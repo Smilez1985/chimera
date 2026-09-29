@@ -81,7 +81,9 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   Darstellungsarten (animiert bis 1-Bit-reduziert), Erkennung bei jedem
   Start. Der E-Paper-Treiber bleibt und kommt aus dem eigenen Fork.
 - `docs/PROVIDER.md`: Anbieterschicht als Hybrid — Gotchis Werkzeugschleife
-  mit OpenMinis' Anbietermuster. Dazu MCP und der eigene Audio-Prozess.
+  mit OpenMinis' Anbietermuster. Modelle werden **je Aufgabe** zugeordnet,
+  jede Aufgabe zeigt auf eine Gruppe mit Rückfall; kein Anbieter wird
+  vorausgesetzt. Dazu MCP und der eigene Audio-Prozess.
 
 ### Bekannte Einschränkungen
 

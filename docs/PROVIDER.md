@@ -38,16 +38,92 @@ Weil OpenMinis GPL-3 ist, wird dessen Teil **nachgebaut, nicht
       │  ├─ Schleifenerkennung               ← OpenMinis-Muster
       │  └─ Kontextschwellen                 ← OpenMinis-Muster
       ▼
+    Aufgaben → Gruppen           ← OpenMinis-Muster, Regel 5h
+      gespraech      → [ abo/sonnet-5, ollama/qwen ]
+      mood_erfindung → [ ollama/qwen, abo/haiku ]
+      umgebung       → [ ollama/qwen ]
+      │
+      ▼
     Anbieter-Registry            ← OpenMinis-Muster, Regel 5a
       ├─ AnthropicOAuth    Abo-Anmeldung, Kennung zur Laufzeit (5b)
       ├─ AnthropicKey      API-Schlüssel
-      ├─ Ollama            eigenes Netz, erstklassig (5c)
+      ├─ Ollama            eigenes Netz, wenn vorhanden (5c)
       ├─ LiteLLM           alles Weitere
       └─ MCP-Werkzeuge     fremde Werkzeugquellen (§4)
 
 ---
 
 ## 3. Die Anbieterschicht
+
+### Architekturregel 5h — Kein Anbieter wird vorausgesetzt
+
+Nicht jeder hat einen Rechner mit Ollama im Haus. Ein Entwurf, der das
+stillschweigend annimmt, schließt die Hälfte der Interessenten aus — und
+widerspricht dem Zweck des Projekts, Hürden zu senken (Regel 6c).
+
+Deshalb gilt: **Chimera läuft mit dem, was da ist.** Ollama, wenn
+vorhanden. Ein Abo, wenn eines eingerichtet ist. Ein API-Schlüssel, wenn
+sonst nichts. Ist gar nichts eingerichtet, sagt das Gerät das — und
+bleibt ansonsten benutzbar (Gesicht, Mood-Stufen 1 und 2, Taste).
+
+### Aufgaben statt fester Zuordnung
+
+Ein Gerät wie Chimera braucht Modelle für sehr unterschiedliche Dinge.
+Ein einziges Modell für alles ist entweder zu teuer oder zu schwach:
+
+| Aufgabe | Ansprüche |
+|---|---|
+| **Gespräch** | Werkzeuge, guter Ausdruck, Kontext — das teure Modell |
+| **Mood-Erfindung** | Struktur einhalten, kein Weltwissen — klein genügt |
+| **Deutung der Umgebung** | knapp, häufig, unkritisch — klein genügt |
+| **Zusammenfassen** | läuft im Hintergrund — klein genügt |
+| **Titel, Aufräumen** | trivial — das billigste, was greifbar ist |
+
+Der Nutzer ordnet **je Aufgabe** zu, nicht global:
+
+    gespraech        = anthropic-abo / sonnet-5
+    mood_erfindung   = ollama / qwen-3.8:27B_K_M
+    umgebung         = ollama / qwen-3.8:27B_K_M
+    zusammenfassen   = anthropic-abo / haiku
+    titel            = (wie zusammenfassen)
+
+Das ist das Muster, das OpenMinis mit seinen Modellgruppen vormacht:
+Modelle werden nicht einmal global gewählt, sondern **für die Arbeit, die
+sie tun sollen** — dort für Sprache, Bilderzeugung und Bildauswertung,
+hier für Gespräch, Ausdruck und Hintergrundarbeit.
+
+### Gruppen mit Rückfall
+
+Eine Aufgabe zeigt nicht auf ein Modell, sondern auf eine **Gruppe** mit
+geordneten Mitgliedern. Fällt das erste aus, greift das nächste:
+
+    mood_erfindung → [ ollama/qwen-3.8, anthropic-abo/haiku ]
+
+Damit löst sich das Ollama-Problem von selbst: Wer einen Server hat, trägt
+ihn vorn ein und zahlt nichts. Wer keinen hat, lässt den Eintrag weg und
+es läuft über das Abo — dieselbe Konfiguration, ein Eintrag weniger.
+
+Zwei Strategien genügen:
+
+- **Rückfall** (Voreinstellung): der Reihe nach, bis eines antwortet
+- **Verteilen**: abwechselnd, wenn mehrere gleichwertig sind
+
+### Automatische Einrichtung, überschreibbar
+
+Beim ersten Lauf sucht der Installer, was erreichbar ist:
+
+1. **Ollama im eigenen Netz** — bekannte Adressen und Port 11434 abfragen;
+   antwortet etwas, werden die vorhandenen Modelle aufgelistet
+2. **Zugangsdaten in der Umgebung** — gesetzte Schlüssel erkennen
+3. **Bestehende Abo-Anmeldung**
+
+Daraus entsteht ein **Vorschlag**, kein Zwang: Gefundene Anbieter werden
+den Aufgaben nach Kosten zugeordnet — kostenlos für Hintergrundarbeit,
+bezahlt fürs Gespräch. Der Nutzer sieht die Zuordnung und kann jede Zeile
+ändern.
+
+**Nichts wird stillschweigend eingerichtet** (Regel 10g). Was gefunden
+wurde, steht im Protokoll; was vermutet wurde, wird als Vermutung benannt.
 
 ### Gemeinsame Schnittstelle
 
@@ -60,15 +136,37 @@ Gotchis `LLMConnector` (51 Zeilen) ist die Grundlage — sie hat bereits
 | `supports_tools` | nicht jeder Anbieter kann Werkzeugaufrufe |
 | `context_window` | **Kontextschwellen gegen das bedienende Modell** |
 | `supports_streaming` | für die Sprachausgabe: früher anfangen zu sprechen |
-| `cost_class` | `free` / `metered` / `subscription` — steuert, was wohin geht |
+| `cost_class` | `free` / `metered` / `subscription` — steuert die Voreinstellung |
 
-`cost_class` ist der Grund, weshalb die Mood-Erfindung auf Ollama landet
-(Regel 5c): Der Ausdruck des Geräts soll nicht an einem bezahlten
-Kontingent hängen.
+`cost_class` ist der Grund, weshalb die automatische Zuordnung ohne
+Nachfragen sinnvolle Vorschläge macht: Was nichts kostet, bekommt die
+häufigen Aufgaben.
 
 ### Anthropic mit Abo-Anmeldung
 
-Das Muster aus OpenMinis, nachgebaut:
+**Der eigene Beitrag an OpenMinis wird hier mit übernommen** — PR #407,
+„resolve the claude-cli fingerprint at runtime". Er ist nicht Beiwerk,
+sondern die Voraussetzung dafür, dass die Abo-Anmeldung auf Dauer
+funktioniert.
+
+Der Kern: Anthropic sperrt neue Modelle hinter einer **Mindestversion des
+CLI-Clients** und prüft das über die Client-Kennung. Ist diese Kennung
+fest einkompiliert, veraltet sie — und ein Modell, das eigentlich
+verfügbar wäre, wird mit `claude_code_version_too_old` abgelehnt. In
+OpenMinis stand dort eine feste Zeichenkette; genau das hat Opus 5.5
+blockiert.
+
+Der Fix ermittelt die Kennung **zur Laufzeit** aus der installierten CLI,
+mit gepflegtem Rückfallwert und Zwischenspeicher. Für Chimera gilt das
+unverändert (Regel 5b) — auf einem Gerät, das monatelang durchläuft, ist
+eine veraltende Kennung keine theoretische Sorge, sondern eine Frage der
+Zeit.
+
+Ergänzung gegenüber dem PR: Auf einem Pi Zero kostet das Ermitteln
+spürbar, also **einmal beim Prozessstart** und danach aus dem
+Zwischenspeicher — nicht bei jedem Aufruf.
+
+Das übrige Muster aus OpenMinis, nachgebaut:
 
 1. **Anmeldung** einmalig, Zugangs- und Auffrischungsmarke werden abgelegt
 2. **Auffrischen** vor Ablauf, nicht erst bei Ablehnung
@@ -85,10 +183,14 @@ Ergänzung für Chimera: Der ermittelte Wert wird **zwischengespeichert und
 einmal beim Prozessstart aufgefrischt**, nicht bei jedem Aufruf — auf
 einem Pi Zero kostet das spürbar.
 
-### Ollama
+### Ollama — wenn vorhanden
 
 Eigener Connector, kein Sonderfall von LiteLLM (Regel 5c). Sonst lässt
 sich nicht unterscheiden, ob der Server weg ist oder ein Schlüssel fehlt.
+
+**Aber keine Voraussetzung** (Regel 5h). Fehlt er, meldet sich der
+Connector als nicht verfügbar, die Gruppe fällt auf ihr nächstes Mitglied
+zurück, und nichts weiter passiert.
 
 Aus dem eigenen Fork übernommen (Ideen, nicht Code):
 

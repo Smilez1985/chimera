@@ -456,7 +456,8 @@ keine Änderung am Router.
 ### Architekturregel 5b — Anthropic-Anmeldung wie im OpenMinis-PR
 
 Anthropic wird auf demselben Weg eingebunden wie in
-[OpenMinis PR #407](https://github.com/OpenMinis/OpenMinis/pull/407):
+[OpenMinis PR #407](https://github.com/OpenMinis/OpenMinis/pull/407) —
+**dem eigenen Beitrag dort, der hier mit übernommen wird**:
 über den **OAuth-Pfad der Abo-Anmeldung**, nicht nur über einen
 API-Schlüssel. Das erlaubt die Nutzung eines bestehenden Abos, statt pro
 Token zu zahlen — auf einem Gerät, das dauernd läuft, ist das der
@@ -507,6 +508,25 @@ weitergegangen. Chimera setzt daher auf dem **aktuellen Upstream** auf und
 baut die Fork-Ideen dort neu ein, statt den divergierten Fork
 nachzuziehen. Ein Rebase über 41 Commits mit anschließendem Umbau auf die
 Registry wäre mehr Arbeit als die Neuimplementierung.
+
+### Architekturregel 5h — Kein Anbieter wird vorausgesetzt
+
+Nicht jeder hat einen Rechner mit Ollama. Chimera läuft mit dem, was da
+ist: Ollama wenn vorhanden, ein Abo wenn eingerichtet, ein API-Schlüssel
+wenn sonst nichts.
+
+Modelle werden **je Aufgabe** zugeordnet, nicht global — Gespräch,
+Mood-Erfindung, Deutung der Umgebung, Zusammenfassen haben sehr
+unterschiedliche Ansprüche. Jede Aufgabe zeigt auf eine **Gruppe** mit
+geordneten Mitgliedern; fällt das erste aus, greift das nächste.
+
+Damit löst sich die Ollama-Frage von selbst: Wer einen Server hat, trägt
+ihn vorn ein und zahlt nichts. Wer keinen hat, lässt den Eintrag weg.
+Dieselbe Konfiguration, ein Eintrag weniger.
+
+Die Ersteinrichtung **sucht** (Ollama im Netz, gesetzte Schlüssel,
+bestehende Anmeldung) und **schlägt vor** — sie entscheidet nicht.
+Einzelheiten in `docs/PROVIDER.md`.
 
 ### Architekturregel 5c — Ollama ist ein erstklassiger Anbieter
 
@@ -1087,6 +1107,7 @@ scannen.
 - **5** — Sprache lokal, Sprachmodell immer remote
 - **5a** — Registry statt fester Connector-Attribute
 - **5b** — Anthropic-Anmeldung wie im OpenMinis-PR
+- **5h** — Kein Anbieter wird vorausgesetzt
 - **5c** — Ollama ist ein erstklassiger Anbieter
 - **5d** — Ein Gespräch, zwei Türen
 - **5e** — zram und Auslagerungsdatei gehören zum Aufbau

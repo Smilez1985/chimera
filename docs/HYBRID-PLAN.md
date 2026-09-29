@@ -113,6 +113,11 @@ die noch nicht da ist.
 
 ### H1 — Agent-Grundlage *(ohne Hardware)*
 
+Dazu gehört von Anfang an die **Aufgabenzuordnung** (Regel 5h): Modelle
+werden je Aufgabe gewählt, nicht global, und jede Aufgabe zeigt auf eine
+Gruppe mit Rückfall. Ohne das setzt man Ollama voraus — und schließt alle
+aus, die keinen Server haben.
+
 openclawgotchi-Kern übernehmen, ohne alles Gerätenahe.
 
 - `llm/base.py` → um `supports_tools` und `context_window` erweitern
