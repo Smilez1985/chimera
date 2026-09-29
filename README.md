@@ -112,6 +112,8 @@ board is one entry rather than a hunt through every module.
 ## Documentation
 
 - [`docs/DESIGN.md`](docs/DESIGN.md) — architecture, decisions, constraints
+- [`docs/HYBRID-PLAN.md`](docs/HYBRID-PLAN.md) — how the three sources fit together
+- [`docs/HERKUNFT.md`](docs/HERKUNFT.md) — what is taken from where, and what isn't
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — what is missing, by priority
 - [`CHANGELOG.md`](CHANGELOG.md) — what has happened
 

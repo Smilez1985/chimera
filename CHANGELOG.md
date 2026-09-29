@@ -73,6 +73,10 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   nur Tupel, und der Fehler fiele sonst erst im Renderer auf.
 - 21 Tests für Übergänge, mit gestellter Uhr und Gegenproben.
 
+- `docs/HERKUNFT.md`: Bauteil-für-Bauteil-Analyse von openclawgotchi
+  (Upstream und Fork) und OpenMinis — übernehmen, anpassen, weglassen.
+- `docs/HYBRID-PLAN.md`: Aufbau und Reihenfolge in acht Stufen.
+
 ### Bekannte Einschränkungen
 
 - Noisys Reset-Überlagerung wurde entfernt; Chimera wird über Telegram

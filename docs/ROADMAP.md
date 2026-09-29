@@ -58,9 +58,16 @@ Hardware ist vorhanden, also nicht blockiert.
 - [ ] Bildrate auf Zielhardware messen (in der Sandbox 0,7 ms je Bild,
       das Zielgerät ist deutlich langsamer)
 
+> **Der Weg zum fertigen Gerät steht in `docs/HYBRID-PLAN.md`** (Stufen
+> H1–H8). Was von openclawgotchi und OpenMinis übernommen wird und was
+> nicht, steht in `docs/HERKUNFT.md`. Die Phasen hier bleiben als
+> Feingliederung.
+
 ## Phase 4 — Agent-Kopplung
 
-- [ ] openclawgotchi-Basis übernehmen (Skills, Memory, LLM, Telegram)
+- [ ] openclawgotchi-Basis übernehmen (Skills, Memory, LLM, Telegram) —
+      Auswahl in `docs/HERKUNFT.md` §1.2, **Sicherheitsschicht des
+      `execute_bash` unverändert mitnehmen**
 - [ ] Alten Display-Layer entfernen (Architekturregel 7)
 - [ ] Renderer als Dauer-Thread, Zustandsübergabe über Shared Memory
 - [ ] `skills/mood/SKILL.md` (Architekturregel 8)
