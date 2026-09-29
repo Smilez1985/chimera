@@ -1,0 +1,172 @@
+name: Tests
+
+# Warum CI, obwohl jeder Lauf hier auch von Hand geht:
+#
+# Die Tests dieses Projekts sind eigenstaendige Laeufer, die von Hand
+# gestartet werden. Das funktioniert -- solange jemand daran denkt. Genau
+# das ist beim Registry-Fehler und beim Renderer-Startbefehl schiefgegangen:
+# Die Tests waren gruen, aber niemand hatte den einen Zweig aufgerufen.
+#
+# CI nimmt das "daran denken" aus der Gleichung. Und sie prueft auf einer
+# ANDEREN Shell als der Entwicklungsumgebung: hier BusyBox ash, dort dash.
+# Beide unterscheiden sich von bash, aber nicht gleich -- was auf einer
+# laeuft, muss auf der anderen nicht laufen.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python (${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 ist die aelteste Fassung, die Chimera unterstuetzt.
+        # 3.13 laeuft auf dem Zielgeraet (DietPi/Trixie) -- das ist die
+        # Fassung, die zaehlt.
+        python: ["3.11", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Abhaengigkeiten
+        # Nur was die Tests wirklich brauchen. Chimera selbst kommt ohne
+        # Fremdbibliotheken aus; Pillow und numpy braucht der Renderer.
+        run: |
+          python -m pip install --upgrade pip
+          pip install pillow numpy
+
+      - name: Tests
+        # Die Testdateien sind eigenstaendige Laeufer mit eigenem Exitcode,
+        # kein pytest. Jede wird einzeln aufgerufen, damit ein Fehlschlag
+        # nicht die uebrigen verdeckt.
+        run: |
+          set -eu
+          fehl=0
+          for t in tests/test_*.py; do
+            printf '=== %s ===\n' "$t"
+            if PYTHONPATH=src python3 "$t"; then :; else
+              fehl=$((fehl + 1))
+              printf 'ROT: %s\n' "$t"
+            fi
+          done
+          [ "$fehl" -eq 0 ] || { printf '\n%d Testdatei(en) rot.\n' "$fehl"; exit 1; }
+
+      - name: Ungebundene Namen
+        # Findet Namen, die eine Funktion als global liest, die es nicht
+        # gibt. Diese Fehlerklasse uebersehen Tests strukturell: Sie faellt
+        # erst auf, wenn der Zweig betreten wird.
+        run: python3 tools/check-globals.py src/ tests/ tools/
+
+  installer:
+    name: Installer (${{ matrix.shell }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Zwei Shells, weil die Zielgeraete verschiedene haben und beide
+        # NICHT bash sind. BusyBox ist die strengste -- was dort laeuft,
+        # laeuft fast ueberall.
+        shell: [dash, busybox]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell bereitstellen
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq dash busybox-static
+
+      - name: Tests
+        run: |
+          set -eu
+          cd installer
+          case "${{ matrix.shell }}" in
+            dash)    SH="dash" ;;
+            busybox) SH="busybox sh" ;;
+          esac
+          fehl=0
+          for t in tests/test-*.sh; do
+            printf '=== %s (%s) ===\n' "$t" "$SH"
+            if $SH "$t"; then :; else
+              fehl=$((fehl + 1))
+              printf 'ROT: %s\n' "$t"
+            fi
+          done
+          [ "$fehl" -eq 0 ] || { printf '\n%d Testdatei(en) rot.\n' "$fehl"; exit 1; }
+
+      - name: Syntax aller Skripte
+        # Ein Syntaxfehler in einem Modul, das kein Test aufruft, faellt
+        # sonst erst auf dem Geraet auf.
+        run: |
+          set -eu
+          case "${{ matrix.shell }}" in
+            dash)    SH="dash" ;;
+            busybox) SH="busybox sh" ;;
+          esac
+          find installer -name '*.sh' -o -name 'chimera-install' | while read -r f; do
+            $SH -n "$f" || { printf 'Syntaxfehler: %s\n' "$f"; exit 1; }
+          done
+
+  trockenlauf:
+    name: Trockenlauf ohne Hardware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Erfundenes Wurzelverzeichnis
+        # Regel 10d: Alles Lesende geht ueber CHIMERA_ROOT. Genau dafuer
+        # ist sie da -- die Boarderkennung laesst sich ohne Zielhardware
+        # pruefen, indem man ihr erfundene Systemdateien vorlegt.
+        run: |
+          set -eu
+          R="$(mktemp -d)"
+          mkdir -p "$R/proc/device-tree" "$R/etc" "$R/boot/firmware"
+          printf 'Raspberry Pi Zero 2 W Rev 1.0\0' >"$R/proc/device-tree/model"
+          printf 'raspberrypi,model-zero-2-w\0brcm,bcm2837\0' \
+            >"$R/proc/device-tree/compatible"
+          printf 'ID=debian\nVERSION_CODENAME=trixie\n' >"$R/etc/os-release"
+          : >"$R/boot/firmware/config.txt"
+          echo "CHIMERA_ROOT=$R" >>"$GITHUB_ENV"
+
+      - name: Preflight erkennt das Board
+        run: |
+          set -eu
+          cd installer
+          CHIMERA_MODE=check CHIMERA_LOG_DIR=/tmp/logs \
+            sh modules/10-preflight.sh
+          # Exitcode 0 heisst: erkannt und unterstuetzt. Alles andere ist
+          # ein Befund -- auch dann, wenn das Skript nicht abstuerzt.
+
+      - name: Trockenlauf aendert nichts
+        run: |
+          set -eu
+          cd installer
+          vorher="$(cat "$CHIMERA_ROOT/boot/firmware/config.txt")"
+          CHIMERA_MODE=dry CHIMERA_ANZEIGE=whisplay CHIMERA_LOG_DIR=/tmp/logs \
+            sh modules/40-anzeige.sh || true
+          nachher="$(cat "$CHIMERA_ROOT/boot/firmware/config.txt")"
+          if [ "$vorher" != "$nachher" ]; then
+            echo "Der Trockenlauf hat die Bootkonfiguration veraendert."
+            diff <(printf '%s' "$vorher") <(printf '%s' "$nachher") || true
+            exit 1
+          fi
+          echo "Bootkonfiguration unveraendert — richtig."
+          # Und: keine Sicherung. Eine Sicherung im Trockenlauf waere
+          # selbst eine Aenderung.
+          if ls "$CHIMERA_ROOT/boot/firmware/"*.bak >/dev/null 2>&1; then
+            echo "Der Trockenlauf hat eine Sicherung angelegt."
+            exit 1
+          fi
+          echo "Keine Sicherung angelegt — richtig."
