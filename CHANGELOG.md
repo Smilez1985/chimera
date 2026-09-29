@@ -8,7 +8,11 @@ einer bewussten Abweichung: **ein Versionssprung bricht keine laufende
 Installation.** Was ein Release an bestehenden Installationen ändert,
 erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 
-## [0.1.0] — 2026-09-29
+## [0.1.0] — unveröffentlicht
+
+**Nicht getaggt.** Pre-Alpha bleibt ungetaggt, bis eine Fassung auf echter
+Hardware gelaufen ist. Die Versionsnummer markiert den Stand, nicht ein
+Release.
 
 Erste Fassung mit lauffähigem Agenten. Alles hier Genannte ist verdrahtet
 und geprüft; was noch offen ist, steht unter „Bekannte Einschränkungen"
