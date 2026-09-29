@@ -88,7 +88,7 @@ class Agent:
 
     def __init__(self, registry, toolbox: Toolbox, *, task: str = "gespraech",
                  max_turns: int = 8, guard: GuardConfig | None = None,
-                 on_state=None):
+                 on_state=None, skills=None, memory=None):
         self.registry = registry
         self.tools = toolbox
         self.task = task
@@ -97,6 +97,29 @@ class Agent:
         self.history: list[dict] = []
         #: Rückruf für den Zustand — damit das Gesicht zeigt, was läuft.
         self.on_state = on_state
+        self.skills = skills
+        self.memory = memory
+
+        # Skills als Werkzeug anmelden, wenn welche da sind. Ein Katalog
+        # ohne Abrufmöglichkeit wäre ein offenes Ende (Regel 10h).
+        if skills is not None:
+            from .preflight import ToolSpec
+            toolbox.add(ToolSpec(
+                "read_skill",
+                "Die Anleitung zu einem Skill lesen, bevor du ihn benutzt.",
+                {"name": "Name des Skills"},
+                ("name",),
+            ), self._read_skill)
+            self.guard = LoopGuard(guard, known_tools=toolbox.names())
+
+    def _read_skill(self, name: str) -> str:
+        sk = self.skills.get(name) if self.skills else None
+        if sk is None:
+            verf = ", ".join(s.name for s in self.skills.usable()) if self.skills else ""
+            return f"Skill {name!r} gibt es nicht. Verfügbar: {verf}"
+        if not sk.usable:
+            return f"Skill {sk.name} ist hier nicht nutzbar: {sk.reason}"
+        return sk.read()
 
     # --- Hilfen -----------------------------------------------------------
 
@@ -105,7 +128,20 @@ class Agent:
         for spec in (t.spec for t in self.tools._tools.values()):
             args = ", ".join(spec.params) or "keine"
             lines.append(f"- {spec.name}({args}): {spec.description}")
-        return SYSTEM_TEMPLATE.replace("{tools}", "\n".join(lines))
+        text = SYSTEM_TEMPLATE.replace("{tools}", "\n".join(lines))
+
+        if self.skills is not None:
+            cat = self.skills.catalog()
+            if cat:
+                text += ("\n\nSkills (Anleitungen, mit read_skill abrufbar):\n"
+                         + cat)
+
+        if self.memory is not None:
+            ctx = self.memory.context()
+            if ctx:
+                text += "\n\n" + ctx
+
+        return text
 
     def _state(self, what: str) -> None:
         if self.on_state:

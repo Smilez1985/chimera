@@ -187,8 +187,7 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
 Die vier Muster aus `docs/DESIGN.md` §8 sind gebaut und verdrahtet.
 Offen bleibt:
 
-- [ ] Rangordnung im Gedächtnis (nur lesbar gegen agentgeschrieben) —
-      braucht erst die Gedächtnisschicht aus openclawgotchi
+- [x] Rangordnung im Gedächtnis (nur lesbar gegen agentgeschrieben)
 - [ ] Auslagern bei `Action.OFFLOAD`: erkannt wird es, getan noch nicht
 - [ ] Schleifenzustand auf die RGB-LED (braucht Hardware)
 

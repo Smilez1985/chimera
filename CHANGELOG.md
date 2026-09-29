@@ -63,6 +63,12 @@ oder in der Roadmap.
   Modell, das die Anfrage **tatsächlich bedient**.
 - Der Agentzustand ist am Gesicht ablesbar: denkt, arbeitet, spricht,
   verwirrt.
+- Skills im `SKILL.md`-Format mit **Voraussetzungsprüfung**: Ein Skill,
+  dessen Programme fehlen, wird gar nicht erst angeboten — genannt wird er
+  trotzdem, mit Grund.
+- Gedächtnis mit Rangordnung: dauerhafte Notizen sind für den Agenten nur
+  lesbar, Tageslogs schreibt er selbst. Beim Einspeisen wird gesagt, dass
+  es Hintergrund ist und nicht Auftrag.
 
 **Installer**
 - `chimera-install` mit Modulen, `--only`, `--list`, `--dry-run`, `--check`.
@@ -96,8 +102,8 @@ oder in der Roadmap.
 
 ### Geprüft
 
-267 Tests, alle grün (64 Agent, 68 Mood, 41 Anbieter, 21 Übergänge,
-16 Renderer, 11 Anzeige, 46 Installer). Jeder Regressionstest hat eine Gegenprobe. Die
+302 Tests, alle grün (64 Agent, 68 Mood, 41 Anbieter, 35 Skills und
+Gedächtnis, 21 Übergänge, 16 Renderer, 11 Anzeige, 46 Installer). Jeder Regressionstest hat eine Gegenprobe. Die
 Anbieterschicht und die Agent-Schleife wurden zusätzlich gegen einen
 echten Ollama-Server geprüft.
 
