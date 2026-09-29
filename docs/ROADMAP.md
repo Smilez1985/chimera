@@ -160,12 +160,29 @@ Plattformfrage, deshalb eigene Phase und nicht am Ende angehaengt.
 - [ ] Protokolldatei
 - [ ] `VERSION` ins System stempeln, `chimera --version`
 
-### 8b — Modul 10 `preflight`
+### 8b — Modul 10 `preflight` + Boardprofile
 Liefert sofort Nutzen: klaert die offenen Fragen zum Zielgeraet.
-- [ ] Board und Betriebssystem erkennen, Whisplay-Revision
+**Von Anfang an mit beiden Boards im Blick** (`docs/INSTALLER.md` §2a) —
+sonst bedeutet Portieren spaeter ein Durchsuchen aller Module.
+- [ ] Board und Betriebssystem **getrennt** erkennen (zwei Achsen: derselbe
+      Chip unter DietPi und unter Radxa-Debian sind zwei Faelle)
+- [ ] Bootmethode erkennen: `config.txt` / extlinux / u-boot-Skript
+- [ ] Erkennung auf **konkrete `compatible`-Kennung** stuetzen, nicht auf
+      `model == *"Radxa"*` — das trifft jedes Radxa-Board
+- [ ] **Profiltabelle** fuer alles Boardabhaengige (Header-Stufe, SPI-Bus
+      und -Takt, Overlay-Quelle und -Ziel, kollidierende Overlays,
+      Bootmethode, ALSA-Vorlage) — ein neues Board = ein Eintrag
+- [ ] Radxa-Eintrag von Anfang an vorhanden, meldet „noch nicht
+      unterstuetzt" als bewussten Zustand
+- [ ] Unbekanntes Board ⇒ **Abbruch mit Auskunft**, kein Rateversuch.
+      `--force-board` nur fuer Entwicklung, nie im Fehlertext vorgeschlagen
+- [ ] Whisplay-EEPROM auslesen (`/proc/device-tree/hat/`); klaeren, ob sich
+      daraus **V1 gegen V2** unterscheiden laesst
 - [ ] `uname -r`, Header-Verzeichnis, `modinfo snd-soc-wm8960`,
       `/boot/config-*`, Speicher und Platz erfassen und protokollieren
 - [ ] Warnen, wenn ungeteilte Kernelupdates aktiv sind
+- [ ] Test ohne Hardware: erfundene `model`- und `os-release`-Inhalte in
+      einem temporaeren Wurzelverzeichnis, richtiges Profil? (mit Gegenprobe)
 
 ### 8c — Module 20–70 fuer Pi Zero 2 W
 Der einfache Fall: Header kommen aus dem Distributionspaket.
@@ -184,9 +201,17 @@ Der einfache Fall: Header kommen aus dem Distributionspaket.
 - [ ] `migrate_from()` fuer Uebergaenge (I2)
 - [ ] Deinstallation, die den Ausgangszustand wiederherstellt
 
-### 8e — Radxa unter DietPi: Header Stufe 2/3
-**Zuletzt, gegen ein bereits laufendes Chimera.** Sonst debuggt man es
-gegen eine Baustelle. Analyse in `docs/INSTALLER.md` §3.
+### 8e — Radxa Zero 3W: Portierung
+**Zuletzt, gegen ein bereits laufendes Chimera auf dem Pi.** Sonst
+debuggt man den Modulbau gegen eine Baustelle und weiss bei jedem Fehler
+nicht, ob es der Treiber oder der eigene Code war.
+Wenn 8b richtig gebaut ist, ist die Portierung im Wesentlichen **ein
+ausgefuellter Profileintrag plus Header-Stufe 2/3**.
+Analyse in `docs/INSTALLER.md` §2a und §3.
+
+- [ ] Radxa-Profileintrag ausfuellen (SPI3 CS0, Overlay-Ziel `/boot/dtbo`,
+      kollidierende Overlays, Bootmethode je Distribution)
+- [ ] Radxa-Debian **und** DietPi als getrennte OS-Faelle behandeln
 - [ ] Tabelle bekannter Kombinationen (Board, Kernelversion, Quelle,
       Pruefsumme) statt einer fest verdrahteten Version
 - [ ] Headers-Paket laden, Pruefsumme verifizieren
@@ -214,14 +239,11 @@ gegen eine Baustelle. Analyse in `docs/INSTALLER.md` §3.
 
 ## Offen / zu entscheiden
 
-- **Radxa Zero 3W** wäre das bessere Board (bis 8 GB ⇒ Sprachmodell lokal
-  möglich). Der Audiotreiber läuft unter DietPi nicht — das löst **Phase 8e
-  des Installers**, nicht eine Wiki-Anleitung. Analyse in
-  `docs/HARDWARE.md` §3 und `docs/INSTALLER.md` §3. Kein Blocker: das Board
-  ist eine Konfigurationsfrage.
-  Offen bleibt die Abwägung, ob Radxas offizielles Debian (unterstützter
-  Pfad, DietPis Schlankheit verloren) nicht der günstigere Weg ist als
-  Header-Stufe 3 unter DietPi bei jedem Kernelupdate.
+- **Radxa unter DietPi oder unter Radxa-Debian?** Beides bleibt als
+  OS-Fall vorgesehen. Unter Radxa-Debian greift der unterstützte Pfad
+  (`/boot/dtbo`, `u-boot-update`); DietPi kostet dafür Header-Stufe 3 bei
+  jedem Kernelupdate. Die Abwägung fällt in Phase 8e, nicht vorher —
+  beide Wege stehen im Profil.
 - **Mood-Aufräumen:** Wenn der Agent dauerhaft speichern darf, wächst die
   Bibliothek unbegrenzt. LRU über `last_used`? Obergrenze?
 - **Bleibt Telegram** die Hauptschnittstelle, wenn Mikrofon, Lautsprecher

@@ -82,6 +82,100 @@ alles umzubenennen.
 
 ---
 
+## 2a. Boarderkennung (Modul 10)
+
+Chimera soll auf **Pi Zero 2 W und Radxa Zero 3W** laufen, und der
+Installer soll das Board selbst erkennen. Ein Nutzer, der ein Flag setzen
+muss, ist ein Nutzer, der es falsch setzen kann.
+
+### Quellen, in dieser Reihenfolge
+
+| Quelle | Aussage |
+|---|---|
+| `/proc/device-tree/model` | Klartextname des Boards |
+| `/proc/device-tree/compatible` | Herstellerkennungen, zuverlässiger als der Name |
+| `/etc/os-release` | Distribution — **entscheidet über die Bootmethode** |
+| `uname -r` | Kernelversion, Vendor-Suffix |
+| `/boot/config-<kver>` | vorhanden? (nötig für Header-Stufe 3) |
+
+Die Trennung ist wichtig: **Board und Betriebssystem sind zwei
+unabhängige Achsen.** Radxa Zero 3W mit Radxa-Debian und Radxa Zero 3W mit
+DietPi sind derselbe Chip, aber zwei verschiedene Installationsfälle —
+Overlay-Ablage und Bootkonfiguration unterscheiden sich (§5). Der
+Installer ermittelt beides getrennt und entscheidet daraus.
+
+    board = rpi_zero2w | radxa_zero3w | unknown
+    os    = raspios | dietpi | radxa_debian | armbian | unknown
+    boot  = config_txt | extlinux | uboot_script | unknown
+
+### Die Schwäche im Hersteller-Verfahren
+
+Der Whisplay-Installer erkennt den Radxa so:
+
+    if [[ "$model" == *"Radxa"* ]]; then echo "radxa_zero3w"
+
+Das trifft **jedes** Radxa-Board — auch eines, für das die
+Gerätebaum-Beschreibung gar nicht passt. Chimera prüft stattdessen auf die
+konkrete Kennung (`radxa,zero3w` bzw. das entsprechende
+`compatible`-Feld) und meldet bei einem unbekannten Radxa ehrlich
+`unknown`, statt einen falschen Pfad zu nehmen.
+
+Ebenso beim Pi: nicht nur `model`, sondern auch `compatible` und das
+Vorhandensein von `/boot/firmware/overlays` bzw. `/boot/overlays`.
+
+### Architekturregel — Unbekanntes Board bricht ab, ohne zu raten
+
+`unknown` ⇒ Abbruch mit Auskunft: was erkannt wurde, was erwartet wird,
+welche Kombinationen bekannt sind. Ein Erratungsversuch, der das falsche
+Overlay in die Bootkonfiguration schreibt, kostet im schlimmsten Fall den
+Ausbau der SD-Karte.
+
+`--force-board <name>` existiert für Entwicklung und für neue Boards, ist
+aber nie der Vorschlag im Fehlertext.
+
+### Whisplay-Revision
+
+Der HAT hat ein EEPROM, das sich auslesen lässt:
+
+    /proc/device-tree/hat/vendor      → "PiSugar"
+    /proc/device-tree/hat/product_id  → "0x0001"
+
+Damit ist die Platine erkennbar, ohne draufzuschauen. Ob sich daraus auch
+**V1 gegen V2** unterscheiden lässt, ist noch offen — das gehört zu den
+ersten Dingen, die Modul 10 auf echter Hardware beantworten muss. Bis
+dahin bleibt die Warnung bestehen: V1 kann sich beim Tastendruck selbst
+abschalten.
+
+### Boardprofile
+
+Alles Boardabhängige steht in **einer Tabelle**, nicht verstreut in
+`if`-Zweigen: Header-Stufe, SPI-Bus und -Takt, Overlay-Quelle,
+Overlay-Ziel, kollidierende Overlays, Bootmethode, ALSA-Vorlage.
+
+Ein neues Board ist dann ein Tabelleneintrag. Das ist derselbe Gedanke wie
+bei der Anbieter-Registry (Architekturregel 5a in `DESIGN.md`) und aus dem
+gleichen Grund: Fallunterscheidungen, die über viele Funktionen verteilt
+sind, driften auseinander.
+
+### Warum das die Portierung billig macht
+
+Die Reihenfolge — erst Pi fertigstellen, dann Radxa — funktioniert nur,
+wenn boardabhängige Entscheidungen von Anfang an **an einer Stelle**
+stehen. Sonst bedeutet „portieren" ein Durchsuchen aller Module.
+
+Konkret heißt das: Modul 10 und die Profiltabelle entstehen in Phase 8a/8b
+**mit beiden Boards im Blick**, auch wenn zunächst nur der Pi-Eintrag
+ausgefüllt wird. Der Radxa-Eintrag bleibt vorhanden und meldet „noch nicht
+unterstützt" — nicht als Platzhalter im Code, sondern als bewusster
+Zustand.
+
+Das lässt sich **ohne Hardware testen**: erfundene
+`/proc/device-tree/model`- und `os-release`-Inhalte in ein temporäres
+Wurzelverzeichnis legen und prüfen, dass die Erkennung das richtige Profil
+wählt. Inklusive Gegenprobe.
+
+---
+
 ## 3. Modul 30 — Kernel-Headers
 
 Der Kern der Sache. Der Whisplay-Audiotreiber ist ein **Out-of-Tree-Modul**

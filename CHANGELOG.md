@@ -54,12 +54,19 @@ Installation** (siehe `docs/DESIGN.md` §10).
   `DISPLAY:` und `SAY:` bleiben; nur das Ziel wechselt auf die Whisplay
   mit Noisys Mechanik. Bestehende Skills laufen unverändert weiter.
 
-- **Zielplattform ist der Pi Zero 2 W.** Der Radxa Zero 3W wäre mit bis zu
-  8 GB das bessere Board — dort könnte das Sprachmodell lokal laufen —,
-  aber der Whisplay-Audiotreiber lässt sich unter DietPi nicht bauen.
-  Analyse und Auswege in `docs/HARDWARE.md`. Die Plattform bleibt eine
-  Konfigurationsfrage: ein späterer Wechsel kostet eine Einstellung,
-  keinen Umbau.
+- **Zwei Boards werden unterstützt: Pi Zero 2 W und Radxa Zero 3W**, mit
+  Boarderkennung im Installer. Entwickelt wird zuerst auf dem Pi, portiert
+  wird danach auf den Radxa — nicht weil der Pi besser wäre, sondern weil
+  dort alles läuft, während der Radxa unter DietPi erst einen
+  Treiber-Bootstrap braucht. Erst ein Gerät, das nachweislich läuft, dann
+  die schwierige Plattform.
+- **Alles Boardabhängige steht in einer Profiltabelle**, nicht verstreut in
+  Fallunterscheidungen. Der Radxa-Eintrag existiert von Anfang an und
+  meldet zunächst „noch nicht unterstützt". Damit ist die Portierung im
+  Wesentlichen ein ausgefüllter Eintrag und kein Durchsuchen aller Module.
+- **Board und Betriebssystem sind zwei getrennte Achsen.** Derselbe Chip
+  unter DietPi und unter Radxa-Debian sind zwei Installationsfälle, weil
+  sich Overlay-Ablage und Bootkonfiguration unterscheiden.
 - **Chimera setzt auf dem aktuellen Upstream von openclawgotchi auf**, nicht
   auf dem eigenen Fork. Der liegt 41 Commits hinter dem Upstream; ein
   Rebase samt Umbau auf die Anbieter-Registry wäre mehr Arbeit als die

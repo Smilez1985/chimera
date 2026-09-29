@@ -8,12 +8,24 @@ Stand: 2026-09-29.
 
 ## 1. Entscheidung
 
-**Zielplattform ist der Raspberry Pi Zero 2 W** mit Whisplay HAT (V2).
+**Chimera unterstützt zwei Boards: Raspberry Pi Zero 2 W und Radxa Zero 3W**,
+jeweils mit Whisplay HAT (V2). Der Installer erkennt das Board selbst
+(`docs/INSTALLER.md` §2a).
 
-Das ist eine Entscheidung aus Notwendigkeit, nicht aus Vorliebe: Auf dem
-Radxa Zero 3W wäre mehr Luft, aber der Audiotreiber läuft dort unter
-DietPi nicht (§3). Bis das gelöst ist, ist der Zero 2 W die Plattform,
-auf der alles funktioniert.
+**Entwickelt wird zuerst auf dem Pi Zero 2 W**, portiert wird danach auf
+den Radxa. Nicht weil der Pi das bessere Board wäre — der Radxa hat bis zu
+8 GB und könnte das Sprachmodell lokal fahren —, sondern weil auf dem Pi
+alles funktioniert, während der Radxa unter DietPi erst einen
+Treiber-Bootstrap braucht (§3).
+
+Die Reihenfolge ist bewusst: Erst ein Gerät, das nachweislich läuft, dann
+die schwierige Plattform. Andernfalls debuggt man den Modulbau gegen eine
+Baustelle und weiß bei jedem Fehler nicht, ob es der Treiber oder der
+eigene Code war.
+
+Damit die Portierung billig bleibt, steht alles Boardabhängige in **einer
+Profiltabelle** — der Radxa-Eintrag existiert von Anfang an und meldet
+zunächst „noch nicht unterstützt".
 
 ### Folgen für die Architektur
 
@@ -125,6 +137,7 @@ auf dem Radxa denkbar, ist aber ein eigenes Projekt und kein Nebenbei.
 ### Wie Chimera damit umgeht
 
 Das Board ist eine **Konfigurationsfrage, keine Architekturfrage.**
+Die Treiberfrage löst der Installer (Phase 8e), nicht der Nutzer.
 Konkret:
 
 - Keine Annahme über die RAM-Größe im Code. Ob das Sprachmodell lokal

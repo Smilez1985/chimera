@@ -87,11 +87,22 @@ account.
 
 ## Hardware
 
-- Raspberry Pi Zero 2 W or Pi 5
+Two supported boards; the installer detects which one it is running on:
+
+- **Raspberry Pi Zero 2 W** — the development target. Everything works here.
+- **Radxa Zero 3W** — more headroom (up to 8 GB, enough to run the language
+  model locally). Ported once the Pi is done; under DietPi it needs a
+  kernel-header bootstrap first.
+
+Plus:
+
 - **PiSugar Whisplay HAT — revision V2 only.** On V1 the button line
   carries 5 V and pressing it can cut power to the board.
 - 240×280 ST7789-compatible LCD, WM8960/ES8389 codec, mic, speaker,
   button, RGB LED
+
+Everything board-dependent lives in a single profile table, so adding a
+board is one entry rather than a hunt through every module.
 
 ## Documentation
 
