@@ -37,21 +37,43 @@ verglichen, **und** kontrolliert, dass keine Sicherungsdatei entstanden
 ist. Eine Sicherung im Trockenlauf wäre selbst eine Änderung — genau der
 Fehler, den der erste Lauf auf echter Hardware hatte.
 
-## Die Datei liegt nicht im Repo
+## Der Token braucht den `workflow`-Scope
 
-`.github/workflows/tests.yml` ist in `.gitignore`. Nicht aus
-Nachlässigkeit: **Der Token der Entwicklungsumgebung hat keinen
-`workflow`-Scope**, GitHub lehnt einen Push mit Workflow-Änderungen
-deshalb ab:
+Ohne ihn lehnt GitHub jeden Push ab, der eine Workflow-Datei anfasst:
 
 ```
 refusing to allow an OAuth App to create or update workflow
 .github/workflows/tests.yml without `workflow` scope
 ```
 
-Die Vorlage liegt neben dem Repo unter `ci-vorlage/tests.yml`. Wer sie
-aktivieren will, legt sie von Hand an — über die GitHub-Weboberfläche oder
-mit einem Token, der den Scope hat.
+Zwei Fallen, die dabei Zeit kosten:
+
+**Ein `gho_`-Token lässt sich in den Einstellungen nicht bearbeiten.** Er
+entsteht beim CLI-Login und taucht unter *Developer settings → Tokens* gar
+nicht auf — nur unter *Applications → Authorized OAuth Apps*, und dort
+kann man ihn ausschließlich widerrufen. Wer dort nach Häkchen sucht,
+sucht vergeblich.
+
+**`gh auth refresh` verweigert, solange eine Token-Variable gesetzt ist:**
+
+```
+The value of the GITHUB_TOKEN environment variable is being used for
+authentication. To refresh credentials stored in GitHub CLI, first clear
+the value from the environment.
+```
+
+`gh` kann keinen Token auffrischen, der ihm nicht gehört. Lösung: die
+Variablen für genau diesen Aufruf ausblenden.
+
+```sh
+env -u GITHUB_TOKEN -u GH_TOKEN gh auth refresh -h github.com -s workflow
+```
+
+**Danach liegt der neue Token in `~/.config/gh/hosts.yml`, die
+Umgebungsvariable bleibt alt.** Wer weiter blind die Variable benutzt,
+merkt nichts — die Anmeldung klappt ja, nur der Workflow-Push scheitert
+erneut. Deshalb wählt der Bootstrap den Token mit den *mehr* Rechten,
+nicht den aus einer festen Quelle.
 
 ## Vor dem Push lokal prüfen
 
