@@ -59,6 +59,7 @@ Unterschied zieht sich durch die ganze Bewertung.
 | `cron/scheduler.py` | 276 | Zeitgesteuerte Aufgaben | — |
 | `hooks/runner.py` | 172 | Erweiterungspunkte | — |
 | `hardware/battery.py` | 248 | Akkustand | auf PiSugar umstellen |
+| `drivers/epd2in13_V4.py`, `epdconfig.py` | 672 | **E-Paper bleibt** — Chimera unterstützt mehrere Anzeigen (Regel 6c) | aus dem **eigenen Fork**, wo mono/B bereits unterschieden wird |
 | `bot/telegram.py` | ~200 | Telegram bleibt (Regel 5d) | Verlauf mit Sprache teilen |
 | `gotchi-skills/*` | 10 Skills | `SKILL.md` im Anthropic-Format | als Beispiele |
 
@@ -91,13 +92,12 @@ Untergrenze.
 
 | Baustein | Grund |
 |---|---|
-| `drivers/epd2in13_V4.py`, `epdconfig.py` (672) | E-Paper-Treiber. Wir haben ein Farb-LCD |
-| `ui/gotchi_ui.py`, `ui/faces.py` (~700) | Zeichnet Text-Emoticons aufs E-Paper. Chimera hat Noisys Renderer |
+| `ui/gotchi_ui.py`, `ui/faces.py` (~700) | Zeichnet Text-Emoticons. Chimera hat Noisys Renderer — die reduzierte Darstellung wird daraus abgeleitet, nicht übernommen |
 | `hardware/display.py` (289) | Startet je Bild einen Unterprozess mit `sudo`, Sperre und 45 s Zeitgrenze. Bei 15 Bildern je Sekunde wären das 15 Prozessstarts je Sekunde → **ersetzen, nicht anpassen** (Regel 7) |
 | `data/custom_faces.json` | 10 Emoticons. Werden als Startbestand *abgebildet*, nicht übernommen |
 | `bot/discord_inbound.py` (430) | Zweiter Chat-Weg. Telegram und Sprache reichen |
 | `skills/devto.py` | Artikel veröffentlichen — nicht unser Zweck |
-| `utils/patch_self.py` | Selbstveränderung. Auf einem Gerät ohne Rettungsweg (eMMC!) zu riskant |
+| `utils/patch_self.py` | **Ersetzt**, nicht übernommen: keine Sicherung, keine Selbstprüfung, kein Rückweg (Regel 10i) |
 
 ### 1.5 Der eigene Fork
 
@@ -124,6 +124,11 @@ Arbeit als die Neuimplementierung.
   Hinweis gemeldet, statt in einen Verbindungsfehler zu laufen — die
   eleganteste der fünf Änderungen
 - Der Installer fragt die echte Adresse ab
+
+Ebenso aus dem Fork: der Zweig **`feat/display-variant-detect-v2`**
+(4 Commits). Er unterscheidet die Waveshare-Varianten mono und B und
+bringt das Wissen über deren Zeitverhalten mit — Grundlage für die
+Panel-Profile in `docs/DISPLAYS.md`.
 
 Der Code dazu sitzt auf `set_model()` des LiteLLM-Connectors auf und passt
 nicht in die Registry, in der Ollama ein eigener Connector ist (Regel 5c).

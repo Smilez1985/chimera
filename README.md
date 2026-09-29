@@ -87,6 +87,10 @@ account.
 
 ## Hardware
 
+**Several displays are supported**, not just one — an E-Paper Pi or a
+GamePi13 works too. The installer detects the panel at every boot and
+installs what is missing (see [`docs/DISPLAYS.md`](docs/DISPLAYS.md)).
+
 Two supported boards; the installer detects which one it is running on:
 
 - **Raspberry Pi Zero 2 W** — the development target. Everything works here.
@@ -114,6 +118,8 @@ board is one entry rather than a hunt through every module.
 - [`docs/DESIGN.md`](docs/DESIGN.md) — architecture, decisions, constraints
 - [`docs/HYBRID-PLAN.md`](docs/HYBRID-PLAN.md) — how the three sources fit together
 - [`docs/HERKUNFT.md`](docs/HERKUNFT.md) — what is taken from where, and what isn't
+- [`docs/DISPLAYS.md`](docs/DISPLAYS.md) — supported panels and how they are detected
+- [`docs/PROVIDER.md`](docs/PROVIDER.md) — model providers, MCP, audio process
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — what is missing, by priority
 - [`CHANGELOG.md`](CHANGELOG.md) — what has happened
 

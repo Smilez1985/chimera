@@ -153,6 +153,19 @@ voneinander unabhängig, einzeln prüfbar.
 
 *Fertig, wenn:* Der Agent denkt und das Gesicht zeigt es.
 
+### H3a — Mehrere Anzeigen *(teilweise ohne Hardware)*
+
+Chimera darf nicht auf ein Panel festgelegt sein (Regel 6c) — das senkt
+die Einstiegshürde. Einzelheiten in `docs/DISPLAYS.md`.
+
+- Panel-Profile: Fläche, Farben, Bildrate, Auffrischverhalten, Zeitgrenzen
+- Treiber je Panel mit gemeinsamer Schnittstelle (Whisplay ist fertig)
+- **E-Paper-Treiber aus dem eigenen Fork** übernehmen (mono und B)
+- ST7789 für den GamePi13
+- Darstellungsarten: animiert, Standbild, reduziert, reduziert mit Akzent
+- Erkennung **bei jedem Start** (Regel 6e), Nachinstallation bei Wechsel
+- Installer: ein Modul je Panel
+
 ### H4 — Telegram *(ohne Hardware)*
 
 - Bot übernehmen, Verlauf **mit der Sprache teilen** (Regel 5d)
@@ -160,6 +173,21 @@ voneinander unabhängig, einzeln prüfbar.
 - Zeitsteuerung und Erweiterungspunkte
 
 *Fertig, wenn:* Eine Telegram-Anfrage ist dem Gesicht anzusehen.
+
+### H4a — MCP *(ohne Hardware)*
+
+Fremde Werkzeugquellen, Spezifikation 2026-07-28, Bibliothek 2.2.0.
+**Dieselbe Absicherung wie für eigene Werkzeuge** (Regel 5f): Vorprüfung,
+Schleifenerkennung, Protokoll. Server werden bei Bedarf gestartet, nicht
+im Voraus — auf 512 MB zählt jeder Dauerprozess.
+
+### H4b — Selbstaktualisierung *(ohne Hardware)*
+
+Ersetzt `patch_self.py` (Regel 10i): sichern → aktualisieren → selbst
+prüfen → bei Fehlschlag zurückspielen. Vorlage ist die erprobte
+Aktualisierungsroutine aus dem PiHole-Projekt.
+
+*Wartet auf:* die Unterlagen dazu.
 
 ### H5 — Installer und erste Inbetriebnahme *(Hardware nötig)*
 
@@ -169,6 +197,11 @@ voneinander unabhängig, einzeln prüfbar.
   Bildrate, Speicherlage, Whisplay-Revision
 
 ### H6 — Sprache *(Hardware nötig)*
+
+**Als eigener, schlanker Prozess** (Regel 5g): Der Renderer darf nicht
+warten, Abstürze bleiben lokal, Speicher lässt sich freigeben.
+Verständigung über geteiltes Gedächtnis für den Pegel, Warteschlange für
+den Rest — dafür kommt Noisys `noisy_shm.py` zum Einsatz.
 
 VAD → Wake-Word → Erkennung → Synthese, einzeln. Emotion der Stimme an
 den Mood koppeln (Regel 4b). Danach das Mienenspiel beim Sprechen (§4.1)
@@ -196,8 +229,10 @@ sondern eine Messung:
 2. **Müssen Erkennung und Synthese rotieren?** Mit zram und Auslagerung
    wahrscheinlich nicht; der Kernel verdrängt feiner als eine
    Rotationsmechanik. Antwort in H5.
-3. **Braucht Audio einen eigenen Prozess?** Nur wenn es den Renderer
-   ausbremst. Antwort in H6.
+3. ~~Braucht Audio einen eigenen Prozess?~~ **Entschieden: ja** (Regel 5g).
+   Nicht wegen der Messung, sondern wegen der globalen Sperre in Python,
+   der Stabilität von Audio-Bibliotheken auf ARM und der Möglichkeit,
+   Speicher freizugeben. Offen bleibt nur, wie schlank er wird.
 
 Für alle drei sind die Auswege bereits benannt und tasten den Entwurf
 nicht an.
@@ -212,6 +247,7 @@ nicht an.
 - **Keine Portierung von Noisy.** Noisy läuft unverändert weiter. Der
   Renderer wurde übernommen und angepasst, nicht abgelöst.
 - **Kein Code aus OpenMinis.** Vier Muster, neu geschrieben.
-- **Keine Selbstveränderung.** `patch_self.py` bleibt draußen — auf einem
-  Gerät, dessen System auf eMMC liegt, gibt es keinen Rettungsweg
-  (`docs/HARDWARE.md` §3a).
+- **Keine Selbstveränderung ohne Rückweg.** `patch_self.py` wird ersetzt,
+  nicht übernommen: sichern, prüfen, zurückspielen können (Regel 10i).
+- **Keine Festlegung auf ein Panel.** Mehrere Anzeigen sind Absicht, nicht
+  Zugabe (Regel 6c).

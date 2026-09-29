@@ -77,6 +77,12 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   (Upstream und Fork) und OpenMinis — übernehmen, anpassen, weglassen.
 - `docs/HYBRID-PLAN.md`: Aufbau und Reihenfolge in acht Stufen.
 
+- `docs/DISPLAYS.md`: mehrere Anzeigen statt einer. Panel-Profile,
+  Darstellungsarten (animiert bis 1-Bit-reduziert), Erkennung bei jedem
+  Start. Der E-Paper-Treiber bleibt und kommt aus dem eigenen Fork.
+- `docs/PROVIDER.md`: Anbieterschicht als Hybrid — Gotchis Werkzeugschleife
+  mit OpenMinis' Anbietermuster. Dazu MCP und der eigene Audio-Prozess.
+
 ### Bekannte Einschränkungen
 
 - Noisys Reset-Überlagerung wurde entfernt; Chimera wird über Telegram

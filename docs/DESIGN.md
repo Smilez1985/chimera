@@ -673,6 +673,41 @@ Noisys `AUDIO_SMOOTHING = 0.18` bleibt daneben für die Audiokopplung
 erhalten — dort glättet es jetzt die eigene Sprachausgabe (§4.1) statt der
 Musik.
 
+### Architekturregel 6c — Das Panel ist eine Eigenschaft, keine Annahme
+
+Chimera ist **nicht auf ein Panel festgelegt** — das senkt die
+Einstiegshürde: Wer einen Pi mit E-Paper oder einen GamePi13 hat, soll
+Chimera benutzen können, ohne Hardware zu kaufen.
+
+Nichts oberhalb der Anzeigeschicht weiß, welches Panel angeschlossen ist.
+Der Renderer fragt nach Fläche und Fähigkeiten. Einzelheiten und die Liste
+der Anzeigen: `docs/DISPLAYS.md`.
+
+**Der E-Paper-Treiber bleibt** und wird aus dem eigenen Fork übernommen,
+wo die Unterscheidung mono gegen B bereits gebaut ist — samt dem teuer
+erworbenen Wissen über Zeitverhalten (B-Variante: Vollbild rund 15–20 s,
+Zeitgrenze 120 s statt 45 s).
+
+### Architekturregel 6d — Dieselben Moods, verschiedene Darstellungen
+
+Ein Panel, das 20 Sekunden je Bild braucht, kann nicht animieren — aber
+ein gutes Standbild zeigen. Der Mood bleibt derselbe Datensatz, nur seine
+Umsetzung ändert sich: animiert, Standbild, reduziert (1 Bit),
+reduziert mit Akzent (S/W + Rot).
+
+Die reduzierte Form ist **keine Notlösung**, sondern eine eigene
+Gestaltung. Ein Gesicht in Strichzeichnung kann ausdrucksstärker sein als
+eines mit Farbverlauf — es muss nur dafür entworfen sein.
+
+### Architekturregel 6e — Anzeige bei jedem Start prüfen
+
+Wer das Panel wechselt, schaltet ein und es funktioniert. Bei jedem Start
+wird erkannt, was angeschlossen ist; weicht es ab, werden fehlende
+Abhängigkeiten nachinstalliert und der passende Treiber aktiviert.
+
+Bei mehrdeutigem Befund wird **gemeldet und vorgeschlagen**, nicht
+geraten — ein falscher Treiber kann ein E-Paper beschädigen (Regel 10g).
+
 ### Architekturregel 7 — Ein Prozess, ein Framebuffer
 
 openclawgotchis Display-Layer startet pro Update einen `sudo`-Subprozess
@@ -918,6 +953,27 @@ die Boarderkennung nur auf dem Gerät prüfbar, das man gerade nicht hat.
 
 ---
 
+### Architekturregel 10i — Selbstaktualisierung nur mit Rückweg
+
+Ein Gerät, das sich selbst aktualisiert, muss sich selbst zurückholen
+können. openclawgotchis `patch_self.py` ändert den eigenen Quelltext ohne
+Sicherung und ohne Selbstprüfung — auf einem System vom eMMC, wo es
+keinen Rettungsweg gibt (`docs/HARDWARE.md` §3a), ist das nicht vertretbar.
+
+Stattdessen die Reihenfolge, die sich andernorts bewährt hat:
+
+    sichern → aktualisieren → selbst prüfen → bei Fehlschlag zurückspielen
+
+Bedingungen:
+
+- Die Sicherung entsteht **vor** der Änderung und wird geprüft, nicht nur
+  angelegt (Regel 8a: das Ergebnis prüfen, nicht den Exitcode).
+- Die Selbstprüfung muss **etwas bestätigen**, nicht nur fehlerfrei
+  durchlaufen: Dienst läuft, Anzeige antwortet, Modell erreichbar.
+- Das Zurückspielen läuft **ohne Netz und ohne das neue Programm** —
+  sonst hängt die Rettung an dem, was gerade kaputt ist.
+- Jeder Lauf wird protokolliert (Regel 10e), auch der erfolgreiche.
+
 ### Architekturregel 10e — Jeder Lauf hinterlässt ein Protokoll
 
 In `logs/` (vorgesehen: `/var/log/chimera/`), **auch bei Erfolg**. Ein
@@ -1036,6 +1092,9 @@ scannen.
 - **5e** — zram und Auslagerungsdatei gehören zum Aufbau
 - **6** — Keine absoluten Pixelwerte
 - **6b** — Weich ist der Normalfall, hart muss möglich bleiben
+- **6c** — Das Panel ist eine Eigenschaft, keine Annahme
+- **6d** — Dieselben Moods, verschiedene Darstellungen
+- **6e** — Anzeige bei jedem Start prüfen
 - **7** — Ein Prozess, ein Framebuffer
 - **8** — Die Mood-Steuerung ist ein Skill, kein Sonderweg
 - **8a** — Stiller Erfolg ist die gefährlichste Fehlerart
@@ -1045,6 +1104,7 @@ scannen.
 - **10b** — Erkennung stützt sich auf `compatible`, nicht auf den Klartextnamen
 - **10c** — Alles Boardabhängige steht in einer Profiltabelle
 - **10d** — Alles Lesende geht über ein Wurzelverzeichnis
+- **10i** — Selbstaktualisierung nur mit Rückweg
 - **10e** — Jeder Lauf hinterlässt ein Protokoll
 - **10f** — Keine Container auf dem Gerät
 - **10g** — Nie raten
