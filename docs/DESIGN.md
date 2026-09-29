@@ -69,12 +69,17 @@ Slots und Felder:
 
 ### 3.2 Was gegenüber Noisy entfällt
 
-Noisy leitet Moods aus Umgebungsgeräuschen ab. Chimera tut das **nicht**.
-Ersatzlos gestrichen:
+Noisy bildet Geräusche **fest** auf Moods ab. Chimera behält das Hören,
+aber nicht die feste Zuordnung (§3.4). Gestrichen wird deshalb:
 
-- `labels` — AudioSet-Label → Mood (in Noisy 41×)
+- `labels` — AudioSet-Label → Mood (in Noisy 41×). Die Zuordnung trifft
+  das Sprachmodell, nicht die Tabelle.
 - `fingerprint` — Genre-Erkennung über Label-Indizien (7×)
 - `energy` — BPM-/Lautstärke-Fenster (21×)
+
+Eine **kleine** feste Zuordnung bleibt allerdings: die Reflexe für
+Sofortreaktionen (§3.4, Ebene 1). Ein Erschrecken darf nicht auf eine
+Modellantwort warten.
 
 Es bleiben `priority`, `fast_track` und alle Darstellungs-Slots.
 Neu hinzu: `origin` (builtin / mixed / generated), `created_at`,
@@ -101,6 +106,100 @@ Verhindert, dass dasselbe Gefühl immer pixelgleich aussieht.
 Nur wenn Mischen nicht reicht. Der Agent bekommt das Vokabular als
 Schema und schreibt einen neuen Mood. Ergebnis wird validiert (§3.4),
 persistiert und ist danach kostenlos wiederverwendbar.
+
+### 3.4 Umgebungshören im Ruhezustand
+
+Chimera reagiert nicht nur auf Ansprache. **Wenn niemand mit ihm redet,
+hört es dem Raum zu** — damit es etwas tut, wenn der Raum lebt.
+
+Das ist ausdrücklich **nicht** Noisys Modell. Noisy bildet Geräusche fest
+auf Moods ab: `labels` im Mood-Dict, Label rein, Mood raus. Chimera behält
+die **Erkennung** und wirft die **Zuordnung** weg — welcher Ausdruck zu
+einem Geräusch passt, entscheidet das Sprachmodell, situationsabhängig.
+
+Derselbe Hundebellen-Reiz kann morgens „aufmerksam" bedeuten und nachts um
+drei „erschrocken". Eine Tabelle kann das nicht, ein Modell mit Kontext
+schon.
+
+#### Architekturregel 2a — Das Modell wird nicht pro Geräusch gefragt
+
+Der naive Bau wäre: Geräusch erkannt → Anfrage ans Sprachmodell → Mood.
+Das scheitert dreifach: an der Latenz (das Modell liegt außerhalb, Regel
+5), an den Kosten (Dauerbetrieb) und am Netzausfall.
+
+Stattdessen **drei Geschwindigkeiten**:
+
+| Ebene | Reaktionszeit | braucht Modell |
+|---|---|---|
+| Sofortreaktion | unter 1 s | nein |
+| Stimmungslage | Sekunden | nein |
+| Deutung | Minuten | ja, asynchron |
+
+1. **Sofortreaktion.** Ein plötzlicher Knall, ein Lachen — dafür gibt es
+   eine kleine, fest verdrahtete Menge von Reflexen. Noisys `fast_track`
+   ist genau das. Ein Gerät, das erst in drei Sekunden zusammenzuckt, ist
+   kaputt.
+2. **Stimmungslage.** Aus dem, was über die letzten Minuten zu hören war,
+   ergibt sich ein Grundzustand — ruhig, belebt, laut. Rein lokal
+   gerechnet, ohne Modell, über Mischen und Variieren (§3.3 Stufen 1–2).
+3. **Deutung.** In größeren Abständen — oder wenn sich etwas deutlich
+   ändert — bekommt das Sprachmodell eine **Zusammenfassung** der
+   akustischen Lage und antwortet mit einem Mood: gemischt aus
+   vorhandenen oder neu erfunden. Das Ergebnis wird gespeichert und gilt,
+   bis die nächste Deutung kommt.
+
+Das Modell wird also **pro Situation** befragt, nicht pro Geräusch. Eine
+Anfrage alle paar Minuten ist bezahlbar; eine pro Geräusch wäre es nicht.
+
+#### Architekturregel 2b — Nur im Ruhezustand wird zugehört
+
+Umgebungshören läuft **nur, wenn gerade kein Gespräch stattfindet.**
+
+Zwei Gründe, beide zwingend:
+
+- **Rechenzeit.** Auf dem Pi Zero 2 W teilen sich Renderer, Wake-Word,
+  Spracherkennung und Sprachsynthese vier schwache Kerne. Dauerndes
+  Audio-Tagging nebenher kostet Bildrate.
+- **Bedeutung.** Während eines Gesprächs ist das Wichtigste im Raum, was
+  gesagt wird. Ein Gerät, das mitten im Satz auf ein vorbeifahrendes Auto
+  reagiert, wirkt nicht lebendig, sondern unaufmerksam.
+
+Der Übergang ist damit klar: Wake-Word oder Tastendruck beendet das
+Zuhören, das Gespräch übernimmt; nach dessen Ende kehrt es zurück.
+
+#### Modellwahl: nicht der Zipformer
+
+Für das reine Tagging wird **CED-tiny** verwendet, nicht der Zipformer,
+den Noisy einsetzt. Auf dem Pi Zero 2 W gemessen (int8, 2 Threads):
+
+    Zipformer-small   22,1 M Parameter   26 MB   4,71 s   mAP 45,1
+    CED-tiny           5,5 M Parameter  5,9 MB   0,83 s   mAP 48,1
+
+Kleiner, rund fünfmal schneller und auf AudioSet sogar genauer. Bei einem
+Gerät, das nebenher rendert und jederzeit ins Gespräch wechseln können
+muss, entscheidet die Laufzeit.
+
+**Der Haken ist bekannt und beherrschbar:** CED liefert flachere
+Wahrscheinlichkeiten — ein Lachen, das der Zipformer mit 93 % meldet,
+kommt dort mit 38 % an. Für die Sofortreaktion braucht es deshalb einen
+modellabhängigen Schwellenfaktor. Für die Deutung durch das Sprachmodell
+spielt es kaum eine Rolle, weil dort ohnehin die Rangfolge der Labels
+zählt und nicht deren absoluter Wert.
+
+Das ist ein Punkt für die Messung auf echter Hardware, nicht für eine
+Annahme.
+
+#### Was das Modell bekommt und zurückgibt
+
+Hinein geht eine Lagebeschreibung, keine Rohdaten: erkannte Labels mit
+Häufigkeit, Lautstärkeverlauf, Tageszeit, wie lange niemand gesprochen
+hat, aktueller Mood. Heraus kommt entweder der Name eines vorhandenen
+Moods, eine Mischanweisung oder ein neuer Mood-Datensatz — der dann
+genauso validiert wird wie jeder andere (Regel 2).
+
+**Bei Netzausfall bleibt Ebene 1 und 2.** Das Gerät behält ein Gesicht und
+eine Stimmung, es verliert nur die Deutung. Das ist der Normalfall bei
+einem Gerät, das an einem externen Modell hängt — und kein Fehlerzustand.
 
 ### Architekturregel 2 — Ein generierter Mood wird immer validiert
 

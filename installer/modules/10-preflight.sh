@@ -63,7 +63,11 @@ fi
 
 # --- Berichten ------------------------------------------------------------
 
+# Preflight aendert ohnehin nichts -- im Trockenlauf ist es also
+# identisch. Das wird gesagt, statt die Option stillschweigend zu
+# ignorieren: eine Option ohne Wirkung ist ein offenes Ende.
 log "Chimera preflight"
+is_dry_run && info "(preflight aendert nie etwas — Betriebsart ohne Folgen)"
 log ""
 log "Board und System"
 info "Board:          $BOARD ($(profile_get "$BOARD" name))"

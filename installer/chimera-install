@@ -62,7 +62,10 @@ fi
 log_open "install" || warn "Kein Protokoll moeglich — Lauf wird nicht festgehalten."
 
 log "chimera-install $VERSION"
-[ "$MODE" != run ] && info "Betriebsart: $MODE"
+case "$MODE" in
+	dry)   info "Trockenlauf — es wird nichts geaendert." ;;
+	check) info "Pruefung — es wird nichts geaendert." ;;
+esac
 [ -n "$ONLY" ] && info "Nur Modul: $ONLY"
 log ""
 

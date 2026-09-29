@@ -46,12 +46,52 @@ info() { printf '  %s\n' "$*";         _log_raw "  $*"; }
 warn() { printf 'WARN: %s\n' "$*" >&2; _log_raw "WARN: $*"; }
 err()  { printf 'FEHLER: %s\n' "$*" >&2; _log_raw "FEHLER: $*"; }
 
+# Protokolle aufraeumen: die juengsten CHIMERA_LOG_KEEP behalten. Sonst
+# laeuft auf einem Geraet, das monatelang durchlaeuft, die Karte voll --
+# ausgerechnet wegen der Dateien, die beim Debuggen helfen sollen.
+: "${CHIMERA_LOG_KEEP:=20}"
+log_rotate() {
+	[ -d "$CHIMERA_LOG_DIR" ] || return 0
+	_lr_n=0
+	# Neueste zuerst; alles ab Position KEEP+1 faellt weg.
+	for _lr_f in $(ls -1t "$CHIMERA_LOG_DIR"/*.log 2>/dev/null); do
+		_lr_n=$((_lr_n + 1))
+		[ "$_lr_n" -le "$CHIMERA_LOG_KEEP" ] && continue
+		rm -f "$_lr_f" 2>/dev/null || true
+	done
+}
+
+# --- Betriebsart ----------------------------------------------------------
+#
+# Module fragen NICHT selbst die Variable ab, sondern benutzen diese
+# Helfer. Sonst steht die Bedeutung von "dry" an zwanzig Stellen und
+# driftet auseinander.
+: "${CHIMERA_MODE:=run}"
+
+mode_is()      { [ "$CHIMERA_MODE" = "$1" ]; }
+is_dry_run()   { [ "$CHIMERA_MODE" = dry ] || [ "$CHIMERA_MODE" = check ]; }
+is_check()     { [ "$CHIMERA_MODE" = check ]; }
+
+# Eine aendernde Handlung ausfuehren -- oder im Trockenlauf nur ankuendigen.
+# $1 Beschreibung, Rest: der Befehl.
+do_change() {
+	_dc_what="$1"; shift
+	if is_dry_run; then
+		info "[wuerde] $_dc_what"
+		_log_raw "  [dry] $_dc_what"
+		return 0
+	fi
+	info "$_dc_what"
+	"$@"
+}
+
 # Bilanz am Ende -- auch bei Erfolg.
 log_close() {
 	_lc_rc="${1:-0}"
 	if [ "$_lc_rc" -eq 0 ]; then _log_raw "=== Ergebnis: Erfolg (0) ==="
 	else _log_raw "=== Ergebnis: Exitcode $_lc_rc ==="; fi
 	[ -n "$CHIMERA_LOGFILE" ] && printf 'Protokoll: %s\n' "$CHIMERA_LOGFILE"
+	log_rotate
 	return 0
 }
 

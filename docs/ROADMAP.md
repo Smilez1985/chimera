@@ -112,6 +112,29 @@ Kann parallel zu Phase 4 laufen; berührt den Renderer nicht.
       kürzer als geschrieben)
 - [ ] Avatar zeigt auch bei Telegram-Anfragen den Agentenzustand
 
+## Phase 5a — Umgebungshören im Ruhezustand
+
+Setzt Phase 5 voraus (Audioaufnahme läuft bereits). Details in
+`docs/DESIGN.md` §3.4.
+
+- [ ] CED-tiny statt Zipformer einbinden (5,9 MB, 0,83 s gegen 4,71 s auf
+      dem Pi Zero 2 W) — sherpa-onnx spricht beide Architekturen
+      unterschiedlich an
+- [ ] Schwellenfaktor je Modell: CED liefert flachere Wahrscheinlichkeiten
+- [ ] Ebene 1: kleine Reflextabelle für Sofortreaktionen (Knall, Lachen),
+      ohne Modell, unter 1 s
+- [ ] Ebene 2: Stimmungslage aus den letzten Minuten, lokal über Mischen
+      und Variieren
+- [ ] Ebene 3: Lagebeschreibung an das Sprachmodell, Antwort ist ein
+      Mood-Name, eine Mischanweisung oder ein neuer Mood
+- [ ] **Nur im Ruhezustand** hören; Wake-Word oder Taste beendet es
+      (Regel 2b)
+- [ ] Anfragen begrenzen (Mindestabstand, Auslösung bei deutlicher
+      Änderung) — das Modell wird pro Situation befragt, nicht pro Geräusch
+- [ ] Netzausfall: Ebene 1 und 2 laufen weiter, Zustand wird angezeigt
+- [ ] **Auf Hardware messen:** Bildrate des Renderers mit laufendem
+      Tagging; falls zu teuer, Taktrate senken
+
 ## Phase 5 — Sprache
 
 Einzeln nachrüstbar, in dieser Reihenfolge.

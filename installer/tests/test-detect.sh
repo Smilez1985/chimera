@@ -218,6 +218,44 @@ grep -q "Erfolg (0)" "$CHIMERA_LOGFILE" 2>/dev/null && ok "auch Erfolg wird fest
 CHIMERA_LOGFILE=""
 rm -rf "$R"
 
+echo "== Betriebsart =="
+R="$(mktemp -d)"; load "$R"
+CHIMERA_MODE=run;   is_dry_run && bad "run ist kein Trockenlauf" || ok "run aendert"
+CHIMERA_MODE=dry;   is_dry_run && ok "dry ist Trockenlauf"   || bad "dry nicht erkannt"
+CHIMERA_MODE=check; is_dry_run && ok "check aendert nichts"  || bad "check nicht erkannt"
+CHIMERA_MODE=check; is_check   && ok "check unterscheidbar"  || bad "is_check falsch"
+
+# do_change muss im Trockenlauf den Befehl WIRKLICH nicht ausfuehren.
+CHIMERA_MODE=dry
+do_change "Datei anlegen" touch "$R/darf-nicht.txt" >/dev/null 2>&1
+[ -e "$R/darf-nicht.txt" ] && bad "do_change hat im Trockenlauf geaendert" \
+	|| ok "do_change aendert im Trockenlauf nichts"
+
+# Gegenprobe: im Normalbetrieb MUSS er ausfuehren, sonst misst der Test nichts.
+CHIMERA_MODE=run
+do_change "Datei anlegen" touch "$R/muss.txt" >/dev/null 2>&1
+[ -e "$R/muss.txt" ] && ok "Gegenprobe: im Normalbetrieb wird ausgefuehrt" \
+	|| bad "do_change fuehrt gar nicht aus"
+CHIMERA_MODE=run
+rm -rf "$R"
+
+echo "== Protokolle aufraeumen =="
+R="$(mktemp -d)"; load "$R"
+CHIMERA_LOG_DIR="$R/logs"; mkdir -p "$CHIMERA_LOG_DIR"
+i=1; while [ "$i" -le 25 ]; do
+	: >"$CHIMERA_LOG_DIR/alt-$i.log"; i=$((i+1))
+done
+CHIMERA_LOG_KEEP=20 log_rotate
+_n="$(ls -1 "$CHIMERA_LOG_DIR"/*.log 2>/dev/null | wc -l | tr -d ' ')"
+check "auf 20 begrenzt" "$_n" "20"
+
+# Gegenprobe: ohne Aufruf bleiben alle liegen.
+i=1; while [ "$i" -le 5 ]; do : >"$CHIMERA_LOG_DIR/neu-$i.log"; i=$((i+1)); done
+_n2="$(ls -1 "$CHIMERA_LOG_DIR"/*.log 2>/dev/null | wc -l | tr -d ' ')"
+[ "$_n2" -eq 25 ] && ok "Gegenprobe: ohne Aufraeumen wachsen sie" || bad "Gegenprobe misslungen ($_n2)"
+CHIMERA_LOGFILE=""
+rm -rf "$R"
+
 echo ""
 printf 'Ergebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
