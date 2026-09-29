@@ -36,7 +36,22 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 - Protokolle werden aufgeräumt; die jüngsten 20 bleiben
   (`CHIMERA_LOG_KEEP`).
 
+- Mood-Schicht (`src/chimera/mood/`): Vokabular, Validator, Registry sowie
+  Mischen und Variieren. Schema und Validator entstehen aus **einer**
+  Tabelle, damit sie nicht auseinanderdriften.
+- **Freie Zeichenformen**: elf Grundformen mit relativen Koordinaten,
+  Ebene und Bewegung. Benannte Bausteine sind Vorschläge — ein Name, den
+  der Renderer nicht kennt, wird übernommen und über eigene Formen
+  dargestellt.
+- Noisys 41 Moods als Startbestand, ohne die Audio-Kopplung
+  (`tools/import-noisy-moods.py`).
+- 68 Tests für die Mood-Schicht, mit Gegenproben.
+
 ### Bekannte Einschränkungen
+
+- Es gibt noch **keinen Renderer**, der die Formen zeichnet. Das Vokabular
+  ist damit beschrieben und geprüft, aber nicht sichtbar.
+- `MAX_SHAPES` (40) ist geschätzt, nicht gemessen.
 
 - Ob der Renderer 15 Bilder je Sekunde hält, **während** gesprochen wird,
   ist auf echter Hardware ungeprüft. Ausweichwege stehen in

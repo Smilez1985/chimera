@@ -24,26 +24,26 @@ Stand: 2026-09-29. Pre-Alpha.
 
 **Ohne Hardware testbar.** Kern der neuen Idee, deshalb zuerst.
 
-- [ ] Kanonische Feldtabelle: Slot, Feld, Typ, Min/Max bzw. Enum-Werte
-- [ ] Schema-Generator für den Agenten *aus derselben Tabelle*
-      (Architekturregel 2 — keine zweite Liste)
-- [ ] Validator mit Clamping; unbekannte Keys verwerfen
-- [ ] Fallback-Mood
-- [ ] Mood-Registry mit dynamischer ID-Vergabe
-- [ ] Felder `origin`, `created_at`, `last_used`
-- [ ] Noisys 41 Moods als Startbestand importieren, `labels`/`fingerprint`/
-      `energy` abstreifen
-- [ ] Tests inkl. Gegenprobe: absurde Werte müssen geklemmt werden
+- [x] Kanonische Feldtabelle (`src/chimera/mood/schema.py`)
+- [x] Schema für den Agenten *aus derselben Tabelle* (`describe_for_llm`)
+- [x] Validator: zurechtstutzen statt ablehnen, unbekannte Felder verwerfen
+- [x] Rückfall-Mood
+- [x] Registry mit dynamischer Nummernvergabe, Ablage als JSON
+- [x] Herkunft, Anlage- und Nutzungszeit; Aufräumen nach Gebrauch
+- [x] **Freie Zeichenformen** (`draw.py`) — 11 Grundformen, Regel 1a
+- [x] Noisys 41 Moods als Startbestand (`tools/import-noisy-moods.py`)
+- [x] 68 Tests mit Gegenproben
 
 ## Phase 2 — Mischen und Variieren
 
 **Ohne Hardware testbar.**
 
-- [ ] `mix(a, b, gewicht)` — HSV für Farben, gewichtetes Mittel für Zahlen,
-      Gewichtsentscheid bei Enums
-- [ ] `vary(mood, seed)` — begrenztes Rauschen
+- [x] `mix(a, b, gewicht)` — Farbton statt Kanäle, Listen werden vereinigt
+- [x] `vary(mood, seed)` — gleicher Anlass, gleiches Ergebnis
 - [ ] Offline-Renderziel: Mood → PNG in eine Datei, zum Ansehen
+      (**nächster Schritt** — beantwortet, ob generierte Ausdrücke taugen)
 - [ ] Kontaktbogen: alle Startmoods plus Mischungen als Bildübersicht
+- [ ] `MAX_SHAPES` auf echter Hardware messen
 
 ## Phase 3 — Display und Renderer
 

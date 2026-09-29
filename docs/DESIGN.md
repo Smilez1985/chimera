@@ -103,9 +103,51 @@ Begrenztes Rauschen auf einen bestehenden Mood, Seed aus dem Anlass.
 Verhindert, dass dasselbe Gefühl immer pixelgleich aussieht.
 
 **Stufe 3 — Erfinden. LLM, selten.**
-Nur wenn Mischen nicht reicht. Der Agent bekommt das Vokabular als
-Schema und schreibt einen neuen Mood. Ergebnis wird validiert (§3.4),
-persistiert und ist danach kostenlos wiederverwendbar.
+Nur wenn Mischen nicht reicht. Der Agent bekommt das Vokabular als Schema
+— benannte Bausteine **und** die freien Zeichenformen (§3.3a) — und
+schreibt einen neuen Mood. Ergebnis wird validiert, gespeichert und ist
+danach kostenlos wiederverwendbar.
+
+### 3.3a Der Renderer ist nicht die Grenze
+
+Noisy kennt benannte Bausteine: `mouth.style = "smile"`, `accessory =
+"saxophone"`. Der Renderer weiß, wie man ein Saxophon zeichnet; das Modell
+darf es auswählen. Damit ist der Ausdruck auf das gedeckelt, was jemand
+vorher von Hand gezeichnet hat — eine Auswahlliste, kein
+Ausdrucksvermögen.
+
+**Chimera gibt die Grundformen heraus, aus denen diese Figuren ohnehin
+bestehen.** Noisys gesamter Avatar, Saxophon und Rastamütze eingeschlossen,
+ist aus elf Zeichenbefehlen gebaut:
+
+    Flächen   ellipse, circle, rect, polygon, ngon
+    Bögen     arc (offen), chord (Sehne), pieslice (Tortenstück)
+    Striche   line, point
+    Schrift   text
+
+Dazu Farbe, Umriss, Füllung, eine Ebene (`behind`, `body`, `face`,
+`front`) und eine Bewegung (`bob`, `sway`, `spin`, `pulse`, `flicker`,
+`audio` — letztere folgt der eigenen Sprachausgabe, §4.1).
+
+#### Architekturregel 1a — Benannte Bausteine sind Vorschläge, keine Grenze
+
+Ein Wert, den der Renderer nicht kennt, ist **kein Fehler**. Schreibt das
+Modell `mouth.style = "zaehneknirschen"`, wird der Name übernommen und die
+Darstellung kommt aus den freien Formen, die es mitliefert. Der Validator
+vermerkt das, lehnt aber nicht ab.
+
+Damit sind Noisys 41 Moods das, was sie sein sollen: **Beispiele dafür,
+was möglich ist** — Startbestand zum Mischen, nicht Katalog zum Auswählen.
+
+Zwei Dinge bleiben fest, beide aus gutem Grund:
+
+- **Koordinaten sind relativ** (0..1, `0.5` ist die Mitte). Sonst wäre
+  Erfundenes an 240×280 gebunden (Regel 6).
+- **Es gibt eine Obergrenze** für erfundene Formen (`MAX_SHAPES`, derzeit
+  40). Nicht als Bevormundung: Bei 15 Bildern je Sekunde bleiben rund
+  66 ms pro Bild, und wer 400 Polygone zeichnen lässt, bekommt eine
+  Diashow. Der Wert ist eine Einstellung und gehört auf echter Hardware
+  gemessen.
 
 ### Architekturregel 2 — Ein generierter Mood wird immer validiert
 
@@ -947,6 +989,7 @@ scannen.
 ## Verzeichnis der Architekturregeln
 
 - **1** — Die GPL-Grenze ist hart
+- **1a** — Benannte Bausteine sind Vorschläge, keine Grenze
 - **2** — Ein generierter Mood wird immer validiert
 - **3a** — Das Modell wird nicht pro Geräusch gefragt
 - **3b** — Nur im Ruhezustand wird zugehört

@@ -1,0 +1,3119 @@
+{
+  "moods": [
+    {
+      "body": {
+        "color": [
+          30,
+          180,
+          220
+        ],
+        "glow": [
+          15,
+          90,
+          110
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "note",
+        "rate": 0.2,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": [
+          "headphones"
+        ]
+      },
+      "name": "MUSIC",
+      "priority": 50,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          255,
+          30,
+          30
+        ],
+        "glow": [
+          180,
+          15,
+          15
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": true,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0.85,
+        "headbang_amp": 26.0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "note",
+        "rate": 0.3,
+        "color": [
+          255,
+          100,
+          50
+        ]
+      },
+      "accessory": {
+        "type": [
+          "devil_sign"
+        ]
+      },
+      "name": "ROCK",
+      "priority": 90,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          180,
+          120,
+          255
+        ],
+        "glow": [
+          90,
+          60,
+          180
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.12,
+        "sway_amp": 16.0,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "note",
+        "rate": 0.2,
+        "color": [
+          180,
+          130,
+          255
+        ]
+      },
+      "accessory": {
+        "type": [
+          "saxophone"
+        ]
+      },
+      "name": "JAZZ",
+      "priority": 80,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          255,
+          200,
+          0
+        ],
+        "glow": [
+          180,
+          140,
+          0
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0.55,
+        "bounce_amp": 32.0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "note",
+        "rate": 0.25,
+        "color": [
+          255,
+          215,
+          0
+        ]
+      },
+      "accessory": {
+        "type": [
+          "gold_chain"
+        ]
+      },
+      "name": "HIPHOP",
+      "priority": 85,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          0,
+          200,
+          80
+        ],
+        "glow": [
+          0,
+          120,
+          40
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0.18,
+        "bounce_amp": 6.0,
+        "sway_speed": 0.22,
+        "sway_amp": 9.0,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "note",
+        "rate": 0.2,
+        "color": [
+          0,
+          220,
+          100
+        ]
+      },
+      "accessory": {
+        "type": [
+          "rasta_hat"
+        ]
+      },
+      "name": "REGGAE",
+      "priority": 80,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          255,
+          0,
+          180
+        ],
+        "glow": [
+          180,
+          0,
+          120
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0.8,
+        "bounce_amp": 22.0,
+        "sway_speed": 0.6,
+        "sway_amp": 12.0,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "star",
+        "rate": 0.3,
+        "color": [
+          255,
+          100,
+          255
+        ]
+      },
+      "accessory": {
+        "type": [
+          "drink"
+        ]
+      },
+      "name": "PARTY",
+      "priority": 85,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          60,
+          140,
+          180
+        ],
+        "glow": [
+          30,
+          70,
+          90
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0.09,
+        "bounce_amp": 7.0,
+        "sway_speed": 0.04,
+        "sway_amp": 3.0,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "note",
+        "rate": 0.08,
+        "color": [
+          100,
+          180,
+          220
+        ]
+      },
+      "accessory": {
+        "type": [
+          "sunglasses",
+          "frost"
+        ]
+      },
+      "name": "CHILL",
+      "priority": 40,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          220,
+          200,
+          255
+        ],
+        "glow": [
+          120,
+          100,
+          180
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": "peruecke",
+        "color": [
+          240,
+          240,
+          236
+        ],
+        "color_dark": [
+          198,
+          198,
+          196
+        ],
+        "color_light": [
+          255,
+          255,
+          252
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.08,
+        "sway_amp": 6.0,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "note",
+        "rate": 0.12,
+        "color": [
+          200,
+          180,
+          255
+        ]
+      },
+      "accessory": {
+        "type": [
+          "sheet_music"
+        ]
+      },
+      "name": "CLASSIC",
+      "priority": 60,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          30,
+          180,
+          220
+        ],
+        "glow": [
+          15,
+          90,
+          110
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "LISTEN",
+      "priority": 30,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          255,
+          220,
+          0
+        ],
+        "glow": [
+          180,
+          160,
+          0
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 0.5,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "grin",
+        "width": 1.3
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0.6,
+        "bounce_amp": 8.0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "star",
+        "rate": 0.2,
+        "color": [
+          255,
+          255,
+          100
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "LAUGH",
+      "priority": 85,
+      "fast_track": true
+    },
+    {
+      "body": {
+        "color": [
+          80,
+          80,
+          200
+        ],
+        "glow": [
+          40,
+          40,
+          120
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 0.8,
+        "look_offset": -3,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "frown",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "heart",
+        "rate": 0.08,
+        "color": [
+          100,
+          200,
+          255
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "SAD",
+      "priority": 70,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          255,
+          0,
+          0
+        ],
+        "glow": [
+          200,
+          0,
+          0
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.6,
+        "scale_h": 1.7,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "open_round",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 8.0,
+        "shake_y": 6.0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "exclamation",
+        "rate": 0.35,
+        "color": [
+          255,
+          255,
+          0
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "SCARED",
+      "priority": 100,
+      "fast_track": true
+    },
+    {
+      "body": {
+        "color": [
+          100,
+          200,
+          150
+        ],
+        "glow": [
+          50,
+          120,
+          80
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.2,
+        "scale_h": 1.1,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "concerned",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "heart",
+        "rate": 0.15,
+        "color": [
+          255,
+          150,
+          150
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "EMPATHY",
+      "priority": 75,
+      "fast_track": true
+    },
+    {
+      "body": {
+        "color": [
+          200,
+          180,
+          50
+        ],
+        "glow": [
+          120,
+          100,
+          25
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.3,
+        "scale_h": 1.2,
+        "look_offset": 8,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "neutral",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "CURIOUS",
+      "priority": 45,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          215,
+          95,
+          200
+        ],
+        "glow": [
+          120,
+          40,
+          110
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": true
+      },
+      "mouth": {
+        "style": "squiggle",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": true,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0.3,
+        "bounce_amp": 2.5,
+        "sway_speed": 0.35,
+        "sway_amp": 3.5,
+        "shake_x": 3.0,
+        "shake_y": 2.0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "exclamation",
+        "rate": 0.3,
+        "color": [
+          255,
+          230,
+          120
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "CHAOS",
+      "priority": 70,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          135,
+          200,
+          160
+        ],
+        "glow": [
+          65,
+          105,
+          85
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.15,
+        "scale_h": 1.2,
+        "look_offset": 7,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "line",
+        "width": 0.7
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.04,
+        "sway_amp": 1.5,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": [
+          "big_ear"
+        ]
+      },
+      "name": "TALK",
+      "priority": 40,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          100,
+          180,
+          50
+        ],
+        "glow": [
+          50,
+          100,
+          25
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 14,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smirk",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "stink",
+        "rate": 0.2,
+        "color": [
+          120,
+          180,
+          60
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "FART",
+      "priority": 80,
+      "fast_track": true
+    },
+    {
+      "body": {
+        "color": [
+          70,
+          80,
+          150
+        ],
+        "glow": [
+          35,
+          40,
+          80
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 0.18,
+        "look_offset": 0,
+        "droopy": true,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "line",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.03,
+        "sway_amp": 1.5,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "zzz",
+        "rate": 0.08,
+        "color": [
+          180,
+          180,
+          200
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "SLEEP",
+      "priority": 10,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          200,
+          150,
+          80
+        ],
+        "glow": [
+          120,
+          80,
+          40
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "chewing",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "EAT",
+      "priority": 35,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          255,
+          140,
+          0
+        ],
+        "glow": [
+          180,
+          80,
+          0
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0.5,
+        "bounce_amp": 10.0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "sweat",
+        "rate": 0.15,
+        "color": [
+          100,
+          200,
+          255
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "EXERCISE",
+      "priority": 40,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          100,
+          160,
+          220
+        ],
+        "glow": [
+          50,
+          80,
+          120
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "focused",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": [
+          "keyboard"
+        ]
+      },
+      "name": "WORK",
+      "priority": 45,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          50,
+          180,
+          120
+        ],
+        "glow": [
+          25,
+          100,
+          60
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.04,
+        "sway_amp": 3.0,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "NATURE",
+      "priority": 35,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          80,
+          100,
+          160
+        ],
+        "glow": [
+          40,
+          50,
+          90
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.06,
+        "sway_amp": 4.0,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "WEATHER",
+      "priority": 35,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          150,
+          150,
+          150
+        ],
+        "glow": [
+          80,
+          80,
+          80
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "TRAFFIC",
+      "priority": 30,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          180,
+          160,
+          120
+        ],
+        "glow": [
+          100,
+          80,
+          60
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "HOUSE",
+      "priority": 30,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          120,
+          135,
+          175
+        ],
+        "glow": [
+          60,
+          70,
+          100
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": -6,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "line",
+        "width": 0.8
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.03,
+        "sway_amp": 1.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": [
+          "remote"
+        ]
+      },
+      "name": "TV",
+      "priority": 55,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          120,
+          195,
+          205
+        ],
+        "glow": [
+          55,
+          100,
+          110
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 0.35,
+        "look_offset": 0,
+        "droopy": true,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 0.9
+      },
+      "hair": {
+        "visible": true,
+        "wobble": true,
+        "blown": true,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.16,
+        "sway_amp": 5.0,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": [
+          "breeze"
+        ]
+      },
+      "name": "FAN",
+      "priority": 35,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          225,
+          185,
+          120
+        ],
+        "glow": [
+          120,
+          95,
+          55
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.1,
+        "scale_h": 1.0,
+        "look_offset": -4,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "chewing",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.03,
+        "sway_amp": 1.0,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": [
+          "popcorn"
+        ]
+      },
+      "name": "POPCORN",
+      "priority": 50,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          245,
+          170,
+          40
+        ],
+        "glow": [
+          150,
+          95,
+          15
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 0.75,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": true,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "grin",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 4.0,
+        "shake_y": 3.0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "drop",
+        "rate": 0.5,
+        "color": [
+          205,
+          200,
+          190
+        ]
+      },
+      "accessory": {
+        "type": [
+          "ear_muffs",
+          "jackhammer"
+        ]
+      },
+      "name": "TOOLS",
+      "priority": 55,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          95,
+          98,
+          135
+        ],
+        "glow": [
+          50,
+          52,
+          72
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 14,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "neutral",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "BORED",
+      "priority": 5,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          95,
+          135,
+          95
+        ],
+        "glow": [
+          50,
+          72,
+          50
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 0.6,
+        "look_offset": 0,
+        "droopy": true,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": true
+      },
+      "particles": {
+        "type": "smoke",
+        "rate": 0.15,
+        "color": [
+          140,
+          140,
+          140
+        ]
+      },
+      "accessory": {
+        "type": [
+          "joint"
+        ]
+      },
+      "name": "JOINT",
+      "priority": 5,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          85,
+          125,
+          145
+        ],
+        "glow": [
+          45,
+          66,
+          78
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 0.5,
+        "look_offset": 0,
+        "droopy": true,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": true
+      },
+      "particles": {
+        "type": "smoke",
+        "rate": 0.2,
+        "color": [
+          160,
+          160,
+          160
+        ]
+      },
+      "accessory": {
+        "type": [
+          "bong"
+        ]
+      },
+      "name": "BONG",
+      "priority": 5,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          140,
+          100,
+          60
+        ],
+        "glow": [
+          80,
+          50,
+          30
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "sip",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "smoke",
+        "rate": 0.08,
+        "color": [
+          200,
+          200,
+          200
+        ]
+      },
+      "accessory": {
+        "type": [
+          "coffee"
+        ]
+      },
+      "name": "COFFEE",
+      "priority": 5,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          115,
+          120,
+          160
+        ],
+        "glow": [
+          60,
+          63,
+          85
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "yawn",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "YAWN",
+      "priority": 5,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          110,
+          160,
+          135
+        ],
+        "glow": [
+          58,
+          85,
+          70
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": -12.0,
+        "stretch_h": 20.0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "STRETCH",
+      "priority": 5,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          85,
+          90,
+          140
+        ],
+        "glow": [
+          45,
+          48,
+          75
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 0.18,
+        "look_offset": 0,
+        "droopy": true,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": "zzz",
+        "rate": 0.06,
+        "color": [
+          180,
+          180,
+          200
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "DOZE",
+      "priority": 5,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          105,
+          110,
+          150
+        ],
+        "glow": [
+          55,
+          58,
+          80
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": -10,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": [
+          "watch"
+        ]
+      },
+      "name": "WATCH",
+      "priority": 5,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          118,
+          118,
+          155
+        ],
+        "glow": [
+          62,
+          62,
+          82
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "tongue",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "TONGUE",
+      "priority": 5,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          180,
+          100,
+          200
+        ],
+        "glow": [
+          90,
+          50,
+          110
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0.4,
+        "bounce_amp": 12.0,
+        "sway_speed": 0.3,
+        "sway_amp": 8.0,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "DANCE",
+      "priority": 5,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          100,
+          80,
+          160
+        ],
+        "glow": [
+          60,
+          40,
+          100
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 0.3,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "neutral",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.02,
+        "sway_amp": 1.0,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "MEDITATE",
+      "priority": 5,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          50,
+          200,
+          50
+        ],
+        "glow": [
+          25,
+          120,
+          25
+        ]
+      },
+      "eyes": {
+        "scale_w": 0.9,
+        "scale_h": 0.8,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "smile",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.05,
+        "sway_amp": 2.2,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": [
+          "gamepad"
+        ]
+      },
+      "name": "GAME",
+      "priority": 5,
+      "fast_track": false
+    }
+  ]
+}
