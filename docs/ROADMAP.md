@@ -40,16 +40,16 @@ Stand: 2026-09-29. Pre-Alpha.
 
 - [x] `mix(a, b, gewicht)` — Farbton statt Kanäle, Listen werden vereinigt
 - [x] `vary(mood, seed)` — gleicher Anlass, gleiches Ergebnis
-- [ ] Offline-Renderziel: Mood → PNG in eine Datei, zum Ansehen
-      (**nächster Schritt** — beantwortet, ob generierte Ausdrücke taugen)
-- [ ] Kontaktbogen: alle Startmoods plus Mischungen als Bildübersicht
+- [ ] Kontaktbogen: alle Startmoods plus Mischungen nebeneinander,
+      zum Ansehen ohne Gerät (**nächster Schritt**)
 - [ ] `MAX_SHAPES` auf echter Hardware messen
 
 ## Phase 3 — Display und Renderer
 
 Hardware ist vorhanden, also nicht blockiert.
 
-- [ ] Display-Adapter: `PIL.Image` → RGB565 → `board.draw_image()`
+- [x] Display-Adapter: `PIL.Image` → RGB565 → `board.draw_image()`
+      (`chimera.display.panel`, wie bei Noisy direkt in den Panelspeicher)
 - [ ] Renderer neu, **auflösungsrelativ** (Architekturregel 6)
 - [ ] Komponenten-Pipeline in fester Zeichenreihenfolge
 - [ ] Blink-Engine, Nachlauf-Effekte, Software-Dimming

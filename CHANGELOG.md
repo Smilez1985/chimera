@@ -47,10 +47,21 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   (`tools/import-noisy-moods.py`).
 - 68 Tests für die Mood-Schicht, mit Gegenproben.
 
+- Bildausgabe (`src/chimera/display/panel.py`): Pillow-Bild → RGB565 →
+  Panelspeicher über SPI, wie bei Noisy. Die Umrechnung läuft über `numpy`
+  und ist damit rund 25-mal schneller als die bildpunktweise Fassung aus
+  dem Herstellerbeispiel (2,5 ms gegen 62,9 ms je Bild). Ohne `numpy`
+  greift der langsame Weg und meldet sich.
+- `NullPanel` für Entwicklung und Messung ohne Gerät.
+- 11 Tests für die Bildausgabe, inklusive Abgleich gegen die
+  bildpunktweise Fassung.
+
 ### Bekannte Einschränkungen
 
-- Es gibt noch **keinen Renderer**, der die Formen zeichnet. Das Vokabular
-  ist damit beschrieben und geprüft, aber nicht sichtbar.
+- Es gibt noch **keinen Renderer**, der die Formen zeichnet. Die Ausgabe
+  steht bereit, das Vokabular ist geprüft — dazwischen fehlt das Zeichnen.
+- Die Messwerte zur Umrechnung stammen aus der Entwicklungsumgebung
+  (aarch64), nicht vom Zielgerät.
 - `MAX_SHAPES` (40) ist geschätzt, nicht gemessen.
 
 - Ob der Renderer 15 Bilder je Sekunde hält, **während** gesprochen wird,
