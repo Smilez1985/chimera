@@ -154,7 +154,7 @@ Modelle (int8, deutsch):
 | STT | `nemo-fast-conformer-ctc-en-de-es-fr-14288-int8` | 98 MB |
 | TTS | `vits-piper-de_DE-thorsten_emotional-medium-int8` | 22 MB |
 
-### Architekturregel 5 — Sprache lokal, LLM darf remote sein
+### Architekturregel 5 — Sprache lokal, Sprachmodell immer remote
 
 Auf einem Pi Zero 2 W (512 MB) passen Sprache **und** LLM nicht
 gleichzeitig in den Speicher:
@@ -169,10 +169,30 @@ laufendem Renderer bedeutet das Ruckeln und tote Karten.
 Token-Konto, nichts verlässt das eigene Netz.** Ein LLM auf dem eigenen
 Ollama-Server erfüllt das. Sprache bleibt in jedem Fall auf dem Gerät.
 
-Ein Board mit mehr Speicher könnte alles lokal fahren — siehe
-`docs/HARDWARE.md` zur Boardfrage. Die Plattform ist bewusst eine
-**Konfigurationsfrage, keine Architekturfrage**: ob das Sprachmodell lokal
-oder im Netz liegt, entscheidet die Registry (Regel 5a), nicht der Code.
+**Auch mehr Arbeitsspeicher ändert daran nichts.** Beim Radxa ZERO 3W war
+die Hoffnung, mit 8 GB ein lokales Modell fahren zu können. Das scheitert
+nicht am Speicher, sondern an der Rechenleistung:
+
+- Der RK3566 hat vier Cortex-A55-Kerne bei 1,8 GHz. A55 ist ein
+  Effizienzkern, kein Leistungskern — für Modellinferenz auf der CPU zu
+  langsam, selbst bei kleinen Modellen.
+- Die NPU hilft nicht: **Rockchips eigener LLM-Stack `rknn-llm`
+  unterstützt RK3588, RK3576, RK3562 und RV1126B — den RK3566 nicht.**
+  Es gibt also nicht einmal einen Weg, ein Modell auf diese NPU zu
+  bringen, und sie wäre dafür auch zu schwach.
+
+Damit ist die Sache entschieden und keine Frage des Boards mehr:
+**Das Sprachmodell läuft immer außerhalb des Geräts.** Anthropic über die
+Abo-Anmeldung, Ollama im eigenen Netz, weitere über LiteLLM.
+
+Der Arbeitsspeicher des Radxa bleibt trotzdem wertvoll — er nimmt den
+Druck von STT, TTS und Renderer, die sich auf dem Zero 2 W einen sehr
+engen Rahmen teilen (Modellrotation, siehe `docs/HARDWARE.md`).
+
+Was **lokal** bleibt, bleibt lokal: Spracherkennung, Sprachsynthese,
+Sprachaktivitätserkennung und Wake-Word laufen auf beiden Boards ohne
+Netz. Nur das Sprachmodell geht hinaus, und auch das nicht zwingend zu
+einem Fremdanbieter.
 
 Bemerkenswert: PiSugars eigene Whisplay-Referenzanwendung lässt Whisper,
 Piper und Ollama per Docker auf einem separaten Rechner laufen. Der
@@ -282,11 +302,17 @@ Voreinstellung:
 | Aufgabe | Anbieter |
 |---|---|
 | Gespräch, Werkzeugnutzung | Anthropic (Abo), Fallback Ollama |
-| Mood-Erfindung (§3.3 Stufe 3) | Ollama — selten, günstig, lokal |
+| Mood-Erfindung (§3.3 Stufe 3) | Ollama — selten, günstig, im eigenen Netz |
 | Zusammenfassen, Aufräumen | Ollama |
 
-Mood-Erfindung auf dem lokalen Modell zu belassen, ist bewusst: Der
+Mood-Erfindung auf dem eigenen Server zu belassen, ist bewusst: Der
 Ausdruck des Geräts sollte nicht an einem bezahlten Kontingent hängen.
+
+Da beide Anbieter außerhalb des Geräts liegen (Regel 5), muss Chimera mit
+**Netzausfall** umgehen können, ohne stehenzubleiben: Die Mood-Stufen 1
+und 2 (Mischen, Variieren) brauchen kein Modell und funktionieren weiter.
+Das Gerät behält also ein Gesicht, auch wenn es gerade nichts sagen kann —
+und kann diesen Zustand sogar zeigen (§7).
 
 ### Konfiguration
 

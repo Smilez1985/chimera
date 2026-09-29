@@ -64,7 +64,7 @@ profile_get() {
 		overlay_src)    echo "dts/whisplay-soundcard-radxa-zero3w.dts" ;;
 		conflicts)      echo "rk3568-i2s3-m0.dtbo wm8960-radxa-zero3.dtbo" ;;
 		wm8960_builtin) echo "unknown" ;;
-		llm_local)      echo "maybe" ;;
+		llm_local)      echo "no" ;;   # RK3566: A55-Kerne zu langsam, NPU nicht von rknn-llm unterstuetzt
 		notes)          echo "Portierungsziel. Headers aus Armbians rockchip64-Pool; Version muss exakt zur laufenden passen." ;;
 		*)              echo "" ;;
 		esac

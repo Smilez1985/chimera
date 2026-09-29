@@ -159,10 +159,15 @@ if [ "$WM8960" = absent ] && [ "$(profile_get "$BOARD" wm8960_builtin)" != yes ]
 	warn "voraus und ergaenzt ihn nur — Modul 40 muss ihn dann bauen."
 fi
 
-# Speicherlage: entscheidet, ob das Sprachmodell lokal laufen kann.
+# Das Sprachmodell liegt grundsaetzlich ausserhalb (Architekturregel 5):
+# weder der BCM2837 noch der RK3566 koennen es tragen. Beim RK3566 hilft
+# auch die NPU nicht — Rockchips rknn-llm unterstuetzt sie gar nicht.
+# Der Speicher entscheidet nur, ob STT und TTS gleichzeitig geladen
+# bleiben koennen oder rotieren muessen.
+info "Sprachmodell laeuft ausserhalb (Anthropic-Abo oder Ollama im Netz)."
 if [ -n "$MEM_MB" ] && [ "$MEM_MB" -lt 1024 ]; then
-	info "Unter 1 GB Speicher: Sprache laeuft lokal, das Sprachmodell nicht."
-	info "  Anbieter-Registry auf Ollama im eigenen Netz einstellen."
+	info "Unter 1 GB: STT und TTS muessen voraussichtlich rotieren,"
+	info "  also nie gleichzeitig geladen sein."
 fi
 
 log ""

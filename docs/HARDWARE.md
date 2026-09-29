@@ -16,10 +16,13 @@ Chimera ist **headless** — kein Desktop, keine grafische Oberfläche.
 Höchstens eine schlanke Web-Oberfläche für Einstellungen (§3).
 
 **Entwickelt wird zuerst auf dem Pi Zero 2 W**, portiert wird danach auf
-den Radxa. Nicht weil der Pi das bessere Board wäre — der Radxa hat bis zu
-8 GB und könnte das Sprachmodell lokal fahren —, sondern weil auf dem Pi
-alles funktioniert, während der Radxa unter DietPi erst einen
-Treiber-Bootstrap braucht (§3).
+den Radxa. Auf dem Pi funktioniert alles, während der Radxa unter DietPi
+erst einen Treiber-Bootstrap braucht (§3).
+
+Der Radxa bringt mehr Arbeitsspeicher (8 GB im vorhandenen Gerät), aber
+**kein lokales Sprachmodell** — dazu §1a. Sein Gewinn liegt woanders:
+STT, TTS und Renderer teilen sich auf dem Zero 2 W einen sehr engen
+Rahmen; auf dem Radxa entfällt dieser Druck.
 
 Die Reihenfolge ist bewusst: Erst ein Gerät, das nachweislich läuft, dann
 die schwierige Plattform. Andernfalls debuggt man den Modulbau gegen eine
@@ -51,6 +54,39 @@ Zwei Konsequenzen, die man im Auge behalten muss:
   und eine Karte, die nach Wochen stirbt.
 
 ---
+
+## 1a. Warum das Sprachmodell nicht auf das Gerät passt
+
+Naheliegende Hoffnung beim Radxa ZERO 3W mit 8 GB: ein kleines Modell
+lokal laufen lassen und ganz ohne Netz auskommen. Das geht nicht, und
+zwar nicht wegen des Speichers.
+
+**Der RK3566 ist dafür zu schwach:**
+
+- Vier **Cortex-A55**-Kerne bei 1,8 GHz. A55 ist ein Effizienzkern. Für
+  Modellinferenz auf der CPU reicht das nicht — auch ein 1–3B-Modell
+  antwortet dort in einem Tempo, das ein Gespräch unmöglich macht.
+- Die NPU ist kein Ausweg: **Rockchips eigener LLM-Stack `rknn-llm`
+  unterstützt RK3588, RK3576, RK3562 und RV1126B. Der RK3566 steht nicht
+  auf der Liste.** Es existiert also nicht einmal ein Werkzeug, um ein
+  Modell auf diese NPU zu bringen.
+
+Auf dem Pi Zero 2 W stellt sich die Frage ohnehin nicht (512 MB, vier
+A53-Kerne).
+
+**Konsequenz:** Das Sprachmodell liegt immer außerhalb — Anthropic per
+Abo-Anmeldung oder Ollama im eigenen Netz. Das ist keine
+Board-Einschränkung mehr, sondern eine feste Eigenschaft des Projekts
+(`docs/DESIGN.md`, Architekturregel 5).
+
+**Was lokal bleibt:** Spracherkennung, Sprachsynthese,
+Sprachaktivitätserkennung und Wake-Word. Auf beiden Boards, ohne Netz.
+Das ist der Teil, der Dauerlast erzeugt und Latenz kostet — genau deshalb
+gehört er aufs Gerät.
+
+Der Arbeitsspeicher des Radxa zahlt sich trotzdem aus: Auf dem Zero 2 W
+müssen STT und TTS voraussichtlich rotieren (nie gleichzeitig geladen),
+auf dem Radxa nicht.
 
 ## 2. Whisplay HAT
 
@@ -180,6 +216,33 @@ und keinen Umbau. Das ist der Grund, es so zu bauen.
 
 ---
 
+## 3a. eMMC ändert das Risiko beim Radxa
+
+Das vorhandene Radxa-Gerät hat **64 GB eMMC**, keine SD-Karte. Das klingt
+nach Komfort, verschärft aber den schlimmsten Fall erheblich.
+
+Bei einer kaputten Bootkonfiguration auf dem Pi zieht man die SD-Karte,
+korrigiert die Datei an einem anderen Gerät und steckt sie zurück.
+**Beim eMMC gibt es nichts auszubauen.** Die Rettung läuft dann über
+Maskrom-Modus und `rkdeveloptool` an einem Rechner — also genau dem
+Gerät, das hier nicht vorausgesetzt werden kann.
+
+Daraus folgt für den Installer:
+
+- Auf Boards mit eMMC und ohne wechselbaren Datenträger werden Änderungen
+  an Bootkonfiguration und Overlays **nur nach ausdrücklicher Bestätigung**
+  vorgenommen — kein stilles Durchlaufen.
+- Sicherungen vor jeder Änderung sind dort Pflicht, nicht Kür.
+- `--dry-run` ist bei diesen Modulen der empfohlene erste Aufruf, nicht
+  eine Bequemlichkeit für Vorsichtige.
+- Wenn ein bootfähiger Wechseldatenträger vorhanden ist, wird das
+  vermerkt: Er ist der Rettungsweg.
+
+Das ist der zweite, unabhängige Grund für die Reihenfolge Pi zuerst:
+Die riskanten Module (30 Header, 60 Overlay) kommen erprobt auf den
+Radxa, nicht als Erstversuch. Ein Fehlschlag auf der SD-Karte kostet zehn
+Minuten Neuflashen, derselbe Fehlschlag auf dem eMMC kostet einen PC.
+
 ## 4. Vor dem ersten Start prüfen
 
 - [ ] Whisplay-Revision: **V2?** Wenn nicht aufgedruckt, vor dem ersten
@@ -189,3 +252,5 @@ und keinen Umbau. Das ist der Grund, es so zu bauen.
 - [ ] Audioaufnahme und -ausgabe mit `example/test.py` prüfen, bevor
       irgendetwas gebaut wird
 - [ ] Freien Speicher unter Last messen (`free -m` mit laufendem Renderer)
+- [ ] Beim Radxa: `lsblk` — läuft das System vom eMMC? Gibt es einen
+      bootfähigen Wechseldatenträger als Rettungsweg? (§3a)

@@ -316,7 +316,14 @@ passenden Pfad wählen, statt `u-boot-update` vorauszusetzen.
 
 Nach I3: Bootdateien über Sidecar und `mv`. Vorher eine Kopie mit
 Zeitstempel ablegen — eine kaputte Bootkonfiguration auf einem Gerät ohne
-Bildschirm bedeutet SD-Karte ausbauen.
+Bildschirm bedeutet im besten Fall SD-Karte ausbauen.
+
+**Im schlechteren Fall gar nichts.** Läuft das System vom eMMC (beim
+Radxa der Normalfall), gibt es keinen Datenträger zum Ausbauen; die
+Rettung führt über Maskrom-Modus und `rkdeveloptool` an einem PC. Modul 10
+stellt deshalb fest, ob ein wechselbarer Rettungsweg existiert, und Modul
+60 verlangt auf eMMC-Systemen eine ausdrückliche Bestätigung, bevor es
+Bootdateien anfasst (`docs/HARDWARE.md` §3a).
 
 Abschalten heißt **umbenennen**, nicht löschen (`.disabled`-Suffix), damit
 die Deinstallation den Ausgangszustand wiederherstellen kann.
