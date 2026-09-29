@@ -1,0 +1,122 @@
+#!/bin/sh
+# Chimera — Installer, Haupteinstieg.
+#
+# Ruft die Module in `modules/` der Nummer nach auf. Jeder Lauf schreibt
+# ein Protokoll, auch ein erfolgreicher.
+#
+# Aufruf:
+#   chimera-install                  alle Module
+#   chimera-install --only 10        nur Modul 10 (Praefix genuegt)
+#   chimera-install --list           Module auflisten
+#   chimera-install --dry-run        nur berichten, nichts aendern
+#   chimera-install --check          Zustand pruefen, Exitcode sprechend
+#   chimera-install --log-dir DIR    Ablage des Protokolls
+#
+# Exitcode: der des ersten fehlgeschlagenen Moduls, sonst 0.
+
+set -eu
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$HERE/lib/common.sh"
+
+MODE=run
+ONLY=""
+VERSION="$(cat "$HERE/../VERSION" 2>/dev/null || echo '?')"
+
+usage() {
+	cat <<EOF
+chimera-install $VERSION
+
+  --only <praefix>   nur das passende Modul (z. B. 10, oder 10-preflight)
+  --list             verfuegbare Module anzeigen
+  --dry-run          nichts aendern, nur berichten
+  --check            nur pruefen, Exitcode sagt den Zustand
+  --log-dir <dir>    wohin das Protokoll geschrieben wird
+  -h, --help         diese Hilfe
+EOF
+}
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--only)    ONLY="${2:?--only braucht einen Wert}"; shift 2 ;;
+		--dry-run) MODE=dry;   shift ;;
+		--check)   MODE=check; shift ;;
+		--list)    MODE=list;  shift ;;
+		--log-dir) CHIMERA_LOG_DIR="${2:?--log-dir braucht einen Wert}"; shift 2 ;;
+		-h|--help) usage; exit 0 ;;
+		*) err "Unbekannte Option: $1"; usage >&2; exit 2 ;;
+	esac
+done
+
+modules_list() {
+	# Nummerisch sortiert, damit 10 vor 90 kommt.
+	find "$HERE/modules" -name '[0-9]*-*.sh' 2>/dev/null | sort
+}
+
+if [ "$MODE" = list ]; then
+	printf 'Verfuegbare Module:\n'
+	modules_list | while read -r m; do printf '  %s\n' "$(basename "$m" .sh)"; done
+	exit 0
+fi
+
+log_open "install" || warn "Kein Protokoll moeglich — Lauf wird nicht festgehalten."
+
+log "chimera-install $VERSION"
+[ "$MODE" != run ] && info "Betriebsart: $MODE"
+[ -n "$ONLY" ] && info "Nur Modul: $ONLY"
+log ""
+
+FAILED=0
+FIRST_RC=0
+RAN=0
+
+for mod in $(modules_list); do
+	name="$(basename "$mod" .sh)"
+
+	if [ -n "$ONLY" ]; then
+		case "$name" in
+			"$ONLY"|"$ONLY"-*) : ;;
+			*) continue ;;
+		esac
+	fi
+
+	RAN=$((RAN + 1))
+	_log_raw "--- Modul $name ---"
+
+	# Betriebsart wird an das Modul durchgereicht; Module, die sie nicht
+	# kennen, ignorieren sie.
+	set +e
+	CHIMERA_MODE="$MODE" CHIMERA_LOGFILE="$CHIMERA_LOGFILE" sh "$mod"
+	rc=$?
+	set -e
+
+	if [ "$rc" -ne 0 ]; then
+		FAILED=$((FAILED + 1))
+		[ "$FIRST_RC" -eq 0 ] && FIRST_RC=$rc
+		_log_raw "Modul $name: Exitcode $rc"
+		# Preflight mit Exitcode 2 heisst: Board unbekannt. Weitermachen
+		# waere raten.
+		if [ "$rc" -ge 2 ]; then
+			err "Modul $name bricht den Lauf ab (Exitcode $rc)."
+			log_close "$rc"
+			exit "$rc"
+		fi
+	else
+		_log_raw "Modul $name: ok"
+	fi
+done
+
+if [ "$RAN" -eq 0 ]; then
+	err "Kein Modul ausgefuehrt${ONLY:+ — kein Treffer fuer '$ONLY'}."
+	log_close 2
+	exit 2
+fi
+
+log ""
+if [ "$FAILED" -eq 0 ]; then
+	log "Fertig: $RAN Modul(e), ohne Fehler."
+else
+	warn "Fertig: $RAN Modul(e), $FAILED mit Befund."
+fi
+log_close "$FIRST_RC"
+exit "$FIRST_RC"

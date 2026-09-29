@@ -191,6 +191,33 @@ fi
 check "Inhalt trotz kaputtem TMPDIR" "$(cat "$R/tmpdir.txt")" "neu"
 rm -rf "$R"
 
+echo "== Sicherung =="
+R="$(mktemp -d)"; load "$R"
+printf 'original\n' >"$R/boot.txt"
+backup_file "$R/boot.txt" >/dev/null 2>&1
+_bk="$(find "$R" -name 'boot.txt.chimera-*.bak' | head -1)"
+if [ -n "$_bk" ]; then ok "Sicherung angelegt"
+else bad "keine Sicherung angelegt"; fi
+check "Sicherung hat den Originalinhalt" "$(cat "$_bk" 2>/dev/null)" "original"
+backup_file "$R/gibtsnicht.txt" >/dev/null 2>&1 && ok "fehlende Datei ist kein Fehler" \
+	|| bad "fehlende Datei haette durchgehen muessen"
+rm -rf "$R"
+
+echo "== Protokoll =="
+R="$(mktemp -d)"; load "$R"
+CHIMERA_LOG_DIR="$R/logs"; CHIMERA_LOGFILE=""
+log_open "test" >/dev/null 2>&1
+if [ -n "$CHIMERA_LOGFILE" ] && [ -f "$CHIMERA_LOGFILE" ]; then ok "Protokolldatei angelegt"
+else bad "keine Protokolldatei"; fi
+log "eine Zeile" >/dev/null
+warn "eine Warnung" 2>/dev/null
+log_close 0 >/dev/null
+grep -q "eine Zeile" "$CHIMERA_LOGFILE" 2>/dev/null && ok "Ausgabe landet im Protokoll" || bad "Ausgabe fehlt im Protokoll"
+grep -q "WARN: eine Warnung" "$CHIMERA_LOGFILE" 2>/dev/null && ok "Warnung landet im Protokoll" || bad "Warnung fehlt"
+grep -q "Erfolg (0)" "$CHIMERA_LOGFILE" 2>/dev/null && ok "auch Erfolg wird festgehalten" || bad "Erfolg nicht vermerkt"
+CHIMERA_LOGFILE=""
+rm -rf "$R"
+
 echo ""
 printf 'Ergebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

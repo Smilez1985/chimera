@@ -158,9 +158,11 @@ Plattformfrage, deshalb eigene Phase und nicht am Ende angehaengt.
 - [x] **`mktemp` geprueft** — ungeprueft leert es Zieldateien (I3)
 - [x] **Leere Eingabe wird abgelehnt** (Regel 8a: stiller Erfolg). Gefunden
       durch den eigenen Test, nicht durch Nachdenken
-- [ ] Modulaufbau mit Nummern und Luecken, einzeln aufrufbar (`--only`)
-- [ ] `--dry-run` und `--check` mit sprechendem Exitcode
-- [ ] Protokolldatei
+- [x] `chimera-install` als Einstieg, Module nach Nummer, `--only`, `--list`
+- [x] **Protokolldatei je Lauf, auch bei Erfolg** (Regel 10e)
+- [ ] `--dry-run` und `--check` in den Modulen tatsaechlich auswerten
+      (werden bisher nur durchgereicht)
+- [ ] Protokolle aufraeumen (Anzahl oder Alter begrenzen)
 - [ ] `VERSION` ins System stempeln, `chimera --version`
 
 ### 8b — Modul 10 `preflight` + Boardprofile  ✅ erster Wurf steht

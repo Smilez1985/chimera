@@ -560,6 +560,58 @@ Versionssprung bricht keine Installation, atomar schreiben mit geprüftem
 `mktemp`, nichts ungeprüft aufrufen, fremde Pakete nie über `/` entpacken,
 jeder Schritt einzeln aufrufbar.
 
+### Architekturregel 10e — Jeder Lauf hinterlässt ein Protokoll
+
+In `logs/` (vorgesehen: `/var/log/chimera/`), **auch bei Erfolg**. Ein
+Lauf, der nichts hinterlässt, ist später nicht nachvollziehbar — und
+genau dann braucht man ihn: wenn etwas schiefging und die Frage lautet,
+was vorher anders war.
+
+Protokolliert werden Zeitstempel, Version, erkannte Umgebung, jeder
+Schritt mit Ergebnis und eine Schlussbilanz. Auf dem Schirm darf es
+knapper zugehen als in der Datei. Kann kein Protokoll angelegt werden,
+wird das **gemeldet** und nicht stillschweigend übergangen.
+
+### Architekturregel 10f — Keine Container auf dem Gerät
+
+Auf Pi und Radxa läuft alles **nativ**. Der Aufwand an Speicher,
+Startzeit und Schreiblast ist auf diesen Geräten nicht zu rechtfertigen,
+und er verdeckt gerade die Systemintegration, um die es hier geht.
+
+Ausnahmen nur, wo es anders nicht geht — etwa ein Dienst, der nativ nicht
+sauber baubar ist. Eine solche Ausnahme wird **hier begründet**, nicht
+stillschweigend eingeführt. Bisher gibt es keine.
+
+### Architekturregel 10g — Nie raten
+
+Erst die Fakten holen, dann entscheiden. Kein „das Paket heißt vermutlich
+so", kein „das liegt wahrscheinlich da". Nachsehen: im Quelltext, im
+Paketindex, auf dem Gerät.
+
+**Vor jedem Codebau prüfen, was bereits existiert und was daran hängt.**
+Sonst entstehen Doppelimplementierungen — dieselbe Logik zweimal, subtil
+unterschiedlich, monatelang unbemerkt.
+
+Was ungeprüft bleibt, wird **als ungeprüft benannt**. Eine ehrliche Lücke
+ist brauchbar, eine geratene Antwort nicht. Deshalb steht in diesem
+Dokument an mehreren Stellen „zu prüfen, nicht anzunehmen".
+
+### Architekturregel 10h — Gebaut ist erst, wenn verdrahtet ist
+
+Ein Modul, das niemand aufruft, ist kein fertiges Modul, sondern ein
+offenes Ende. Dasselbe gilt für eine Funktion ohne Aufrufer, einen
+Schalter ohne Wirkung, eine Option, die nirgends gelesen wird.
+
+**Offene Enden fliegen einem um die Ohren — oder sie stehen dokumentiert.**
+Beides ist zulässig, Schweigen nicht. Was unfertig bleibt, steht in der
+Roadmap oder als bekannte Einschränkung im Changelog, mit seinem
+tatsächlichen Zustand.
+
+Bereits eingetreten: Modul 10 lag zunächst ohne Aufrufer da (kein
+`chimera-install`), und `backup_file` hatte keinen. Ersteres ist
+verdrahtet, Letzteres ist im Quelltext als „noch ohne Aufrufer, gebraucht
+von Modul 60" vermerkt.
+
 ### Architekturregel 10a — Board, Betriebssystem und Bootmethode sind drei Achsen
 
 Nicht eine Variable, sondern drei unabhängige:

@@ -13,14 +13,49 @@
 
 # --- Ausgabe ---------------------------------------------------------------
 
-_c_use_color() { [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; }
+# Protokoll. Jeder Lauf hinterlaesst eine Datei -- auch ein erfolgreicher.
+# Ein Lauf, der nichts hinterlaesst, ist spaeter nicht nachvollziehbar, und
+# genau dann braucht man ihn: wenn etwas schiefging und die Frage lautet,
+# was vorher anders war.
+: "${CHIMERA_LOG_DIR:=${CHIMERA_ROOT}/var/log/chimera}"
+CHIMERA_LOGFILE=""
 
-log()  { printf '%s\n' "$*"; }
-info() { printf '  %s\n' "$*"; }
-warn() { printf 'WARN: %s\n' "$*" >&2; }
-err()  { printf 'FEHLER: %s\n' "$*" >&2; }
+log_open() {
+	_lo_name="${1:-chimera}"
+	mkdir -p "$CHIMERA_LOG_DIR" 2>/dev/null || {
+		# Kein Schreibrecht (z. B. Lauf ohne root): Protokoll ins
+		# Arbeitsverzeichnis, aber NICHT stillschweigend weglassen.
+		CHIMERA_LOG_DIR="./logs"
+		mkdir -p "$CHIMERA_LOG_DIR" 2>/dev/null || return 1
+	}
+	CHIMERA_LOGFILE="$CHIMERA_LOG_DIR/${_lo_name}-$(date +%Y%m%d-%H%M%S).log"
+	: >"$CHIMERA_LOGFILE" 2>/dev/null || { CHIMERA_LOGFILE=""; return 1; }
+	_log_raw "=== chimera $_lo_name — $(date '+%Y-%m-%d %H:%M:%S') ==="
+	_log_raw "Version: $(cat "$(dirname "$0")/../VERSION" 2>/dev/null || echo '?')"
+	return 0
+}
 
-die() { err "$*"; exit 1; }
+# Nur in die Datei, nicht auf den Schirm.
+_log_raw() {
+	[ -n "$CHIMERA_LOGFILE" ] || return 0
+	printf '%s\n' "$*" >>"$CHIMERA_LOGFILE" 2>/dev/null || true
+}
+
+log()  { printf '%s\n' "$*";           _log_raw "$*"; }
+info() { printf '  %s\n' "$*";         _log_raw "  $*"; }
+warn() { printf 'WARN: %s\n' "$*" >&2; _log_raw "WARN: $*"; }
+err()  { printf 'FEHLER: %s\n' "$*" >&2; _log_raw "FEHLER: $*"; }
+
+# Bilanz am Ende -- auch bei Erfolg.
+log_close() {
+	_lc_rc="${1:-0}"
+	if [ "$_lc_rc" -eq 0 ]; then _log_raw "=== Ergebnis: Erfolg (0) ==="
+	else _log_raw "=== Ergebnis: Exitcode $_lc_rc ==="; fi
+	[ -n "$CHIMERA_LOGFILE" ] && printf 'Protokoll: %s\n' "$CHIMERA_LOGFILE"
+	return 0
+}
+
+die() { err "$*"; log_close 1; exit 1; }
 
 # --- Lesen aus dem (ggf. erfundenen) Wurzelverzeichnis ---------------------
 
@@ -119,8 +154,17 @@ write_atomic() {
 	return 0
 }
 
-# Sicherung mit Zeitstempel. Eine kaputte Bootkonfiguration auf einem
-# Geraet ohne Bildschirm bedeutet SD-Karte ausbauen.
+# Sicherung mit Zeitstempel.
+#
+# NOCH OHNE AUFRUFER: Wird von Modul 60 (Overlay/Bootkonfiguration)
+# gebraucht, das es noch nicht gibt. Steht hier, weil die Regel dazu
+# bereits feststeht und getestet ist -- nicht als Vorrat, sondern damit
+# Modul 60 sie nicht neu erfindet.
+#
+# Eine kaputte Bootkonfiguration auf einem Geraet ohne Bildschirm bedeutet
+# im besten Fall SD-Karte ausbauen. Laeuft das System vom eMMC, gibt es
+# nichts auszubauen -- dann braucht die Rettung Herstellerwerkzeug an
+# einem PC.
 backup_file() {
 	_bf_f="$1"
 	[ -f "$_bf_f" ] || return 0

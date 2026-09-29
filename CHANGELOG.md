@@ -23,6 +23,21 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 - `write_atomic`: schreibt Systemdateien über eine Sidecar-Datei neben dem
   Ziel und benennt sie atomar um. Prüft `mktemp` und lehnt leere Eingaben
   ab.
-- 31 Tests für Erkennung und atomares Schreiben, jeder Regressionstest mit
-  Gegenprobe. Laufen ohne Zielhardware, weil alle Systemabfragen über
-  `CHIMERA_ROOT` gehen.
+- `chimera-install` als Einstiegspunkt: ruft die Module der Nummer nach
+  auf, kennt `--only`, `--list`, `--dry-run`, `--check` und `--log-dir`.
+- Protokollierung: jeder Lauf schreibt eine Datei, **auch ein
+  erfolgreicher**. Lässt sich kein Protokoll anlegen, wird das gemeldet.
+- 38 Tests für Erkennung, atomares Schreiben, Sicherung und Protokoll,
+  jeder Regressionstest mit Gegenprobe. Laufen ohne Zielhardware, weil
+  alle Systemabfragen über `CHIMERA_ROOT` gehen.
+
+### Bekannte Einschränkungen
+
+- `backup_file` hat **noch keinen Aufrufer**. Es wird von Modul 60
+  (Overlay und Bootkonfiguration) gebraucht, das noch nicht existiert.
+  Getestet ist es bereits.
+- `--dry-run` und `--check` werden von `chimera-install` entgegengenommen
+  und an die Module durchgereicht; Modul 10 ändert ohnehin nichts und
+  wertet sie daher noch nicht aus.
+- Die Erkennung des Rettungswegs (zweiter Datenträger) ist heuristisch und
+  auf echter Hardware noch nicht überprüft.

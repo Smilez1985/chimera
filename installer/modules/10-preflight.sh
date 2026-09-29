@@ -22,6 +22,10 @@ _HERE="$(cd "$(dirname "$0")/.." && pwd)"
 
 # --- Erfassen -------------------------------------------------------------
 
+# Wenn direkt aufgerufen (nicht ueber chimera-install), eigenes Protokoll.
+[ -n "${CHIMERA_LOGFILE:-}" ] || log_open "preflight" || \
+	warn "Kein Protokoll moeglich — Lauf wird nicht festgehalten."
+
 BOARD="$(detect_board)"
 OS="$(detect_os)"
 BOOT="$(detect_boot)"
@@ -86,6 +90,24 @@ if whisplay_soundcard_live; then
 fi
 log ""
 
+log "Datentraeger"
+_root_dev="$(read_file /proc/cmdline 2>/dev/null | tr ' ' '\n' | grep '^root=' | head -1 || true)"
+info "root: ${_root_dev:-unbekannt}"
+case "$_root_dev" in
+	*mmcblk*p*|*mmcblk*)
+		if printf '%s' "$_root_dev" | grep -q 'mmcblk0'; then
+			info "Hinweis: Systemtraeger pruefen (SD oder eMMC?) — 'lsblk' zeigt es."
+		fi ;;
+esac
+if have_dir /sys/block/mmcblk1 || have_dir /sys/block/sda; then
+	info "Weiterer Datentraeger vorhanden — moeglicher Rettungsweg."
+else
+	warn "Kein zweiter Datentraeger erkennbar. Laeuft das System vom eMMC,"
+	warn "gibt es bei kaputter Bootkonfiguration nichts auszubauen — die"
+	warn "Rettung braucht dann Herstellerwerkzeug an einem PC."
+fi
+log ""
+
 log "Bauvoraussetzungen"
 info "Kernel-Headers:   $HEADERS_OK ($HEADERS_DIR)"
 info "/boot/config-*:   $BOOTCONFIG"
@@ -110,17 +132,17 @@ unknown)
 	err ""
 	err "Es wird nicht geraten: ein falsches Overlay in der Bootkonfiguration"
 	err "kostet im schlimmsten Fall den Ausbau der SD-Karte."
-	exit 2
+	log_close 2; exit 2
 	;;
 unsupported_rpi)
 	err "Raspberry Pi erkannt, aber nicht das Zero 2 W."
 	err "Unterstuetzt wird derzeit nur der Pi Zero 2 W."
-	exit 2
+	log_close 2; exit 2
 	;;
 unsupported_radxa)
 	err "Radxa-Board erkannt, aber nicht das ZERO 3W."
 	err "Das Profil des ZERO 3W passt nicht auf andere Radxa-Boards."
-	exit 2
+	log_close 2; exit 2
 	;;
 esac
 
@@ -173,9 +195,9 @@ fi
 log ""
 if [ "$SUPPORTED" = yes ]; then
 	log "Ergebnis: $BOARD wird unterstuetzt."
-	exit 0
+	log_close 0; exit 0
 fi
 
 log "Ergebnis: $BOARD ist erkannt, aber noch nicht unterstuetzt."
 log "  $(profile_get "$BOARD" notes)"
-exit 1
+log_close 1; exit 1

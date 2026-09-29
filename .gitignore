@@ -12,3 +12,4 @@ models/
 data/*.db
 .pytest_cache/
 installer/.testtmp/
+logs/
