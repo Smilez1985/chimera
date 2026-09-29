@@ -9,8 +9,11 @@ Stand: 2026-09-29.
 ## 1. Entscheidung
 
 **Chimera unterstützt zwei Boards: Raspberry Pi Zero 2 W und Radxa Zero 3W**,
-jeweils mit Whisplay HAT (V2). Der Installer erkennt das Board selbst
-(`docs/INSTALLER.md` §2a).
+jeweils mit Whisplay HAT (V2) und **DietPi** als Betriebssystem. Der
+Installer erkennt das Board selbst (`docs/INSTALLER.md` §2a).
+
+Chimera ist **headless** — kein Desktop, keine grafische Oberfläche.
+Höchstens eine schlanke Web-Oberfläche für Einstellungen (§3).
 
 **Entwickelt wird zuerst auf dem Pi Zero 2 W**, portiert wird danach auf
 den Radxa. Nicht weil der Pi das bessere Board wäre — der Radxa hat bis zu
@@ -63,7 +66,7 @@ Whisplay-README.
 
 ---
 
-## 3. Radxa Zero 3W — warum es (noch) nicht geht
+## 3. Radxa Zero 3W
 
 ### Der Wunsch
 
@@ -74,65 +77,89 @@ eine fertige Gerätebaum-Beschreibung
 (`dts/whisplay-soundcard-radxa-zero3w.dts`) und einen eigenen
 Installationspfad im Treiberpaket.
 
-### Der Befund
+### Betriebssystem: DietPi
 
-Der Audiotreiber läuft unter **DietPi** nicht, weil das Modul im dortigen
-Kernel fehlt.
+**DietPi ist das Betriebssystem der Wahl — auf beiden Boards.**
 
-Wichtig für die weitere Suche: **Der Treiber ist gar nicht Teil des
-Kernels, sondern ein Out-of-Tree-Modul.** Das Makefile baut
-`snd-soc-whisplay-soundcard.ko` gegen
-`/lib/modules/$(uname -r)/build`. Die Aussage "fehlt im Kernel" ist also
-keine Sackgasse — das Modul muss nicht im Kernel sein, es muss *gebaut
-werden können*. Dafür braucht es:
+Chimera ist **headless**. Es gibt einen 240×280-Bildschirm, der ein Gesicht
+zeigt, und zwei Bedienwege (Telegram, Sprache). Ein Desktop hat darin keine
+Aufgabe. Wenn später Einstellungen im Browser einstellbar sein sollen, wird
+das eine schlanke Web-Oberfläche — kein X-Server.
 
-1. **Kernel-Headers passend zur laufenden Kernelversion.**
-   Der Installer versucht `linux-headers-$(uname -r)` per apt. Auf DietPi
-   mit Radxas Vendor-Kernel gibt es dieses Paket in der Regel nicht —
-   das ist der wahrscheinliche Bruchpunkt.
+Das ist auf dem Radxa Zero 3W kein Geschmacksurteil: Radxas offizielle
+Abbilder gibt es als KDE- und XFCE-Varianten, und ein Desktop auf diesem
+Board frisst die Reserven, die eigentlich das Sprachmodell tragen sollen.
+Ein GUI-Abbild einzurichten, um dann den Desktop abzuschalten, ist der
+Umweg — DietPi startet dort, wo man hinwill.
+
+Zur Vollständigkeit: Radxa bietet auch `cli`-Abbilder ohne Desktop an
+(Debian Bullseye, Ubuntu Jammy). Die bleiben als Ausweichpfad im
+Boardprofil vorgesehen, falls sich unter DietPi etwas als unlösbar erweist.
+
+### Der Befund zum Audiotreiber
+
+Der Whisplay-Audiotreiber ist **kein Kernel-Bestandteil, sondern ein
+Out-of-Tree-Modul.** Das Makefile baut `snd-soc-whisplay-soundcard.ko`
+gegen `/lib/modules/$(uname -r)/build`. „Fehlt im Kernel" heißt also nicht
+„unmöglich", sondern: es braucht Kernel-Headers zur laufenden Version.
+
+Voraussetzungen im Einzelnen:
+
+1. **Kernel-Headers passend zur laufenden Version** — der wahrscheinliche
+   Bruchpunkt
 2. **`snd-soc-wm8960` aus dem Kernel.** Das Whisplay-Modul setzt den
-   eingebauten WM8960-Codec-Treiber voraus und ergänzt ihn nur. Fehlt der
-   im DietPi-Kernel, fehlt die Grundlage.
+   eingebauten WM8960-Codec voraus und ergänzt ihn nur
 3. **Gerätebaum-Overlay** nach `/boot/dtbo`, plus Abschalten der
-   kollidierenden Overlays `rk3568-i2s3-m0` und `wm8960-radxa-zero3`.
-4. **`u-boot-update`** zum Schreiben von `/boot/extlinux/extlinux.conf`.
+   kollidierenden `rk3568-i2s3-m0` und `wm8960-radxa-zero3`
+4. **Bootkonfiguration** — der Hersteller-Installer ruft `u-boot-update`
+   auf und erwartet `/boot/extlinux/extlinux.conf`
 
-Punkt 3 und 4 sind DietPi-spezifisch heikel: Der Installer erwartet
-Radxas eigene Verzeichnisstruktur (`/boot/dtbo`, `extlinux.conf`,
-`rsetup`). DietPi legt das anders ab.
+### Warum DietPi die Header-Frage entschärft
 
-### Was der Hersteller selbst tut — und was es verrät
+Hier liegt der Grund, warum DietPi nicht der schwierigere, sondern der
+gangbarere Weg ist:
 
-Für den Orange Pi Zero 3W steht im Treiberpaket ein aufschlussreicher
-Hinweis: Dort fehlen im offiziellen Abbild ebenfalls die Kernel-Headers.
-Die Lösung ist, ein passendes Headers-Paket **von außen** zu laden, in ein
-privates Verzeichnis zu entpacken, die ARM64-Header neu zu erzeugen,
-`fixdep` und `modpost` selbst zu bauen und dann gegen die
-`/boot/config-*` des Boards zu konfigurieren. Sogar `wm8960.c` liegt als
-GPL-2.0-Kopie im Repo, weil das Headers-Paket nicht alles mitbringt.
+**DietPi baut für den Radxa ZERO 3 keinen eigenen Kernel, sondern nutzt
+Armbians `rockchip64`-Familie.** Im DietPi-Abbildbau ist das Board mit
+`root_size='rockchip64'` geführt.
 
-Das heißt: **Der Hersteller hat dieses Problem für ein anderes Board
-schon gelöst — mit ziemlich viel Aufwand.** Derselbe Weg wäre für DietPi
-auf dem Radxa denkbar, ist aber ein eigenes Projekt und kein Nebenbei.
+Und im Armbian-Paketindex existieren genau die passenden Pakete:
 
-### Realistische Wege, in der Reihenfolge des Aufwands
+    linux-image-current-rockchip64
+    linux-headers-current-rockchip64
+    linux-image-edge-rockchip64
+    linux-headers-edge-rockchip64
 
-1. **Radxas offizielles Debian statt DietPi.** Dort greift der
-   unterstützte Installationspfad, inklusive `/boot/dtbo` und
-   `u-boot-update`. Kostet DietPis Schlankheit — bei 8 GB RAM aber ein
-   Preis, der nicht weh tut. *Der mit Abstand aussichtsreichste Weg.*
-2. **Headers für den DietPi-Kernel beschaffen** und das Modul direkt
-   bauen. Steht und fällt damit, ob es ein passendes Headers-Paket zur
-   exakten Kernelversion gibt und ob `snd-soc-wm8960` vorhanden ist.
-   Beides vorab prüfbar:
+Damit ist **Header-Stufe 2 erreichbar, ohne das Orange-Pi-Verfahren
+nachzubauen**: Armbians Repository einbinden oder das passende
+`linux-headers-…-rockchip64`-Paket zur installierten Kernelversion laden.
+Die Kernelversion des Headers-Pakets muss exakt zur laufenden passen —
+genau dafür gibt es die Tabelle bekannter Kombinationen
+(`docs/INSTALLER.md` §3.4).
 
-       uname -r
-       ls /lib/modules/$(uname -r)/build
-       modinfo snd-soc-wm8960
+Stufe 3 (Header aufbereiten, `fixdep` und `modpost` selbst bauen) bleibt
+als Rückfallebene beschrieben, ist aber vermutlich **nicht nötig**. Das ist
+vor dem Bauen zu prüfen, nicht anzunehmen:
 
-3. **Orange-Pi-Verfahren auf Radxa übertragen** — privates
-   Headers-Verzeichnis, Hostwerkzeuge selbst bauen. Machbar, aber
-   erheblicher Aufwand und bei jedem Kernelupdate erneut.
+    uname -r
+    ls /lib/modules/$(uname -r)/build
+    modinfo snd-soc-wm8960
+    dpkg -l | grep -E 'linux-(image|headers|dtb)'
+
+Punkt 3 und 4 aus dem Befund bleiben trotzdem zu lösen — DietPi legt die
+Bootkonfiguration anders ab als Radxas Abbild. Das ist Aufgabe von
+Installermodul 60 (Bootmethode erkennen statt voraussetzen).
+
+### Was der Hersteller für ein anderes Board tut
+
+Für den Orange Pi Zero 3W fehlen im offiziellen Abbild ebenfalls die
+Header. PiSugars Lösung dort: Headers-Paket von außen laden, in ein
+privates Verzeichnis entpacken, ARM64-Header neu erzeugen, `fixdep` und
+`modpost` selbst bauen, gegen `/boot/config-*` synchronisieren. Sogar
+`wm8960.c` liegt als GPL-2.0-Kopie im Repo.
+
+Das ist das Vorbild für Stufe 3 — und der Beleg, dass der Weg gangbar ist,
+falls Stufe 2 auf dem Radxa doch nicht trägt.
 
 ### Wie Chimera damit umgeht
 

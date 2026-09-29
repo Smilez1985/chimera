@@ -501,8 +501,10 @@ neu installieren". Ein `git pull` plus Installer-Lauf muss genügen.
 
 ## 11. Hardware
 
-- **Raspberry Pi Zero 2 W (512 MB)** — festgelegt. Begründung, Grenzen und
-  der Stand zum Radxa Zero 3W stehen in `docs/HARDWARE.md`.
+- **Raspberry Pi Zero 2 W (512 MB)** — Entwicklungsziel
+- **Radxa Zero 3W** — Portierungsziel, mehr Reserven
+- **DietPi** auf beiden, headless (§11a)
+Begründung und Grenzen in `docs/HARDWARE.md`.
 - **Whisplay HAT V2 — ausschließlich.** Auf V1 führt die Button-Leitung
   5 V; ein Tastendruck kann das Board stromlos schalten. Herstellerwarnung.
 - LCD 240×280, ST7789-kompatibel, SPI bis 100 MHz
@@ -512,6 +514,27 @@ neu installieren". Ein `git pull` plus Installer-Lauf muss genügen.
 Lastbetrachtung: Renderer (15 FPS) und Sprachmodelle laufen bei Noisy
 bereits gemeinsam auf einem Zero 2 W; der Agent wartet überwiegend auf
 I/O. Machbar, aber eng — siehe Architekturregel 5 und `docs/HARDWARE.md`.
+
+---
+
+## 11a. Headless
+
+Chimera hat **keine grafische Oberfläche.** Es gibt den 240×280-Bildschirm
+mit dem Gesicht und zwei Bedienwege (Telegram, Sprache). Ein Desktop hätte
+darin keine Aufgabe und würde auf beiden Zielboards Reserven verbrauchen,
+die Renderer und Sprachmodelle brauchen.
+
+**Betriebssystem ist DietPi**, auf beiden Boards — schlank und ohne
+mitgeliefertes Desktop-Gepäck. Auf dem Radxa Zero 3W ist das kein
+Geschmacksurteil: Radxas offizielle Abbilder sind KDE- und XFCE-Varianten,
+und ein Desktop macht dieses Board für den eigentlichen Zweck unbrauchbar
+langsam.
+
+Sollen Einstellungen im Browser bearbeitbar sein, wird das eine **schlanke
+Web-Oberfläche** auf einem lokalen Port — HTML und ein Formular, kein
+X-Server, kein Framework-Gebirge. Sie ist Zubehör, nicht Voraussetzung:
+Chimera muss ohne sie vollständig einsatzfähig sein, konfigurierbar über
+`.env` und Installerfragen.
 
 ---
 

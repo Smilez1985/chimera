@@ -195,6 +195,7 @@ Der einfache Fall: Header kommen aus dem Distributionspaket.
 - [ ] ALSA-Konfiguration
 
 ### 8d — Module 80–99
+- [ ] Headless prüfen: kein Desktop-Paket wird nachgezogen
 - [ ] Python-Umgebung, Modelle laden und Pruefsummen verifizieren
 - [ ] `.env` aus Vorlage, Ollama-Adresse erfragen
 - [ ] systemd-Unit
@@ -239,11 +240,10 @@ Analyse in `docs/INSTALLER.md` §2a und §3.
 
 ## Offen / zu entscheiden
 
-- **Radxa unter DietPi oder unter Radxa-Debian?** Beides bleibt als
-  OS-Fall vorgesehen. Unter Radxa-Debian greift der unterstützte Pfad
-  (`/boot/dtbo`, `u-boot-update`); DietPi kostet dafür Header-Stufe 3 bei
-  jedem Kernelupdate. Die Abwägung fällt in Phase 8e, nicht vorher —
-  beide Wege stehen im Profil.
+- **Web-Oberfläche für Einstellungen** — gewünscht, aber nachrangig.
+  Schlank, lokaler Port, kein Framework. Chimera muss ohne sie vollständig
+  einsatzfähig bleiben (`docs/DESIGN.md` §11a). Gehört in eine eigene Phase
+  nach dem ersten Release.
 - **Mood-Aufräumen:** Wenn der Agent dauerhaft speichern darf, wächst die
   Bibliothek unbegrenzt. LRU über `last_used`? Obergrenze?
 - **Bleibt Telegram** die Hauptschnittstelle, wenn Mikrofon, Lautsprecher

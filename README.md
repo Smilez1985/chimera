@@ -94,6 +94,11 @@ Two supported boards; the installer detects which one it is running on:
   model locally). Ported once the Pi is done; under DietPi it needs a
   kernel-header bootstrap first.
 
+Both run **DietPi** — Chimera is headless. There is a 240×280 screen showing
+a face and two ways to talk to it; a desktop would only eat the headroom the
+renderer and speech models need. Settings may later be editable through a
+small local web page — no X server.
+
 Plus:
 
 - **PiSugar Whisplay HAT — revision V2 only.** On V1 the button line
