@@ -102,8 +102,8 @@ oder in der Roadmap.
 
 ### Geprüft
 
-302 Tests, alle grün (64 Agent, 68 Mood, 41 Anbieter, 35 Skills und
-Gedächtnis, 21 Übergänge, 16 Renderer, 11 Anzeige, 46 Installer). Jeder Regressionstest hat eine Gegenprobe. Die
+302 Tests, alle grün: 64 Agent, 68 Mood, 46 Installer, 41 Anbieter,
+35 Skills und Gedächtnis, 21 Übergänge, 16 Renderer, 11 Anzeige. Jeder Regressionstest hat eine Gegenprobe. Die
 Anbieterschicht und die Agent-Schleife wurden zusätzlich gegen einen
 echten Ollama-Server geprüft.
 
