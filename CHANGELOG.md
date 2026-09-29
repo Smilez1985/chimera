@@ -38,6 +38,10 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 
 ### Bekannte Einschränkungen
 
+- Ob der Renderer 15 Bilder je Sekunde hält, **während** gesprochen wird,
+  ist auf echter Hardware ungeprüft. Ausweichwege stehen in
+  `docs/DESIGN.md` §4.1.
+
 - `backup_file` hat **noch keinen Aufrufer**. Es wird von Modul 60
   (Overlay und Bootkonfiguration) gebraucht, das noch nicht existiert.
   Getestet ist es bereits.

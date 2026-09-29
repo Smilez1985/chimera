@@ -84,9 +84,13 @@ Sprachaktivitätserkennung und Wake-Word. Auf beiden Boards, ohne Netz.
 Das ist der Teil, der Dauerlast erzeugt und Latenz kostet — genau deshalb
 gehört er aufs Gerät.
 
-Der Arbeitsspeicher des Radxa zahlt sich trotzdem aus: Auf dem Zero 2 W
-müssen STT und TTS voraussichtlich rotieren (nie gleichzeitig geladen),
-auf dem Radxa nicht.
+Der Arbeitsspeicher des Radxa zahlt sich trotzdem aus — auf dem Zero 2 W
+ist er der Engpass. Dort schafft **zram (75 % des Arbeitsspeichers) plus
+eine Auslagerungsdatei (ein Viertel des Datenträgers)** die nötige
+Reserve; siehe `docs/DESIGN.md`, Regel 5e. Beides wird auf dem Radxa
+ebenfalls eingerichtet, obwohl es dort nicht nötig ist: Ein Aufbau, der
+sich je nach Board unterscheidet, erzeugt zwei Systeme mit
+unterschiedlichem Verhalten.
 
 ## 2. Whisplay HAT
 

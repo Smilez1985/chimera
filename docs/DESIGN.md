@@ -248,6 +248,18 @@ Dauerhaft laufende Spracherkennung frisst die CPU, die der Renderer für
 15 FPS braucht. Das Wake-Word hält den Ruhezustand billig, die
 Sprachaktivitätserkennung begrenzt die Erkennung auf echte Äußerungen.
 
+### 4.1 Mienenspiel beim Sprechen
+
+Ziel ist, dass sich das Sprechen wie ein Gegenüber anfühlt und nicht wie
+eine Ansage. Das Gesicht soll sich **während** der Antwort bewegen — nicht
+einmal zu Beginn einen Ausdruck setzen und ihn dann halten.
+
+Der naheliegende Weg wäre, das Sprachmodell die Animation steuern zu
+lassen. Das geht schief, und zwar an der Physik: Das Modell liegt außerhalb
+(Regel 5), eine Antwort braucht Hunderte Millisekunden bis Sekunden. Eine
+Mundbewegung braucht Bilder alle 60 ms. Selbst bei einem Modell im
+Nebenzimmer kommt die Anweisung zu spät für die Silbe, die sie meint.
+
 ### Architekturregel 4b — Gesicht und Stimme tragen denselben Mood
 
 Die Mood-Entscheidung fällt **vor** der Sprachausgabe. Ein müder Avatar
@@ -264,6 +276,60 @@ Modelle (int8, deutsch):
 | STT | `nemo-fast-conformer-ctc-en-de-es-fr-14288-int8` | 98 MB |
 | TTS | `vits-piper-de_DE-thorsten_emotional-medium-int8` | 22 MB |
 
+#### Architekturregel 4c — Das Sprachmodell setzt Absicht, nicht Bilder
+
+Die Arbeitsteilung folgt derselben Staffelung wie beim Umgebungshören
+(§3.4) — nur enger getaktet:
+
+| Was | Wer | Takt |
+|---|---|---|
+| Mundform zur Lautstärke | Renderer, lokal | jedes Bild |
+| Betonung, Pausen, Kopfbewegung | Renderer aus dem Sprachsignal | ~100 ms |
+| Ausdruck des Satzes | Sprachmodell, im Voraus | pro Antwort |
+
+Das Sprachmodell liefert **Regieanweisungen zum Text**, keine Einzelbilder.
+Ein Satz kommt also nicht nackt, sondern mit einem Ausdruck versehen —
+etwa „nachdenklich beginnen, bei der Pointe erfreut". Chimera kennt diese
+Ausdrücke bereits als Moods (§3); es sind dieselben Datensätze, die auch
+sonst das Gesicht bestimmen. Das Modell wählt oder mischt sie, so wie es
+im Ruhezustand die Deutung liefert.
+
+Die eigentliche Lebendigkeit entsteht **lokal**: Der Mund folgt der
+Lautstärke der Sprachausgabe, der Kopf bewegt sich mit der Betonung, die
+Augen blinzeln weiter. Dafür braucht es kein Modell, sondern das
+Audiosignal, das ohnehin durch den Lautsprecher geht.
+
+Das ist derselbe Mechanismus, den Noisy für Musik nutzt — dort folgt die
+Figur dem Takt. Hier folgt sie der eigenen Stimme. Die Kopplung ist schon
+erprobt, inklusive der Glättung (`AUDIO_SMOOTHING`, rund ein Drittel
+Sekunde Nachlauf bei 15 Bildern je Sekunde).
+
+#### Was das auf dem Pi Zero 2 W kostet
+
+Die ehrliche Antwort: Das ist der Lastfall, der das Board am meisten
+fordert — Sprachsynthese und Renderer laufen gleichzeitig, beide wollen
+Rechenzeit, und der Renderer soll dabei nicht einbrechen.
+
+Vier Kerne stehen zur Verfügung. Zugehört wird währenddessen nicht
+(Regel 3b), die Spracherkennung schweigt also. Das Sprachmodell liegt
+außerhalb und kostet nichts außer Wartezeit. Bleibt: Renderer plus
+Sprachsynthese, plus die Auswertung des Audiosignals — letztere ist
+billig, weil nur Lautstärke und grobe Betonung gebraucht werden, keine
+Frequenzanalyse.
+
+Trotzdem ist offen, ob 15 Bilder je Sekunde dabei halten. **Zu messen,
+nicht anzunehmen** (Regel 10g). Falls nicht, in dieser Reihenfolge:
+
+1. Bildrate **während des Sprechens** senken (10 statt 15) — beim
+   Sprechen zählt die Mundbewegung, nicht die Partikelanimation
+2. Aufwendige Ebenen (Partikel, mehrlagiger Schein) währenddessen
+   aussetzen
+3. Sprachausgabe in Stücken erzeugen und abspielen, damit die Synthese
+   nicht in einem Block rechnet
+
+Der Ausweg ist also vorhanden, ohne den Entwurf anzutasten. Das ist der
+Grund, weshalb die Bildrate eine Einstellung ist und keine Konstante.
+
 ### Architekturregel 5 — Sprache lokal, Sprachmodell immer remote
 
 Auf einem Pi Zero 2 W (512 MB) passen Sprache **und** LLM nicht
@@ -272,8 +338,10 @@ gleichzeitig in den Speicher:
     OS + Python ~120 · Renderer ~60 · STT ~150 · TTS ~60
     VAD+KWS ~25 · Agent+Telegram ~80  =  ~495 MB
 
-Das LLM fehlt darin komplett. Swap auf SD-Karte ist keine Lösung — bei
-laufendem Renderer bedeutet das Ruckeln und tote Karten.
+Das Sprachmodell fehlt darin komplett — und passt auch mit Auslagerung
+nicht hinein (§4a, Regel 5). Was Auslagerung sehr wohl leistet, ist der
+Rest: Renderer, Spracherkennung und Sprachsynthese gleichzeitig
+vorzuhalten, ohne dass der Speicher ausgeht. Dazu Regel 5e.
 
 "Ohne API" ist deshalb so definiert: **kein Fremdanbieter, kein
 Token-Konto, nichts verlässt das eigene Netz.** Ein LLM auf dem eigenen
@@ -433,21 +501,6 @@ Fehlermeldung beim Start.
 
 Zugangsdaten gehören nicht ins Repo (§12). `*.example` mit Platzhaltern.
 
----
-
-## 4b. Schnittstellen zum Nutzer
-
-Chimera hat **zwei gleichwertige Wege** hinein, nicht einen mit Anhängsel:
-
-| Weg | Nutzung |
-|---|---|
-| **Telegram** | Von unterwegs, lange Texte, Dateien, Verlauf |
-| **Sprache am Gerät** | Vor Ort, beiläufig, freihändig |
-
-Telegram bleibt aus openclawgotchi **vollständig erhalten** — es ist die
-einzige Schnittstelle, die auch funktioniert, wenn man nicht im selben
-Raum steht.
-
 ### Architekturregel 5d — Ein Gespräch, zwei Türen
 
 Beide Wege führen in **denselben Agenten mit demselben Verlauf**. Wer
@@ -464,6 +517,66 @@ Der Avatar zeigt in beiden Fällen denselben Zustand (§7). Wenn per
 Telegram eine Anfrage läuft, sieht man das dem Gesicht an.
 
 ---
+
+### Architekturregel 5e — zram und Auslagerungsdatei gehören zum Aufbau
+
+Auf dem Pi Zero 2 W ist der Speicher der Engpass, nicht die Rechenleistung.
+Der Installer richtet deshalb **immer** ein:
+
+- **zram** mit 75 % des Arbeitsspeichers als komprimierter Auslagerungs-
+  bereich im RAM. Kein Datenträgerzugriff, und bei den Daten, um die es
+  geht (Python-Objekte, Modellpuffer, Bildpuffer), komprimiert das gut.
+  Auf 512 MB entstehen so real nutzbare Reserven in dreistelliger
+  Megabyte-Höhe.
+- **Auslagerungsdatei auf dem Systemdatenträger**, ein Viertel von dessen
+  Größe, als zweite Stufe unterhalb von zram. Sie liegt dort, wo das
+  System liegt: auf dem Pi die SD-Karte, auf dem Radxa der eMMC. Damit
+  läuft der Radxa ohne SD-Karte — und wo eine steckt, wird sie geschont.
+
+Das ist die bewährte Aufstellung aus den übrigen Projekten auf dieser
+Hardware (Noisy, PiPortal) und keine Chimera-Erfindung. Ein früherer
+Entwurfsstand lehnte Auslagerung auf SD-Karte pauschal ab — das war zu
+grob. Richtig ist die Unterscheidung:
+
+- **Ein Sprachmodell auszulagern ist sinnlos.** Es wird bei jedem Token
+  vollständig durchlaufen; ausgelagert bedeutet das dauerndes Nachladen.
+  Deshalb bleibt Regel 5 bestehen — das Modell liegt außerhalb.
+- **Selten benutzte Seiten auszulagern ist genau richtig.** Der
+  Telegram-Anteil, während gesprochen wird; das Sprachsynthese-Modell,
+  während zugehört wird; Python-Bibliotheken nach dem Start. Diese Seiten
+  werden minutenlang nicht angefasst — sie im Arbeitsspeicher zu halten
+  ist die eigentliche Verschwendung.
+
+Damit wird die befürchtete Modellrotation (STT und TTS nie gleichzeitig
+geladen) voraussichtlich überflüssig: Der Kernel verdrängt die gerade
+unbenutzte Seite von selbst, und zwar feiner, als es eine
+Rotationsmechanik je könnte.
+
+Zum Verschleiß der Karte: Er entsteht durch **Schreiben**, und die zweite
+Stufe wird selten beschrieben, wenn zram davor liegt. Die
+Auslagerungsneigung (`vm.swappiness`) wird trotzdem niedrig gehalten, und
+das Protokoll hält fest, wie viel tatsächlich ausgelagert wurde — damit
+Vermutung durch Messung ersetzt werden kann (Regel 10g).
+
+**Auf dem Radxa ist beides nicht nötig und wird trotzdem eingerichtet.**
+Ein Aufbau, der sich je nach Board unterscheidet, erzeugt zwei Systeme,
+die sich unterschiedlich verhalten — und der Fehler zeigt sich dann
+ausgerechnet auf dem Gerät, das seltener läuft.
+
+---
+
+## 4b. Schnittstellen zum Nutzer
+
+Chimera hat **zwei gleichwertige Wege** hinein, nicht einen mit Anhängsel:
+
+| Weg | Nutzung |
+|---|---|
+| **Telegram** | Von unterwegs, lange Texte, Dateien, Verlauf |
+| **Sprache am Gerät** | Vor Ort, beiläufig, freihändig |
+
+Telegram bleibt aus openclawgotchi **vollständig erhalten** — es ist die
+einzige Schnittstelle, die auch funktioniert, wenn man nicht im selben
+Raum steht.
 
 ## 5. Renderer
 
@@ -839,11 +952,13 @@ scannen.
 - **3b** — Nur im Ruhezustand wird zugehört
 - **4a** — VAD läuft vor STT, KWS vor VAD
 - **4b** — Gesicht und Stimme tragen denselben Mood
+- **4c** — Das Sprachmodell setzt Absicht, nicht Bilder
 - **5** — Sprache lokal, Sprachmodell immer remote
 - **5a** — Registry statt fester Connector-Attribute
 - **5b** — Anthropic-Anmeldung wie im OpenMinis-PR
 - **5c** — Ollama ist ein erstklassiger Anbieter
 - **5d** — Ein Gespräch, zwei Türen
+- **5e** — zram und Auslagerungsdatei gehören zum Aufbau
 - **6** — Keine absoluten Pixelwerte
 - **7** — Ein Prozess, ein Framebuffer
 - **8** — Die Mood-Steuerung ist ein Skill, kein Sonderweg

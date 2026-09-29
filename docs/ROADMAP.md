@@ -146,6 +146,15 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
 - [ ] STT (`nemo-fast-conformer-ctc-en-de-es-fr-int8`), Latenz messen
 - [ ] TTS (`thorsten_emotional-medium-int8`)
 - [ ] TTS-Emotion an Mood koppeln (Architekturregel 4b)
+
+### Mienenspiel beim Sprechen (`docs/DESIGN.md` §4.1)
+- [ ] Mundform folgt der Lautstärke der Sprachausgabe, jedes Bild
+- [ ] Kopfbewegung und Pausen aus dem Sprachsignal, ~100 ms
+- [ ] Sprachmodell liefert **Regieanweisung zum Satz** (Mood-Name oder
+      Mischung), keine Einzelbilder — Latenz macht alles andere unmöglich
+- [ ] **Messen:** hält der Renderer 15 Bilder/s, während gesprochen wird?
+- [ ] Falls nicht: Bildrate beim Sprechen senken, aufwendige Ebenen
+      aussetzen, Sprachausgabe stückweise erzeugen
 - [ ] Wake-Word prüfen — die KWS-Modelle sind nicht auf deutschem Material
       trainiert. Wenn "Hey Chimera" unzuverlässig ist: eigenes Keyword
       trainieren oder Button als Auslöser
@@ -228,6 +237,11 @@ Der einfache Fall: Header kommen aus dem Distributionspaket.
 
 ### 8d — Module 80–99
 - [ ] Headless prüfen: kein Desktop-Paket wird nachgezogen
+- [ ] **zram einrichten, 75 % des Arbeitsspeichers** (Regel 5e)
+- [ ] **Auslagerungsdatei, ein Viertel des Systemdatenträgers** — auf dem
+      Pi die SD, auf dem Radxa der eMMC (laeuft damit ohne SD)
+- [ ] `vm.swappiness` niedrig halten; Auslagerungsmenge protokollieren
+- [ ] Auf beiden Boards gleich einrichten — auch wo es nicht nötig wäre
 - [ ] Python-Umgebung, Modelle laden und Pruefsummen verifizieren
 - [ ] `.env` aus Vorlage, Ollama-Adresse erfragen
 - [ ] systemd-Unit
