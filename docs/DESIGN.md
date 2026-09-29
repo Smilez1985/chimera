@@ -1293,8 +1293,43 @@ I/O. Machbar, aber eng — siehe Architekturregel 5 und `docs/HARDWARE.md`.
 
 Tokens, Zugangsdaten, SSIDs, Gerätenamen und lokale Pfade gehören nicht
 in die Versionsverwaltung. Konfiguration liegt als `*.example` mit
-Platzhaltern vor; echte Werte erzeugt der Installer. Vor jedem Push
-scannen.
+Platzhaltern vor; echte Werte erzeugt der Installer.
+
+Nicht hinein gehören außerdem: **IP-Adressen aus privaten Netzen**, MAC-
+Adressen, Heimnetz-Hostnamen und private Mailadressen. Für Commits gilt
+ausschließlich die GitHub-noreply-Adresse.
+
+### Architekturregel 13a — Vor jedem Push wird geprüft, und die Prüfung beweist ihre Sehfähigkeit
+
+„Vor jedem Push scannen" allein genügt nicht — ein Scan, dessen Umfang
+jedes Mal neu aus dem Kopf gewählt wird, prüft jedes Mal etwas anderes.
+Die Prüfung läuft deshalb als Werkzeug mit festen Mustern, und zwar über
+den Arbeitsbaum, die Commit-Nachrichten und die Urheberadressen; beim
+ersten Push eines Repos und nach jedem Umschreiben der Historie auch über
+jede frühere Dateifassung.
+
+**Das Werkzeug liegt bewusst außerhalb des Repos** und ist in
+`.gitignore` gesperrt. Es nennt die Suchmuster und damit die Form der
+Werte, die es schützen soll — welche Präfixe die Tokens haben, welcher
+Adressbereich das Heimnetz ist. Das ist eine Landkarte für jeden, der
+sucht, und gehört nicht in eine öffentliche Historie. Hier steht die
+Pflicht, nicht die Umsetzung.
+
+**Und die Prüfung prüft sich selbst.** Die erste Fassung meldete „sauber"
+für ein Repo, in dem eine Heimnetz-Adresse lag: `grep --exclude-dir` gibt
+es in BusyBox nicht, der Aufruf brach ab, das leere Ergebnis galt als
+Abwesenheit von Funden. Das ist Regel 10j in ihrer teuersten Form — wer
+einem Scanner glaubt, der nichts sehen kann, pusht das Geheimnis selbst.
+
+Deshalb läuft vor jeder Suche jedes Muster gegen einen bekannten Köder,
+**durch dieselbe Funktion wie der echte Lauf**. Findet ein Muster seinen
+Köder nicht, bricht die Prüfung ab, statt zu beruhigen. Ein eigener
+Selbsttest mit eigenem Suchaufruf wäre wertlos: Genau der war grün,
+während der echte Scan blind war.
+
+Was in der Historie gefunden wird, ist nicht durch Löschen behoben. Der
+Wert wird **widerrufen** und als verbrannt behandelt; erst danach wird
+die Historie umgeschrieben.
 
 ---
 
@@ -1342,3 +1377,4 @@ scannen.
 - **10f** — Keine Container auf dem Gerät
 - **10g** — Nie raten
 - **10h** — Gebaut ist erst, wenn verdrahtet ist
+- **13a** — Vor jedem Push wird geprüft, und die Prüfung beweist ihre Sehfähigkeit

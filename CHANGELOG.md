@@ -152,6 +152,12 @@ echten Ollama-Server geprüft.
 - Die CPU-Temperatur wird über eine Instanzeigenschaft gelesen, nicht über
   eine Modulkonstante — auf dem Radxa heißt die Zone anders als auf dem Pi
   (Regel 10c).
+- **§13 verschärft und als Regel 13a gefasst:** Vor jedem Push läuft eine
+  Prüfung auf Geheimnisse und Personenbezug, und sie belegt vorher, dass
+  sie überhaupt etwas finden kann. Hinzugekommen in der Liste des
+  Unerwünschten: private IP-Adressen, MAC-Adressen, Heimnetz-Hostnamen,
+  private Mailadressen. Das Prüfwerkzeug selbst bleibt außerhalb des
+  Repos — es nennt die Muster und damit die Form der geschützten Werte.
 
 ### Behoben
 

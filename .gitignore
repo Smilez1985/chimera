@@ -15,3 +15,14 @@ installer/.testtmp/
 logs/
 __pycache__/
 *.pyc
+
+# Pruefwerkzeuge fuer Geheimnisse und Personenbezug bleiben LOKAL.
+# Sie nennen die Muster, nach denen man suchen muss -- und damit die Form
+# der Werte, die sie schuetzen. Das gehoert nicht in eine oeffentliche
+# Historie. Das Werkzeug liegt in der privaten Werkzeugkiste, der Aufruf
+# steht in docs/DESIGN.md §13.
+check-secrets.sh
+check-pii.sh
+tools/check-secrets*
+tools/check-pii*
+.seccheck*
