@@ -147,23 +147,81 @@ Phase 1–5, also parallel machbar. Details in `docs/DESIGN.md` §8.
 - [ ] PiSugar-Akkustand als Mood-Eingang
 - [ ] Thermal-Hack neu kalibrieren (Agent-Grundlast einrechnen)
 
-## Phase 8 — Installer und erstes Release
+## Phase 8 — Installer
 
-- [ ] Idempotenter Installer mit Migrationsfunktion (Architekturregel 10)
+Entwurf steht in `docs/INSTALLER.md`. Der Installer traegt die
+Plattformfrage, deshalb eigene Phase und nicht am Ende angehaengt.
+
+### 8a — Geruest
+- [ ] Modulaufbau mit Nummern und Luecken, einzeln aufrufbar (`--only`)
+- [ ] `--dry-run` und `--check` mit sprechendem Exitcode
+- [ ] Atomares Schreiben: Sidecar neben dem Ziel, dann `mv`
+- [ ] **`mktemp` geprueft** — ungeprueft leert es Zieldateien (I3)
+- [ ] Protokolldatei
 - [ ] `VERSION` ins System stempeln, `chimera --version`
-- [ ] `*.example`-Konfigvorlagen, Secret-Scan vor Push
+
+### 8b — Modul 10 `preflight`
+Liefert sofort Nutzen: klaert die offenen Fragen zum Zielgeraet.
+- [ ] Board und Betriebssystem erkennen, Whisplay-Revision
+- [ ] `uname -r`, Header-Verzeichnis, `modinfo snd-soc-wm8960`,
+      `/boot/config-*`, Speicher und Platz erfassen und protokollieren
+- [ ] Warnen, wenn ungeteilte Kernelupdates aktiv sind
+
+### 8c — Module 20–70 fuer Pi Zero 2 W
+Der einfache Fall: Header kommen aus dem Distributionspaket.
+- [ ] Systempakete, Header (Stufe 1), Whisplay-Treiber bauen
+- [ ] WM8960 pruefen: **`modprobe` versuchen**, nicht nur Existenz pruefen
+      (ein vorhandenes Modul kann ABI-inkompatibel sein)
+- [ ] Overlay, kollidierende **umbenennen** statt loeschen
+- [ ] Bootmethode erkennen statt `u-boot-update` vorauszusetzen
+- [ ] Bootdateien vorher sichern
+- [ ] ALSA-Konfiguration
+
+### 8d — Module 80–99
+- [ ] Python-Umgebung, Modelle laden und Pruefsummen verifizieren
+- [ ] `.env` aus Vorlage, Ollama-Adresse erfragen
+- [ ] systemd-Unit
+- [ ] `migrate_from()` fuer Uebergaenge (I2)
+- [ ] Deinstallation, die den Ausgangszustand wiederherstellt
+
+### 8e — Radxa unter DietPi: Header Stufe 2/3
+**Zuletzt, gegen ein bereits laufendes Chimera.** Sonst debuggt man es
+gegen eine Baustelle. Analyse in `docs/INSTALLER.md` §3.
+- [ ] Tabelle bekannter Kombinationen (Board, Kernelversion, Quelle,
+      Pruefsumme) statt einer fest verdrahteten Version
+- [ ] Headers-Paket laden, Pruefsumme verifizieren
+- [ ] **`dpkg-deb -x` in ein privates Verzeichnis** — niemals nach `/`
+      entpacken (I5: merged-`/usr` wuerde zerstoert, dynamisch gelinkte
+      Programme brechen)
+- [ ] Versionskennung in `kernel.release` und `utsrelease.h` anpassen
+- [ ] ARM64-Generatoreingaben ergaenzen, `cpucaps.h` und `sysreg-defs.h`
+      erzeugen
+- [ ] `fixdep` und `modpost` selbst bauen
+- [ ] `/boot/config-<kver>` als `.config`, dann `olddefconfig` und
+      `syncconfig` — sonst baut das Modul und laedt trotzdem nicht
+- [ ] `modules_prepare` **nicht** aufrufen (laeuft bei Vendor-Kerneln endlos)
+- [ ] `build`-Symlink setzen
+- [ ] WM8960 aus Quelle bauen, falls im DietPi-Kernel nicht vorhanden
+- [ ] Unbekannte Kernelversion ⇒ Abbruch mit Auskunft, kein Rateversuch
+
+## Phase 9 — Erstes Release
+
 - [ ] CI: Tests der hardwarefreien Teile
+- [ ] Secret-Scan vor jedem Push
 - [ ] **Erst nach Hardware-Test:** `v0.1.0` taggen
 
 ---
 
 ## Offen / zu entscheiden
 
-- **Radxa Zero 3W nutzbar machen?** Wäre das bessere Board (bis 8 GB ⇒
-  Sprachmodell lokal möglich), aber der Audiotreiber läuft unter DietPi
-  nicht. Aussichtsreichster Weg: Radxas offizielles Debian statt DietPi.
-  Analyse in `docs/HARDWARE.md` §3. Kein Blocker — das Board ist eine
-  Konfigurationsfrage.
+- **Radxa Zero 3W** wäre das bessere Board (bis 8 GB ⇒ Sprachmodell lokal
+  möglich). Der Audiotreiber läuft unter DietPi nicht — das löst **Phase 8e
+  des Installers**, nicht eine Wiki-Anleitung. Analyse in
+  `docs/HARDWARE.md` §3 und `docs/INSTALLER.md` §3. Kein Blocker: das Board
+  ist eine Konfigurationsfrage.
+  Offen bleibt die Abwägung, ob Radxas offizielles Debian (unterstützter
+  Pfad, DietPis Schlankheit verloren) nicht der günstigere Weg ist als
+  Header-Stufe 3 unter DietPi bei jedem Kernelupdate.
 - **Mood-Aufräumen:** Wenn der Agent dauerhaft speichern darf, wächst die
   Bibliothek unbegrenzt. LRU über `last_used`? Obergrenze?
 - **Bleibt Telegram** die Hauptschnittstelle, wenn Mikrofon, Lautsprecher

@@ -67,6 +67,14 @@ Installation** (siehe `docs/DESIGN.md` §10).
   `/model`-Umschaltung im Chat, persistente Modellwahl, Platzhalter-Adresse
   als „nicht gesetzt" behandeln.
 
+- **Der Installer löst die Treiberfrage, nicht der Nutzer.** Die
+  Header-Beschaffung für den Radxa unter DietPi wird ein Installermodul
+  (Phase 8e) — kein Wiki-Eintrag zum Abtippen. Entwurf in
+  `docs/INSTALLER.md`, inklusive der Fallstricke: fremde Pakete niemals
+  über `/` entpacken, `mktemp` immer prüfen, `syncconfig` gegen die
+  Bootkonfiguration des Boards, und `modprobe` versuchen statt nur die
+  Existenz eines Moduls zu prüfen.
+
 ### Bekannte Einschränkungen
 - Auf einem Pi Zero 2 W (512 MB) passen lokale Sprache und lokales LLM
   nicht gleichzeitig in den Speicher. Rechnung in `docs/DESIGN.md` §4.
