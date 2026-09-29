@@ -28,14 +28,32 @@ netz_erreichbar() {
 	_ne_port="${2:-443}"
 	_ne_frist="${3:-5}"
 
-	if have_cmd nc; then
-		nc -z -w "$_ne_frist" "$_ne_host" "$_ne_port" >/dev/null 2>&1
-		return $?
-	fi
+	# curl zuerst, nicht nc.
+	#
+	# Grund: `nc` gibt es in mindestens drei Bauarten (BusyBox,
+	# netcat-openbsd, netcat-traditional), und sie behandeln `-z` und `-w`
+	# unterschiedlich -- manche kennen `-z` gar nicht und warten dann auf
+	# Eingabe, statt zu antworten. Das faellt nicht als Fehler auf: Die
+	# Pruefung meldet "nicht erreichbar", die Warteschleife beginnt, und
+	# von aussen sieht es aus wie ein Haenger.
+	#
+	# Genau das ist auf einem GitHub-Runner passiert, wo `sh` BusyBox war:
+	# Lokal lief derselbe Test in 25 Sekunden, dort lief er in die Grenze.
+	#
+	# curl ist in dieser Hinsicht berechenbar und ueberall gleich.
 	if have_cmd curl; then
 		curl -s -o /dev/null --max-time "$_ne_frist" \
 			--connect-timeout "$_ne_frist" \
-			"https://$_ne_host" >/dev/null 2>&1
+			"https://$_ne_host:$_ne_port" >/dev/null 2>&1 && return 0
+		# Auch ein HTTP-Fehler beweist, dass jemand geantwortet hat --
+		# gefragt ist die Erreichbarkeit, nicht der Inhalt.
+		case "$?" in
+			0|22|52|56) return 0 ;;
+		esac
+		return 1
+	fi
+	if have_cmd nc; then
+		nc -z -w "$_ne_frist" "$_ne_host" "$_ne_port" >/dev/null 2>&1
 		return $?
 	fi
 	if have_cmd wget; then

@@ -100,7 +100,10 @@ enthaelt "es wird gesagt, dass gewartet wird" "$_txt" "wartet"
 
 # Gegenprobe: Bei erreichbarem Ziel darf es KEINE Wartemeldung geben --
 # sonst waere die Meldung wertlos, weil sie immer kaeme.
-_ok_txt="$(netz_warten github.com 443 10 2>&1 || true)"
+# Grenze klein halten: Sollte die Erreichbarkeitspruefung auf einem
+# fremden System scheitern, darf der Test nicht minutenlang warten,
+# sondern muss zuegig rot werden. Ein haengender Test meldet nichts.
+_ok_txt="$(CHIMERA_NETZ_GRENZE=8 netz_warten github.com 443 8 2>&1 || true)"
 if printf '%s' "$_ok_txt" | grep -q "Netz weg"; then
 	bad "Gegenprobe: Wartemeldung auch bei erreichbarem Ziel"
 else
