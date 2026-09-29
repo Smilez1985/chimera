@@ -27,3 +27,6 @@ tools/check-secrets*
 tools/check-pii*
 .seccheck*
 
+
+# Sessionübergaben: Arbeitsstand, kein Projektinhalt.
+uebergaben/
