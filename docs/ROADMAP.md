@@ -73,6 +73,12 @@ Hardware ist vorhanden, also nicht blockiert.
 - [ ] `skills/mood/SKILL.md` (Architekturregel 8)
 - [ ] Agent-Zustände auf Moods abbilden (denkt, spricht, hört zu)
 
+### Werkzeugschleife → erledigt
+
+`FACE:` ist als Werkzeug `set_face` umgesetzt und mit der Mood-Bibliothek
+verdrahtet. Offen bleiben `DISPLAY:` (Statuszeile) und `SAY:` (braucht
+Sprachausgabe).
+
 ### E-Ink-Ausgabe auf Whisplay umbiegen
 
 Die Steuerbefehle bleiben, nur das Ziel wechselt (`docs/DESIGN.md` §6).
@@ -178,15 +184,13 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
 
 ## Phase 6 — Agent-Härtung
 
-Vier unabhängige Bausteine, ~300 Zeilen. Berührt eine andere Ecke als
-Phase 1–5, also parallel machbar. Details in `docs/DESIGN.md` §8.
+Die vier Muster aus `docs/DESIGN.md` §8 sind gebaut und verdrahtet.
+Offen bleibt:
 
-- [ ] Tool-Schleifen-Erkennung + Gegenprobe-Test
-- [ ] Tool-Preflight und JSON-Reparatur
-- [ ] Gestaffelte Kontextschwellen; Kapazität gegen das *tatsächlich
-      bedienende* Modell prüfen
-- [ ] Rangordnung im Gedächtnis (read-only vs. agentgeschrieben)
-- [ ] Schleifen- und Kontextzustand auf Moods/LED abbilden
+- [ ] Rangordnung im Gedächtnis (nur lesbar gegen agentgeschrieben) —
+      braucht erst die Gedächtnisschicht aus openclawgotchi
+- [ ] Auslagern bei `Action.OFFLOAD`: erkannt wird es, getan noch nicht
+- [ ] Schleifenzustand auf die RGB-LED (braucht Hardware)
 
 ## Phase 7 — Restliche Peripherie
 

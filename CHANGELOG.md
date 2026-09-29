@@ -8,115 +8,95 @@ einer bewussten Abweichung: **ein Versionssprung bricht keine laufende
 Installation.** Was ein Release an bestehenden Installationen ändert,
 erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 
-## [Unreleased]
+## [0.1.0] — 2026-09-29
+
+Erste Fassung mit lauffähigem Agenten. Alles hier Genannte ist verdrahtet
+und geprüft; was noch offen ist, steht unter „Bekannte Einschränkungen"
+oder in der Roadmap.
 
 ### Hinzugefügt
 
-- Installer-Modul 10 `preflight`: erkennt Board, Betriebssystem und
-  Bootmethode getrennt voneinander, liest das Whisplay-EEPROM und berichtet
-  die Bauvoraussetzungen (Kernel-Headers, `snd-soc-wm8960`,
-  `/boot/config-*`, Speicher). Ändert nichts am System.
-- Boardprofile für Raspberry Pi Zero 2 W und Radxa ZERO 3W, dazu eine
-  Tabelle bekannter Kombinationen aus Board, Betriebssystem und
-  Kernelversion. Eine unbekannte Kombination führt zum Abbruch mit
-  Auskunft statt zu einem Rateversuch.
-- `write_atomic`: schreibt Systemdateien über eine Sidecar-Datei neben dem
-  Ziel und benennt sie atomar um. Prüft `mktemp` und lehnt leere Eingaben
-  ab.
-- `chimera-install` als Einstiegspunkt: ruft die Module der Nummer nach
-  auf, kennt `--only`, `--list`, `--dry-run`, `--check` und `--log-dir`.
-- Protokollierung: jeder Lauf schreibt eine Datei, **auch ein
-  erfolgreicher**. Lässt sich kein Protokoll anlegen, wird das gemeldet.
-- 38 Tests für Erkennung, atomares Schreiben, Sicherung und Protokoll,
-  jeder Regressionstest mit Gegenprobe. Laufen ohne Zielhardware, weil
-  alle Systemabfragen über `CHIMERA_ROOT` gehen.
+**Ausdruck**
+- Mood-Vokabular, Validator und Registry (`chimera.mood`). Schema für das
+  Sprachmodell und Prüfung entstehen aus **einer** Tabelle.
+- Freie Zeichenformen: elf Grundformen mit relativen Koordinaten, Ebene
+  und Bewegung. Benannte Bausteine sind Vorschläge — ein unbekannter Name
+  wird übernommen und über eigene Formen dargestellt.
+- Mischen und Variieren ohne Sprachmodell; Farben über den Farbton, damit
+  Rot und Blau über Violett laufen statt über Grau.
+- Übergänge über alle Felder, weich und hart. `fast_track` schaltet
+  sofort, damit ein Schreck nicht einblendet.
+- 41 Moods aus Noisy als Startbestand, ohne die Audio-Kopplung.
 
-- `--dry-run` und `--check` werden jetzt ausgewertet: `do_change` führt
-  im Trockenlauf nichts aus, sondern kündigt an.
-- Protokolle werden aufgeräumt; die jüngsten 20 bleiben
-  (`CHIMERA_LOG_KEEP`).
+**Anzeige**
+- Renderer aus Noisy übernommen und auflösungsrelativ gemacht: Bildgröße
+  kommt vom Panel, Ausgabe über ein beliebiges `Panel`, Zustand statt
+  Orchestrator.
+- Bildausgabe in den Panelspeicher über SPI. Die Umrechnung nach RGB565
+  läuft über `numpy` und ist rund 25-mal schneller als bildpunktweise
+  (2,5 ms gegen 62,9 ms je Bild).
 
-- Mood-Schicht (`src/chimera/mood/`): Vokabular, Validator, Registry sowie
-  Mischen und Variieren. Schema und Validator entstehen aus **einer**
-  Tabelle, damit sie nicht auseinanderdriften.
-- **Freie Zeichenformen**: elf Grundformen mit relativen Koordinaten,
-  Ebene und Bewegung. Benannte Bausteine sind Vorschläge — ein Name, den
-  der Renderer nicht kennt, wird übernommen und über eigene Formen
-  dargestellt.
-- Noisys 41 Moods als Startbestand, ohne die Audio-Kopplung
-  (`tools/import-noisy-moods.py`).
-- 68 Tests für die Mood-Schicht, mit Gegenproben.
-
-- Bildausgabe (`src/chimera/display/panel.py`): Pillow-Bild → RGB565 →
-  Panelspeicher über SPI, wie bei Noisy. Die Umrechnung läuft über `numpy`
-  und ist damit rund 25-mal schneller als die bildpunktweise Fassung aus
-  dem Herstellerbeispiel (2,5 ms gegen 62,9 ms je Bild). Ohne `numpy`
-  greift der langsame Weg und meldet sich.
-- `NullPanel` für Entwicklung und Messung ohne Gerät.
-- 11 Tests für die Bildausgabe, inklusive Abgleich gegen die
-  bildpunktweise Fassung.
-
-- Renderer (`src/chimera/render/avatar.py`), übernommen aus Noisy (MIT)
-  und angepasst: Bildgröße kommt vom Panel statt aus einer Konstanten,
-  Ausgabe über ein beliebiges `Panel`, Zustand statt Orchestrator,
-  Mood als Dict statt Nummer in einer globalen Registry.
-- Freie Formen werden gezeichnet — elf Grundformen mit Ebene und Bewegung,
-  `audio` folgt der eigenen Sprachausgabe.
-- `tools/contact-sheet.py`: alle Moods und Mischungen nebeneinander.
-- 16 Tests für den Renderer, mit Gegenprobe für die freien Formen.
-
-- Mood-Übergänge (`src/chimera/mood/transition.py`): blenden über alle
-  Felder, nicht nur über die Farbe. `fast_track` wechselt hart, damit ein
-  Reflex nicht einblendet. Die Dauer ist eine Zeitangabe, der Fortschritt
-  hängt an der Uhr.
-- Farben sind ab jetzt garantiert Tupel — JSON liefert Listen, PIL nimmt
-  nur Tupel, und der Fehler fiele sonst erst im Renderer auf.
-- 21 Tests für Übergänge, mit gestellter Uhr und Gegenproben.
-
-- `docs/HERKUNFT.md`: Bauteil-für-Bauteil-Analyse von openclawgotchi
-  (Upstream und Fork) und OpenMinis — übernehmen, anpassen, weglassen.
-- `docs/HYBRID-PLAN.md`: Aufbau und Reihenfolge in acht Stufen.
-
-- `docs/DISPLAYS.md`: mehrere Anzeigen statt einer. Panel-Profile,
-  Darstellungsarten (animiert bis 1-Bit-reduziert), Erkennung bei jedem
-  Start. Der E-Paper-Treiber bleibt und kommt aus dem eigenen Fork.
-- `docs/PROVIDER.md`: Anbieterschicht als Hybrid — Gotchis Werkzeugschleife
-  mit OpenMinis' Anbietermuster. Modelle werden **je Aufgabe** zugeordnet,
-  jede Aufgabe zeigt auf eine Gruppe mit Rückfall; kein Anbieter wird
-  vorausgesetzt. Dazu MCP und der eigene Audio-Prozess.
-
-- Anbieterschicht (`src/chimera/provider/`): Registry mit Aufgaben und
-  Gruppen, Rückfall **über Anbietergrenzen hinweg**. Ollama mit
-  Platzhalter-Erkennung und Netzsuche; Claude getrennt nach Abo und
-  API-Schlüssel, jede Antwort trägt ihre Herkunft.
-- Client-Kennung für den Abo-Weg wird zur Laufzeit ermittelt (PR #407),
-  mit gepflegtem Rückfallwert, wenn die CLI fehlt.
+**Sprachmodelle**
+- Anbieter-Registry mit Aufgaben und Gruppen. Der Rückfall geht **über
+  Anbietergrenzen**: Ist Ollama weg, hilft ein zweites Ollama-Modell nicht.
+- Ollama mit Platzhalter-Erkennung und Netzsuche; Claude getrennt nach Abo
+  und API-Schlüssel, jede Antwort trägt ihre Herkunft.
+- Client-Kennung für den Abo-Weg wird zur Laufzeit ermittelt (OpenMinis
+  PR #407), mit Rückfallwert wenn die CLI fehlt.
 - Ersteinrichtung sucht, schlägt vor und übernimmt — jede Zeile änderbar.
-- 36 Tests für die Anbieterschicht, mit Gegenproben.
 
-- `docs/SELBSTUPDATE.md`: Auswertung der PiHole-Updateroutine als Vorlage
-  für Chimeras Selbstaktualisierung — geprüfte Sicherung, bestätigende
-  Selbstprüfung, gestufter Rollback, Rückweg außerhalb des Updates.
+**Agent**
+- Werkzeugschleife mit fünf Werkzeugen: Befehl ausführen, Datei lesen und
+  schreiben, Verzeichnis auflisten, Gesicht setzen.
+- Sicherheitsschranke aus openclawgotchi übernommen: keine Shell, keine
+  Verkettung, keine Ersetzung, keine verschachtelten Interpreter, `sudo`
+  gesperrt. Ergänzt um Netzsperre und Pfadschutz gegen `..` und Symlinks.
+- Vorprüfung und JSON-Reparatur: abgebrochene Argumentangaben werden
+  gerettet statt verworfen.
+- Schleifenerkennung, die **vor** der Ausführung greift und dem Modell
+  sagt, dass es feststeckt. Wechselnde Ergebnisse gelten nicht als Kreis.
+- Kontextschwellen, gestaffelt nach Fenstergröße und geprüft gegen das
+  Modell, das die Anfrage **tatsächlich bedient**.
+- Der Agentzustand ist am Gesicht ablesbar: denkt, arbeitet, spricht,
+  verwirrt.
+
+**Installer**
+- `chimera-install` mit Modulen, `--only`, `--list`, `--dry-run`, `--check`.
+- Modul 10 `preflight`: erkennt Board, Betriebssystem und Bootmethode
+  getrennt, liest das Whisplay-EEPROM, meldet die Bauvoraussetzungen.
+- Boardprofile für Pi Zero 2 W und Radxa ZERO 3W samt Tabelle bekannter
+  Kombinationen. Unbekanntes führt zum Abbruch mit Auskunft, nicht zum
+  Rateversuch.
+- Protokoll je Lauf, auch bei Erfolg; die jüngsten 20 bleiben erhalten.
+- Atomares Schreiben mit geprüftem `mktemp`; leere Eingaben werden
+  abgelehnt.
 
 ### Bekannte Einschränkungen
 
-- Die Abo-Marke wird **nicht aufgefrischt**. Läuft sie ab, greift der
-  Rückfall auf das nächste Ziel. Koordinator und Auffrischung fehlen noch.
-- Die Werkzeugschleife ist noch nicht angeschlossen; die Anbieter können
-  bisher nur antworten, nicht handeln.
+- **Keine Sprachein- oder -ausgabe.** Sprache, Wake-Word und
+  Umgebungshören sind entworfen, aber nicht gebaut.
+- **Kein Telegram.** Der Agent läuft nur programmgesteuert.
+- **Die Abo-Marke wird nicht aufgefrischt.** Läuft sie ab, greift der
+  Rückfall auf das nächste Ziel. Koordinator fehlt.
+- **Werkzeugaufrufe werden aus dem Text gelesen** (`TOOL: name {...}`),
+  nicht über die Werkzeug-Schnittstelle der Anbieter. Funktioniert mit
+  jedem Modell, ist aber nicht die saubere Lösung.
+- **`Action.OFFLOAD` wird erkannt, aber nicht ausgeführt** — verdichtet
+  wird erst an der nächsten Schwelle.
+- **`backup_file` im Installer hat keinen Aufrufer.** Modul 60, das es
+  braucht, existiert noch nicht.
+- **Nur ein Panel ist gebaut** (Whisplay). E-Paper und ST7789 sind
+  entworfen (`docs/DISPLAYS.md`), nicht umgesetzt.
+- **Nichts davon lief auf der Zielhardware.** Alle Messwerte stammen aus
+  der Entwicklungsumgebung oder von einem Ollama-Server im Netz.
 
-- Noisys Reset-Überlagerung wurde entfernt; Chimera wird über Telegram
-  und Sprache bedient.
-- Die Messwerte zur Umrechnung stammen aus der Entwicklungsumgebung
-  (aarch64), nicht vom Zielgerät.
-- `MAX_SHAPES` (40) ist geschätzt, nicht gemessen.
+### Geprüft
 
-- Ob der Renderer 15 Bilder je Sekunde hält, **während** gesprochen wird,
-  ist auf echter Hardware ungeprüft. Ausweichwege stehen in
-  `docs/DESIGN.md` §4.1.
+267 Tests, alle grün (64 Agent, 68 Mood, 41 Anbieter, 21 Übergänge,
+16 Renderer, 11 Anzeige, 46 Installer). Jeder Regressionstest hat eine Gegenprobe. Die
+Anbieterschicht und die Agent-Schleife wurden zusätzlich gegen einen
+echten Ollama-Server geprüft.
 
-- `backup_file` hat **noch keinen Aufrufer**. Es wird von Modul 60
-  (Overlay und Bootkonfiguration) gebraucht, das noch nicht existiert.
-  Getestet ist es bereits.
-- Die Erkennung des Rettungswegs (zweiter Datenträger) ist heuristisch und
-  auf echter Hardware noch nicht überprüft.
+## [Unreleased]
+
+Noch keine Änderungen seit 0.1.0.
