@@ -92,12 +92,18 @@ Modelle werden nicht einmal global gewählt, sondern **für die Arbeit, die
 sie tun sollen** — dort für Sprache, Bilderzeugung und Bildauswertung,
 hier für Gespräch, Ausdruck und Hintergrundarbeit.
 
-### Gruppen mit Rückfall
+### Gruppen mit Rückfall über Anbietergrenzen
 
-Eine Aufgabe zeigt nicht auf ein Modell, sondern auf eine **Gruppe** mit
-geordneten Mitgliedern. Fällt das erste aus, greift das nächste:
+Eine Aufgabe zeigt nicht auf ein Modell, sondern auf eine geordnete Kette.
+**Jedes Glied nennt Anbieter *und* Modell** — das ist der entscheidende
+Punkt:
 
-    mood_erfindung → [ ollama/qwen-3.8, anthropic-abo/haiku ]
+    mood_erfindung → [ ollama/qwen-3.8, claude-abo/haiku, claude-api/haiku ]
+
+Ist Ollama nicht erreichbar, nützt ein zweites Ollama-Modell nichts. Der
+Rückfall muss den **Anbieter wechseln** können. Deshalb prüft die Auswahl
+die Verfügbarkeit je Glied, nicht einmal je Gruppe — sonst blockiert ein
+toter Anbieter eine Kette, in der dahinter ein lebender steht.
 
 Damit löst sich das Ollama-Problem von selbst: Wer einen Server hat, trägt
 ihn vorn ein und zahlt nichts. Wer keinen hat, lässt den Eintrag weg und
@@ -116,6 +122,18 @@ Beim ersten Lauf sucht der Installer, was erreichbar ist:
    antwortet etwas, werden die vorhandenen Modelle aufgelistet
 2. **Zugangsdaten in der Umgebung** — gesetzte Schlüssel erkennen
 3. **Bestehende Abo-Anmeldung**
+
+Gemessen gegen einen echten Server (29.09.2026): Erreichbarkeitsprüfung
+95 ms, Modellliste im selben Aufruf. Ein kaltes 14B-Modell brauchte für
+die erste Antwort 51 s, ein warmes 3,9 s — deshalb hat die
+Verfügbarkeitsprüfung einen Zwischenspeicher und die Zeitgrenze ist
+großzügig.
+
+Bei der Modellwahl wird die Parameterzahl aus dem Namen geschätzt
+(`qwen3.8:27b` → 27): das größte fürs Gespräch, ein kleines für
+Hintergrundarbeit. Einbettungs-, OCR- und reine Code-Modelle werden
+übersprungen — sie stehen in Ollamas Liste, können aber kein Gespräch
+führen.
 
 Daraus entsteht ein **Vorschlag**, kein Zwang: Gefundene Anbieter werden
 den Aufgaben nach Kosten zugeordnet — kostenlos für Hintergrundarbeit,
@@ -141,6 +159,26 @@ Gotchis `LLMConnector` (51 Zeilen) ist die Grundlage — sie hat bereits
 `cost_class` ist der Grund, weshalb die automatische Zuordnung ohne
 Nachfragen sinnvolle Vorschläge macht: Was nichts kostet, bekommt die
 häufigen Aufgaben.
+
+### Claude: Abo und Schlüssel getrennt
+
+Zwei Anbieter, nicht einer mit zwei Betriebsarten. Der Unterschied ist
+nicht technisch, sondern für den Nutzer wesentlich:
+
+| | belastet | Grenze |
+|---|---|---|
+| **Abo** (Claude Code / Cowork) | Kontingent | kann erschöpft sein |
+| **API-Schlüssel** | Abrechnung je Token | keine Kontingentgrenze |
+
+Wer beides eingerichtet hat, benutzt beides — und **sieht, was gerade
+zieht**. Die Übersicht führt sie getrennt auf, und jede Antwort trägt ihre
+Herkunft (`Reply.access`, `Reply.cost`).
+
+Ein Aufbau, der das ausnutzt:
+
+    gespraech → [ claude-abo/sonnet-5, claude-api/sonnet-5, ollama/qwen ]
+
+Erst das Kontingent, dann bezahlt, dann lokal.
 
 ### Anthropic mit Abo-Anmeldung
 

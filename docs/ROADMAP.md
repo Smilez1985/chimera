@@ -89,9 +89,16 @@ Die Steuerbefehle bleiben, nur das Ziel wechselt (`docs/DESIGN.md` §6).
 
 Kann parallel zu Phase 4 laufen; berührt den Renderer nicht.
 
-- [ ] Router auf **Registry** umbauen (Architekturregel 5a) — geordnete
-      Liste statt fester Attribute `self.claude` / `self.litellm`
-- [ ] `LLMConnector` um `supports_tools` und `context_window` erweitern
+- [x] **Registry** mit Aufgaben und Gruppen (Regel 5a, 5h)
+- [x] Rückfall **über Anbietergrenzen** — jedes Glied nennt Anbieter+Modell
+- [x] `Connector` um `supports_tools`, `context_window`,
+      `supports_streaming`, `cost_class`, `access` erweitert
+- [x] **Ollama-Connector** mit Platzhalter-Erkennung und Netzsuche
+- [x] **Claude getrennt nach Abo und Schlüssel**, Herkunft in der Antwort
+- [x] Client-Kennung zur Laufzeit (PR #407), mit Rückfallwert
+- [x] Ersteinrichtung: suchen, vorschlagen, übernehmen — änderbar
+- [ ] Auffrischen der Abo-Marke vor Ablauf, mit Koordinator
+- [ ] Werkzeugschleife aus openclawgotchi anschließen
 - [ ] **Anthropic-Connector mit Abo-Anmeldung** nach dem Muster von
       OpenMinis PR #407 (Architekturregel 5b)
 - [ ] Client-Kennung **zur Laufzeit ermitteln**, nie einkompilieren;

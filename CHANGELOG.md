@@ -85,7 +85,21 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   jede Aufgabe zeigt auf eine Gruppe mit Rückfall; kein Anbieter wird
   vorausgesetzt. Dazu MCP und der eigene Audio-Prozess.
 
+- Anbieterschicht (`src/chimera/provider/`): Registry mit Aufgaben und
+  Gruppen, Rückfall **über Anbietergrenzen hinweg**. Ollama mit
+  Platzhalter-Erkennung und Netzsuche; Claude getrennt nach Abo und
+  API-Schlüssel, jede Antwort trägt ihre Herkunft.
+- Client-Kennung für den Abo-Weg wird zur Laufzeit ermittelt (PR #407),
+  mit gepflegtem Rückfallwert, wenn die CLI fehlt.
+- Ersteinrichtung sucht, schlägt vor und übernimmt — jede Zeile änderbar.
+- 36 Tests für die Anbieterschicht, mit Gegenproben.
+
 ### Bekannte Einschränkungen
+
+- Die Abo-Marke wird **nicht aufgefrischt**. Läuft sie ab, greift der
+  Rückfall auf das nächste Ziel. Koordinator und Auffrischung fehlen noch.
+- Die Werkzeugschleife ist noch nicht angeschlossen; die Anbieter können
+  bisher nur antworten, nicht handeln.
 
 - Noisys Reset-Überlagerung wurde entfernt; Chimera wird über Telegram
   und Sprache bedient.
