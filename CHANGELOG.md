@@ -33,6 +33,26 @@ Installation** (siehe `docs/DESIGN.md` §10).
   ist kein Kompromiss nötig.
 - **Kein OpenMinis-Code.** Dort GPL-3.0, hier MIT. Übernommen werden nur
   nachgebaute Muster (`docs/DESIGN.md` §8).
+- **Mehrere Sprachmodell-Anbieter nebeneinander**, keiner Pflicht. Der
+  Router aus openclawgotchi wird dafür auf eine Registry umgebaut — er
+  kennt bisher genau zwei Connectoren als feste Attribute und schaltet
+  mit einem Bool um; ein dritter Anbieter passt da nicht hinein.
+- **Anthropic mit Abo-Anmeldung** nach dem Muster von OpenMinis PR #407.
+  Dessen Kernlehre gilt hier unmittelbar: Die Client-Kennung wird zur
+  Laufzeit ermittelt, nie einkompiliert — sonst sperrt Anthropic neue
+  Modelle mit `claude_code_version_too_old` aus.
+- **Ollama ist ein erstklassiger Anbieter**, kein LiteLLM-Sonderfall.
+  Mood-Erfindung und Zusammenfassen laufen dort, damit der Ausdruck des
+  Geräts nicht an einem bezahlten Kontingent hängt.
+- **Telegram bleibt vollständig erhalten** — es ist der einzige Weg, der
+  auch funktioniert, wenn man nicht im selben Raum steht. Sprache kommt
+  daneben, nicht darüber.
+- **Ein Gespräch, zwei Türen.** Telegram und Sprache führen in denselben
+  Agenten mit demselben Verlauf. Getrennte Sitzungen je Kanal würden das
+  Gerät in zwei Persönlichkeiten spalten.
+- **E-Ink wird umgebogen, nicht gestrichen.** Die Steuerbefehle `FACE:`,
+  `DISPLAY:` und `SAY:` bleiben; nur das Ziel wechselt auf die Whisplay
+  mit Noisys Mechanik. Bestehende Skills laufen unverändert weiter.
 
 ### Bekannte Einschränkungen
 - Auf einem Pi Zero 2 W (512 MB) passen lokale Sprache und lokales LLM

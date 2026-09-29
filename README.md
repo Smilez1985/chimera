@@ -36,6 +36,29 @@ The state it shows is real state:
 An agent that looks nervous when it gets stuck is the most honest status
 display you can build.
 
+## Two ways in, one conversation
+
+Chimera talks over **Telegram** and **by voice**, and both lead into the
+same agent with the same history. Discuss something on the way home, walk
+up to the device and continue — it is the same counterpart, not two.
+
+Telegram stays because it is the only channel that works when you are not
+in the room. Voice is added beside it, not on top of it.
+
+## Bring your own model
+
+No provider is mandatory. Connectors register themselves and are skipped
+when unconfigured:
+
+- **Anthropic** via subscription sign-in — the client identifier is
+  resolved at runtime, never compiled in, so new models don't get locked
+  out by a stale version check
+- **Ollama** on your own network — first-class, not a special case
+- **anything else** through LiteLLM
+
+Mood invention and summarising default to the local model on purpose: the
+device's own expression should not depend on a paid quota.
+
 ## Voice, fully offline
 
 Speech recognition, synthesis, voice activity detection and wake-word

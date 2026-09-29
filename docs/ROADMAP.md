@@ -62,6 +62,48 @@ Hardware ist vorhanden, also nicht blockiert.
 - [ ] `skills/mood/SKILL.md` (Architekturregel 8)
 - [ ] Agent-Zustände auf Moods abbilden (denkt, spricht, hört zu)
 
+### E-Ink-Ausgabe auf Whisplay umbiegen
+
+Die Steuerbefehle bleiben, nur das Ziel wechselt (`docs/DESIGN.md` §6).
+
+- [ ] `FACE:` auf Mood-Datensätze statt Emoticons legen; generierte Moods
+      zulassen
+- [ ] `DISPLAY:` auf die Statuszeile legen
+- [ ] `SAY:` auf Sprechblase **und** Sprachausgabe legen
+- [ ] Ghosting-Behandlung und Vollbild-Auffrischung ersatzlos entfernen
+- [ ] Die 10 alten Emoticon-Moods als Startbestand abbilden, damit
+      bestehende Skills unverändert laufen
+
+## Phase 4b — Provider-Schicht
+
+Kann parallel zu Phase 4 laufen; berührt den Renderer nicht.
+
+- [ ] Router auf **Registry** umbauen (Architekturregel 5a) — geordnete
+      Liste statt fester Attribute `self.claude` / `self.litellm`
+- [ ] `LLMConnector` um `supports_tools` und `context_window` erweitern
+- [ ] **Anthropic-Connector mit Abo-Anmeldung** nach dem Muster von
+      OpenMinis PR #407 (Architekturregel 5b)
+- [ ] Client-Kennung **zur Laufzeit ermitteln**, nie einkompilieren;
+      Rückfallwert und Cache, Auffrischung bei Prozessstart
+- [ ] Test: veraltete Kennung muss erkannt werden (mit Gegenprobe)
+- [ ] **Ollama als eigenständiger Connector** (Architekturregel 5c), nicht
+      als LiteLLM-Sonderfall
+- [ ] LiteLLM-Connector aus openclawgotchi übernehmen (weitere Anbieter)
+- [ ] Aufgabenzuordnung konfigurierbar: Gespräch → Anthropic,
+      Mood-Erfindung und Zusammenfassen → Ollama
+- [ ] Fehlender Schlüssel ⇒ Connector meldet sich als nicht verfügbar,
+      kein Startabbruch
+- [ ] `.env.example` mit Platzhaltern für alle Anbieter
+
+## Phase 4c — Telegram erhalten
+
+- [ ] Telegram-Bot aus openclawgotchi unverändert übernehmen
+- [ ] **Gemeinsamer Verlauf** für Telegram und Sprache
+      (Architekturregel 5d) — keine getrennten Sitzungen je Kanal
+- [ ] Kanal als Kontext an den Agenten geben (Antwortlänge: gesprochen
+      kürzer als geschrieben)
+- [ ] Avatar zeigt auch bei Telegram-Anfragen den Agentenzustand
+
 ## Phase 5 — Sprache
 
 Einzeln nachrüstbar, in dieser Reihenfolge.

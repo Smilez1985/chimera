@@ -178,6 +178,126 @@ Hersteller traut der Platine die Last selbst nicht zu.
 
 ---
 
+## 4a. Sprachmodelle: Provider-Schicht
+
+Chimera soll **mehrere Anbieter gleichzeitig** kennen: Anthropic per
+Abo-Anmeldung, Ollama im eigenen Netz, dazu beliebige weitere über
+LiteLLM. Keiner davon ist Pflicht.
+
+### Ausgangslage aus openclawgotchi
+
+Die Abstraktion ist da und taugt: `LLMConnector` mit `call()` und
+`is_available()`, dazu `LLMError` / `RateLimitError`. Zwei
+Implementierungen existieren (Claude-CLI, LiteLLM).
+
+Der **Router** taugt nicht. Er kennt genau zwei Connectoren als feste
+Attribute und schaltet mit einem Bool (`force_lite`) zwischen ihnen um.
+Ein dritter Anbieter passt da nicht hinein, ohne die Klasse aufzubohren.
+
+### Architekturregel 5a — Registry statt fester Connector-Attribute
+
+Der Router hält eine **geordnete Liste** von Connectoren, nicht benannte
+Felder. Ein Anbieter meldet sich mit Name, Priorität und
+Verfügbarkeitsprüfung an. Auswahl geschieht über den Namen, nicht über
+einen Schalter; Fallback läuft die Liste entlang.
+
+Damit kostet ein neuer Anbieter eine Datei und einen Registry-Eintrag —
+keine Änderung am Router.
+
+`LLMConnector` wird um zwei Dinge erweitert:
+- `supports_tools` — nicht jeder Anbieter kann Tool-Calls
+- `context_window` — nötig für die gestaffelten Kontextschwellen (§8.3).
+  Die Kapazität muss gegen das Modell geprüft werden, das die Anfrage
+  **tatsächlich bedient**. Bei Fallback über die Registry sonst gegen das
+  falsche Fenster.
+
+### Architekturregel 5b — Anthropic-Anmeldung wie im OpenMinis-PR
+
+Anthropic wird auf demselben Weg eingebunden wie in
+[OpenMinis PR #407](https://github.com/OpenMinis/OpenMinis/pull/407):
+über den **OAuth-Pfad der Abo-Anmeldung**, nicht nur über einen
+API-Schlüssel. Das erlaubt die Nutzung eines bestehenden Abos, statt pro
+Token zu zahlen — auf einem Gerät, das dauernd läuft, ist das der
+Unterschied zwischen benutzbar und nicht benutzbar.
+
+Der Kern dieses PRs ist eine Lehre, die hier direkt gilt:
+
+> Anthropic sperrt neue Modelle hinter einer Mindestversion des
+> CLI-Clients und prüft das über den User-Agent. Eine **fest verdrahtete
+> Versionskennung veraltet** und quittiert mit
+> `claude_code_version_too_old` — für ein neues Modell, das eigentlich
+> verfügbar wäre.
+
+Also: **Die Client-Kennung wird zur Laufzeit ermittelt, nie einkompiliert.**
+Ermittlung aus der real installierten CLI, mit gepflegtem Rückfallwert
+und Zwischenspeicher. Genau das tut `ClaudeCliVersion` im PR.
+
+Für Chimera heißt das zusätzlich: Wo die CLI als Unterprozess läuft,
+kommt sie über den Gerätestart hinweg nicht mit. Der ermittelte Wert
+gehört gecacht und bei Prozessstart einmal aufgefrischt — nicht bei jedem
+Aufruf, das kostet auf einem Zero spürbar.
+
+### Architekturregel 5c — Ollama ist ein erstklassiger Anbieter
+
+Ollama läuft im eigenen Netz und ist damit der Anbieter, der Regel 5
+erfüllt (nichts verlässt das Netz). Er wird **nicht** als Sonderfall von
+LiteLLM behandelt, sondern als eigener Connector mit eigener
+Verfügbarkeitsprüfung — sonst lässt sich nicht sauber unterscheiden, ob
+der Server weg ist oder ein Schlüssel fehlt.
+
+Die Zuordnung von Aufgabe zu Anbieter ist konfigurierbar. Sinnvolle
+Voreinstellung:
+
+| Aufgabe | Anbieter |
+|---|---|
+| Gespräch, Werkzeugnutzung | Anthropic (Abo), Fallback Ollama |
+| Mood-Erfindung (§3.3 Stufe 3) | Ollama — selten, günstig, lokal |
+| Zusammenfassen, Aufräumen | Ollama |
+
+Mood-Erfindung auf dem lokalen Modell zu belassen, ist bewusst: Der
+Ausdruck des Geräts sollte nicht an einem bezahlten Kontingent hängen.
+
+### Konfiguration
+
+Alle Anbieter sind optional, alle über `.env` einzurichten, keiner
+hartkodiert. Fehlt ein Schlüssel, meldet der Connector sich als nicht
+verfügbar und die Registry überspringt ihn — kein Absturz, keine
+Fehlermeldung beim Start.
+
+Zugangsdaten gehören nicht ins Repo (§12). `*.example` mit Platzhaltern.
+
+---
+
+## 4b. Schnittstellen zum Nutzer
+
+Chimera hat **zwei gleichwertige Wege** hinein, nicht einen mit Anhängsel:
+
+| Weg | Nutzung |
+|---|---|
+| **Telegram** | Von unterwegs, lange Texte, Dateien, Verlauf |
+| **Sprache am Gerät** | Vor Ort, beiläufig, freihändig |
+
+Telegram bleibt aus openclawgotchi **vollständig erhalten** — es ist die
+einzige Schnittstelle, die auch funktioniert, wenn man nicht im selben
+Raum steht.
+
+### Architekturregel 5d — Ein Gespräch, zwei Türen
+
+Beide Wege führen in **denselben Agenten mit demselben Verlauf**. Wer
+morgens per Telegram etwas bespricht und abends davorsteht und nachfragt,
+redet mit demselben Gegenüber. Getrennte Sitzungen je Kanal wären ein
+Fehler und würden das Gerät in zwei Persönlichkeiten spalten.
+
+Praktisch: Die Kanäle unterscheiden sich nur in Ein- und Ausgabe
+(Text gegen STT/TTS) und in der Ausgabelänge — gesprochene Antworten
+müssen kürzer sein als geschriebene. Der Agent bekommt den Kanal als
+Kontext mitgeteilt, damit er sich darauf einstellen kann.
+
+Der Avatar zeigt in beiden Fällen denselben Zustand (§7). Wenn per
+Telegram eine Anfrage läuft, sieht man das dem Gesicht an.
+
+---
+
 ## 5. Renderer
 
 ### Architekturregel 6 — Keine absoluten Pixelwerte
@@ -228,10 +348,31 @@ Unverändert übernommen:
 - Skills im Anthropic-`SKILL.md`-Format
 - Telegram-Anbindung
 
-**E-Ink entfällt.** Bewusste Entscheidung mit realem Verlust: E-Paper
-bleibt ohne Strom lesbar, was für ein Gerät, das schläft, ein echter
-Vorteil war. Gegenleistung: Farbe, 30–60 FPS, Mikrofon, Lautsprecher,
-Button, LED auf einer Platine.
+### E-Ink wird umgebogen, nicht gestrichen
+
+Die Anzeige verschwindet nicht — sie wechselt das Medium. Was
+openclawgotchi über E-Paper ausgibt, gibt Chimera über die Whisplay aus,
+mit Noisys Mechanik dahinter.
+
+Die Übersetzung im Einzelnen:
+
+| openclawgotchi (E-Ink) | Chimera (Whisplay) |
+|---|---|
+| `FACE: <mood>` steuert Emoticon aus `custom_faces.json` | steuert einen Mood-Datensatz (§3) |
+| 10 feste Text-Emoticons | Mood-Bibliothek, vom Agenten erweiterbar |
+| `DISPLAY: <text>` Statuszeile | Statuszeile in den 40 zusätzlichen Zeilen |
+| `SAY: <msg>` Sprechblase | Sprechblase **und** Sprachausgabe (§4) |
+| Vollbild-Auffrischung gegen Geisterbilder | entfällt — LCD hat kein Ghosting |
+| ~2 s pro Bild, statisch | 15 FPS, animiert |
+
+**Die Steuerbefehle bleiben erhalten.** Der Agent schreibt weiterhin
+`FACE:`, `DISPLAY:`, `SAY:` — was sich ändert, ist ausschließlich das,
+was dahinter passiert. Damit funktionieren bestehende Skills und der
+Systemprompt unverändert weiter; `FACE:` nimmt zusätzlich die neuen,
+generierten Moods entgegen.
+
+Der reale Verlust ist die Lesbarkeit ohne Strom. Dafür: Farbe, Animation,
+Mikrofon, Lautsprecher, Button und LED auf einer Platine.
 
 ### Architekturregel 8 — Die Mood-Steuerung ist ein Skill, kein Sonderweg
 
