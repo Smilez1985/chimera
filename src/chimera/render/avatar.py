@@ -86,7 +86,8 @@ class State:
 
     def __init__(self):
         self.mood_name = "IDLE"      # Name statt Nummer (Nummern sind dynamisch)
-        self.mood = None             # das Mood-Dict selbst
+        self._mood = None            # Ziel-Mood
+        self._trans = None           # laeuft der Uebergang
         self.intensity = 0.0         # 0..255, Lautstaerke -> Mundform (SS4.1)
         self.beat = 0.0
         self.morph_speed = 1.0
@@ -99,6 +100,39 @@ class State:
         self.favorite_playing = False
         self.cube_mode = False
         self.speaking = False        # neu: spricht gerade (SS4.1)
+
+    # Moods werden ueber diese Eigenschaft gesetzt, damit der Uebergang
+    # automatisch mitlaeuft. Wer hart wechseln will, ruft set_mood(hard=True).
+    @property
+    def mood(self):
+        if self._trans is not None:
+            return self._trans.current()
+        return self._mood
+
+    @mood.setter
+    def mood(self, value):
+        self.set_mood(value)
+
+    def set_mood(self, mood, *, hard=False, duration=None):
+        """Mood wechseln -- weich (Standard) oder hart.
+
+        Hart ist Pflicht bei Reflexen: Ein Erschrecken, das eine halbe
+        Sekunde einblendet, ist kein Schreck (SS3.4, Ebene 1). Moods mit
+        fast_track schalten von selbst hart um.
+        """
+        if mood is None:
+            self._mood = None
+            self._trans = None
+            return
+        from ..mood.transition import Transition
+        if self._trans is None:
+            self._trans = Transition(mood)
+            if not hard and duration:
+                self._trans.duration = duration
+        else:
+            self._trans.to(mood, hard=hard, duration=duration)
+        self._mood = mood
+        self.mood_name = mood.get("name", self.mood_name)
 
 def lift_color(farbe, staerke, ziel=245):
     """

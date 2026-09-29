@@ -86,7 +86,13 @@ def _as_bool(value) -> bool | None:
 
 
 def _as_color(value) -> tuple[int, int, int] | None:
-    """RGB aus Liste, Tupel oder ``#rrggbb``."""
+    """RGB aus Liste, Tupel oder ``#rrggbb``.
+
+    Liefert **immer ein Tupel**, nie eine Liste. Das ist keine Kosmetik:
+    JSON kennt keine Tupel und liefert Listen, PIL nimmt Listen nicht als
+    Farbe an. Dazwischen kann es nur knallen -- und zwar im Renderer, weit
+    weg von der Ursache. Genau so ist es beim ersten Kontaktbogen passiert.
+    """
     if isinstance(value, str):
         s = value.strip().lstrip("#")
         if len(s) == 6:

@@ -136,6 +136,40 @@ Zur Vollständigkeit: Radxa bietet auch `cli`-Abbilder ohne Desktop an
 (Debian Bullseye, Ubuntu Jammy). Die bleiben als Ausweichpfad im
 Boardprofil vorgesehen, falls sich unter DietPi etwas als unlösbar erweist.
 
+### Welche Debian-Fassung: Trixie
+
+**Trixie, nicht Forky.** Geprüft am 29.09.2026:
+
+| | Trixie | Forky |
+|---|---|---|
+| Debian-Zweig | **stable** (13.7) | **testing** |
+| Python | 3.13 | 3.14 |
+| DietPi-Voreinstellung | `DISTRO=8` ✔ | `DISTRO=9` |
+
+Die Abhängigkeiten sind in beiden vorhanden — `python3-numpy`,
+`python3-pil`, `python3-spidev`, `alsa-utils`, `device-tree-compiler`.
+Auch `sherpa-onnx` und `onnxruntime` haben bereits `cp314`-Pakete, und
+`piper-tts` ist über die stabile Python-Schnittstelle gebaut und damit
+ohnehin unabhängig von der Nebenversion.
+
+Trotzdem Trixie, aus drei Gründen:
+
+1. **Forky ist `testing` ohne Einfrierphase.** Pakete ändern sich
+   laufend. Rückt dabei ein neuer Kernel nach, **passt das mühsam
+   gebaute Whisplay-Modul nicht mehr** — genau die Fehlerklasse, gegen
+   die die Kombinationstabelle im Installer gebaut wurde
+   (`docs/INSTALLER.md` §3.4).
+2. **DietPi setzt selbst auf Trixie.** Forky ist vorgesehen, aber nicht
+   Voreinstellung. Der seltenere Pfad ist der schlechter geprüfte.
+3. **Python 3.14 ist die Bruchstelle für Fremdpakete.** Heute passt es;
+   bei jedem weiteren Paket ist es wieder eine offene Frage.
+
+Der Gewinn von Forky wären neuere Pakete — für Python, Pillow, numpy und
+sherpa-onnx bringt das nichts. Das Risiko ist einseitig.
+
+Zu prüfen bleibt, ob Trixie auf dem Radxa denselben `rockchip64`-Kernel
+bekommt wie beschrieben. **Prüfen, nicht annehmen** (Regel 10g).
+
 ### Der Befund zum Audiotreiber
 
 Der Whisplay-Audiotreiber ist **kein Kernel-Bestandteil, sondern ein

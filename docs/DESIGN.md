@@ -636,10 +636,42 @@ Statuszeile: Mood-Name, Akku, Agent-Zustand.
 Zeichenreihenfolge (Glow → Body → Frisur → Accessoires → Augen → Mund →
 Partikel), Blink-Engine, Nachlauf-Effekte, Software-Dimming.
 
-`AUDIO_SMOOTHING = 0.18` (bei 15 FPS ≈ 1/3 s Nachlauf) wird zur
-**Mood-Übergangsglättung** umgedeutet. Chimera hat keine Audiokopplung,
-braucht aber weiche Übergänge — sonst springt das Gesicht hart um.
-Erprobter Wert, andere Eingangsgröße.
+### 5.2 Übergänge zwischen Moods
+
+Noisy blendet nur die **Farben** ineinander, alles andere springt. Dort
+fällt das kaum auf, weil die Moods aus einer festen Tabelle kommen und
+einander ähneln. In Chimera erfindet das Sprachmodell Ausdrücke — zwei
+aufeinanderfolgende können weit auseinanderliegen, und ein Sprung sieht
+dann aus wie ein Bildfehler.
+
+Chimera blendet deshalb über **alle** Felder. Die Mechanik ist dieselbe
+wie beim Mischen (§3.3), nur kommt die Zeit dazu.
+
+#### Architekturregel 6b — Weich ist der Normalfall, hart muss möglich bleiben
+
+Ein Reflex, der über eine halbe Sekunde einblendet, ist kein Schreck,
+sondern eine Verzögerung. Moods mit `fast_track` wechseln deshalb
+**sofort** — dasselbe Merkmal, das im Umgebungshören die Sofortreaktion
+auslöst (§3.4, Ebene 1). Wer es ausdrücklich will, bekommt den harten
+Wechsel auch ohne dieses Merkmal.
+
+Drei Feinheiten, die den Unterschied machen:
+
+- **Die Dauer ist eine Zeitangabe, keine Bildanzahl.** Sinkt die Bildrate
+  beim Sprechen (§4.1), dauert ein Übergang trotzdem gleich lang.
+- **Der Fortschritt hängt an der Uhr, nicht an der Zahl der Aufrufe.**
+  Bleibt der Renderer einmal hängen, springt der Übergang weiter, statt
+  stehenzubleiben.
+- **Ein neuer Wechsel setzt am Zwischenstand an**, nicht am alten
+  Ausgangspunkt. Sonst ruckt es zurück, wenn zwei Wechsel dicht
+  aufeinanderfolgen.
+
+Der Verlauf ist weich statt gleichmäßig: Ein linearer Übergang beginnt und
+endet abrupt, obwohl sich die Werte gleichmäßig ändern.
+
+Noisys `AUDIO_SMOOTHING = 0.18` bleibt daneben für die Audiokopplung
+erhalten — dort glättet es jetzt die eigene Sprachausgabe (§4.1) statt der
+Musik.
 
 ### Architekturregel 7 — Ein Prozess, ein Framebuffer
 
@@ -1003,6 +1035,7 @@ scannen.
 - **5d** — Ein Gespräch, zwei Türen
 - **5e** — zram und Auslagerungsdatei gehören zum Aufbau
 - **6** — Keine absoluten Pixelwerte
+- **6b** — Weich ist der Normalfall, hart muss möglich bleiben
 - **7** — Ein Prozess, ein Framebuffer
 - **8** — Die Mood-Steuerung ist ein Skill, kein Sonderweg
 - **8a** — Stiller Erfolg ist die gefährlichste Fehlerart

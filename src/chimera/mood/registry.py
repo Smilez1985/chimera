@@ -135,6 +135,21 @@ class Registry:
 
     # --- Ablage -----------------------------------------------------------
 
+    @staticmethod
+    def _jsonable(value):
+        """Tupel werden zu Listen -- JSON kann nichts anderes.
+
+        Der Rueckweg laeuft ueber den Validator, der wieder Tupel macht.
+        Deshalb geht jeder geladene Mood durch ``add()``.
+        """
+        if isinstance(value, tuple):
+            return [Registry._jsonable(v) for v in value]
+        if isinstance(value, list):
+            return [Registry._jsonable(v) for v in value]
+        if isinstance(value, dict):
+            return {k: Registry._jsonable(v) for k, v in value.items()}
+        return value
+
     def to_json(self) -> str:
         data = {
             "next_id": self._next_id,
@@ -145,7 +160,7 @@ class Registry:
                     "created_at": e.created_at,
                     "last_used": e.last_used,
                     "uses": e.uses,
-                    "mood": e.mood,
+                    "mood": self._jsonable(e.mood),
                 }
                 for e in self._by_id.values()
             ],

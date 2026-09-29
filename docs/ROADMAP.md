@@ -14,6 +14,7 @@ Stand: 2026-09-29. Pre-Alpha.
 - [x] `CHANGELOG.md` mit `[Unreleased]`
 - [x] `README.md`, `LICENSE`, `VERSION`
 - [x] `docs/HARDWARE.md` — Zielplattform und Boardfrage
+- [x] Debian-Fassung entschieden: **Trixie** (stable), nicht Forky
 - [ ] Hardware-Revision der vorhandenen Whisplay prüfen (**V2?**)
 - [ ] `uname -r`, `/lib/modules/$(uname -r)/build`, `modinfo snd-soc-wm8960`
       auf dem Zielgerät notieren (Checkliste in `docs/HARDWARE.md` §4)
@@ -52,8 +53,7 @@ Hardware ist vorhanden, also nicht blockiert.
 - [x] Renderer aus Noisy übernommen und auflösungsrelativ gemacht
 - [x] Komponenten-Pipeline (kam mit)
 - [x] Blink-Engine, Nachlauf-Effekte, Software-Dimming (kamen mit)
-- [ ] Mood-Übergangsglättung (Noisys Farbmorphing ist da, Übergang
-      zwischen ganzen Moods fehlt)
+- [x] Mood-Übergänge über alle Felder, weich und hart (Regel 6b)
 - [ ] Statuszeile in den 40 zusätzlichen Zeilen
 - [ ] Bildrate auf Zielhardware messen (in der Sandbox 0,7 ms je Bild,
       das Zielgerät ist deutlich langsamer)

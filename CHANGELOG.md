@@ -65,12 +65,18 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 - `tools/contact-sheet.py`: alle Moods und Mischungen nebeneinander.
 - 16 Tests für den Renderer, mit Gegenprobe für die freien Formen.
 
+- Mood-Übergänge (`src/chimera/mood/transition.py`): blenden über alle
+  Felder, nicht nur über die Farbe. `fast_track` wechselt hart, damit ein
+  Reflex nicht einblendet. Die Dauer ist eine Zeitangabe, der Fortschritt
+  hängt an der Uhr.
+- Farben sind ab jetzt garantiert Tupel — JSON liefert Listen, PIL nimmt
+  nur Tupel, und der Fehler fiele sonst erst im Renderer auf.
+- 21 Tests für Übergänge, mit gestellter Uhr und Gegenproben.
+
 ### Bekannte Einschränkungen
 
 - Noisys Reset-Überlagerung wurde entfernt; Chimera wird über Telegram
   und Sprache bedient.
-- Übergänge zwischen ganzen Moods sind noch hart. Noisys Farbmorphing ist
-  vorhanden, eine Glättung über alle Felder fehlt.
 - Die Messwerte zur Umrechnung stammen aus der Entwicklungsumgebung
   (aarch64), nicht vom Zielgerät.
 - `MAX_SHAPES` (40) ist geschätzt, nicht gemessen.
