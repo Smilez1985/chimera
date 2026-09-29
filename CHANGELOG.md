@@ -110,6 +110,44 @@ echten Ollama-Server geprüft.
 
 ### Hinzugefügt
 
+**Werkzeug**
+- **GitHub Actions** (`.github/workflows/tests.yml`): Python-Tests auf 3.11
+  und 3.13, Installer-Tests unter **dash und BusyBox** (beide unterscheiden
+  sich von bash, aber nicht gleich), Syntaxprüfung aller Skripte, dazu ein
+  Trockenlauf gegen ein erfundenes Wurzelverzeichnis — der prüft, dass der
+  Installer im Trockenlauf wirklich nichts anfasst, auch keine Sicherung.
+
+**Installer: Abhängigkeiten, Bestand, Anzeigen**
+- **Modul 20 (`20-pakete.sh`) läuft vor allem anderen.** Es prüft und holt,
+  was die späteren Module brauchen — und prüft danach, ob das Werkzeug
+  wirklich *aufrufbar* ist, nicht nur ob apt Erfolg meldet. Anlass: Der
+  erste echte Lauf scheiterte mitten in der Arbeit an fehlendem `make`.
+- **Bestandsverzeichnis (`lib/bestand.sh`, `/var/lib/chimera/bestand.tsv`).**
+  Jede Änderung am System wird mit Modul, Art und Pfad festgehalten —
+  Grundlage für eine spätere Deinstallation. Entscheidend ist die
+  Unterscheidung `neu` gegen `vorher_da`: `apt-get install` meldet Erfolg
+  auch für bereits installierte Pakete, und was es vor Chimera gab, darf
+  eine Deinstallation nicht entfernen.
+- **Modul 30 (`30-headers.sh`) holt die Kernel-Headers** — eigenes Modul,
+  weil das richtige Paket an Board *und* Kernelfassung hängt. Geprüft wird
+  das Bauverzeichnis, nicht der Paketstatus: Ein Paket kann installiert
+  sein und trotzdem zur falschen Kernelfassung gehören.
+- **Modul 40 (`40-anzeige.sh`) richtet die Anzeige ein**, über eine
+  Registry (`lib/anzeigen.sh`) statt über Fallunterscheidungen: `whisplay`,
+  `st7789`, `epaper`, `keine`. Eine neue Anzeige ist ein Eintrag. Der
+  Herstellertreiber wird aufgerufen, nicht nachgebaut — aber mit
+  gesicherter Bootkonfiguration, eigenem Protokoll und Prüfung am
+  Ergebnis. Exitcode 3 heißt „Neustart nötig", also weder Erfolg noch
+  Fehlschlag. Nimmt den Nutzer außerdem in die Gruppen `audio`, `spi`,
+  `gpio` und `i2c` auf — ohne sie meldet `aplay -l` „keine Soundkarten",
+  obwohl die Karte läuft.
+- **Netzzugriffe überleben Unterbrechungen (`lib/netz.sh`).** Ein Ausfall
+  ist eine Pause, kein Ende: Downloads setzen fort (`curl -C -`), zwischen
+  den Versuchen wird auf das Netz gewartet, und **jeder** Abbruch wird
+  gemeldet. Ein stiller Wiederholungsversuch sieht von außen aus wie ein
+  Hänger. Erreichbarkeit wird über TCP geprüft, nicht über ICMP; fehlt das
+  Werkzeug dafür, heißt das „nicht prüfbar", nicht „nicht erreichbar".
+
 **Bedienschnittstelle (H4)**
 - **Sitzung und Kanal** (`chimera.agent.session`). Der Kern von Regel 5d:
   ein Agent, ein Verlauf, beliebig viele Türen. Eine Sperre serialisiert
@@ -197,6 +235,12 @@ Test rot, wenn man ihn wiederherstellt.
 
 Die Prüfung des H4-Stands gegen die Blaupause steht in
 `docs/PRUEFUNG-H4.md`.
+
+**Zum ersten Mal auf der Zielhardware gelaufen** (Pi Zero 2 W, DietPi
+10.7, Kernel 6.18.50): Preflight mit Exitcode 0, Whisplay-Treiber gebaut,
+ALSA-Karte `whisplaysound` registriert (Codec WM8960). Was sich dabei
+gezeigt hat — auch die Fehlschläge und ihre Ursachen — steht in
+`docs/HARDWARE-BEFUNDE.md`.
 
 ### Bekannte Einschränkungen
 

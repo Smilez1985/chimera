@@ -15,6 +15,9 @@
 #   header_pkg       Distributionspaket fuer Stufe 1
 #   header_pool      Paketquelle fuer Stufe 2
 #   spi_bus/cs/speed LCD-Anbindung
+#   busse            welche Busse die Bootkonfiguration braucht. DREI, nicht
+#                    einer: SPI traegt das Bild, I2C die Codec-Register und
+#                    das HAT-EEPROM, I2S die Audiodaten. Ohne I2S kein Ton.
 #   overlay_src      Quelldatei im Whisplay-Treiberpaket
 #   conflicts        Overlays, die abgeschaltet werden muessen
 #   wm8960_builtin   bringt der Kernel den Codec mit?
@@ -37,6 +40,7 @@ profile_get() {
 		spi_bus)        echo "0" ;;
 		spi_cs)         echo "0" ;;
 		spi_speed)      echo "100000000" ;;
+		busse)          echo "spi i2c_arm i2s" ;;
 		overlay_src)    echo "dts/whisplay-soundcard.dts" ;;
 		conflicts)      echo "" ;;
 		wm8960_builtin) echo "yes" ;;
@@ -61,6 +65,10 @@ profile_get() {
 		spi_bus)        echo "3" ;;
 		spi_cs)         echo "0" ;;
 		spi_speed)      echo "48000000" ;;
+		# Dieselben drei Busse, andere Schreibweise in der
+		# Bootkonfiguration -- Armbian kennt kein dtparam. Modul 40
+		# muss das beim Radxa ueber die Overlay-Datei loesen.
+		busse)          echo "spi i2c i2s" ;;
 		overlay_src)    echo "dts/whisplay-soundcard-radxa-zero3w.dts" ;;
 		conflicts)      echo "rk3568-i2s3-m0.dtbo wm8960-radxa-zero3.dtbo" ;;
 		wm8960_builtin) echo "unknown" ;;

@@ -156,6 +156,22 @@ ersten Dingen, die Modul 10 auf echter Hardware beantworten muss. Bis
 dahin bleibt die Warnung bestehen: V1 kann sich beim Tastendruck selbst
 abschalten.
 
+### Was sich am echten Gerät gezeigt hat
+
+Messwerte, Fehlschläge und ihre Ursachen stehen in
+`docs/HARDWARE-BEFUNDE.md` — getrennt von der Blaupause, weil es Befunde
+sind und keine Entscheidungen. Wer dort eine Regel ableiten will, schlägt
+sie vor; eingetragen wird sie in `DESIGN.md`.
+
+Kurz, was den Installer betrifft:
+
+- Der Hersteller-Installer setzt `make` und `gcc` in einem seiner beiden
+  Pfade als vorhanden voraus. Auf DietPi sind sie es nicht — deshalb
+  Modul 20 vor allem anderen.
+- Ein Prüfbefehl, dessen Ergebnis von den Rechten des Aufrufers abhängt,
+  misst nicht das System (`aplay -l` ohne `audio`-Gruppe).
+- `/dev/i2c-*` belegt Userspace-Zugriff, nicht aktives I2C.
+
 ### Boardprofile
 
 Alles Boardabhängige steht in **einer Tabelle**, nicht verstreut in

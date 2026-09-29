@@ -26,3 +26,7 @@ check-pii.sh
 tools/check-secrets*
 tools/check-pii*
 .seccheck*
+
+# Workflow-Dateien kann der Sandbox-Token nicht pushen (kein
+# workflow-Scope). Vorlage: siehe docs/CI.md
+.github/workflows/
