@@ -56,10 +56,21 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 - 11 Tests für die Bildausgabe, inklusive Abgleich gegen die
   bildpunktweise Fassung.
 
+- Renderer (`src/chimera/render/avatar.py`), übernommen aus Noisy (MIT)
+  und angepasst: Bildgröße kommt vom Panel statt aus einer Konstanten,
+  Ausgabe über ein beliebiges `Panel`, Zustand statt Orchestrator,
+  Mood als Dict statt Nummer in einer globalen Registry.
+- Freie Formen werden gezeichnet — elf Grundformen mit Ebene und Bewegung,
+  `audio` folgt der eigenen Sprachausgabe.
+- `tools/contact-sheet.py`: alle Moods und Mischungen nebeneinander.
+- 16 Tests für den Renderer, mit Gegenprobe für die freien Formen.
+
 ### Bekannte Einschränkungen
 
-- Es gibt noch **keinen Renderer**, der die Formen zeichnet. Die Ausgabe
-  steht bereit, das Vokabular ist geprüft — dazwischen fehlt das Zeichnen.
+- Noisys Reset-Überlagerung wurde entfernt; Chimera wird über Telegram
+  und Sprache bedient.
+- Übergänge zwischen ganzen Moods sind noch hart. Noisys Farbmorphing ist
+  vorhanden, eine Glättung über alle Felder fehlt.
 - Die Messwerte zur Umrechnung stammen aus der Entwicklungsumgebung
   (aarch64), nicht vom Zielgerät.
 - `MAX_SHAPES` (40) ist geschätzt, nicht gemessen.

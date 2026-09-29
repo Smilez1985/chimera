@@ -174,6 +174,8 @@ class Registry:
         if not p.exists():
             return reg
         data = json.loads(p.read_text(encoding="utf-8"))
+        # JSON kennt keine Tupel -- der Validator wandelt beim Aufnehmen
+        # zurueck, deshalb laeuft jeder geladene Mood durch add().
         for item in data.get("moods", []):
             entry, _ = reg.add(item["mood"], origin=item.get("origin", "generated"))
             entry.created_at = item.get("created_at", entry.created_at)

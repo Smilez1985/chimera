@@ -40,8 +40,7 @@ Stand: 2026-09-29. Pre-Alpha.
 
 - [x] `mix(a, b, gewicht)` — Farbton statt Kanäle, Listen werden vereinigt
 - [x] `vary(mood, seed)` — gleicher Anlass, gleiches Ergebnis
-- [ ] Kontaktbogen: alle Startmoods plus Mischungen nebeneinander,
-      zum Ansehen ohne Gerät (**nächster Schritt**)
+- [x] Kontaktbogen (`tools/contact-sheet.py`)
 - [ ] `MAX_SHAPES` auf echter Hardware messen
 
 ## Phase 3 — Display und Renderer
@@ -50,12 +49,14 @@ Hardware ist vorhanden, also nicht blockiert.
 
 - [x] Display-Adapter: `PIL.Image` → RGB565 → `board.draw_image()`
       (`chimera.display.panel`, wie bei Noisy direkt in den Panelspeicher)
-- [ ] Renderer neu, **auflösungsrelativ** (Architekturregel 6)
-- [ ] Komponenten-Pipeline in fester Zeichenreihenfolge
-- [ ] Blink-Engine, Nachlauf-Effekte, Software-Dimming
-- [ ] Mood-Übergangsglättung
+- [x] Renderer aus Noisy übernommen und auflösungsrelativ gemacht
+- [x] Komponenten-Pipeline (kam mit)
+- [x] Blink-Engine, Nachlauf-Effekte, Software-Dimming (kamen mit)
+- [ ] Mood-Übergangsglättung (Noisys Farbmorphing ist da, Übergang
+      zwischen ganzen Moods fehlt)
 - [ ] Statuszeile in den 40 zusätzlichen Zeilen
-- [ ] Framerate auf Zielhardware messen
+- [ ] Bildrate auf Zielhardware messen (in der Sandbox 0,7 ms je Bild,
+      das Zielgerät ist deutlich langsamer)
 
 ## Phase 4 — Agent-Kopplung
 

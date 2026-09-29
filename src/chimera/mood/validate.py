@@ -96,6 +96,9 @@ def _as_color(value) -> tuple[int, int, int] | None:
                 return None
         return None
     if isinstance(value, (list, tuple)) and len(value) == 3:
+        # Immer als Tupel zurueck: PIL nimmt Listen nicht als Farbe an,
+        # und JSON liefert Listen. Ohne das scheitert erst der Renderer --
+        # weit weg von der Ursache.
         out = []
         for c in value:
             n = _as_number(c)
