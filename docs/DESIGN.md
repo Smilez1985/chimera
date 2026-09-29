@@ -107,6 +107,25 @@ Nur wenn Mischen nicht reicht. Der Agent bekommt das Vokabular als
 Schema und schreibt einen neuen Mood. Ergebnis wird validiert (§3.4),
 persistiert und ist danach kostenlos wiederverwendbar.
 
+### Architekturregel 2 — Ein generierter Mood wird immer validiert
+
+Ein Mood geht direkt in den Renderer. Ohne Schranken bedeutet
+`headbang_amp: 5000`, dass der Avatar das Display verlässt, und
+`rate: 0.99` eine Partikelflut, die bei 15 FPS auf einem Pi Zero die
+Framerate bricht.
+
+Also: **Clamping pro Feld gegen eine kanonische Schema-Tabelle.**
+Min/Max je Zahl, erlaubte Werte je Enum, RGB auf 0–255. Unbekannte Keys
+werden verworfen, nicht durchgelassen. Ein Fallback-Mood greift, wenn
+alles fehlschlägt.
+
+**Dieselbe Tabelle erzeugt das Schema für den Agenten und den Validator.**
+Zwei getrennte Listen driften auseinander, sobald jemand ein Feld
+ergänzt. (Muster nachgebaut aus OpenMinis' `ToolPreflight`, wo genau das
+dokumentiert ist.)
+
+---
+
 ### 3.4 Umgebungshören im Ruhezustand
 
 Chimera reagiert nicht nur auf Ansprache. **Wenn niemand mit ihm redet,
@@ -121,7 +140,7 @@ Derselbe Hundebellen-Reiz kann morgens „aufmerksam" bedeuten und nachts um
 drei „erschrocken". Eine Tabelle kann das nicht, ein Modell mit Kontext
 schon.
 
-#### Architekturregel 2a — Das Modell wird nicht pro Geräusch gefragt
+#### Architekturregel 3a — Das Modell wird nicht pro Geräusch gefragt
 
 Der naive Bau wäre: Geräusch erkannt → Anfrage ans Sprachmodell → Mood.
 Das scheitert dreifach: an der Latenz (das Modell liegt außerhalb, Regel
@@ -151,7 +170,7 @@ Stattdessen **drei Geschwindigkeiten**:
 Das Modell wird also **pro Situation** befragt, nicht pro Geräusch. Eine
 Anfrage alle paar Minuten ist bezahlbar; eine pro Geräusch wäre es nicht.
 
-#### Architekturregel 2b — Nur im Ruhezustand wird zugehört
+#### Architekturregel 3b — Nur im Ruhezustand wird zugehört
 
 Umgebungshören läuft **nur, wenn gerade kein Gespräch stattfindet.**
 
@@ -167,27 +186,38 @@ Zwei Gründe, beide zwingend:
 Der Übergang ist damit klar: Wake-Word oder Tastendruck beendet das
 Zuhören, das Gespräch übernimmt; nach dessen Ende kehrt es zurück.
 
-#### Modellwahl: nicht der Zipformer
+#### Der Tagger ist austauschbar
 
-Für das reine Tagging wird **CED-tiny** verwendet, nicht der Zipformer,
-den Noisy einsetzt. Auf dem Pi Zero 2 W gemessen (int8, 2 Threads):
+Entscheidend am Entwurf ist die **Funktion**: Der Tagger liefert Labels,
+die Deutung macht das Sprachmodell (Ebene 3). Welches Modell die Labels
+liefert, ist eine Einstellung — kein Architekturmerkmal.
+
+Deshalb gilt hier dasselbe wie bei Anbietern und Boards: Das Modell steht
+in der Konfiguration, nicht im Code. Sherpa-onnx spricht Zipformer und CED
+unterschiedlich an, also kapselt eine dünne Schicht den Unterschied; alles
+darüber sieht nur noch „Label mit Wert".
+
+**Voreinstellung ist CED-tiny.** Auf dem Pi Zero 2 W gemessen
+(int8, 2 Threads):
 
     Zipformer-small   22,1 M Parameter   26 MB   4,71 s   mAP 45,1
     CED-tiny           5,5 M Parameter  5,9 MB   0,83 s   mAP 48,1
 
 Kleiner, rund fünfmal schneller und auf AudioSet sogar genauer. Bei einem
 Gerät, das nebenher rendert und jederzeit ins Gespräch wechseln können
-muss, entscheidet die Laufzeit.
+muss, entscheidet die Laufzeit — deshalb die Voreinstellung.
 
 **Der Haken ist bekannt und beherrschbar:** CED liefert flachere
 Wahrscheinlichkeiten — ein Lachen, das der Zipformer mit 93 % meldet,
-kommt dort mit 38 % an. Für die Sofortreaktion braucht es deshalb einen
-modellabhängigen Schwellenfaktor. Für die Deutung durch das Sprachmodell
-spielt es kaum eine Rolle, weil dort ohnehin die Rangfolge der Labels
-zählt und nicht deren absoluter Wert.
+kommt dort mit 38 % an. Jedes Modell bringt deshalb seinen eigenen
+Schwellenfaktor mit (Noisy löst das bereits so). Für die Deutung durch
+das Sprachmodell spielt es ohnehin kaum eine Rolle, weil dort die
+Rangfolge der Labels zählt und nicht deren absoluter Wert.
 
-Das ist ein Punkt für die Messung auf echter Hardware, nicht für eine
-Annahme.
+Die Zahlen stammen aus Noisys Messungen auf echter Hardware. Ob sie unter
+Chimeras Last — Renderer plus Wake-Word gleichzeitig — genauso ausfallen,
+ist **zu messen, nicht anzunehmen** (Regel 10g). Fällt CED durch, wird ein
+anderes Modell eingetragen; der Entwurf bleibt davon unberührt.
 
 #### Was das Modell bekommt und zurückgibt
 
@@ -201,25 +231,6 @@ genauso validiert wird wie jeder andere (Regel 2).
 eine Stimmung, es verliert nur die Deutung. Das ist der Normalfall bei
 einem Gerät, das an einem externen Modell hängt — und kein Fehlerzustand.
 
-### Architekturregel 2 — Ein generierter Mood wird immer validiert
-
-Ein Mood geht direkt in den Renderer. Ohne Schranken bedeutet
-`headbang_amp: 5000`, dass der Avatar das Display verlässt, und
-`rate: 0.99` eine Partikelflut, die bei 15 FPS auf einem Pi Zero die
-Framerate bricht.
-
-Also: **Clamping pro Feld gegen eine kanonische Schema-Tabelle.**
-Min/Max je Zahl, erlaubte Werte je Enum, RGB auf 0–255. Unbekannte Keys
-werden verworfen, nicht durchgelassen. Ein Fallback-Mood greift, wenn
-alles fehlschlägt.
-
-**Dieselbe Tabelle erzeugt das Schema für den Agenten und den Validator.**
-Zwei getrennte Listen driften auseinander, sobald jemand ein Feld
-ergänzt. (Muster nachgebaut aus OpenMinis' `ToolPreflight`, wo genau das
-dokumentiert ist.)
-
----
-
 ## 4. Sprache — vollständig offline
 
 Ein Framework für alles: **sherpa-onnx**. Läuft auf Raspberry Pi, ohne
@@ -231,13 +242,13 @@ Kette:
       → Mood-Entscheidung → Renderer
       → TTS (Emotion aus Mood) → Lautsprecher
 
-### Architekturregel 3 — VAD läuft vor STT, KWS vor VAD
+### Architekturregel 4a — VAD läuft vor STT, KWS vor VAD
 
 Dauerhaft laufende Spracherkennung frisst die CPU, die der Renderer für
 15 FPS braucht. Das Wake-Word hält den Ruhezustand billig, die
 Sprachaktivitätserkennung begrenzt die Erkennung auf echte Äußerungen.
 
-### Architekturregel 4 — Gesicht und Stimme tragen denselben Mood
+### Architekturregel 4b — Gesicht und Stimme tragen denselben Mood
 
 Die Mood-Entscheidung fällt **vor** der Sprachausgabe. Ein müder Avatar
 mit munterer Stimme zerstört die Illusion sofort. Die deutsche Stimme
@@ -659,58 +670,6 @@ Versionssprung bricht keine Installation, atomar schreiben mit geprüftem
 `mktemp`, nichts ungeprüft aufrufen, fremde Pakete nie über `/` entpacken,
 jeder Schritt einzeln aufrufbar.
 
-### Architekturregel 10e — Jeder Lauf hinterlässt ein Protokoll
-
-In `logs/` (vorgesehen: `/var/log/chimera/`), **auch bei Erfolg**. Ein
-Lauf, der nichts hinterlässt, ist später nicht nachvollziehbar — und
-genau dann braucht man ihn: wenn etwas schiefging und die Frage lautet,
-was vorher anders war.
-
-Protokolliert werden Zeitstempel, Version, erkannte Umgebung, jeder
-Schritt mit Ergebnis und eine Schlussbilanz. Auf dem Schirm darf es
-knapper zugehen als in der Datei. Kann kein Protokoll angelegt werden,
-wird das **gemeldet** und nicht stillschweigend übergangen.
-
-### Architekturregel 10f — Keine Container auf dem Gerät
-
-Auf Pi und Radxa läuft alles **nativ**. Der Aufwand an Speicher,
-Startzeit und Schreiblast ist auf diesen Geräten nicht zu rechtfertigen,
-und er verdeckt gerade die Systemintegration, um die es hier geht.
-
-Ausnahmen nur, wo es anders nicht geht — etwa ein Dienst, der nativ nicht
-sauber baubar ist. Eine solche Ausnahme wird **hier begründet**, nicht
-stillschweigend eingeführt. Bisher gibt es keine.
-
-### Architekturregel 10g — Nie raten
-
-Erst die Fakten holen, dann entscheiden. Kein „das Paket heißt vermutlich
-so", kein „das liegt wahrscheinlich da". Nachsehen: im Quelltext, im
-Paketindex, auf dem Gerät.
-
-**Vor jedem Codebau prüfen, was bereits existiert und was daran hängt.**
-Sonst entstehen Doppelimplementierungen — dieselbe Logik zweimal, subtil
-unterschiedlich, monatelang unbemerkt.
-
-Was ungeprüft bleibt, wird **als ungeprüft benannt**. Eine ehrliche Lücke
-ist brauchbar, eine geratene Antwort nicht. Deshalb steht in diesem
-Dokument an mehreren Stellen „zu prüfen, nicht anzunehmen".
-
-### Architekturregel 10h — Gebaut ist erst, wenn verdrahtet ist
-
-Ein Modul, das niemand aufruft, ist kein fertiges Modul, sondern ein
-offenes Ende. Dasselbe gilt für eine Funktion ohne Aufrufer, einen
-Schalter ohne Wirkung, eine Option, die nirgends gelesen wird.
-
-**Offene Enden fliegen einem um die Ohren — oder sie stehen dokumentiert.**
-Beides ist zulässig, Schweigen nicht. Was unfertig bleibt, steht in der
-Roadmap oder als bekannte Einschränkung im Changelog, mit seinem
-tatsächlichen Zustand.
-
-Bereits eingetreten: Modul 10 lag zunächst ohne Aufrufer da (kein
-`chimera-install`), und `backup_file` hatte keinen. Ersteres ist
-verdrahtet, Letzteres ist im Quelltext als „noch ohne Aufrufer, gebraucht
-von Modul 60" vermerkt.
-
 ### Architekturregel 10a — Board, Betriebssystem und Bootmethode sind drei Achsen
 
 Nicht eine Variable, sondern drei unabhängige:
@@ -772,25 +731,59 @@ die Boarderkennung nur auf dem Gerät prüfbar, das man gerade nicht hat.
 
 ---
 
-## 11. Hardware
+### Architekturregel 10e — Jeder Lauf hinterlässt ein Protokoll
 
-- **Raspberry Pi Zero 2 W (512 MB)** — Entwicklungsziel
-- **Radxa Zero 3W** — Portierungsziel, mehr Reserven
-- **DietPi** auf beiden, headless (§11a)
-Begründung und Grenzen in `docs/HARDWARE.md`.
-- **Whisplay HAT V2 — ausschließlich.** Auf V1 führt die Button-Leitung
-  5 V; ein Tastendruck kann das Board stromlos schalten. Herstellerwarnung.
-- LCD 240×280, ST7789-kompatibel, SPI bis 100 MHz
-- WM8960 bzw. ES8389 Codec, Mikrofon und Lautsprecher onboard
-- 1 Button, RGB-LED
+In `logs/` (vorgesehen: `/var/log/chimera/`), **auch bei Erfolg**. Ein
+Lauf, der nichts hinterlässt, ist später nicht nachvollziehbar — und
+genau dann braucht man ihn: wenn etwas schiefging und die Frage lautet,
+was vorher anders war.
 
-Lastbetrachtung: Renderer (15 FPS) und Sprachmodelle laufen bei Noisy
-bereits gemeinsam auf einem Zero 2 W; der Agent wartet überwiegend auf
-I/O. Machbar, aber eng — siehe Architekturregel 5 und `docs/HARDWARE.md`.
+Protokolliert werden Zeitstempel, Version, erkannte Umgebung, jeder
+Schritt mit Ergebnis und eine Schlussbilanz. Auf dem Schirm darf es
+knapper zugehen als in der Datei. Kann kein Protokoll angelegt werden,
+wird das **gemeldet** und nicht stillschweigend übergangen.
 
----
+### Architekturregel 10f — Keine Container auf dem Gerät
 
-## 11a. Headless
+Auf Pi und Radxa läuft alles **nativ**. Der Aufwand an Speicher,
+Startzeit und Schreiblast ist auf diesen Geräten nicht zu rechtfertigen,
+und er verdeckt gerade die Systemintegration, um die es hier geht.
+
+Ausnahmen nur, wo es anders nicht geht — etwa ein Dienst, der nativ nicht
+sauber baubar ist. Eine solche Ausnahme wird **hier begründet**, nicht
+stillschweigend eingeführt. Bisher gibt es keine.
+
+### Architekturregel 10g — Nie raten
+
+Erst die Fakten holen, dann entscheiden. Kein „das Paket heißt vermutlich
+so", kein „das liegt wahrscheinlich da". Nachsehen: im Quelltext, im
+Paketindex, auf dem Gerät.
+
+**Vor jedem Codebau prüfen, was bereits existiert und was daran hängt.**
+Sonst entstehen Doppelimplementierungen — dieselbe Logik zweimal, subtil
+unterschiedlich, monatelang unbemerkt.
+
+Was ungeprüft bleibt, wird **als ungeprüft benannt**. Eine ehrliche Lücke
+ist brauchbar, eine geratene Antwort nicht. Deshalb steht in diesem
+Dokument an mehreren Stellen „zu prüfen, nicht anzunehmen".
+
+### Architekturregel 10h — Gebaut ist erst, wenn verdrahtet ist
+
+Ein Modul, das niemand aufruft, ist kein fertiges Modul, sondern ein
+offenes Ende. Dasselbe gilt für eine Funktion ohne Aufrufer, einen
+Schalter ohne Wirkung, eine Option, die nirgends gelesen wird.
+
+**Offene Enden fliegen einem um die Ohren — oder sie stehen dokumentiert.**
+Beides ist zulässig, Schweigen nicht. Was unfertig bleibt, steht in der
+Roadmap oder als bekannte Einschränkung im Changelog, mit seinem
+tatsächlichen Zustand.
+
+Bereits eingetreten: Modul 10 lag zunächst ohne Aufrufer da (kein
+`chimera-install`), und `backup_file` hatte keinen. Ersteres ist
+verdrahtet, Letzteres ist im Quelltext als „noch ohne Aufrufer, gebraucht
+von Modul 60" vermerkt.
+
+## 11. Headless
 
 Chimera hat **keine grafische Oberfläche.** Es gibt den 240×280-Bildschirm
 mit dem Gesicht und zwei Bedienwege (Telegram, Sprache). Ein Desktop hätte
@@ -811,9 +804,57 @@ Chimera muss ohne sie vollständig einsatzfähig sein, konfigurierbar über
 
 ---
 
-## 12. Keine Secrets im Repo
+## 12. Hardware
+
+- **Raspberry Pi Zero 2 W (512 MB)** — Entwicklungsziel
+- **Radxa Zero 3W** — Portierungsziel, mehr Reserven
+- **DietPi** auf beiden, headless (§11a)
+Begründung und Grenzen in `docs/HARDWARE.md`.
+- **Whisplay HAT V2 — ausschließlich.** Auf V1 führt die Button-Leitung
+  5 V; ein Tastendruck kann das Board stromlos schalten. Herstellerwarnung.
+- LCD 240×280, ST7789-kompatibel, SPI bis 100 MHz
+- WM8960 bzw. ES8389 Codec, Mikrofon und Lautsprecher onboard
+- 1 Button, RGB-LED
+
+Lastbetrachtung: Renderer (15 FPS) und Sprachmodelle laufen bei Noisy
+bereits gemeinsam auf einem Zero 2 W; der Agent wartet überwiegend auf
+I/O. Machbar, aber eng — siehe Architekturregel 5 und `docs/HARDWARE.md`.
+
+---
+
+## 13. Keine Secrets im Repo
 
 Tokens, Zugangsdaten, SSIDs, Gerätenamen und lokale Pfade gehören nicht
 in die Versionsverwaltung. Konfiguration liegt als `*.example` mit
 Platzhaltern vor; echte Werte erzeugt der Installer. Vor jedem Push
 scannen.
+
+---
+
+## Verzeichnis der Architekturregeln
+
+- **1** — Die GPL-Grenze ist hart
+- **2** — Ein generierter Mood wird immer validiert
+- **3a** — Das Modell wird nicht pro Geräusch gefragt
+- **3b** — Nur im Ruhezustand wird zugehört
+- **4a** — VAD läuft vor STT, KWS vor VAD
+- **4b** — Gesicht und Stimme tragen denselben Mood
+- **5** — Sprache lokal, Sprachmodell immer remote
+- **5a** — Registry statt fester Connector-Attribute
+- **5b** — Anthropic-Anmeldung wie im OpenMinis-PR
+- **5c** — Ollama ist ein erstklassiger Anbieter
+- **5d** — Ein Gespräch, zwei Türen
+- **6** — Keine absoluten Pixelwerte
+- **7** — Ein Prozess, ein Framebuffer
+- **8** — Die Mood-Steuerung ist ein Skill, kein Sonderweg
+- **8a** — Stiller Erfolg ist die gefährlichste Fehlerart
+- **9** — Kein Test, der eine Formel nachrechnet
+- **10** — Ein Versionssprung bricht keine Installation
+- **10a** — Board, Betriebssystem und Bootmethode sind drei Achsen
+- **10b** — Erkennung stützt sich auf `compatible`, nicht auf den Klartextnamen
+- **10c** — Alles Boardabhängige steht in einer Profiltabelle
+- **10d** — Alles Lesende geht über ein Wurzelverzeichnis
+- **10e** — Jeder Lauf hinterlässt ein Protokoll
+- **10f** — Keine Container auf dem Gerät
+- **10g** — Nie raten
+- **10h** — Gebaut ist erst, wenn verdrahtet ist

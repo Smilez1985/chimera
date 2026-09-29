@@ -117,9 +117,11 @@ Kann parallel zu Phase 4 laufen; berührt den Renderer nicht.
 Setzt Phase 5 voraus (Audioaufnahme läuft bereits). Details in
 `docs/DESIGN.md` §3.4.
 
-- [ ] CED-tiny statt Zipformer einbinden (5,9 MB, 0,83 s gegen 4,71 s auf
-      dem Pi Zero 2 W) — sherpa-onnx spricht beide Architekturen
-      unterschiedlich an
+- [ ] Tagger-Schicht, die Zipformer und CED gleich aussehen lässt —
+      sherpa-onnx spricht beide unterschiedlich an. Das Modell ist eine
+      Einstellung, kein Architekturmerkmal
+- [ ] Voreinstellung CED-tiny (5,9 MB, 0,83 s gegen 4,71 s auf dem
+      Pi Zero 2 W, laut Noisys Messung)
 - [ ] Schwellenfaktor je Modell: CED liefert flachere Wahrscheinlichkeiten
 - [ ] Ebene 1: kleine Reflextabelle für Sofortreaktionen (Knall, Lachen),
       ohne Modell, unter 1 s
@@ -128,7 +130,7 @@ Setzt Phase 5 voraus (Audioaufnahme läuft bereits). Details in
 - [ ] Ebene 3: Lagebeschreibung an das Sprachmodell, Antwort ist ein
       Mood-Name, eine Mischanweisung oder ein neuer Mood
 - [ ] **Nur im Ruhezustand** hören; Wake-Word oder Taste beendet es
-      (Regel 2b)
+      (Regel 3b)
 - [ ] Anfragen begrenzen (Mindestabstand, Auslösung bei deutlicher
       Änderung) — das Modell wird pro Situation befragt, nicht pro Geräusch
 - [ ] Netzausfall: Ebene 1 und 2 laufen weiter, Zustand wird angezeigt
@@ -143,7 +145,7 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
 - [ ] VAD (`silero_vad_v5`)
 - [ ] STT (`nemo-fast-conformer-ctc-en-de-es-fr-int8`), Latenz messen
 - [ ] TTS (`thorsten_emotional-medium-int8`)
-- [ ] TTS-Emotion an Mood koppeln (Architekturregel 4)
+- [ ] TTS-Emotion an Mood koppeln (Architekturregel 4b)
 - [ ] Wake-Word prüfen — die KWS-Modelle sind nicht auf deutschem Material
       trainiert. Wenn "Hey Chimera" unzuverlässig ist: eigenes Keyword
       trainieren oder Button als Auslöser
