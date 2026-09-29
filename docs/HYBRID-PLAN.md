@@ -190,9 +190,18 @@ im Voraus — auf 512 MB zählt jeder Dauerprozess.
 
 Ersetzt `patch_self.py` (Regel 10i): sichern → aktualisieren → selbst
 prüfen → bei Fehlschlag zurückspielen. Vorlage ist die erprobte
-Aktualisierungsroutine aus dem PiHole-Projekt.
+Updateroutine aus dem PiHole-Projekt — Unterlagen liegen vor, Auswertung
+in `docs/SELBSTUPDATE.md`.
 
-*Wartet auf:* die Unterlagen dazu.
+- Sicherung **prüfen**, nicht nur anlegen — ohne sie kein Eingriff
+- Selbstprüfung muss etwas bestätigen: Dienst läuft nach 10 s **noch**,
+  Anzeige antwortet, ein Anbieter ist erreichbar
+- **Gestufter** Rollback: erst Programm, dann Konfiguration, nach jeder
+  Stufe prüfen
+- Rückspielwerkzeug **außerhalb** des aktualisierten Verzeichnisses,
+  ohne fremde Abhängigkeiten, bei jedem Lauf neu sichergestellt
+- Mood-Bibliothek mitsichern — sie ist gewachsen und steht nicht in Git
+- Kette bricht nicht beim ersten Fehler ab; Exitcode = Anzahl Fehlschläge
 
 ### H5 — Installer und erste Inbetriebnahme *(Hardware nötig)*
 

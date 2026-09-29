@@ -94,6 +94,10 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 - Ersteinrichtung sucht, schlägt vor und übernimmt — jede Zeile änderbar.
 - 36 Tests für die Anbieterschicht, mit Gegenproben.
 
+- `docs/SELBSTUPDATE.md`: Auswertung der PiHole-Updateroutine als Vorlage
+  für Chimeras Selbstaktualisierung — geprüfte Sicherung, bestätigende
+  Selbstprüfung, gestufter Rollback, Rückweg außerhalb des Updates.
+
 ### Bekannte Einschränkungen
 
 - Die Abo-Marke wird **nicht aufgefrischt**. Läuft sie ab, greift der

@@ -291,6 +291,18 @@ Analyse in `docs/INSTALLER.md` §2a und §3.
 - [ ] WM8960 aus Quelle bauen, falls im DietPi-Kernel nicht vorhanden
 - [ ] Unbekannte Kernelversion ⇒ Abbruch mit Auskunft, kein Rateversuch
 
+## Phase 8f — Selbstaktualisierung
+
+Entwurf in `docs/SELBSTUPDATE.md`, Vorlage ist die PiHole-Routine.
+
+- [ ] Sicherung mit Prüfung (Existenz, Kopie gelungen, nicht leer)
+- [ ] Selbstprüfung: Dienst, Anzeige, Anbieter
+- [ ] Gestufter Rollback mit Prüfung nach jeder Stufe
+- [ ] Rückspielwerkzeug außerhalb des Updates, ohne Abhängigkeiten
+- [ ] Mood-Bibliothek in die Sicherung
+- [ ] Trockenlauf durchgehend; auf eMMC nachfragen
+- [ ] Gegenprobe: Update absichtlich kaputt machen, Rollback muss greifen
+
 ## Phase 9 — Erstes Release
 
 - [ ] CI: Tests der hardwarefreien Teile

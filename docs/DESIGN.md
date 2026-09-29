@@ -984,6 +984,9 @@ Stattdessen die Reihenfolge, die sich andernorts bewährt hat:
 
     sichern → aktualisieren → selbst prüfen → bei Fehlschlag zurückspielen
 
+Vorlage ist die erprobte Updateroutine aus dem PiHole-Projekt;
+Einzelheiten in `docs/SELBSTUPDATE.md`.
+
 Bedingungen:
 
 - Die Sicherung entsteht **vor** der Änderung und wird geprüft, nicht nur
@@ -993,6 +996,27 @@ Bedingungen:
 - Das Zurückspielen läuft **ohne Netz und ohne das neue Programm** —
   sonst hängt die Rettung an dem, was gerade kaputt ist.
 - Jeder Lauf wird protokolliert (Regel 10e), auch der erfolgreiche.
+
+### Architekturregel 10j — Wer prüft, muss etwas sehen können
+
+Aus der Befundsammlung der PiHole-Routine, und dort teuer bezahlt:
+
+> Eine Prüfung, die ihre eigene Voraussetzung nicht herstellen kann,
+> meldet Unsichtbarkeit als Abwesenheit — und zwar positiv, ohne Alarm.
+
+Konkreter Fall: Die Paketliste wurde nie aufgefrischt, also meldete jede
+Prüfung „kein Update verfügbar". In Wahrheit hieß das „ich habe seit
+Wochen nicht nachgesehen". Belegt mit einer Paketliste, die einen Monat
+alt war — und jeder Lauf sah dabei gesund aus.
+
+Das verschärft Regel 10g: Nicht raten genügt nicht. **Wer prüft, muss
+vorher dafür sorgen, dass er etwas sehen kann** — Liste auffrischen,
+Verbindung herstellen, Rechte besorgen. Sonst ist die Antwort wertlos,
+ohne dass es auffällt.
+
+Das gilt auch für Chimera selbst: Die Anbieterprüfung, die
+Anzeigenerkennung und die Selbstprüfung nach einem Update müssen
+unterscheiden können zwischen „nicht da" und „konnte nicht nachsehen".
 
 ### Architekturregel 10e — Jeder Lauf hinterlässt ein Protokoll
 
@@ -1126,6 +1150,7 @@ scannen.
 - **10c** — Alles Boardabhängige steht in einer Profiltabelle
 - **10d** — Alles Lesende geht über ein Wurzelverzeichnis
 - **10i** — Selbstaktualisierung nur mit Rückweg
+- **10j** — Wer prüft, muss etwas sehen können
 - **10e** — Jeder Lauf hinterlässt ein Protokoll
 - **10f** — Keine Container auf dem Gerät
 - **10g** — Nie raten
