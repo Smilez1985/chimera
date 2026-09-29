@@ -13,7 +13,10 @@ Stand: 2026-09-29. Pre-Alpha.
 - [x] `docs/ROADMAP.md`
 - [x] `CHANGELOG.md` mit `[Unreleased]`
 - [x] `README.md`, `LICENSE`, `VERSION`
+- [x] `docs/HARDWARE.md` — Zielplattform und Boardfrage
 - [ ] Hardware-Revision der vorhandenen Whisplay prüfen (**V2?**)
+- [ ] `uname -r`, `/lib/modules/$(uname -r)/build`, `modinfo snd-soc-wm8960`
+      auf dem Zielgerät notieren (Checkliste in `docs/HARDWARE.md` §4)
 
 ---
 
@@ -91,6 +94,11 @@ Kann parallel zu Phase 4 laufen; berührt den Renderer nicht.
 - [ ] LiteLLM-Connector aus openclawgotchi übernehmen (weitere Anbieter)
 - [ ] Aufgabenzuordnung konfigurierbar: Gespräch → Anthropic,
       Mood-Erfindung und Zusammenfassen → Ollama
+- [ ] Aus dem eigenen Fork übernehmen (Ideen, nicht Code —
+      `docs/DESIGN.md` §4a): `/model`-Befehl zum Umschalten im Chat,
+      **persistente Modellwahl** über Neustarts, Platzhalter-Adresse als
+      „nicht gesetzt" behandeln statt Verbindungsfehler, Installer fragt
+      die Ollama-Adresse ab
 - [ ] Fehlender Schlüssel ⇒ Connector meldet sich als nicht verfügbar,
       kein Startabbruch
 - [ ] `.env.example` mit Platzhaltern für alle Anbieter
@@ -151,8 +159,11 @@ Phase 1–5, also parallel machbar. Details in `docs/DESIGN.md` §8.
 
 ## Offen / zu entscheiden
 
-- **Zielboard:** Zero 2 W mit remote-LLM oder Pi 5 autark? Entscheidet
-  über Architekturregel 5. Hängt daran, welcher Pi unter der Whisplay sitzt.
+- **Radxa Zero 3W nutzbar machen?** Wäre das bessere Board (bis 8 GB ⇒
+  Sprachmodell lokal möglich), aber der Audiotreiber läuft unter DietPi
+  nicht. Aussichtsreichster Weg: Radxas offizielles Debian statt DietPi.
+  Analyse in `docs/HARDWARE.md` §3. Kein Blocker — das Board ist eine
+  Konfigurationsfrage.
 - **Mood-Aufräumen:** Wenn der Agent dauerhaft speichern darf, wächst die
   Bibliothek unbegrenzt. LRU über `last_used`? Obergrenze?
 - **Bleibt Telegram** die Hauptschnittstelle, wenn Mikrofon, Lautsprecher

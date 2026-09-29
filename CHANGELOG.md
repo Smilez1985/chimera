@@ -54,11 +54,27 @@ Installation** (siehe `docs/DESIGN.md` §10).
   `DISPLAY:` und `SAY:` bleiben; nur das Ziel wechselt auf die Whisplay
   mit Noisys Mechanik. Bestehende Skills laufen unverändert weiter.
 
+- **Zielplattform ist der Pi Zero 2 W.** Der Radxa Zero 3W wäre mit bis zu
+  8 GB das bessere Board — dort könnte das Sprachmodell lokal laufen —,
+  aber der Whisplay-Audiotreiber lässt sich unter DietPi nicht bauen.
+  Analyse und Auswege in `docs/HARDWARE.md`. Die Plattform bleibt eine
+  Konfigurationsfrage: ein späterer Wechsel kostet eine Einstellung,
+  keinen Umbau.
+- **Chimera setzt auf dem aktuellen Upstream von openclawgotchi auf**, nicht
+  auf dem eigenen Fork. Der liegt 41 Commits hinter dem Upstream; ein
+  Rebase samt Umbau auf die Anbieter-Registry wäre mehr Arbeit als die
+  Neuimplementierung. Die guten Ideen des Forks werden übernommen:
+  `/model`-Umschaltung im Chat, persistente Modellwahl, Platzhalter-Adresse
+  als „nicht gesetzt" behandeln.
+
 ### Bekannte Einschränkungen
 - Auf einem Pi Zero 2 W (512 MB) passen lokale Sprache und lokales LLM
   nicht gleichzeitig in den Speicher. Rechnung in `docs/DESIGN.md` §4.
 - Die verfügbaren Wake-Word-Modelle sind nicht auf deutschem Material
   trainiert. Zuverlässigkeit von "Hey Chimera" ist ungeprüft.
+- Der Whisplay-Audiotreiber ist ein Out-of-Tree-Modul und braucht
+  Kernel-Headers zur laufenden Version sowie `snd-soc-wm8960` aus dem
+  Kernel. Unter DietPi auf dem Radxa Zero 3W ist beides nicht gegeben.
 - Whisplay **V1 ist unbrauchbar**: die Button-Leitung führt 5 V und kann
   das Board beim Tastendruck stromlos schalten. Nur V2 verwenden.
 

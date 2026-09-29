@@ -169,8 +169,10 @@ laufendem Renderer bedeutet das Ruckeln und tote Karten.
 Token-Konto, nichts verlässt das eigene Netz.** Ein LLM auf dem eigenen
 Ollama-Server erfüllt das. Sprache bleibt in jedem Fall auf dem Gerät.
 
-Ein Pi 5 mit 8/16 GB kann alles lokal — dann entfällt diese Einschränkung.
-Whisplay unterstützt beide Boards.
+Ein Board mit mehr Speicher könnte alles lokal fahren — siehe
+`docs/HARDWARE.md` zur Boardfrage. Die Plattform ist bewusst eine
+**Konfigurationsfrage, keine Architekturfrage**: ob das Sprachmodell lokal
+oder im Netz liegt, entscheidet die Registry (Regel 5a), nicht der Code.
 
 Bemerkenswert: PiSugars eigene Whisplay-Referenzanwendung lässt Whisper,
 Piper und Ollama per Docker auf einem separaten Rechner laufen. Der
@@ -236,6 +238,35 @@ Für Chimera heißt das zusätzlich: Wo die CLI als Unterprozess läuft,
 kommt sie über den Gerätestart hinweg nicht mit. Der ermittelte Wert
 gehört gecacht und bei Prozessstart einmal aufgefrischt — nicht bei jedem
 Aufruf, das kostet auf einem Zero spürbar.
+
+### Vorarbeit im eigenen Fork von openclawgotchi
+
+Im Fork `Smilez1985/openclawgotchi`, Branch `feat/model-ollama-switcher`,
+ist Ollama bereits angebunden. Fünf Commits, die inhaltlich übernommen
+werden:
+
+- `LLM_PRESETS`-Eintrag `ollama` mit `ollama_chat/<modell>` und
+  `OLLAMA_API_BASE`
+- `/model`-Befehl im Chat: Modelle zur Laufzeit auflisten und umschalten,
+  ohne SSH
+- **Auswahl bleibt über Neustarts erhalten** (`active_model.json`), mit
+  Vorrang vor dem Voreinstellungs-Preset
+- Platzhalter-Hostname wird als „nicht gesetzt" behandelt und mit einem
+  klaren Hinweis gemeldet, statt in einen Verbindungsfehler zu laufen
+- Der Installer fragt die echte Ollama-Adresse ab
+
+Die Muster sind gut und werden übernommen — insbesondere die persistente
+Modellwahl und die Behandlung des Platzhalters. **Der Code selbst wird
+nicht übertragen**, weil er auf dem alten Zwei-Connector-Router aufsitzt
+(`set_model()` auf dem LiteLLM-Connector). In der Registry ist Ollama ein
+eigener Connector, kein umgeschalteter LiteLLM (Regel 5c).
+
+Zum Stand des Forks: Er liegt **41 Commits hinter dem Upstream** und 5
+voraus. Das Upstream-Projekt ist in der Zwischenzeit deutlich
+weitergegangen. Chimera setzt daher auf dem **aktuellen Upstream** auf und
+baut die Fork-Ideen dort neu ein, statt den divergierten Fork
+nachzuziehen. Ein Rebase über 41 Commits mit anschließendem Umbau auf die
+Registry wäre mehr Arbeit als die Neuimplementierung.
 
 ### Architekturregel 5c — Ollama ist ein erstklassiger Anbieter
 
@@ -470,7 +501,8 @@ neu installieren". Ein `git pull` plus Installer-Lauf muss genügen.
 
 ## 11. Hardware
 
-- Raspberry Pi Zero 2 W (512 MB) oder Pi 5
+- **Raspberry Pi Zero 2 W (512 MB)** — festgelegt. Begründung, Grenzen und
+  der Stand zum Radxa Zero 3W stehen in `docs/HARDWARE.md`.
 - **Whisplay HAT V2 — ausschließlich.** Auf V1 führt die Button-Leitung
   5 V; ein Tastendruck kann das Board stromlos schalten. Herstellerwarnung.
 - LCD 240×280, ST7789-kompatibel, SPI bis 100 MHz
@@ -479,7 +511,7 @@ neu installieren". Ein `git pull` plus Installer-Lauf muss genügen.
 
 Lastbetrachtung: Renderer (15 FPS) und Sprachmodelle laufen bei Noisy
 bereits gemeinsam auf einem Zero 2 W; der Agent wartet überwiegend auf
-I/O. Machbar, aber eng — siehe Architekturregel 5.
+I/O. Machbar, aber eng — siehe Architekturregel 5 und `docs/HARDWARE.md`.
 
 ---
 
