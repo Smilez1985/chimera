@@ -97,8 +97,9 @@ for mod in $(modules_list); do
 		FAILED=$((FAILED + 1))
 		[ "$FIRST_RC" -eq 0 ] && FIRST_RC=$rc
 		_log_raw "Modul $name: Exitcode $rc"
-		# Preflight mit Exitcode 2 heisst: Board unbekannt. Weitermachen
-		# waere raten.
+		# Exitcode 1 ist ein Befund, kein Ende: kein Profil, aber der
+		# Lauf geht weiter (Regel 10k). Ab 2 hat das Modul den Lauf
+		# bewusst beendet — etwa weil niemand die Warnung bestaetigt hat.
 		if [ "$rc" -ge 2 ]; then
 			err "Modul $name bricht den Lauf ab (Exitcode $rc)."
 			log_close "$rc"

@@ -85,7 +85,6 @@ oder in der Roadmap.
 
 - **Keine Sprachein- oder -ausgabe.** Sprache, Wake-Word und
   Umgebungshören sind entworfen, aber nicht gebaut.
-- **Kein Telegram.** Der Agent läuft nur programmgesteuert.
 - **Die Abo-Marke wird nicht aufgefrischt.** Läuft sie ab, greift der
   Rückfall auf das nächste Ziel. Koordinator fehlt.
 - **Werkzeugaufrufe werden aus dem Text gelesen** (`TOOL: name {...}`),
@@ -109,4 +108,95 @@ echten Ollama-Server geprüft.
 
 ## [Unreleased]
 
-Noch keine Änderungen seit 0.1.0.
+### Hinzugefügt
+
+**Bedienschnittstelle (H4)**
+- **Sitzung und Kanal** (`chimera.agent.session`). Der Kern von Regel 5d:
+  ein Agent, ein Verlauf, beliebig viele Türen. Eine Sperre serialisiert
+  den Zugriff — der Agent ist nicht wiedereintrittsfähig, zwei
+  gleichzeitige Läufe würden sich den Verlauf überschreiben. Ein Kanal
+  beschreibt nur Ein- und Ausgabe und hält keinen eigenen Zustand
+  (Regel 5i).
+- **Telegram** (`chimera.bot.telegram`), ohne Fremdbibliothek — die
+  Bot-API ist HTTPS mit JSON, das kann die Standardbibliothek. Auf 512 MB
+  ist jede vermiedene Abhängigkeit eine gesparte. Positivliste erlaubter
+  Absender ist Pflicht (Regel 5j): Ohne Liste startet der Bot nicht.
+- **Der Zusammenbau** (`chimera.app`, `python3 -m chimera`). Den gab es
+  vorher nicht — der Agent wurde nirgends instanziiert. Setzt nichts
+  voraus: ohne Anbieter, ohne Panel, ohne Skills läuft es und sagt, was
+  fehlt.
+
+**Anzeige**
+- **Der Renderer wird jetzt angeschlossen und gestartet.** Vorher setzte
+  das Gesicht Ausdrücke auf einen Zustand, den niemand las — ein offenes
+  Ende nach Regel 10h. `start_display()`/`stop_display()` führen ihn als
+  Faden; das Panel wird durchgereicht statt weggeworfen (Regel 7b).
+- **Die Bildrate gehört zum Panel** (Regel 7a). Ein LCD will 15 Bilder je
+  Sekunde, E-Ink eines alle paar Sekunden; bei `fps = 0` zeichnet der
+  Renderer nur auf Anstoß. Damit trägt derselbe Renderer beide
+  Anzeigearten, ohne Sonderweg — ein neues Panel setzt eine Zahl.
+- `tools/check-globals.py` — findet Namen, die eine Funktion als global
+  liest, die es aber nicht gibt. Statisch, ohne Ausführung.
+
+### Geändert
+
+- **Unbekannte Boards brechen den Installer nicht mehr ab** (Regel 10k).
+  Unbekannt heißt ungetestet, nicht unvereinbar: Wer Chimera auf einem
+  Pi 4 versuchen will, darf das nach einer ehrlichen Warnung und einer
+  bewussten Bestätigung. Was weiterhin **nicht** passiert, ist ein
+  geratenes Overlay in der Bootkonfiguration — dieser eine Schritt kostet
+  bei einem Gerät ohne Bildschirm den Ausbau der SD-Karte. Ohne Profil
+  laufen die boardunabhängigen Module, die bootnahen melden sich ab.
+  Exitcode 1 heißt jetzt „kein Profil, läuft weiter", 2 „niemand hat
+  zugestimmt"; nicht-interaktiv braucht es `CHIMERA_ASSUME_YES=1`.
+- Die CPU-Temperatur wird über eine Instanzeigenschaft gelesen, nicht über
+  eine Modulkonstante — auf dem Radxa heißt die Zone anders als auf dem Pi
+  (Regel 10c).
+
+### Behoben
+
+- **`NoisyRenderer.run()` stürzte in der zweiten Zeile ab.** Es las
+  `TARGET_FPS` und `FRAME_TIME` als Modulglobale; die gab es nie, nur als
+  Attribute. Unentdeckt, weil die Tests `render()` und `show()` aufriefen,
+  nie `run()`.
+- **`run()` hätte auch ohne diesen Fehler kein Bild ausgegeben** — es rief
+  `render()`, das ein Bild zurückgibt, ohne es an das Panel zu schicken.
+  Zwei Fehler auf demselben Weg, beide hinter demselben nie betretenen
+  Zweig.
+- **Die Temperaturkopplung war dauerhaft wirkungslos, und zwar lautlos.**
+  `read_temperature()` las eine Konstante, die es nicht gab; der
+  `NameError` fiel in ein `except Exception` und wurde zu `45,0 °C`. Die
+  Müdigkeit des Avatars bei Hitze hat nie funktioniert. Genau die
+  Fehlerklasse aus Regel 8a, gefunden mit dem neuen Werkzeug.
+- **`app.py` öffnete ein Panel und warf es weg.** Auf echter Hardware wäre
+  der SPI-Bus belegt und unbenutzt gewesen, während sich der Renderer ein
+  eigenes Platzhalter-Panel baute.
+- **Ein Fehler beim Anzeigen des Zustands verschwand in einer
+  Debug-Zeile.** `Chimera.face` war ein namenloses `object`, die Methode
+  wurde vermutet.
+- `Registry.load()` konnte die mitgelieferte Mood-Bibliothek nie lesen —
+  zwei unabhängig entstandene Dateiformate. Der Test daneben las die Datei
+  selbst und rief `add()` auf, umging also genau die Funktion, um die es
+  ging.
+- `Channel.trim()` überschritt die Obergrenze, die es zusagt, um die Länge
+  seines eigenen Abbruchzeichens.
+
+### Geprüft
+
+431 Tests, alle grün: 361 Python, 70 Installer. Neu darunter 27 für die
+Gesichtskette (`test_display_wiring.py`) und 24 für Regel 10k. Jeder
+Regressionstest hat eine Gegenprobe, und die Gegenproben wurden gegen den
+jeweils alten Code **verifiziert** — jeder der sechs Befunde färbt den
+Test rot, wenn man ihn wiederherstellt.
+
+Die Prüfung des H4-Stands gegen die Blaupause steht in
+`docs/PRUEFUNG-H4.md`.
+
+### Bekannte Einschränkungen
+
+- **Nichts davon lief auf der Zielhardware.** Insbesondere ist die
+  Bildrate von 15 auf einem Pi Zero 2 W nicht gemessen, sondern von Noisy
+  übernommen.
+- Der Renderer läuft als Faden im Hauptprozess (Regel 7a). Dass die
+  globale Sperre dabei nicht stört, ist begründet, aber auf dem Zero 2 W
+  nicht gemessen.

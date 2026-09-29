@@ -124,14 +124,17 @@ Kann parallel zu Phase 4 laufen; berührt den Renderer nicht.
       kein Startabbruch
 - [ ] `.env.example` mit Platzhaltern für alle Anbieter
 
-## Phase 4c — Telegram erhalten
+## Phase 4c — Telegram erhalten ✓
 
-- [ ] Telegram-Bot aus openclawgotchi unverändert übernehmen
-- [ ] **Gemeinsamer Verlauf** für Telegram und Sprache
-      (Architekturregel 5d) — keine getrennten Sitzungen je Kanal
-- [ ] Kanal als Kontext an den Agenten geben (Antwortlänge: gesprochen
-      kürzer als geschrieben)
-- [ ] Avatar zeigt auch bei Telegram-Anfragen den Agentenzustand
+Erledigt, siehe `CHANGELOG.md` unter `[Unreleased]`. Telegram wurde nicht
+übernommen, sondern ohne Fremdbibliothek neu gebaut (nur `urllib`) — auf
+512 MB ist jede vermiedene Abhängigkeit eine gesparte. Gemeinsamer Verlauf,
+Kanal als Kontext und die Zustandsmeldung ans Gesicht sind verdrahtet und
+geprüft.
+
+Offen bleibt hier nur, was Sprache voraussetzt: Der Sprachkanal existiert
+als Betriebsart (`mode="voice"` mit kürzerer Ausgabe), hat aber noch keine
+Ein- und Ausgabe — die kommt mit Phase 5.
 
 ## Phase 5a — Umgebungshören im Ruhezustand
 

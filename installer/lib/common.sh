@@ -85,6 +85,62 @@ do_change() {
 	"$@"
 }
 
+# Eine bewusste Bestaetigung einholen (Regel 10k).
+#
+# Fuer Faelle, in denen der Installer NICHT verbietet, aber auch nicht
+# stillschweigend weitermacht: unbekanntes Board, ungetestete Kombination.
+# Die Frage ist keine Formalie -- deshalb genuegt kein Eingabetaste-Druck,
+# sondern es muss "ja" getippt werden.
+#
+# Nicht-interaktiv (Skript, CI, kein Terminal) gilt: ohne ausdruecklichen
+# Schalter wird NICHT fortgesetzt. Ein Automatiklauf soll nicht
+# versehentlich ueber eine Warnung hinweglaufen, die ein Mensch gelesen
+# haette.
+#
+# Gilt die Antwort als Zustimmung? Eigene Funktion, damit sie geprueft
+# werden kann, ohne ein Terminal vorzutaeuschen -- ein Test, der die
+# Auswertung nachbaut, pruefte nur sich selbst (Regel 9).
+#
+# Eine leere Eingabe ist KEIN ja: Ein weggedruecktes Enter ist keine
+# Entscheidung.
+answer_is_yes() {
+	case "${1:-}" in
+		ja|JA|Ja|j|J) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+# $1 die Frage. Rueckgabe 0 = fortfahren, 1 = nicht.
+confirm_risk() {
+	_cr_q="${1:-Fortfahren?}"
+
+	if [ "${CHIMERA_ASSUME_YES:-0}" = 1 ]; then
+		warn "$_cr_q -> ja (CHIMERA_ASSUME_YES=1, auf eigene Gefahr)"
+		return 0
+	fi
+
+	if is_dry_run; then
+		info "[wuerde fragen] $_cr_q"
+		return 0
+	fi
+
+	if [ ! -t 0 ]; then
+		err "$_cr_q"
+		err "Keine Eingabe moeglich (kein Terminal). Wer das bewusst will,"
+		err "setzt CHIMERA_ASSUME_YES=1 -- und traegt die Folgen."
+		return 1
+	fi
+
+	printf '%s [ja/nein] ' "$_cr_q" >&2
+	read -r _cr_a || _cr_a=""
+	if answer_is_yes "$_cr_a"; then
+		_log_raw "  Bestaetigt: $_cr_q -> $_cr_a"
+		return 0
+	fi
+	_log_raw "  Abgelehnt: $_cr_q -> ${_cr_a:-(nichts)}"
+	return 1
+}
+
 # Bilanz am Ende -- auch bei Erfolg.
 log_close() {
 	_lc_rc="${1:-0}"

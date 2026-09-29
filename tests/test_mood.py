@@ -297,6 +297,24 @@ if bi.exists():
     ok("keiner beanstandet") if not bad_ones else bad(f"beanstandet: {bad_ones[:2]}")
     mixed = blend.mix(reg4.get("ROCK"), reg4.get("CHILL"), 0.5, name="ROCKCHILL")
     ok("zwei Startmoods mischbar") if mixed["name"] == "ROCKCHILL" else bad("Mischen fehlgeschlagen")
+
+    # Der Test oben liest die Datei SELBST und ruft add() auf — damit
+    # blieb unbemerkt, dass Registry.load() sie nicht lesen konnte
+    # (flaches gegen verpacktes Format). Der Weg, den das Programm
+    # wirklich nimmt, muss auch geprüft werden.
+    geladen = Registry.load(bi, capacity=500)
+    check("load() liest die mitgelieferte Datei", len(geladen), 41)
+    ok("Namen kommen mit") if "CHILL" in geladen else bad("CHILL fehlt nach load()")
+    # Gegenprobe: das verpackte Format (save) muss weiter gehen.
+    import tempfile as _tf
+    with _tf.TemporaryDirectory() as _td:
+        _p = Path(_td) / "rund.json"
+        geladen.save(_p)
+        zurueck = Registry.load(_p)
+        check("Rundlauf save→load", len(zurueck), 41)
+        ok("Nutzungszähler überlebt") if all(
+            zurueck.find(n) is not None for n in ("CHILL", "ROCK")) \
+            else bad("Moods nach Rundlauf verschwunden")
 else:
     bad("data/moods-builtin.json fehlt — tools/import-noisy-moods.py laufen lassen")
 

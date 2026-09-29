@@ -578,6 +578,24 @@ Kontext mitgeteilt, damit er sich darauf einstellen kann.
 Der Avatar zeigt in beiden Fällen denselben Zustand (§7). Wenn per
 Telegram eine Anfrage läuft, sieht man das dem Gesicht an.
 
+#### Architekturregel 5i — Ein Kanal hat keinen eigenen Zustand
+
+Der Bauplan zu 5d. Die Regel oben nennt das Ziel, diese sagt, wie man es
+nicht wieder verliert.
+
+Die **Sitzung** besitzt den Agenten und dessen Verlauf. Ein **Kanal**
+beschreibt nur die Tür: Name, Betriebsart (gelesen oder gehört),
+Ausgabelänge. Er hält keinen Verlauf, keine Einstellungen, keine Zähler.
+
+Ein Befehl, der den Zustand ändert — „Gespräch von vorn" ist der
+typische —, wirkt auf die **Sitzung**, nie auf einen einzelnen Kanal.
+Sonst kommt die Spaltung durch die Hintertür zurück: Wer per Telegram
+zurücksetzt und dann davorsteht, träfe auf ein Gegenüber, das die Hälfte
+noch weiß.
+
+Praktische Probe: Ein zweiter Kanal derselben Art darf sich nicht anders
+verhalten als der erste. Wenn er es tut, hängt irgendwo Zustand am Kanal.
+
 ---
 
 ### Architekturregel 5e — zram und Auslagerungsdatei gehören zum Aufbau
@@ -627,6 +645,58 @@ ausgerechnet auf dem Gerät, das seltener läuft.
 
 ---
 
+### Architekturregel 5f — Fremde Werkzeuge sind nicht vertrauenswürdig
+
+Ein MCP-Server ist fremder Code mit eigenen Werkzeugen. Deshalb:
+
+- **Dieselbe Vorprüfung** wie für eigene Werkzeuge (§2), kein Freifahrtschein
+- **Dieselbe Schleifenerkennung** — ein fremdes Werkzeug kann genauso
+  im Kreis laufen
+- **Dieselbe Protokollierung** (Regel 10e)
+- Werkzeuge werden **benannt nach Herkunft** (`server.werkzeug`), damit
+  Namenskollisionen nicht stillschweigend das falsche Werkzeug aufrufen
+- Ein Server, der nicht antwortet, wird **übersprungen**, nicht abgewartet
+  — sonst hängt die Agent-Schleife an einem fremden Prozess
+
+Anbindung über die Standardwege der Bibliothek (Unterprozess oder HTTP).
+Auf einem Pi Zero ist jeder zusätzliche Dauerprozess Speicher — MCP-Server
+werden deshalb **bei Bedarf gestartet**, nicht im Voraus.
+
+Ausführung und Stand der Spezifikation: `docs/PROVIDER.md` §4.
+
+---
+
+### Architekturregel 5g — Audio läuft getrennt, aber schlank
+
+Sprachein- und -ausgabe bekommen einen **eigenen Prozess**, nicht nur
+einen Faden. Drei Gründe:
+
+1. **Der Renderer darf nicht warten.** Python hat eine globale Sperre;
+   ein Faden, der in der Spracherkennung rechnet, hält den Renderer auf.
+   Bei 15 Bildern je Sekunde sieht man das sofort.
+2. **Abstürze bleiben lokal.** Audio-Bibliotheken auf ARM sind nicht
+   immer stabil. Ein Absturz darf das Gesicht nicht mitnehmen.
+3. **Speicher lässt sich freigeben.** Ein eigener Prozess kann beendet
+   werden, wenn längere Zeit nicht gesprochen wird — bei 512 MB zählt das.
+
+**Schlank heißt:** Der Prozess macht Aufnahme, Erkennung, Synthese und
+Wiedergabe — sonst nichts. Kein Agent, keine Werkzeuge, kein Netz außer
+dem, was die Modelle brauchen (und die laufen lokal).
+
+Verständigung über **geteiltes Gedächtnis** für den Pegel (der Renderer
+liest ihn bei jedem Bild, §4.1) und eine Warteschlange für alles andere.
+Genau dafür hat Noisy `noisy_shm.py` gebaut, samt dem dokumentierten
+Kniff um den `resource_tracker` — diese Erfahrung wird übernommen.
+
+    Hauptprozess                  Audio-Prozess
+    ├─ Agent                      ├─ Aufnahme
+    ├─ Renderer  ◄── Pegel ────── ├─ VAD, Wake-Word
+    ├─ Telegram      (SHM)        ├─ Erkennung
+    └─ Anzeige   ──── Text ─────► └─ Synthese, Wiedergabe
+                     (Queue)
+
+---
+
 ## 4b. Schnittstellen zum Nutzer
 
 Chimera hat **zwei gleichwertige Wege** hinein, nicht einen mit Anhängsel:
@@ -639,6 +709,25 @@ Chimera hat **zwei gleichwertige Wege** hinein, nicht einen mit Anhängsel:
 Telegram bleibt aus openclawgotchi **vollständig erhalten** — es ist die
 einzige Schnittstelle, die auch funktioniert, wenn man nicht im selben
 Raum steht.
+
+### Architekturregel 5j — Eine Tür von außen ohne Positivliste startet nicht
+
+Jede Bedienschnittstelle, die von außerhalb des Geräts erreichbar ist
+(Telegram heute, weitere später), braucht eine Liste erlaubter Absender.
+**Ohne Liste startet sie nicht** — kein Vorgabewert, kein „offen, wenn
+leer", keine Warnung, die man überlesen kann.
+
+Begründung: Hinter der Tür steht ein Agent mit Dateizugriff und
+Shell-Werkzeug. Eine Bot-Adresse steht früher oder später in irgendeinem
+Verlauf. Wer sie kennt, hätte damit das Gerät — und zwar mit allem, was
+der Agent darf.
+
+Das ist bewusst strenger als Regel 10k, wo Unkenntnis nur warnt: Dort
+trägt der Nutzer das Risiko für sein eigenes Gerät, hier öffnet er es
+Dritten. Wo eine Fehlkonfiguration Fremden Zugang gibt, wird nicht
+gefragt, sondern verweigert.
+
+Die Liste steht in der Umgebung, nicht im Repo (§13).
 
 ## 5. Renderer
 
@@ -742,6 +831,46 @@ dokumentierten `resource_tracker`-Workarounds: Python 3.13+ `track=False`,
 Display-Anbindung: ein Adapter nimmt ein fertiges `PIL.Image`, wandelt
 nach RGB565 und ruft `board.draw_image()`.
 
+#### Architekturregel 7a — Die Bildrate gehört zum Panel, nicht zum Renderer
+
+Beide Vorlagen haben ein Prozessmodell, und es sind **verschiedene** —
+nicht weil eine falsch liegt, sondern weil die Anzeige verschieden ist:
+
+| | openclawgotchi (E-Ink) | Noisy (LCD) |
+|---|---|---|
+| Ausgabe | `sudo`-Subprozess je Bild, Lock, 45 s Timeout | Dauer-Thread |
+| Bildrate | ~2 s je Bild, statisch | 15 Bilder/s, animiert |
+| Übergabe | Textbefehle (`FACE:`, `DISPLAY:`) | geteiltes Gedächtnis |
+
+Gotchis Modell ist für E-Ink **richtig**: Ein Bild alle paar Sekunden,
+jedes einzeln teuer, Vollbildauffrischung gegen Geisterbilder. Ein
+Dauerprozess wäre dort Verschwendung. Bei 15 Bildern je Sekunde wäre es
+grotesk — 15 Prozessstarts je Sekunde.
+
+Chimera braucht beides, weil das Panel eine Eigenschaft ist und keine
+Annahme (Regel 6c). Deshalb gilt:
+
+**Das Panel sagt, wie oft es gezeichnet werden will.** Es trägt eine
+Bildrate; der Renderer liest sie und richtet seine Schleife danach. Bei
+0 zeichnet er nur auf Anstoß — das ist der E-Ink-Fall, ohne Sonderweg
+im Renderer. Wer ein neues Panel einbaut, setzt eine Zahl und ändert
+keinen Ablauf.
+
+**Der Renderer läuft als Faden, nicht als Prozess.** Gegen Regel 5g für
+Audio: Dort geht es um Rechenlast (Spracherkennung hält die globale
+Sperre) und um instabile Fremdbibliotheken. Der Renderer hat beides
+nicht — er zeichnet mit Pillow, rechnet die Umwandlung in numpy (das die
+Sperre freigibt) und wartet den Rest der Zeit. Gemessen: 2,5 ms
+Umwandlung bei 66,7 ms Budget. Ein eigener Prozess würde den
+Bildspeicher über eine Prozessgrenze schieben und auf 512 MB einen
+zweiten Python-Heap kosten, ohne etwas zu gewinnen.
+
+**Das Panel gehört genau einem Faden.** SPI verträgt keine zwei Schreiber
+— wer den Bus aus zwei Fäden bedient, bekommt zerrissene Bilder. Wer
+zeichnen will, setzt den Zustand; ausgegeben wird nur an einer Stelle.
+Das ist die Fassung von Regel 7 für den Fall, dass sie einmal jemand
+umgehen will.
+
 ---
 
 ## 6. Was von openclawgotchi bleibt
@@ -782,6 +911,30 @@ generierten Moods entgegen.
 
 Der reale Verlust ist die Lesbarkeit ohne Strom. Dafür: Farbe, Animation,
 Mikrofon, Lautsprecher, Button und LED auf einer Platine.
+
+### Architekturregel 7b — Wer etwas anzeigt, bekommt die Anzeige übergeben
+
+Ein Baustein, der eine Anzeige bedient, **bekommt sie**. Er sucht sie
+sich nicht selbst, und er nimmt nicht an, dass eine da ist.
+
+Drei Fehler, die diese Regel verhindert — alle drei sind in H4 wirklich
+passiert:
+
+- Ein Panel wird geöffnet, ausgewertet und **weggeworfen**: Auf dem Gerät
+  ist der SPI-Bus dann belegt und wird nicht benutzt. Was man öffnet,
+  reicht man weiter oder schließt man.
+- Der Empfänger baut sich **selbst einen Platzhalter**, weil ihm keiner
+  übergeben wurde. Damit gibt es zwei Anzeigen, von denen die falsche die
+  Bilder bekommt.
+- Eine Methode wird **vermutet** (`face.show_state(...)`), der
+  `AttributeError` landet in einem weiten `except` und wird zur
+  Debug-Zeile. Das ist Regel 8a: Der Fehler ist da, aber niemand erfährt
+  es.
+
+Wo nichts angeschlossen ist, steht ausdrücklich ein Platzhalter
+(`NullPanel`) — kein `None`, das später jemand prüfen muss. Der
+Unterschied zwischen *läuft blind* und *ist kaputt* muss ablesbar
+bleiben, und zwar an der Sache selbst, nicht an einem Protokolleintrag.
 
 ### Architekturregel 8 — Die Mood-Steuerung ist ein Skill, kein Sonderweg
 
@@ -941,11 +1094,38 @@ Chimera prüft die konkrete Kennung aus `/proc/device-tree/compatible`
 (`radxa,zero3w`, `raspberrypi,model-zero-2-w`) und benennt Verwandtes
 ehrlich als `unsupported_radxa` bzw. `unsupported_rpi`.
 
-**Unbekanntes Board bricht ab, ohne zu raten** — mit Auskunft darüber, was
-erwartet und was gefunden wurde. Begründung: Ein falsches Overlay in der
-Bootkonfiguration kostet bei einem Gerät ohne Bildschirm den Ausbau der
-SD-Karte. Ein `--force-board` existiert für Entwicklung, wird aber nie im
-Fehlertext vorgeschlagen.
+Was mit einem unbekannten Board geschieht, steht in Regel 10k.
+
+### Architekturregel 10k — Unbekanntes Board warnt, es verbietet nicht
+
+Unbekannt heißt ungetestet, nicht unvereinbar. Wer Chimera auf einem
+Pi 4 installieren will, den niemand geprüft hat, soll das dürfen — ein
+Abbruch nimmt ihm die Möglichkeit, ohne selbst etwas zu wissen. Das Repo
+soll Hürden senken (Regel 6c, gleicher Gedanke).
+
+Stattdessen eine **ehrliche Warnung**: Board nicht erkannt, es gibt kein
+Profil dafür, was daraus folgt (Anzeige, Audio und Overlays sind
+ungeprüft), und die Bestätigung ist eine bewusste Eingabe — kein
+weggeklicktes „ja". Nicht-interaktive Läufe brauchen dafür einen
+ausdrücklichen Schalter, damit ein Skript nicht versehentlich durchläuft.
+Was erkannt und was erwartet wurde, steht im Protokoll (Regel 10e), damit
+ein Fehlschlag später auswertbar ist — und ein geglückter Lauf zu einem
+neuen Profileintrag führen kann.
+
+**Die Grenze verläuft nicht beim Board, sondern beim Eingriff.** Gefährlich
+ist nicht, ein unbekanntes Gerät zu erkennen, sondern ein **geratenes
+Overlay in die Bootkonfiguration zu schreiben**: Das kostet bei einem
+Gerät ohne Bildschirm den Ausbau der SD-Karte. Deshalb wird nie ein
+Profil geraten. Ohne Profil laufen die Module, die ohne Boardwissen
+auskommen; die bootnahen Schritte werden übersprungen und benannt,
+statt mit einer Vermutung ausgeführt. `--force-board <name>` wählt ein
+bekanntes Profil bewusst aus — für Entwicklung und für neue Boards. Es
+wird nie in einer Warnung vorgeschlagen, weil der Vorschlag die Wahl
+schon getroffen hätte.
+
+Das ist die Anwendung von Regel 10g auf diesen Fall: nicht raten, aber
+auch nicht verweigern — den Zustand benennen und den Menschen
+entscheiden lassen.
 
 ### Architekturregel 10c — Alles Boardabhängige steht in einer Profiltabelle
 
@@ -1134,19 +1314,26 @@ scannen.
 - **5h** — Kein Anbieter wird vorausgesetzt
 - **5c** — Ollama ist ein erstklassiger Anbieter
 - **5d** — Ein Gespräch, zwei Türen
+- **5i** — Ein Kanal hat keinen eigenen Zustand
+- **5j** — Eine Tür von außen ohne Positivliste startet nicht
 - **5e** — zram und Auslagerungsdatei gehören zum Aufbau
+- **5f** — Fremde Werkzeuge sind nicht vertrauenswürdig
+- **5g** — Audio läuft getrennt, aber schlank
 - **6** — Keine absoluten Pixelwerte
 - **6b** — Weich ist der Normalfall, hart muss möglich bleiben
 - **6c** — Das Panel ist eine Eigenschaft, keine Annahme
 - **6d** — Dieselben Moods, verschiedene Darstellungen
 - **6e** — Anzeige bei jedem Start prüfen
 - **7** — Ein Prozess, ein Framebuffer
+- **7a** — Die Bildrate gehört zum Panel, nicht zum Renderer
+- **7b** — Wer etwas anzeigt, bekommt die Anzeige übergeben
 - **8** — Die Mood-Steuerung ist ein Skill, kein Sonderweg
 - **8a** — Stiller Erfolg ist die gefährlichste Fehlerart
 - **9** — Kein Test, der eine Formel nachrechnet
 - **10** — Ein Versionssprung bricht keine Installation
 - **10a** — Board, Betriebssystem und Bootmethode sind drei Achsen
 - **10b** — Erkennung stützt sich auf `compatible`, nicht auf den Klartextnamen
+- **10k** — Unbekanntes Board warnt, es verbietet nicht
 - **10c** — Alles Boardabhängige steht in einer Profiltabelle
 - **10d** — Alles Lesende geht über ein Wurzelverzeichnis
 - **10i** — Selbstaktualisierung nur mit Rückweg

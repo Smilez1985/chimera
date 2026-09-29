@@ -7,11 +7,15 @@
 #
 # Exitcode:
 #   0  Board und Betriebssystem erkannt, unterstuetzt, es kann weitergehen
-#   1  erkannt, aber noch nicht unterstuetzt (z. B. Radxa vor der Portierung)
-#   2  nicht erkannt — Abbruch mit Auskunft, kein Rateversuch
+#   1  kein passendes Profil — es geht weiter, aber ohne Boardwissen:
+#      erkannt-aber-noch-nicht-unterstuetzt (Radxa vor der Portierung)
+#      oder gar nicht erkannt und vom Nutzer bestaetigt (Regel 10k)
+#   2  der Nutzer hat abgelehnt, oder es war niemand da, der zustimmen
+#      konnte (nicht-interaktiv ohne CHIMERA_ASSUME_YES)
 #
-# Der Unterschied zwischen 1 und 2 ist wichtig: 1 heisst "wir wissen, was du
-# hast, aber noch nicht wie", 2 heisst "wir wissen nicht, was du hast".
+# Es wird nicht abgebrochen, weil ein Board unbekannt ist — unbekannt
+# heisst ungetestet, nicht unvereinbar (Regel 10k). Abgebrochen wird nur,
+# wenn die Entscheidung darueber niemand getroffen hat.
 
 set -eu
 
@@ -122,31 +126,41 @@ log ""
 
 SUPPORTED="$(profile_get "$BOARD" supported)"
 
+# Regel 10k: Unbekannt heisst ungetestet, nicht unvereinbar. Es wird
+# gewarnt und gefragt, nicht verboten. Was NICHT passiert: ein geratenes
+# Profil. Ohne Profil bleiben die bootnahen Schritte aus -- die Gefahr
+# liegt im Eingriff, nicht in der Erkennung.
+NO_PROFILE=0
+
 case "$BOARD" in
-unknown)
-	err "Board nicht erkannt."
-	err ""
-	err "Erwartet wird eine dieser Kennungen in /proc/device-tree/compatible:"
-	err "  raspberrypi,model-zero-2-w   (Raspberry Pi Zero 2 W)"
-	err "  radxa,zero3w                 (Radxa ZERO 3W)"
-	err ""
-	err "Gefunden wurde:"
-	err "  model:      $(read_dt /proc/device-tree/model 2>/dev/null || echo '(nichts)')"
-	err "  compatible: $(read_dt_list /proc/device-tree/compatible 2>/dev/null | tr '\n' ' ' || echo '(nichts)')"
-	err ""
-	err "Es wird nicht geraten: ein falsches Overlay in der Bootkonfiguration"
-	err "kostet im schlimmsten Fall den Ausbau der SD-Karte."
-	log_close 2; exit 2
-	;;
-unsupported_rpi)
-	err "Raspberry Pi erkannt, aber nicht das Zero 2 W."
-	err "Unterstuetzt wird derzeit nur der Pi Zero 2 W."
-	log_close 2; exit 2
-	;;
-unsupported_radxa)
-	err "Radxa-Board erkannt, aber nicht das ZERO 3W."
-	err "Das Profil des ZERO 3W passt nicht auf andere Radxa-Boards."
-	log_close 2; exit 2
+unknown|unsupported_rpi|unsupported_radxa)
+	NO_PROFILE=1
+	warn "Board nicht erkannt oder ohne Profil: $BOARD"
+	log ""
+	log "Gefunden wurde:"
+	info "model:      $(read_dt /proc/device-tree/model 2>/dev/null || echo '(nichts)')"
+	info "compatible: $(read_dt_list /proc/device-tree/compatible 2>/dev/null | tr '\n' ' ' || echo '(nichts)')"
+	log ""
+	log "Profile gibt es fuer:"
+	info "raspberrypi,model-zero-2-w   (Raspberry Pi Zero 2 W)"
+	info "radxa,zero3w                 (Radxa ZERO 3W)"
+	log ""
+	warn "Das heisst nicht, dass es nicht laeuft — es heisst, dass es"
+	warn "niemand geprueft hat. Ungeprueft bleiben: Anzeige (SPI-Bus und"
+	warn "-Takt), Audio (Codec, ALSA-Vorlage) und die Overlays."
+	warn ""
+	warn "Ohne Profil wird KEIN Overlay in die Bootkonfiguration"
+	warn "geschrieben — dieser eine Schritt kostet bei einem Geraet ohne"
+	warn "Bildschirm sonst den Ausbau der SD-Karte. Die betroffenen Module"
+	warn "melden sich ab, statt zu raten."
+	warn ""
+	warn "Laeuft es bei dir: bitte melden, dann wird daraus ein Profil."
+	log ""
+	if ! confirm_risk "Ungetestetes Board — auf eigene Gefahr fortfahren?"; then
+		err "Abgebrochen. Ein bekanntes Profil waehlt --force-board."
+		log_close 2; exit 2
+	fi
+	warn "Fortgesetzt auf eigene Gefahr (Board ohne Profil)."
 	;;
 esac
 
@@ -197,6 +211,12 @@ if [ -n "$MEM_MB" ] && [ "$MEM_MB" -lt 1024 ]; then
 fi
 
 log ""
+if [ "$NO_PROFILE" = 1 ]; then
+	log "Ergebnis: kein Profil fuer dieses Board — Lauf auf eigene Gefahr."
+	log "  Boardabhaengige Module melden sich ab, statt zu raten (Regel 10k)."
+	log_close 1; exit 1
+fi
+
 if [ "$SUPPORTED" = yes ]; then
 	log "Ergebnis: $BOARD wird unterstuetzt."
 	log_close 0; exit 0

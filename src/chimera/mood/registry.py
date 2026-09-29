@@ -191,10 +191,21 @@ class Registry:
         data = json.loads(p.read_text(encoding="utf-8"))
         # JSON kennt keine Tupel -- der Validator wandelt beim Aufnehmen
         # zurueck, deshalb laeuft jeder geladene Mood durch add().
+        #
+        # Zwei Formate, beide gueltig:
+        #   verpackt  {"mood": {...}, "uses": 3, ...}  <- save()
+        #   flach     {"name": "CHILL", "body": {...}} <- tools/import-*
+        # Die mitgelieferte Bibliothek ist flach. Frueher las load() nur
+        # das verpackte Format und warf bei der flachen Datei KeyError --
+        # die 41 mitgelieferten Moods waren damit nie ladbar.
         for item in data.get("moods", []):
-            entry, _ = reg.add(item["mood"], origin=item.get("origin", "generated"))
-            entry.created_at = item.get("created_at", entry.created_at)
-            entry.last_used = item.get("last_used", entry.last_used)
-            entry.uses = item.get("uses", 0)
+            if isinstance(item, dict) and isinstance(item.get("mood"), dict):
+                raw, meta = item["mood"], item
+            else:
+                raw, meta = item, {}
+            entry, _ = reg.add(raw, origin=meta.get("origin", "builtin"))
+            entry.created_at = meta.get("created_at", entry.created_at)
+            entry.last_used = meta.get("last_used", entry.last_used)
+            entry.uses = meta.get("uses", 0)
         reg._next_id = max(data.get("next_id", reg._next_id), reg._next_id)
         return reg

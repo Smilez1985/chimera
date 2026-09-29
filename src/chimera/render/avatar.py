@@ -25,11 +25,14 @@ Augen, Mund, Partikel — in dieser Reihenfolge, weil eine Sonnenbrille
 hinter den Augen keine wäre.
 """
 
+import logging
 import time
 import math
 import random
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageEnhance
+
+log = logging.getLogger(__name__)
 
 try:
     import numpy as np
@@ -45,6 +48,12 @@ GOLD = (255, 215, 0)
 EYE_COLOR = (20, 20, 35)
 
 DEFAULT_BODY = {"color": (30, 180, 220), "glow": (15, 90, 110)}
+
+#: Wo die CPU-Temperatur steht, wenn nichts anderes gesagt wird. Auf dem Pi
+#: und dem Radxa ist es dieser Pfad; ein Board mit anderer Zone bekommt ihn
+#: beim Aufsetzen mitgeteilt (Regel 10c). Auf einem Rechner ohne die Datei
+#: bleibt die Temperaturkopplung einfach aus.
+THERMAL_PATH_DEFAULT = "/sys/class/thermal/thermal_zone0/temp"
 
 # Noisy kennt Moods ueber Nummern und vergleicht damit (mood_id == ROCK).
 # Chimera vergibt Nummern zur Laufzeit, also wird ueber den NAMEN
@@ -345,12 +354,20 @@ class ParticleSystem:
 # ============================================================
 class NoisyRenderer:
     def __init__(self, state=None, panel=None, *, width=None, height=None,
-                 target_fps=15):
+                 target_fps=None, thermal_path=None):
         """Renderer aufsetzen.
 
         ``panel`` ist ein beliebiges Panel aus :mod:`chimera.display.panel`;
-        fehlt es, wird eines ohne Anzeige benutzt. Die Bildgroesse kommt vom
-        Panel, nicht aus einer Konstanten.
+        fehlt es, wird eines ohne Anzeige benutzt. Bildgroesse **und
+        Bildrate** kommen vom Panel, nicht aus einer Konstanten
+        (Regel 6, Regel 7a).
+
+        ``target_fps`` uebersteuert die Bildrate des Panels -- fuer
+        Messungen und Sonderfaelle. ``0`` heisst: nicht von selbst
+        zeichnen, nur auf Anstoss.
+
+        ``thermal_path`` sagt, wo die CPU-Temperatur steht; ``""`` schaltet
+        die Temperaturkopplung ab, ``None`` nimmt den Vorgabewert.
         """
         from ..display.panel import NullPanel
 
@@ -359,8 +376,14 @@ class NoisyRenderer:
 
         self.WIDTH = int(width or getattr(self.panel, "width", 240))
         self.HEIGHT = int(height or getattr(self.panel, "height", 280))
-        self.TARGET_FPS = target_fps
-        self.FRAME_TIME = 1.0 / target_fps if target_fps else 0.0
+
+        # Die Bildrate gehoert zum Panel (Regel 7a): ein LCD will 15 Bilder
+        # je Sekunde, E-Ink eines alle paar Sekunden. Der Renderer bleibt
+        # derselbe, nur die Zahl wechselt.
+        fps = getattr(self.panel, "fps", 15) if target_fps is None \
+            else target_fps
+        self.TARGET_FPS = int(fps)
+        self.FRAME_TIME = 1.0 / self.TARGET_FPS if self.TARGET_FPS else 0.0
 
         # Bezugsgroesse fuer alles Geometrische. Noisy rechnete gegen eine
         # quadratische Flaeche; auf 240x280 ist die kurze Seite der
@@ -377,6 +400,14 @@ class NoisyRenderer:
         # ersetzt hat -- sie gehoeren zum Zustand und werden hier gesetzt.
         self.frame = 0.0
         self.particles = ParticleSystem(max_particles=30)
+
+        # Wo die Temperatur steht. Eine Eigenschaft, keine Konstante: Auf
+        # dem Radxa heisst die Zone anders als auf dem Pi (Regel 10c), und
+        # auf einem Entwicklungsrechner gibt es sie gar nicht.
+        self.thermal_path = (
+            THERMAL_PATH_DEFAULT if thermal_path is None else thermal_path
+        )
+        self._thermal_warned = False
 
         self._init_zustand()
 
@@ -408,7 +439,9 @@ class NoisyRenderer:
         self.current_glow_color = DEFAULT_BODY["glow"]
         self.morph_speed = 0.08
 
-        # Thermal
+        # Thermal. Der Pfad selbst wird in __init__ gesetzt, weil er von
+        # aussen kommt; hier stehen nur die Zaehler, die beim Neuaufsetzen
+        # des Zustands zurueckfallen sollen.
         self.cpu_temp = 45.0
         self.temp_read_counter = 0
 
@@ -540,13 +573,35 @@ class NoisyRenderer:
         return weg * 20, weg * 22
 
     def read_temperature(self):
+        """Die CPU-Temperatur nachlesen, alle 30 Bilder.
+
+        Noisy koppelt Muedigkeit an die Temperatur: Wird der Pi heiss,
+        sinken die Augenlider (siehe ``render()``). Der Pfad ist eine
+        **Eigenschaft der Instanz**, nicht eine Modulkonstante -- auf dem
+        Radxa heisst die Zone anders als auf dem Pi (Regel 10c).
+
+        Hier stand vorher ``open(THERMAL_PATH)`` mit einem Namen, den es
+        nie gab. Der ``NameError`` fiel in das ``except`` darunter und
+        wurde zu ``45.0`` -- die Kopplung war dauerhaft wirkungslos, und
+        zwar lautlos (Regel 8a). Deshalb wird jetzt nur noch der
+        Lesefehler gefangen, nicht jeder Fehler.
+        """
         self.temp_read_counter += 1
-        if self.temp_read_counter % 30 == 0:
-            try:
-                with open(THERMAL_PATH, "r") as f:
-                    self.cpu_temp = int(f.read()) / 1000.0
-            except Exception:
-                self.cpu_temp = 45.0
+        if self.temp_read_counter % 30 != 0:
+            return
+        if not self.thermal_path:
+            return
+        try:
+            with open(self.thermal_path, "r") as f:
+                self.cpu_temp = int(f.read().strip()) / 1000.0
+        except (OSError, ValueError) as exc:
+            # Einmal melden, dann Ruhe: bei 15 Bildern je Sekunde waere
+            # eine Meldung je Versuch eine Protokollflut.
+            if not self._thermal_warned:
+                self._thermal_warned = True
+                log.info("Temperatur nicht lesbar (%s) — Kopplung aus: %s",
+                         self.thermal_path, exc)
+            self.thermal_path = ""
 
     # ----------------------------------------------------------
     # Brightness / Night-Window (Web-UI Live-Parameter)
@@ -2255,36 +2310,71 @@ class NoisyRenderer:
             self.panel.show(img)
         return img
 
-    def run(self):
-        print("Noisy Renderer gestartet (Komponentenbasiert)")
-        print(f"Target FPS: {TARGET_FPS}")
+    def run(self, stop=None):
+        """Zeichnen, bis ``stop`` gesetzt wird.
+
+        ``stop`` ist ein ``threading.Event`` (oder etwas mit ``is_set()``).
+        Ohne Argument laeuft die Schleife, bis sie unterbrochen wird --
+        dann ist dieser Aufruf der Hauptzweck des Prozesses.
+
+        Gezeichnet wird mit ``self.TARGET_FPS`` und ``self.FRAME_TIME``.
+        Hier standen vorher die blanken Namen ``TARGET_FPS`` und
+        ``FRAME_TIME`` als Modulglobale -- die gab es nie, der Aufruf
+        endete in Zeile zwei mit einem ``NameError``. Unentdeckt, weil die
+        Tests ``render()`` und ``show()`` aufrufen, aber nie ``run()``.
+        """
+        if not self.TARGET_FPS:
+            # Ein Panel ohne Bildrate (E-Ink) will nicht im Kreis
+            # gezeichnet werden -- dort loest der Zustandswechsel das Bild
+            # aus, nicht die Uhr (Regel 7a). Ohne diesen Ausstieg wuerde
+            # die Schleife mit voller Last leerlaufen.
+            log.info("Panel ohne Bildrate — es wird nur auf Anstoss "
+                     "gezeichnet. run() ist hier nichts zu tun.")
+            return
+
+        log.info("Renderer laeuft: %dx%d, %d Bilder/s",
+                 self.WIDTH, self.HEIGHT, self.TARGET_FPS)
 
         fps_counter = 0
         fps_timer = time.time()
 
         try:
-            while True:
+            while stop is None or not stop.is_set():
                 t_start = time.time()
-                self.render()
+                self.show()
 
                 fps_counter += 1
                 if time.time() - fps_timer >= 10.0:
                     actual_fps = fps_counter / (time.time() - fps_timer)
                     mood_name = self._mood().get('name', 'IDLE')
-                    print(f"FPS: {actual_fps:.1f} | Frame: {int(self.frame)} | "
-                          f"Temp: {self.cpu_temp:.0f}C | Mood: {mood_name}")
+                    log.debug("%.1f Bilder/s | Bild %d | %.0f C | Mood %s",
+                              actual_fps, int(self.frame), self.cpu_temp,
+                              mood_name)
                     fps_counter = 0
                     fps_timer = time.time()
 
                 elapsed = time.time() - t_start
-                sleep_time = FRAME_TIME - elapsed
+                sleep_time = self.FRAME_TIME - elapsed
                 if sleep_time > 0:
-                    time.sleep(sleep_time)
+                    if stop is not None:
+                        # Wartet, laesst sich aber sofort wecken -- sonst
+                        # haengt das Beenden bis zum naechsten Bild.
+                        stop.wait(sleep_time)
+                    else:
+                        time.sleep(sleep_time)
 
-        except Exception as e:
-            print(f"Renderer Fehler: {e}")
-            import traceback
-            traceback.print_exc()
+        except KeyboardInterrupt:
+            log.info("Renderer von Hand beendet.")
+        except Exception:
+            # Der Renderer darf sterben, aber nicht schweigend: ein
+            # stehengebliebenes Bild ohne Spur im Protokoll ist der
+            # schlechteste Zustand (Regel 8a, Regel 10e).
+            log.exception("Renderer abgebrochen")
+            raise
         finally:
-            self.panel.show(Image.new('RGB', (self.WIDTH, self.HEIGHT), BLACK))
-            print("Renderer beendet.")
+            try:
+                self.panel.show(
+                    Image.new('RGB', (self.WIDTH, self.HEIGHT), BLACK))
+            except Exception as exc:                  # noqa: BLE001
+                log.debug("Abschaltbild ging nicht mehr: %s", exc)
+            log.info("Renderer beendet.")

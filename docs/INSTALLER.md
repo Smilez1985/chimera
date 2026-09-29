@@ -123,15 +123,25 @@ konkrete Kennung (`radxa,zero3w` bzw. das entsprechende
 Ebenso beim Pi: nicht nur `model`, sondern auch `compatible` und das
 Vorhandensein von `/boot/firmware/overlays` bzw. `/boot/overlays`.
 
-### Architekturregel — Unbekanntes Board bricht ab, ohne zu raten
+### Unbekanntes Board (Regel 10k)
 
-`unknown` ⇒ Abbruch mit Auskunft: was erkannt wurde, was erwartet wird,
-welche Kombinationen bekannt sind. Ein Erratungsversuch, der das falsche
-Overlay in die Bootkonfiguration schreibt, kostet im schlimmsten Fall den
-Ausbau der SD-Karte.
+`unknown` ⇒ **Warnung, kein Abbruch.** Unbekannt heißt ungetestet, nicht
+unvereinbar; wer es auf einem Pi 4 versuchen will, soll das dürfen. Die
+Warnung nennt, was erkannt wurde, was erwartet wird, welche Profile es
+gibt und was ohne Profil ungeprüft bleibt. Fortsetzen ist eine bewusste
+Eingabe; nicht-interaktiv braucht es einen ausdrücklichen Schalter.
 
-`--force-board <name>` existiert für Entwicklung und für neue Boards, ist
-aber nie der Vorschlag im Fehlertext.
+**Ohne Profil wird kein Profil geraten.** Module, die ohne Boardwissen
+auskommen, laufen; die bootnahen Schritte (Overlay in die
+Bootkonfiguration) werden übersprungen und benannt. Genau dieser eine
+Schritt kostet bei einem Gerät ohne Bildschirm sonst den Ausbau der
+SD-Karte — die Gefahr liegt im Eingriff, nicht in der Erkennung.
+
+`--force-board <name>` wählt bewusst ein bekanntes Profil — für
+Entwicklung und für neue Boards. Es wird nie in einer Warnung
+vorgeschlagen, weil der Vorschlag die Wahl schon getroffen hätte.
+
+Begründung und Wortlaut: `docs/DESIGN.md` Regel 10k.
 
 ### Whisplay-Revision
 

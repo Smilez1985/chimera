@@ -78,6 +78,13 @@ class Panel:
     width: int = 240
     height: int = 280
 
+    #: Wie oft dieses Panel gezeichnet werden will (Regel 7a). Die Bildrate
+    #: ist eine Eigenschaft der Anzeige, nicht des Renderers: Ein LCD will
+    #: 15 Bilder je Sekunde, E-Ink eines alle paar Sekunden. ``0`` heißt
+    #: „nur auf Anstoß" — dann zeichnet der Renderer nicht von selbst.
+    #: Damit bleibt der Renderer für beide Fälle derselbe Code.
+    fps: int = 15
+
     def show(self, image) -> None:
         raise NotImplementedError
 
@@ -99,7 +106,12 @@ class WhisplayPanel(Panel):
     Umrechnung und die Prüfung der Bildgröße.
     """
 
-    def __init__(self, board=None) -> None:
+    #: Ein LCD hat kein Ghosting und keine Wartezeit zwischen Bildern —
+    #: hier ist Animation der Normalfall (Regel 7a). 15 ist Noisys
+    #: erprobter Wert auf einem Zero 2 W.
+    fps = 15
+
+    def __init__(self, board=None, *, fps: int | None = None) -> None:
         if board is None:
             from whisplay import WhisplayBoard  # type: ignore
 
@@ -107,6 +119,8 @@ class WhisplayPanel(Panel):
         self._board = board
         self.width = getattr(board, "LCD_WIDTH", 240)
         self.height = getattr(board, "LCD_HEIGHT", 280)
+        if fps is not None:
+            self.fps = int(fps)
 
     def show(self, image) -> None:
         if image.size != (self.width, self.height):
@@ -140,9 +154,10 @@ class NullPanel(Panel):
     """
 
     def __init__(self, width: int = 240, height: int = 280,
-                 *, convert: bool = True) -> None:
+                 *, convert: bool = True, fps: int = 15) -> None:
         self.width, self.height = width, height
         self.convert = convert
+        self.fps = fps
         self.frames = 0
         self.last: bytes | None = None
 
