@@ -11,3 +11,4 @@ models/
 *.log
 data/*.db
 .pytest_cache/
+installer/.testtmp/

@@ -153,36 +153,41 @@ Entwurf steht in `docs/INSTALLER.md`. Der Installer traegt die
 Plattformfrage, deshalb eigene Phase und nicht am Ende angehaengt.
 
 ### 8a — Geruest
+- [x] `installer/lib/common.sh` — Ausgabe, Systemabfragen über `CHIMERA_ROOT`
+- [x] Atomares Schreiben: Sidecar neben dem Ziel, dann `mv`
+- [x] **`mktemp` geprueft** — ungeprueft leert es Zieldateien (I3)
+- [x] **Leere Eingabe wird abgelehnt** (Regel 8a: stiller Erfolg). Gefunden
+      durch den eigenen Test, nicht durch Nachdenken
 - [ ] Modulaufbau mit Nummern und Luecken, einzeln aufrufbar (`--only`)
 - [ ] `--dry-run` und `--check` mit sprechendem Exitcode
-- [ ] Atomares Schreiben: Sidecar neben dem Ziel, dann `mv`
-- [ ] **`mktemp` geprueft** — ungeprueft leert es Zieldateien (I3)
 - [ ] Protokolldatei
 - [ ] `VERSION` ins System stempeln, `chimera --version`
 
-### 8b — Modul 10 `preflight` + Boardprofile
+### 8b — Modul 10 `preflight` + Boardprofile  ✅ erster Wurf steht
 Liefert sofort Nutzen: klaert die offenen Fragen zum Zielgeraet.
 **Von Anfang an mit beiden Boards im Blick** (`docs/INSTALLER.md` §2a) —
 sonst bedeutet Portieren spaeter ein Durchsuchen aller Module.
-- [ ] Board und Betriebssystem **getrennt** erkennen (zwei Achsen: derselbe
+- [x] Board und Betriebssystem **getrennt** erkennen (zwei Achsen: derselbe
       Chip unter DietPi und unter Radxa-Debian sind zwei Faelle)
-- [ ] Bootmethode erkennen: `config.txt` / extlinux / u-boot-Skript
-- [ ] Erkennung auf **konkrete `compatible`-Kennung** stuetzen, nicht auf
+- [x] Bootmethode erkennen: `config.txt` / extlinux / u-boot-Skript
+- [x] Erkennung auf **konkrete `compatible`-Kennung** stuetzen, nicht auf
       `model == *"Radxa"*` — das trifft jedes Radxa-Board
-- [ ] **Profiltabelle** fuer alles Boardabhaengige (Header-Stufe, SPI-Bus
+- [x] **Profiltabelle** fuer alles Boardabhaengige (Header-Stufe, SPI-Bus
       und -Takt, Overlay-Quelle und -Ziel, kollidierende Overlays,
       Bootmethode, ALSA-Vorlage) — ein neues Board = ein Eintrag
-- [ ] Radxa-Eintrag von Anfang an vorhanden, meldet „noch nicht
+- [x] Radxa-Eintrag von Anfang an vorhanden, meldet „noch nicht
       unterstuetzt" als bewussten Zustand
-- [ ] Unbekanntes Board ⇒ **Abbruch mit Auskunft**, kein Rateversuch.
+- [x] Unbekanntes Board ⇒ **Abbruch mit Auskunft**, kein Rateversuch.
       `--force-board` nur fuer Entwicklung, nie im Fehlertext vorgeschlagen
-- [ ] Whisplay-EEPROM auslesen (`/proc/device-tree/hat/`); klaeren, ob sich
-      daraus **V1 gegen V2** unterscheiden laesst
-- [ ] `uname -r`, Header-Verzeichnis, `modinfo snd-soc-wm8960`,
-      `/boot/config-*`, Speicher und Platz erfassen und protokollieren
+- [x] Whisplay-EEPROM auslesen (`/proc/device-tree/hat/`)
+- [ ] **Offen, braucht Hardware:** laesst sich daraus V1 gegen V2
+      unterscheiden? Bis dahin bleibt die Warnung stehen
+- [x] `uname -r`, Header-Verzeichnis, `snd-soc-wm8960`, `/boot/config-*`,
+      Speicher erfassen und berichten
 - [ ] Warnen, wenn ungeteilte Kernelupdates aktiv sind
-- [ ] Test ohne Hardware: erfundene `model`- und `os-release`-Inhalte in
-      einem temporaeren Wurzelverzeichnis, richtiges Profil? (mit Gegenprobe)
+- [ ] Protokolldatei statt nur Ausgabe auf dem Schirm
+- [x] Test ohne Hardware: erfundene `model`- und `os-release`-Inhalte in
+      einem temporaeren Wurzelverzeichnis (31 Tests, mit Gegenproben)
 
 ### 8c — Module 20–70 fuer Pi Zero 2 W
 Der einfache Fall: Header kommen aus dem Distributionspaket.

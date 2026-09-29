@@ -467,6 +467,21 @@ Alle vier sind unabhängig voneinander und einzeln testbar.
 
 ## 9. Tests
 
+### Architekturregel 8a — Stiller Erfolg ist die gefährlichste Fehlerart
+
+Beim Bau von Modul 10 gefunden, durch den eigenen Test: Schreibt man eine
+Datei über eine Pipe und der Erzeuger liefert **nichts**, dann schreibt
+`cat` nichts, das Umbenennen gelingt, der Exitcode ist 0 — und die
+Zieldatei ist **geleert**. Kein Fehler, keine Meldung, Datenverlust.
+
+Deshalb lehnt `write_atomic` leere Eingaben ab, sofern sie nicht
+ausdrücklich erlaubt werden (`CHIMERA_ALLOW_EMPTY=1`). Dieselbe
+Fehlerklasse wie beim ungeprüften `mktemp`, nur mit anderem Auslöser:
+**etwas scheitert weiter oben, und die Kette meldet Erfolg.**
+
+Verallgemeinert: Wo ein Schritt ein Ergebnis liefern *soll*, wird das
+Ergebnis geprüft — nicht nur der Exitcode des letzten Befehls.
+
 ### Architekturregel 9 — Kein Test, der eine Formel nachrechnet
 
 Ein Test, der eine Berechnung im Testcode nachbildet statt sie
@@ -476,6 +491,15 @@ wird. Ist er das nicht, misst er nichts.
 
 Konkret für die Schleifen-Erkennung: eine echte Schleife simulieren und
 nachweisen, dass sie ohne Detektor durchläuft.
+
+Dass die Regel trägt, hat sich beim ersten Modul sofort gezeigt: Der Test
+zum atomaren Schreiben war zunächst **falsch gebaut** — er setzte ein
+kaputtes `TMPDIR`, aber `mktemp` mit explizitem Template ignoriert
+`TMPDIR`. Die Gegenprobe (denselben Vorgang ohne Schutz ausführen und
+nachweisen, dass die Datei *tatsächlich* geleert wird) hat den
+Denkfehler aufgedeckt — und dabei einen echten Fehler im Code gefunden
+(Regel 8a). Ein Test ohne Gegenprobe wäre grün geblieben und hätte nichts
+gemessen.
 
 Phasen 1 und 2 (Schema, Validator, Mischen, Variieren) sind vollständig
 **ohne Hardware** testbar — Bilder in Dateien rendern und ansehen.
@@ -496,6 +520,78 @@ neu installieren". Ein `git pull` plus Installer-Lauf muss genügen.
 - Der Changelog-Abschnitt ist die Release Notes.
 - **Pre-Alpha bleibt ungetaggt.** Ein Release entsteht erst, wenn eine
   Version **auf echter Hardware getestet** ist.
+
+---
+
+## 10a. Installer
+
+Der Installer trägt die Plattformfrage: Er löst das Beschaffen der
+Kernel-Headers und das Einhängen des Overlays, nicht der Nutzer. Entwurf,
+Modulaufbau und die Fallstricke stehen in `docs/INSTALLER.md`.
+
+Sechs Grundregeln, drei davon aus bezahltem Lehrgeld: idempotent,
+Versionssprung bricht keine Installation, atomar schreiben mit geprüftem
+`mktemp`, nichts ungeprüft aufrufen, fremde Pakete nie über `/` entpacken,
+jeder Schritt einzeln aufrufbar.
+
+### Architekturregel 10a — Board, Betriebssystem und Bootmethode sind drei Achsen
+
+Nicht eine Variable, sondern drei unabhängige:
+
+    board = rpi_zero2w | radxa_zero3w | unsupported_* | unknown
+    os    = dietpi | raspios | radxa_debian | armbian | debian | unknown
+    boot  = config_txt | extlinux | uboot_script | unknown
+
+Derselbe Chip unter DietPi und unter Radxas Abbild sind **zwei
+Installationsfälle**, weil Overlay-Ablage und Bootkonfiguration sich
+unterscheiden. Wer das in einer Variablen zusammenfasst, baut sich die
+Fallunterscheidungen doppelt.
+
+Praktischer Befund aus der Umsetzung: DietPi setzt auf Debian auf und
+meldet sich in `/etc/os-release` als Debian. Die Erkennung muss daher auf
+DietPi-eigene Merkmale prüfen (`/boot/dietpi.txt`) und diese **vor**
+`os-release` auswerten.
+
+### Architekturregel 10b — Erkennung stützt sich auf `compatible`, nicht auf den Klartextnamen
+
+Der Whisplay-Installer des Herstellers erkennt den Radxa so:
+
+    [[ "$model" == *"Radxa"* ]] && echo radxa_zero3w
+
+Das legt **jedes** Radxa-Board auf ein Profil, das nur zum ZERO 3W passt.
+Chimera prüft die konkrete Kennung aus `/proc/device-tree/compatible`
+(`radxa,zero3w`, `raspberrypi,model-zero-2-w`) und benennt Verwandtes
+ehrlich als `unsupported_radxa` bzw. `unsupported_rpi`.
+
+**Unbekanntes Board bricht ab, ohne zu raten** — mit Auskunft darüber, was
+erwartet und was gefunden wurde. Begründung: Ein falsches Overlay in der
+Bootkonfiguration kostet bei einem Gerät ohne Bildschirm den Ausbau der
+SD-Karte. Ein `--force-board` existiert für Entwicklung, wird aber nie im
+Fehlertext vorgeschlagen.
+
+### Architekturregel 10c — Alles Boardabhängige steht in einer Profiltabelle
+
+Header-Stufe, Header-Paket, Paketquelle, SPI-Bus und -Takt,
+Overlay-Quelle, kollidierende Overlays, ob der Codec im Kernel liegt, ob
+ein lokales Sprachmodell realistisch ist. Ein neues Board ist ein Eintrag,
+kein Durchsuchen aller Module.
+
+Der Radxa-Eintrag existiert von Anfang an und meldet `supported=not_yet` —
+ein **Zustand**, kein Platzhalter im Code. Damit ist die Portierung im
+Wesentlichen ein ausgefüllter Eintrag.
+
+Gleiche Begründung wie bei der Anbieter-Registry (Regel 5a): verteilte
+Fallunterscheidungen driften auseinander.
+
+### Architekturregel 10d — Alles Lesende geht über ein Wurzelverzeichnis
+
+Jede Systemabfrage läuft über `CHIMERA_ROOT` (im Betrieb leer). Damit ist
+die vollständige Erkennung **ohne Zielhardware** prüfbar: erfundene
+`model`- und `compatible`-Dateien in einem temporären Verzeichnis, und der
+Installer urteilt darüber wie über ein echtes Gerät.
+
+Das ist kein Testkniff, sondern eine Entwurfsentscheidung. Ohne sie wäre
+die Boarderkennung nur auf dem Gerät prüfbar, das man gerade nicht hat.
 
 ---
 
