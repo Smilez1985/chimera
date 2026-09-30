@@ -831,6 +831,65 @@ dokumentierten `resource_tracker`-Workarounds: Python 3.13+ `track=False`,
 Display-Anbindung: ein Adapter nimmt ein fertiges `PIL.Image`, wandelt
 nach RGB565 und ruft `board.draw_image()`.
 
+### Architekturregel 7c — Konkurrierende Anzeigequellen werden zentral aufgelöst
+
+Mehrere Stellen wollen dasselbe Ausgabegerät bespielen: die Statuszeile
+zeigt Agentenzustand, Temperaturwarnung und Anbieterausfall; die LED zeigt
+Stimmung, Sprechen und Alarm. **Wer gewinnt, entscheidet ein Verwalter —
+und zwar derselbe für beide.**
+
+Das Modell, übernommen aus HATFaces (`06_LED_Manager.md`,
+`07_Text_Overlay.md`, Analyse in `../VERGLEICH-HATFACES.md`):
+
+- Jede Stelle, die anzeigen darf, ist eine **Quelle mit fester
+  Basis-Priorität**.
+- **Pro Quelle genau ein Platz.** Ein „Update" ist ein neuer Eintrag
+  derselben Quelle, der den alten verdrängt. Damit kann keine Quelle die
+  Warteschlange fluten.
+- Aufgelöst wird in **drei Stufen**: höchste Priorität → jüngster
+  Zeitstempel → feste Quellenreihenfolge. Die dritte Stufe ist nicht
+  Zierde: Ohne sie ist das Ergebnis bei gleichzeitigen Einträgen nicht
+  reproduzierbar, und ein nicht reproduzierbarer Fehler ist einer, den man
+  nicht nachstellen kann.
+- **Abstände von mindestens 10** zwischen den Prioritäten, damit neue
+  Quellen ohne Umnummerierung einsortiert werden können. (Das Gegenbeispiel
+  steht in diesem Dokument: Die Regelnummern sind in Einfügereihenfolge
+  gewachsen, `10k` steht zwischen `10b` und `10c`.)
+- **Kurze Laufzeit plus Erneuerungsbedingung** statt langer Laufzeit für
+  anhaltende Zustände. Ein Alarm mit 4 Sekunden und der Bedingung „solange
+  zu heiß" erlischt von selbst, wenn die Bedingung wegfällt — kein
+  explizites Löschen, kein Eintrag, den jemand zu entfernen vergisst.
+
+**Ein Verwalter, zwei Nutzer — nicht zwei Verwalter.** HATFaces nimmt an
+dieser Stelle bewusst eine Doppelung in Kauf und nennt sie „nur
+Stil-Analogie, keine Code-Kopplung". Das ist für Chimera die falsche Wahl:
+Zwei Stellen, die dieselbe Auflösungslogik unabhängig umsetzen, driften
+auseinander, sobald eine davon einen Sonderfall bekommt. Genau diese
+Fehlerklasse hat in einem Vorprojekt dreimal dieselbe Logik zweimal
+unterschiedlich entstehen lassen, über Monate unbemerkt.
+
+Die Unterschiede zwischen LED und Text liegen in der **Darstellung**
+(Farben mischen gegen Glyphen zeichnen), nicht in der Auflösung. Die
+Darstellung gehört in den jeweiligen Renderer, die Auflösung in den
+gemeinsamen Verwalter.
+
+### Architekturregel 7d — Wer anzeigt, besitzt die Zeit
+
+Muster sind **reine Funktionen** `f(t, wert) -> wert`: Pulsieren, Blinken,
+Laufschrift, Einblenden. Sie haben keine eigenen Zeitgeber, keine
+Zustandsvariablen und keine Nebenwirkungen. Die Zeit bekommen sie vom
+Verwalter übergeben.
+
+Das ergänzt Regel 7 („ein Prozess, ein Framebuffer") um die Zeitachse: Es
+genügt nicht, dass nur einer zeichnet — es darf auch nur einer die Uhr
+halten. Ein Muster mit eigenem Zeitgeber läuft sonst weiter, während es
+verdrängt ist, springt beim Zurückkehren an eine unerwartete Stelle, und
+zwei Muster mit eigenen Uhren geraten gegeneinander außer Tritt.
+
+Praktische Folge: Ein Muster ist prüfbar, ohne zu warten. Der Test setzt
+`t` und vergleicht das Ergebnis, statt eine Sekunde zu schlafen und zu
+hoffen.
+
 #### Architekturregel 7a — Die Bildrate gehört zum Panel, nicht zum Renderer
 
 Beide Vorlagen haben ein Prozessmodell, und es sind **verschiedene** —
@@ -941,6 +1000,61 @@ bleiben, und zwar an der Sache selbst, nicht an einem Protokolleintrag.
 Der Agent steuert sein Gesicht über `skills/mood/SKILL.md`, nicht über
 einen eingebauten Spezialpfad. Damit greift das bestehende Gating, und
 der Ausdruck wird mit demselben Mechanismus verwaltet wie alles andere.
+
+### Architekturregel 8b — Ein Gesicht ist ein Paket, das das Modell anlegen darf
+
+**Ein Gesicht reicht nicht.** Das Sprachmodell soll einen Charakter nicht
+nur für den Augenblick erzeugen, sondern **ablegen** können — so, dass er
+den Neustart übersteht und wieder aufgerufen werden kann. Ein erfundener
+Ausdruck, der beim nächsten Start weg ist, ist kein Charakter, sondern ein
+Einfall.
+
+Ein **Gesicht** ist damit mehr als ein Mood: ein Bündel aus Moods,
+Vorgaben, Namen und Herkunft. Es liegt als Verzeichnis unter `faces/<name>/`
+mit einer Pflichtdatei `face.json`.
+
+Das Format folgt dem Leitsatz, den HATFaces für sein Plugin-System
+formuliert und den Chimeras Mood-Schema ohnehin schon befolgt:
+
+> Was du als Daten ausdrücken kannst, drück nicht als Code aus.
+
+**Warum das kein Neubau ist.** Die Bausteine liegen vor, sie sind nur nicht
+verbunden: `mood/schema.py` ist die einzige Wahrheitsquelle und lässt
+unbekannte Werte ausdrücklich durch („Was gezeichnet werden kann, darf auch
+erfunden werden"), `mood/validate.py` prüft Erfundenes gegen die Grenzen
+(Regel 2), `mood/registry.py` hält, nummeriert und speichert atomar, und
+`agent/skills.py` hat das Auffindemuster fertig — Verzeichnis durchsuchen,
+Kopfteil lesen, Unbrauchbares überspringen statt abstürzen.
+
+**Zwei bewusste Abweichungen von HATFaces' Plugin-Format:**
+
+**JSON, nicht TOML.** Dort schreibt ein Mensch das Manifest und Pydantic
+prüft es. Hier schreibt **das Modell**, und Modelle erzeugen zuverlässig
+JSON — es ist das Format, in dem sie ohnehin antworten. Dazu kommt: `json`
+steht in der Standardbibliothek, Pydantic wäre eine Abhängigkeit auf einem
+Gerät mit 512 MB. `agent/skills.py` hat aus genau diesem Grund schon auf
+einen YAML-Leser verzichtet.
+
+**Kein Python in einem Gesicht.** HATFaces erlaubt `behaviors.py` je
+Charakter. Das ist hier ausgeschlossen: Ein Modell, das ausführbaren Code
+ablegt, den ein Dauerdienst lädt, hat eine Fernausführung mit
+Zwischenschritten (Regeln 5f, 5j). Wer dynamisches Verhalten braucht,
+bekommt ein Feld im Schema — dann kann es validiert werden.
+
+**Vier Grenzen, die HATFaces nicht braucht** (dort schreiben Menschen):
+
+1. **Obergrenze für Anzahl und Größe.** `registry.py` hat `capacity` und
+   `prune()`; für Gesichter gilt dasselbe. Ohne das füllt ein Modell in
+   einer Schleife die Speicherkarte.
+2. **Nur unterhalb des Gesichterverzeichnisses schreiben.** Ein Name wie
+   `../../etc/` darf nicht durchkommen. Geprüft wird **vor** dem Schreiben,
+   nicht danach.
+3. **Mitgeliefertes ist geschützt.** `Entry.protected` gibt es bereits; ein
+   erzeugtes Gesicht darf ein eingebautes nicht überschreiben.
+4. **Die Herkunft wird festgehalten** (mitgeliefert, erzeugt, von Hand).
+   Ohne diesen Vermerk ist später nicht unterscheidbar, was das Modell
+   erfunden hat — dieselbe Unterscheidung, die das Installer-Manifest
+   zwischen `neu` und `vorher_da` trifft (Regel 10o).
 
 ---
 
@@ -1508,7 +1622,10 @@ die Historie umgeschrieben.
 - **7** — Ein Prozess, ein Framebuffer
 - **7a** — Die Bildrate gehört zum Panel, nicht zum Renderer
 - **7b** — Wer etwas anzeigt, bekommt die Anzeige übergeben
+- **7c** — Konkurrierende Anzeigequellen werden zentral aufgelöst
+- **7d** — Wer anzeigt, besitzt die Zeit
 - **8** — Die Mood-Steuerung ist ein Skill, kein Sonderweg
+- **8b** — Ein Gesicht ist ein Paket, das das Modell anlegen darf
 - **8a** — Stiller Erfolg ist die gefährlichste Fehlerart
 - **9** — Kein Test, der eine Formel nachrechnet
 - **10** — Ein Versionssprung bricht keine Installation

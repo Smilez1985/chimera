@@ -396,6 +396,16 @@ class NoisyRenderer:
         self.FACE_CY = 0.44
         self.FACE_R = 0.23
 
+        # Die Statuszeile. ``None`` heisst: keine -- auf einem quadratischen
+        # Panel ist unten kein Platz, und ein E-Ink will keine Zeile, die
+        # sich sekuendlich aendert.
+        #
+        # Sie wird uebergeben, nicht hier gebaut (Regel 7b): Wer sie
+        # befuellt, muss dieselbe Instanz haben wie der, der sie zeichnet.
+        # Eine selbstgebaute waere ein zweites Exemplar, das niemand fuellt
+        # -- genau der Fehler B2 aus der Blaupausenpruefung.
+        self.statusline = None
+
         # Diese beiden standen in Noisy im Konstruktor, den Chimera
         # ersetzt hat -- sie gehoeren zum Zustand und werden hier gesetzt.
         self.frame = 0.0
@@ -2303,10 +2313,21 @@ class NoisyRenderer:
     # RUN (als Thread)
     # ----------------------------------------------------------
     def show(self, img=None):
-        """Ein Bild ausgeben; ohne Argument wird neu gezeichnet."""
+        """Ein Bild ausgeben; ohne Argument wird neu gezeichnet.
+
+        Die Statuszeile wird hier aufgetragen und nicht in ``render()``:
+        Dann trägt sie auch ein Bild, das von außen hereingereicht wurde.
+        Jedes Bild geht durch diese Methode -- das ist die einzige Stelle,
+        an der das garantiert ist.
+        """
         if img is None:
             img = self.render()
         if img is not None:
+            if self.statusline is not None:
+                # Die Zeit kommt von hier, nicht aus der Zeile (Regel 7d).
+                # Der Renderer hält die Uhr, die Zeile bekommt sie gesagt.
+                import time as _t
+                self.statusline.zeichnen(img, jetzt_ms=int(_t.monotonic() * 1000))
             self.panel.show(img)
         return img
 

@@ -20,6 +20,24 @@ oder in der Roadmap.
 
 ### Hinzugefügt
 
+**Anzeige**
+- **Prioritäts-Verwalter** (`chimera.arbiter`): löst auf, wer das
+  Ausgabegerät bespielen darf. Quellen mit fester Basis-Priorität, ein
+  Platz je Quelle, Auflösung in drei Stufen (Priorität → jüngster
+  Zeitstempel → feste Quellenreihenfolge). Kurze Laufzeit plus
+  Erneuerungsbedingung statt langer Laufzeit, damit kein Eintrag
+  hängenbleibt, den jemand zu löschen vergisst.
+- **Statuszeile** (`chimera.display.statusline`) in den unteren 40 Zeilen
+  des 240×280-Panels, angeschlossen in `NoisyRenderer.show()`. Sieben
+  Quellen von Abschaltmeldung bis Leerlaufbeschriftung.
+- Der Verwalter ist **ein Baustein für zwei Nutzer** (Statuszeile jetzt,
+  LED später). Die Vorlage nimmt an dieser Stelle bewusst zwei
+  Umsetzungen in Kauf; das wäre die Doppelimplementierung, die im Projekt
+  schon einmal drei Varianten derselben Logik erzeugt hat.
+- Der Quellenkatalog prüft beim Start seine eigenen Abstände. Ein zu eng
+  einsortierter Eintrag lässt die Statuszeile **nicht starten**, statt
+  später „manchmal" falsch zu sein.
+
 **Ausdruck**
 - Mood-Vokabular, Validator und Registry (`chimera.mood`). Schema für das
   Sprachmodell und Prüfung entstehen aus **einer** Tabelle.
@@ -92,12 +110,26 @@ oder in der Roadmap.
   jedem Modell, ist aber nicht die saubere Lösung.
 - **`Action.OFFLOAD` wird erkannt, aber nicht ausgeführt** — verdichtet
   wird erst an der nächsten Schwelle.
-- **`backup_file` im Installer hat keinen Aufrufer.** Modul 60, das es
-  braucht, existiert noch nicht.
 - **Nur ein Panel ist gebaut** (Whisplay). E-Paper und ST7789 sind
   entworfen (`docs/DISPLAYS.md`), nicht umgesetzt.
-- **Nichts davon lief auf der Zielhardware.** Alle Messwerte stammen aus
-  der Entwicklungsumgebung oder von einem Ollama-Server im Netz.
+- **Die Statuszeile überträgt immer das ganze Bild.** Der Schalter
+  `nur_zeile` ist vorgesehen, hat aber keine Wirkung — `panel.py` kennt
+  keine Teilübertragung. Wer nur die unteren 40 von 280 Zeilen schickt,
+  spart am teuersten Posten: SPI kostet 28,1 von 39,3 ms je Bild.
+- **Die Statuszeile kennt keine gesichtsabhängigen Einstellungen.** Der
+  Platz dafür ist vorgesehen (die Vorlage hat `[text_overlay]` je
+  Charakter), bleibt aber leer, solange es keine Gesichter als Pakete
+  gibt.
+- **Die Statuszeile nutzt die Standardschrift von Pillow.** Sie ist klein
+  und nicht auf 240 Pixel Breite abgestimmt; eine eigene Schrift ist
+  nicht ausgesucht.
+- **Die Temperaturkopplung ist nicht gebaut.** Der Verwalter könnte sie
+  tragen (Quelle `hitze` mit Erneuerungsbedingung ist vorhanden), aber
+  niemand misst die Temperatur und niemand degradiert die Anzeige.
+  Befund B6 bleibt damit offen.
+- **Auf der Zielhardware gemessen wurde bisher nur die Bildrate**
+  (39,3 ms je Bild, SPI 28,1 davon) sowie Display, Ton, Mikrofon und LED.
+  Statuszeile und Verwalter liefen dort noch nicht.
 
 ### Geprüft
 

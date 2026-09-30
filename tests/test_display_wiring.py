@@ -290,6 +290,141 @@ chi6 = app.Chimera(home=Path("/tmp"), session=None, registry=None,
                    toolbox=None)
 check("Gegenprobe: ohne Renderer kein Start", chi6.start_display(), False)
 
+# --- Statuszeile: ist sie wirklich angeschlossen? --------------------------
+#
+# Derselbe Fehlertyp wie B1-B4: Ein Baustein existiert, aber niemand ruft
+# ihn. Geprueft wird darum nicht, ob es eine Statuszeile GIBT, sondern ob
+# eine Meldung im ausgegebenen BILD ankommt.
+
+print()
+print("== Statuszeile angeschlossen ==")
+
+from chimera.display.statusline import StatusLine  # noqa: E402
+
+class MerkPanel(NullPanel):
+    """Panel, das sich das letzte Bild merkt."""
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.letztes = None
+
+    def show(self, img):
+        self.letztes = img.copy() if img is not None else None
+        return super().show(img)
+
+mp = MerkPanel()
+r = NoisyRenderer(State(), mp)
+
+# Ohne Statuszeile darf show() trotzdem laufen -- sie ist optional.
+r.show()
+ok("ohne Statuszeile laeuft show()") if mp.letztes is not None \
+    else bad("show() hat kein Bild geliefert")
+
+ohne = mp.letztes.copy()
+
+# Jetzt eine anschliessen und etwas melden.
+sl = StatusLine(hoehe=40)
+r.statusline = sl
+sl.melden("hitze", "ZU HEISS", jetzt_ms=0,
+          erneuern=lambda: True)   # bleibt stehen, Zeit spielt keine Rolle
+r.show()
+
+mit = mp.letztes
+
+# Der Vergleich prueft die WIRKUNG, nicht die Anwesenheit: Unten muss sich
+# etwas geaendert haben, oben nicht.
+unten_anders = any(
+    ohne.getpixel((x, 265)) != mit.getpixel((x, 265))
+    for x in range(0, 240, 8)
+)
+ok("eine Meldung veraendert den unteren Rand") if unten_anders \
+    else bad("die Meldung kommt im Bild NICHT an -- nicht angeschlossen")
+
+# Bleibt die Zeile in ihrem Bereich?
+#
+# NICHT ueber den Vergleich zweier Renderer-Bilder: Der Renderer animiert
+# (Blinzeln, Nachlauf), zwei aufeinanderfolgende Bilder unterscheiden sich
+# auch ohne Statuszeile. Eine erste Fassung dieses Tests hat genau das
+# gemessen und dem richtigen Code einen Fehler angehaengt.
+#
+# Richtig ist, die Zeile allein auf ein gleichfoermiges Bild zu zeichnen.
+# Dann ist jede Veraenderung ihre.
+from PIL import Image  # noqa: E402
+
+leer = Image.new("RGB", (240, 280), (7, 7, 7))
+sl_test = StatusLine(hoehe=40)
+sl_test.melden("hitze", "ZU HEISS", jetzt_ms=0, erneuern=lambda: True)
+sl_test.zeichnen(leer, jetzt_ms=0)
+
+ausserhalb = [
+    (x, y)
+    for y in range(0, 240, 8)
+    for x in range(0, 240, 8)
+    if leer.getpixel((x, y)) != (7, 7, 7)
+]
+ok("die Zeile bleibt in ihren 40 Zeilen") if not ausserhalb \
+    else bad(f"ausserhalb gezeichnet, z. B. bei {ausserhalb[:3]}")
+
+innerhalb = any(
+    leer.getpixel((x, 265)) != (7, 7, 7) for x in range(0, 240, 8)
+)
+ok("und zeichnet dort auch wirklich") if innerhalb \
+    else bad("im eigenen Bereich ist nichts passiert")
+
+# Gegenprobe zur Verdrahtung: Eine Zeile, die NICHT am Renderer haengt,
+# darf im ausgegebenen Bild nicht auftauchen. Ohne diese Probe waere der
+# Test oben auch ohne Anschluss gruen -- er pruefte dann nur, dass Pillow
+# zeichnen kann.
+#
+# Gemessen wird an einem Merkmal, das NUR die Statuszeile erzeugen kann:
+# Text in ihrer Vordergrundfarbe. Der untere Rand ist beim Renderer ohnehin
+# schwarz -- ein Balken taugt nicht als Nachweis, weil er auch ohne die
+# Zeile da waere.
+#
+# Das war der dritte Anlauf. Die beiden vorherigen massen je ein Merkmal,
+# das auch ohne die Ursache vorhanden war: erst den Unterschied zweier
+# Renderer-Bilder (der Renderer animiert), dann den schwarzen Balken (der
+# Rand ist ohnehin schwarz). Ein Nachweis taugt nur, wenn er ohne die
+# Ursache AUSBLEIBT.
+HITZE_FARBE = (255, 190, 90)
+
+def hat_text(bild) -> bool:
+    """Steht Text in der Hitze-Farbe im unteren Rand?
+
+    Geprueft wird AEHNLICHKEIT, nicht Gleichheit. Der Renderer legt ein
+    Software-Dimming ueber das fertige Bild -- aus (255, 190, 90) wird
+    (240, 179, 85). Eine Pruefung auf exakte Gleichheit war deshalb rot,
+    obwohl der Text im Bild stand. Dazu kommt Kantenglaettung der Schrift,
+    die ohnehin Zwischentoene erzeugt.
+
+    Die Schwelle ist grosszuegig genug fuer Dimmung und Glaettung, aber eng
+    genug, dass Schwarz und das Weiss anderer Quellen nicht durchgehen.
+    """
+    zr, zg, zb = HITZE_FARBE
+    for y in range(245, 275):
+        for x in range(0, 240, 2):
+            r_, g_, b_ = bild.getpixel((x, y))
+            if abs(r_ - zr) < 40 and abs(g_ - zg) < 40 and abs(b_ - zb) < 40:
+                return True
+    return False
+
+ok("mit Anschluss steht der Text im Bild") if hat_text(mit) \
+    else bad("kein Text im Bild -- die Zeile ist nicht angeschlossen")
+
+sl.zuruecknehmen("hitze")
+r.show()
+ok("Gegenprobe: zurueckgenommen verschwindet der Text") \
+    if not hat_text(mp.letztes) \
+    else bad("nach dem Zuruecknehmen bleibt der Text stehen")
+
+r.statusline = None
+fremde = StatusLine(hoehe=40)
+fremde.melden("hitze", "ZU HEISS", jetzt_ms=0, erneuern=lambda: True)
+r.show()
+ok("Gegenprobe: eine nicht angeschlossene Zeile wirkt nicht") \
+    if not hat_text(mp.letztes) \
+    else bad("eine fremde Statuszeile hat ins Bild gezeichnet")
+
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(1 if FAIL else 0)

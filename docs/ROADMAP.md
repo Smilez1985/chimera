@@ -59,34 +59,27 @@ Hardware ist vorhanden, also nicht blockiert.
       Obergrenze. 15 Bilder/s brauchen 59 % des Budgets.
       **Befund: Die Übertragung kostet 70 % — mehr als Zeichnen und
       Umrechnen zusammen.** War nicht erwartet und verschiebt den Engpass.
-- [ ] **Statuszeile in den 40 zusätzlichen Zeilen — nach der
-      Prioritäts-Grammatik**, nicht als Sonderfall
-
-      Vorbild: HATFaces `docs/konzept/07_Text_Overlay.md` (Analyse in
-      `../VERGLEICH-HATFACES.md`). Übernommen wird das Modell, nicht der
-      Code — dort gibt es keinen.
-
-      - [ ] Quellen-Katalog mit fester Basis-Priorität, **Abstände ≥ 10**
-            (damit neue Quellen ohne Umnummerierung einsortiert werden —
-            genau das Problem, das die Regelnummern heute haben: `5h`
-            steht zwischen `5b` und `5c`)
-      - [ ] **Pro Quelle genau ein Slot.** Ein „Update" ist ein neuer
-            Eintrag derselben Quelle, der den alten verdrängt
-      - [ ] Auflösung: Priorität → jüngster Zeitstempel → feste
-            Quellenreihenfolge. **Die dritte Stufe ist nicht optional**,
-            sonst ist das Ergebnis bei gleichzeitigen Einträgen nicht
-            reproduzierbar
-      - [ ] **Auto-Renew statt langer Laufzeit** für anhaltende Zustände:
-            kurze TTL plus Bedingung, die sie zurücksetzt. Erlischt von
-            selbst, wenn die Bedingung wegfällt — kein explizites Löschen,
-            kein Leck
-      - [ ] Chimeras Quellen (nicht HATFaces' — dort gibt es ein Gateway
-            und Plugins, hier nicht): Abschaltmeldung, Temperaturwarnung,
-            Anbieter nicht erreichbar, Agentenzustand
-            (denkt/hört/antwortet), Akkustand, Leerlaufbeschriftung
-      - [ ] Muster sind **reine Funktionen** `f(t, farbe) -> farbe`, ohne
-            eigene Zeitgeber. Die Zeit gehört dem Verwalter, nicht dem
-            Muster
+- [x] **Prioritäts-Verwalter** (`chimera/arbiter.py`) — gemeinsame
+      Auflösung für Statuszeile **und** LED (Regel 7c). Ein Baustein, zwei
+      Nutzer; die Vorlage nimmt hier bewusst eine Doppelung in Kauf
+      („nur Stil-Analogie"), das war für uns die falsche Wahl.
+      30 Prüfungen mit Gegenproben.
+- [x] **Statuszeile in den 40 zusätzlichen Zeilen — nach der
+      Prioritäts-Grammatik** (`chimera/display/statusline.py`),
+      angeschlossen in `NoisyRenderer.show()`. 25 + 7 Prüfungen.
+      Offen geblieben (siehe unten): gesichtsabhängige Einstellungen,
+      Teilübertragung, eigene Schriftart.
+- [ ] **Teilübertragung des unteren Rands.** `panel.py` schreibt immer
+      das ganze Bild. Wer nur die unteren 40 von 280 Zeilen überträgt,
+      spart rund 14 % der teuersten Größe — SPI kostet 28,1 von 39,3 ms.
+      Der Schalter `nur_zeile` ist vorgesehen, aber ohne Wirkung; das ist
+      als bekannte Einschränkung vermerkt (Regel 10h).
+- [ ] **Platz für gesichtsabhängige Einstellungen.** HATFaces' Format hat
+      `[text_overlay]` je Charakter (an/aus, Stil). Solange es keine
+      Gesichter gibt, ist der Haken leer — er wird in Phase 3b gefüllt.
+> Das Modell dahinter steht in `DESIGN.md` als Architekturregel 7c/7d,
+> die Herleitung in `../VERGLEICH-HATFACES.md`. Übernommen wurde das
+> Modell, nicht der Code — dort gibt es keinen.
 - [ ] **Anzeige an die Temperatur koppeln**, begründet mit der SPI-Messung
 
       HATFaces' Begründung trifft Chimeras eigene Zahl: *jede
