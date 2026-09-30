@@ -1,10 +1,10 @@
 #!/bin/sh
 # Tests fuer Erkennung und atomares Schreiben.
 #
-# Laeuft ohne Zielhardware: erfundene Gerätebaum-Dateien in einem temporaeren
+# Laeuft ohne Zielhardware: erfundene Geraetebaum-Dateien in einem temporaeren
 # Wurzelverzeichnis, CHIMERA_ROOT zeigt darauf.
 #
-# Jeder Test, der eine Regression absichert, hat eine GEGENPROBE — sonst
+# Jeder Test, der eine Regression absichert, hat eine GEGENPROBE -- sonst
 # weiss man nicht, ob er ueberhaupt etwas messen kann (Architekturregel 9).
 
 set -eu
@@ -13,7 +13,7 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"
 PASS=0; FAIL=0
 
 # Eigenes Spielfeld, unabhaengig von TMPDIR. Die Testumgebung darf nicht
-# an derselben Klippe scheitern, die sie prueft — und ein kaputtes TMPDIR
+# an derselben Klippe scheitern, die sie prueft -- und ein kaputtes TMPDIR
 # ist keine Theorie: in der Entwicklungsumgebung dieses Projekts zeigte es
 # auf ein Verzeichnis, das nicht existierte, und mktemp lieferte einen
 # leeren Pfad mit Exitcode 1.
@@ -26,7 +26,7 @@ ok()   { PASS=$((PASS+1)); printf '  ok    %s\n' "$1"; }
 bad()  { FAIL=$((FAIL+1)); printf '  FAIL  %s\n' "$1"; }
 check() {
 	if [ "$2" = "$3" ]; then ok "$1"
-	else bad "$1 — erwartet '$3', bekam '$2'"; fi
+	else bad "$1 -- erwartet '$3', bekam '$2'"; fi
 }
 
 # Baut ein erfundenes Wurzelverzeichnis.
@@ -80,7 +80,7 @@ R="$(mkroot "" "" "")"
 load "$R"; check "nichts erkennbar -> unknown" "$(detect_board)" "unknown"
 rm -rf "$R"
 
-# Nur Klartextname, kein compatible — Rueckfall muss greifen.
+# Nur Klartextname, kein compatible -- Rueckfall muss greifen.
 R="$(mkroot "Raspberry Pi Zero 2 W Rev 1.0" "" dietpi)"
 load "$R"; check "Rueckfall ueber model" "$(detect_board)" "rpi_zero2w"
 rm -rf "$R"
@@ -90,7 +90,7 @@ R="$(mkroot "Radxa ZERO 3W" "radxa,zero3w" radxa)"
 load "$R"; check "Radxa-Abbild ueber rsetup" "$(detect_os)" "radxa_debian"
 rm -rf "$R"
 
-# DietPi setzt auf Debian auf — os-release allein wuerde es als Debian
+# DietPi setzt auf Debian auf -- os-release allein wuerde es als Debian
 # ausgeben. Der DietPi-Marker muss Vorrang haben.
 R="$(mkroot "Radxa ZERO 3W" "radxa,zero3w" debian)"
 printf 'x\n' >"$R/boot/dietpi.txt"

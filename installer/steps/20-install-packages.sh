@@ -1,5 +1,5 @@
 #!/bin/sh
-# Chimera installer — Modul 20: Abhaengigkeiten.
+# Chimera installer -- Modul 20: Abhaengigkeiten.
 #
 # **Laeuft vor allem anderen.** Jedes spaetere Modul setzt voraus, dass
 # sein Werkzeug da ist; wer das erst merkt, wenn er es braucht, scheitert
@@ -7,7 +7,7 @@
 # das: Modul 40 hatte Pakete nachgeladen, den Fremdinstaller gestartet, und
 # der brach bei Schritt 3 von 8 ab -- `make` fehlte.
 #
-# Was hier installiert wird, wird **festgehalten** (lib/bestand.sh): mit
+# Was hier installiert wird, wird **festgehalten** (lib/manifest.sh): mit
 # der Unterscheidung, ob es vorher schon da war. Ein Paket, das es vor
 # Chimera gab, darf eine Deinstallation nicht entfernen.
 #
@@ -22,13 +22,13 @@ _HERE="$(cd "$(dirname "$0")/.." && pwd)"
 . "$_HERE/lib/common.sh"
 . "$_HERE/lib/detect.sh"
 . "$_HERE/lib/profiles.sh"
-. "$_HERE/lib/netz.sh"
-. "$_HERE/lib/bestand.sh"
+. "$_HERE/lib/network.sh"
+. "$_HERE/lib/manifest.sh"
 
-CHIMERA_MODUL="20-pakete"; export CHIMERA_MODUL
+CHIMERA_STEP="20-install-packages"; export CHIMERA_STEP
 
 [ -n "${CHIMERA_LOGFILE:-}" ] || log_open "pakete" || \
-	warn "Kein Protokoll moeglich — Lauf wird nicht festgehalten."
+	warn "Kein Protokoll moeglich -- Lauf wird nicht festgehalten."
 
 BOARD="$(detect_board)"
 
@@ -45,7 +45,7 @@ log ""
 # Der Befehl ist der Nachweis: Ein Paket kann installiert sein und das
 # Werkzeug trotzdem fehlen (Regel 10j).
 
-zwingend() {
+packages_required() {
 	cat <<'EOF'
 git	command -v git	Quelltext holen
 python3	command -v python3	Chimera selbst
@@ -56,7 +56,7 @@ alsa-utils	command -v aplay	Audio pruefen und abspielen
 EOF
 }
 
-nuetzlich() {
+packages_optional() {
 	cat <<'EOF'
 python3-pil	python3 -c "import PIL"	Bilder zeichnen (Renderer)
 python3-numpy	python3 -c "import numpy"	Umrechnung nach RGB565
@@ -68,10 +68,10 @@ EOF
 
 # --- Pruefen und holen ----------------------------------------------------
 
-FEHLT_ZWINGEND=""
-FEHLT_NUETZLICH=""
+MISSING_REQUIRED=""
+MISSING_OPTIONAL=""
 
-pruefen() {
+probe_tool() {
 	_pr_pkg="$1"; _pr_test="$2"; _pr_wofuer="$3"
 	if sh -c "$_pr_test" >/dev/null 2>&1; then
 		info "da:     $_pr_pkg  ($_pr_wofuer)"
@@ -86,29 +86,29 @@ pruefen() {
 _FZ="${TMPDIR:-/tmp}/.chimera-fz.$$"
 : >"$_FZ"
 log "Zwingend"
-zwingend | while IFS='	' read -r pkg test wofuer; do
+packages_required | while IFS='	' read -r pkg test wofuer; do
 	[ -n "$pkg" ] || continue
-	pruefen "$pkg" "$test" "$wofuer" || printf '%s ' "$pkg" >>"$_FZ"
+	probe_tool "$pkg" "$test" "$wofuer" || printf '%s ' "$pkg" >>"$_FZ"
 done
-FEHLT_ZWINGEND="$(cat "$_FZ" 2>/dev/null || true)"
+MISSING_REQUIRED="$(cat "$_FZ" 2>/dev/null || true)"
 rm -f "$_FZ"
 
 log ""
 _FN="${TMPDIR:-/tmp}/.chimera-fn.$$"
 : >"$_FN"
 log "Nuetzlich"
-nuetzlich | while IFS='	' read -r pkg test wofuer; do
+packages_optional | while IFS='	' read -r pkg test wofuer; do
 	[ -n "$pkg" ] || continue
-	pruefen "$pkg" "$test" "$wofuer" || printf '%s ' "$pkg" >>"$_FN"
+	probe_tool "$pkg" "$test" "$wofuer" || printf '%s ' "$pkg" >>"$_FN"
 done
-FEHLT_NUETZLICH="$(cat "$_FN" 2>/dev/null || true)"
+MISSING_OPTIONAL="$(cat "$_FN" 2>/dev/null || true)"
 rm -f "$_FN"
 
 log ""
 
-if [ -z "$FEHLT_ZWINGEND" ] && [ -z "$FEHLT_NUETZLICH" ]; then
+if [ -z "$MISSING_REQUIRED" ] && [ -z "$MISSING_OPTIONAL" ]; then
 	log "Ergebnis: alles vorhanden, nichts zu tun."
-	bestand_bericht
+	manifest_report
 	log_close 0; exit 0
 fi
 
@@ -117,27 +117,27 @@ if ! is_dry_run && [ "$(id -u)" != 0 ]; then
 	err "Pakete installieren geht nur als Verwalter."
 	err "  sudo sh $0"
 	err ""
-	err "Es fehlen:${FEHLT_ZWINGEND}${FEHLT_NUETZLICH}"
+	err "Es fehlen:${MISSING_REQUIRED}${MISSING_OPTIONAL}"
 	log_close 2; exit 2
 fi
 
 # --- Installieren ---------------------------------------------------------
 
-if [ -n "$FEHLT_ZWINGEND" ]; then
-	log "Wird geholt (zwingend):$FEHLT_ZWINGEND"
-	if ! bestand_apt $FEHLT_ZWINGEND; then
+if [ -n "$MISSING_REQUIRED" ]; then
+	log "Wird geholt (zwingend):$MISSING_REQUIRED"
+	if ! manifest_apt $MISSING_REQUIRED; then
 		err "Zwingende Pakete liessen sich nicht installieren."
-		err "Ohne sie scheitern die folgenden Module — daher Abbruch hier,"
+		err "Ohne sie scheitern die folgenden Module -- daher Abbruch hier,"
 		err "vor dem ersten Eingriff, nicht mittendrin."
 		log_close 2; exit 2
 	fi
 	log ""
 fi
 
-if [ -n "$FEHLT_NUETZLICH" ]; then
-	log "Wird geholt (nuetzlich):$FEHLT_NUETZLICH"
-	bestand_apt $FEHLT_NUETZLICH || \
-		warn "Nicht alles Nuetzliche liess sich holen — siehe oben."
+if [ -n "$MISSING_OPTIONAL" ]; then
+	log "Wird geholt (nuetzlich):$MISSING_OPTIONAL"
+	manifest_apt $MISSING_OPTIONAL || \
+		warn "Nicht alles Nuetzliche liess sich holen -- siehe oben."
 	log ""
 fi
 
@@ -149,7 +149,7 @@ fi
 log "Nachweis"
 _FR="${TMPDIR:-/tmp}/.chimera-fr.$$"
 : >"$_FR"
-zwingend | while IFS='	' read -r pkg test wofuer; do
+packages_required | while IFS='	' read -r pkg test wofuer; do
 	[ -n "$pkg" ] || continue
 	sh -c "$test" >/dev/null 2>&1 || printf '%s ' "$pkg" >>"$_FR"
 done
@@ -165,7 +165,7 @@ fi
 
 info "Alles Zwingende ist aufrufbar."
 log ""
-bestand_bericht
+manifest_report
 log ""
 log "Ergebnis: Abhaengigkeiten stehen."
 log_close 0

@@ -1,7 +1,7 @@
 #!/bin/sh
-# Chimera — Installer, Haupteinstieg.
+# Chimera -- Installer, Haupteinstieg.
 #
-# Ruft die Module in `modules/` der Nummer nach auf. Jeder Lauf schreibt
+# Ruft die Schritte in `steps/` der Nummer nach auf. Jeder Lauf schreibt
 # ein Protokoll, auch ein erfolgreicher.
 #
 # Aufruf:
@@ -27,7 +27,7 @@ usage() {
 	cat <<EOF
 chimera-install $VERSION
 
-  --only <praefix>   nur das passende Modul (z. B. 10, oder 10-preflight)
+  --only <praefix>   nur das passende Modul (z. B. 10, oder 10-check-system)
   --list             verfuegbare Module anzeigen
   --dry-run          nichts aendern, nur berichten
   --check            nur pruefen, Exitcode sagt den Zustand
@@ -48,23 +48,23 @@ while [ $# -gt 0 ]; do
 	esac
 done
 
-modules_list() {
+steps_list() {
 	# Nummerisch sortiert, damit 10 vor 90 kommt.
-	find "$HERE/modules" -name '[0-9]*-*.sh' 2>/dev/null | sort
+	find "$HERE/steps" -name '[0-9]*-*.sh' 2>/dev/null | sort
 }
 
 if [ "$MODE" = list ]; then
 	printf 'Verfuegbare Module:\n'
-	modules_list | while read -r m; do printf '  %s\n' "$(basename "$m" .sh)"; done
+	steps_list | while read -r m; do printf '  %s\n' "$(basename "$m" .sh)"; done
 	exit 0
 fi
 
-log_open "install" || warn "Kein Protokoll moeglich — Lauf wird nicht festgehalten."
+log_open "install" || warn "Kein Protokoll moeglich -- Lauf wird nicht festgehalten."
 
 log "chimera-install $VERSION"
 case "$MODE" in
-	dry)   info "Trockenlauf — es wird nichts geaendert." ;;
-	check) info "Pruefung — es wird nichts geaendert." ;;
+	dry)   info "Trockenlauf -- es wird nichts geaendert." ;;
+	check) info "Pruefung -- es wird nichts geaendert." ;;
 esac
 [ -n "$ONLY" ] && info "Nur Modul: $ONLY"
 log ""
@@ -73,7 +73,7 @@ FAILED=0
 FIRST_RC=0
 RAN=0
 
-for mod in $(modules_list); do
+for mod in $(steps_list); do
 	name="$(basename "$mod" .sh)"
 
 	if [ -n "$ONLY" ]; then
@@ -99,7 +99,7 @@ for mod in $(modules_list); do
 		_log_raw "Modul $name: Exitcode $rc"
 		# Exitcode 1 ist ein Befund, kein Ende: kein Profil, aber der
 		# Lauf geht weiter (Regel 10k). Ab 2 hat das Modul den Lauf
-		# bewusst beendet — etwa weil niemand die Warnung bestaetigt hat.
+		# bewusst beendet -- etwa weil niemand die Warnung bestaetigt hat.
 		if [ "$rc" -ge 2 ]; then
 			err "Modul $name bricht den Lauf ab (Exitcode $rc)."
 			log_close "$rc"
@@ -111,7 +111,7 @@ for mod in $(modules_list); do
 done
 
 if [ "$RAN" -eq 0 ]; then
-	err "Kein Modul ausgefuehrt${ONLY:+ — kein Treffer fuer '$ONLY'}."
+	err "Kein Modul ausgefuehrt${ONLY:+ -- kein Treffer fuer '$ONLY'}."
 	log_close 2
 	exit 2
 fi

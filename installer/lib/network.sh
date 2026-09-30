@@ -1,5 +1,5 @@
 #!/bin/sh
-# Chimera installer — Netzzugriffe, die eine Unterbrechung ueberleben.
+# Chimera installer -- Netzzugriffe, die eine Unterbrechung ueberleben.
 #
 # Ein Pi Zero 2 W haengt am WLAN, oft am Rand der Reichweite. Ein Download
 # von mehreren Megabyte ueberlebt das nicht immer -- und ein Installer, der
@@ -20,10 +20,10 @@
 # ICMP taugt dafuer nicht: Viele Netze verwerfen es, manche Sandkaesten
 # koennen es gar nicht erzeugen. Geprueft wird deshalb mit einer echten
 # TCP-Verbindung zum Ziel, das gleich gebraucht wird -- das misst, was
-# zaehlt, statt etwas Ähnliches.
+# zaehlt, statt etwas Aehnliches.
 #
 # $1 Rechnername, $2 Port (Vorgabe 443), $3 Frist in Sekunden (Vorgabe 5)
-netz_erreichbar() {
+network_reachable() {
 	_ne_host="$1"
 	_ne_port="${2:-443}"
 	_ne_frist="${3:-5}"
@@ -65,7 +65,7 @@ netz_erreichbar() {
 	# Kein Werkzeug da: Das ist KEIN "Netz ist weg", sondern "ich kann es
 	# nicht sehen". Der Unterschied entscheidet, ob gewartet oder
 	# weitergemacht wird (Regel 10j).
-	warn "Kein nc, curl oder wget — Erreichbarkeit nicht pruefbar."
+	warn "Kein nc, curl oder wget -- Erreichbarkeit nicht pruefbar."
 	return 2
 }
 
@@ -77,16 +77,16 @@ netz_erreichbar() {
 # gar keine waere Schweigen.
 #
 # $1 Rechnername, $2 Port, $3 Grenze in Sekunden (0 = ohne Grenze)
-netz_warten() {
+network_wait() {
 	_nw_host="$1"
 	_nw_port="${2:-443}"
-	_nw_grenze="${3:-${CHIMERA_NETZ_GRENZE:-600}}"
+	_nw_grenze="${3:-${CHIMERA_NETWORK_LIMIT:-600}}"
 
-	netz_erreichbar "$_nw_host" "$_nw_port" && return 0
+	network_reachable "$_nw_host" "$_nw_port" && return 0
 
 	warn "Netz weg: $_nw_host:$_nw_port antwortet nicht."
 	warn "Es wird gewartet, nicht abgebrochen. Grenze: ${_nw_grenze}s"
-	[ "$_nw_grenze" = 0 ] && warn "  (ohne Grenze — mit Strg-C beenden)"
+	[ "$_nw_grenze" = 0 ] && warn "  (ohne Grenze -- mit Strg-C beenden)"
 
 	_nw_wartet=0
 	_nw_pause=2
@@ -96,8 +96,8 @@ netz_warten() {
 		sleep "$_nw_pause"
 		_nw_wartet=$((_nw_wartet + _nw_pause))
 
-		if netz_erreichbar "$_nw_host" "$_nw_port"; then
-			log "Netz wieder da nach ${_nw_wartet}s — es geht weiter."
+		if network_reachable "$_nw_host" "$_nw_port"; then
+			log "Netz wieder da nach ${_nw_wartet}s -- es geht weiter."
 			return 0
 		fi
 
@@ -113,7 +113,7 @@ netz_warten() {
 
 		if [ "$_nw_grenze" != 0 ] && [ "$_nw_wartet" -ge "$_nw_grenze" ]; then
 			err "Nach ${_nw_wartet}s immer noch kein Netz. Aufgegeben."
-			err "Der Lauf laesst sich wiederholen — Fertiges bleibt fertig."
+			err "Der Lauf laesst sich wiederholen -- Fertiges bleibt fertig."
 			return 1
 		fi
 	done
@@ -129,12 +129,12 @@ netz_warten() {
 #    Abbruchstelle an. Auf einem Zero 2 W am WLAN-Rand ist das der
 #    Unterschied zwischen "geht irgendwann durch" und "geht nie durch".
 #  * **Pause statt Abbruch.** Zwischen den Versuchen wird auf das Netz
-#    gewartet (netz_warten), nicht blind wiederholt.
+#    gewartet (network_wait), nicht blind wiederholt.
 #  * **In eine Nebendatei schreiben, dann umbenennen.** Sonst liegt am Ziel
 #    ein halbes Archiv, das beim naechsten Lauf fuer fertig gehalten wird.
 #  * **Das Ergebnis pruefen, nicht den Exitcode.** Eine leere Datei mit
 #    Exitcode 0 ist ein Fehlschlag (Regel 10j).
-netz_laden() {
+network_fetch() {
 	_nl_url="$1"
 	_nl_ziel="$2"
 	_nl_summe="${3:-}"
@@ -155,11 +155,11 @@ netz_laden() {
 	# Schon da und stimmig? Dann nichts tun -- der Installer ist
 	# idempotent, ein zweiter Lauf laedt nicht erneut.
 	if [ -s "$_nl_ziel" ] && [ -n "$_nl_summe" ]; then
-		if netz_summe_stimmt "$_nl_ziel" "$_nl_summe"; then
+		if network_checksum_ok "$_nl_ziel" "$_nl_summe"; then
 			info "Schon vorhanden und geprueft: $(basename "$_nl_ziel")"
 			return 0
 		fi
-		warn "Vorhandene Datei passt nicht zur Pruefsumme — wird neu geladen."
+		warn "Vorhandene Datei passt nicht zur Pruefsumme -- wird neu geladen."
 		rm -f "$_nl_ziel"
 	fi
 
@@ -174,8 +174,8 @@ netz_laden() {
 	while [ "$_nl_n" -lt "$_nl_versuche" ]; do
 		_nl_n=$((_nl_n + 1))
 
-		netz_warten "$_nl_host" "$_nl_port" || {
-			err "Kein Netz — Download abgebrochen: $_nl_url"
+		network_wait "$_nl_host" "$_nl_port" || {
+			err "Kein Netz -- Download abgebrochen: $_nl_url"
 			return 1
 		}
 
@@ -195,10 +195,10 @@ netz_laden() {
 		fi
 
 		if [ "$_nl_rc" = 0 ] && [ -s "$_nl_teil" ]; then
-			if [ -n "$_nl_summe" ] && ! netz_summe_stimmt "$_nl_teil" "$_nl_summe"; then
+			if [ -n "$_nl_summe" ] && ! network_checksum_ok "$_nl_teil" "$_nl_summe"; then
 				err "Pruefsumme stimmt nicht: $(basename "$_nl_ziel")"
 				err "  erwartet: $_nl_summe"
-				err "  bekommen: $(netz_summe "$_nl_teil")"
+				err "  bekommen: $(network_checksum "$_nl_teil")"
 				rm -f "$_nl_teil"
 				return 1
 			fi
@@ -223,18 +223,18 @@ netz_laden() {
 }
 
 # --- Pruefsummen ----------------------------------------------------------
-netz_summe() {
+network_checksum() {
 	if have_cmd sha256sum; then sha256sum "$1" 2>/dev/null | awk '{print $1}'
 	elif have_cmd shasum; then shasum -a 256 "$1" 2>/dev/null | awk '{print $1}'
 	else echo ""; fi
 }
 
-netz_summe_stimmt() {
-	_ns_ist="$(netz_summe "$1")"
+network_checksum_ok() {
+	_ns_ist="$(network_checksum "$1")"
 	if [ -z "$_ns_ist" ]; then
 		# Kein Werkzeug: nicht pruefbar ist nicht dasselbe wie falsch.
 		# Aber es wird gesagt, statt es zu verschweigen (Regel 10j).
-		warn "Keine Pruefsumme berechenbar (sha256sum fehlt) — ungeprueft."
+		warn "Keine Pruefsumme berechenbar (sha256sum fehlt) -- ungeprueft."
 		return 0
 	fi
 	[ "$_ns_ist" = "$2" ]
@@ -243,7 +243,7 @@ netz_summe_stimmt() {
 # --- Git, mit denselben Eigenschaften -------------------------------------
 #
 # $1 Adresse, $2 Zielverzeichnis, $3 Zweig (optional)
-netz_git() {
+network_git() {
 	_ng_url="$1"
 	_ng_ziel="$2"
 	_ng_zweig="${3:-}"
@@ -262,8 +262,8 @@ netz_git() {
 	while [ "$_ng_n" -lt "$_ng_versuche" ]; do
 		_ng_n=$((_ng_n + 1))
 
-		netz_warten "$_ng_host" 443 || {
-			err "Kein Netz — Abruf abgebrochen: $_ng_url"
+		network_wait "$_ng_host" 443 || {
+			err "Kein Netz -- Abruf abgebrochen: $_ng_url"
 			return 1
 		}
 
@@ -296,7 +296,7 @@ netz_git() {
 # --- Pakete ---------------------------------------------------------------
 #
 # apt bricht bei Netzausfall ebenfalls ab. Gleiche Behandlung.
-netz_apt() {
+network_apt() {
 	if is_dry_run; then
 		info "[wuerde installieren] $*"
 		return 0
@@ -306,8 +306,8 @@ netz_apt() {
 	_na_n=0
 	while [ "$_na_n" -lt "${CHIMERA_DL_VERSUCHE:-20}" ]; do
 		_na_n=$((_na_n + 1))
-		netz_warten "deb.debian.org" 80 || {
-			err "Kein Netz — Paketinstallation abgebrochen."
+		network_wait "deb.debian.org" 80 || {
+			err "Kein Netz -- Paketinstallation abgebrochen."
 			return 1
 		}
 		if DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@"; then

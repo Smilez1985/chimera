@@ -1,9 +1,9 @@
 #!/bin/sh
-# Chimera installer — Modul 40: Anzeige und ihr Treiber.
+# Chimera installer -- Modul 40: Anzeige und ihr Treiber.
 #
 # Der Herstellertreiber wird **aufgerufen, nicht nachgebaut**. Er
 # uebersetzt ein Kernelmodul aus C-Quelltext, braucht Header, einen
-# Geraetebaum-Uebersetzer und eine Reihe Pakete. Das nachzubauen brächte
+# Geraetebaum-Uebersetzer und eine Reihe Pakete. Das nachzubauen braechte
 # keinen Gewinn und schuefe eine zweite Quelle fuer dieselbe Sache -- genau
 # die Doppelimplementierung, vor der Regel 10g warnt.
 #
@@ -13,7 +13,7 @@
 #   * festhalten, was sich geaendert hat (Regel 10e)
 #   * nicht-interaktiv laufen, ohne die Rueckfrage zu verschlucken
 #   * das ERGEBNIS pruefen, nicht den Exitcode (Regel 10j)
-#   * Downloads pausieren statt abbrechen (lib/netz.sh)
+#   * Downloads pausieren statt abbrechen (lib/network.sh)
 #
 # Exitcode:
 #   0  Anzeige eingerichtet und nachgewiesen
@@ -27,14 +27,14 @@ _HERE="$(cd "$(dirname "$0")/.." && pwd)"
 . "$_HERE/lib/common.sh"
 . "$_HERE/lib/detect.sh"
 . "$_HERE/lib/profiles.sh"
-. "$_HERE/lib/netz.sh"
-. "$_HERE/lib/anzeigen.sh"
-. "$_HERE/lib/bestand.sh"
+. "$_HERE/lib/network.sh"
+. "$_HERE/lib/display.sh"
+. "$_HERE/lib/manifest.sh"
 
-CHIMERA_MODUL="40-anzeige"; export CHIMERA_MODUL
+CHIMERA_STEP="40-install-display"; export CHIMERA_STEP
 
 [ -n "${CHIMERA_LOGFILE:-}" ] || log_open "anzeige" || \
-	warn "Kein Protokoll moeglich — Lauf wird nicht festgehalten."
+	warn "Kein Protokoll moeglich -- Lauf wird nicht festgehalten."
 
 BOARD="$(detect_board)"
 BOOT_CFG="$(rootpath /boot/firmware/config.txt)"
@@ -56,7 +56,7 @@ log ""
 # dem ersten Eingriff ist harmlos, einer mittendrin nicht.
 if ! is_dry_run && [ "$(id -u)" != 0 ]; then
 	err "Dieses Modul aendert die Bootkonfiguration und baut ein"
-	err "Kernelmodul — das geht nur als Verwalter."
+	err "Kernelmodul -- das geht nur als Verwalter."
 	err ""
 	err "  sudo sh $0"
 	err ""
@@ -72,18 +72,18 @@ TYP="${CHIMERA_ANZEIGE:-}"
 if [ -n "$TYP" ]; then
 	info "Anzeige vorgegeben: $TYP"
 else
-	if ! anzeige_erkennung_moeglich; then
-		warn "I2C ist nicht aktiv — ein HAT kann sich noch gar nicht melden."
+	if ! display_detect_possible; then
+		warn "I2C ist nicht aktiv -- ein HAT kann sich noch gar nicht melden."
 		warn "Das ist keine Aussage ueber die Hardware, sondern ueber die"
 		warn "Sichtbarkeit: Ohne i2c_arm liest die Firmware kein HAT-EEPROM."
 	fi
-	TYP="$(anzeige_erkennen || true)"
+	TYP="$(display_detect || true)"
 	case "$TYP" in
-		whisplay)  info "Erkannt: $(anzeige_get whisplay name)" ;;
+		whisplay)  info "Erkannt: $(display_get whisplay name)" ;;
 		unbekannt)
 			warn "Ein HAT meldet sich, aber er ist uns unbekannt."
 			warn "Es wird nicht geraten (Regel 10g). Mit CHIMERA_ANZEIGE=<typ>"
-			warn "laesst sich eine Anzeige vorgeben. Bekannt: $(anzeigen_liste)"
+			warn "laesst sich eine Anzeige vorgeben. Bekannt: $(display_list)"
 			log_close 1; exit 1 ;;
 		*)
 			warn "Keine Anzeige erkannt, die sich selbst meldet."
@@ -93,21 +93,21 @@ else
 	esac
 fi
 
-NAME="$(anzeige_get "$TYP" name)" || {
+NAME="$(display_get "$TYP" name)" || {
 	err "Unbekannter Anzeigetyp: $TYP"
-	err "Bekannt sind: $(anzeigen_liste)"
+	err "Bekannt sind: $(display_list)"
 	log_close 2; exit 2
 }
 
-BUSSE="$(anzeige_get "$TYP" busse)"
-QUELLE="$(anzeige_get "$TYP" quelle)"
-INSTALLER="$(anzeige_get "$TYP" installer)"
-PRUEFE="$(anzeige_get "$TYP" pruefe)"
-HINWEIS="$(anzeige_get "$TYP" hinweis)"
+BUSSE="$(display_get "$TYP" busse)"
+QUELLE="$(display_get "$TYP" quelle)"
+INSTALLER="$(display_get "$TYP" installer)"
+PRUEFE="$(display_get "$TYP" pruefe)"
+HINWEIS="$(display_get "$TYP" hinweis)"
 
 info "Anzeige:    $NAME"
-info "Aufloesung: $(anzeige_get "$TYP" breite)x$(anzeige_get "$TYP" hoehe), \
-$(anzeige_get "$TYP" fps) Bilder/s"
+info "Aufloesung: $(display_get "$TYP" breite)x$(display_get "$TYP" hoehe), \
+$(display_get "$TYP" fps) Bilder/s"
 info "Busse:      ${BUSSE:-keine}"
 [ -n "$HINWEIS" ] && info "Hinweis:    $HINWEIS"
 log ""
@@ -119,7 +119,7 @@ log ""
 # `dietpi` "keine Soundkarten gefunden", waehrend /proc/asound/cards die
 # Karte laengst fuehrte -- der Nutzer war schlicht nicht in der Gruppe
 # `audio`. Wer das nicht einrichtet, sucht den Fehler beim Treiber.
-gruppen_richten() {
+group_ensure() {
 	_gr_user="${SUDO_USER:-${CHIMERA_USER:-}}"
 	[ -n "$_gr_user" ] || return 0
 	[ "$_gr_user" = root ] && return 0
@@ -136,7 +136,7 @@ gruppen_richten() {
 		fi
 		if usermod -aG "$_gr_g" "$_gr_user" 2>/dev/null; then
 			info "$_gr_user in Gruppe $_gr_g aufgenommen"
-			bestand_merke gruppe "$_gr_g" "$_gr_user"
+			manifest_record gruppe "$_gr_g" "$_gr_user"
 		else
 			warn "Konnte $_gr_user nicht in Gruppe $_gr_g aufnehmen."
 		fi
@@ -145,7 +145,7 @@ gruppen_richten() {
 	# Die Gruppenzugehoerigkeit wirkt erst in einer neuen Anmeldung. Das
 	# zu verschweigen wuerde den naechsten Nachweis fehlschlagen lassen,
 	# obwohl alles richtig eingerichtet ist.
-	if bestand_hat gruppe audio 2>/dev/null; then
+	if manifest_has gruppe audio 2>/dev/null; then
 		info "Hinweis: Gruppen wirken erst nach neuer Anmeldung."
 		info "  Sofort pruefbar mit: sg audio -c 'aplay -l'"
 	fi
@@ -161,13 +161,13 @@ if [ -n "$PRUEFE" ] && sh -c "$PRUEFE" >/dev/null 2>&1; then
 	# Auch hier: Die Anzeige kann laufen und die Gruppen trotzdem fehlen
 	# -- etwa bei einem neu angelegten Nutzer. Idempotent heisst, den
 	# Zustand herzustellen, nicht ihn beim ersten Treffer aufzugeben.
-	gruppen_richten
+	group_ensure
 	log_close 0; exit 0
 fi
 
 # --- Busse in der Bootkonfiguration ---------------------------------------
 
-busse_setzen() {
+bus_enable() {
 	[ -n "$BUSSE" ] || return 0
 	[ -f "$BOOT_CFG" ] || {
 		err "Keine Bootkonfiguration gefunden ($BOOT_CFG)."
@@ -182,7 +182,7 @@ busse_setzen() {
 	# eine Aenderung.
 	if ! is_dry_run; then
 		backup_file "$BOOT_CFG" || {
-			err "Sicherung fehlgeschlagen — es wird nichts geaendert."
+			err "Sicherung fehlgeschlagen -- es wird nichts geaendert."
 			return 1
 		}
 	fi
@@ -194,26 +194,31 @@ busse_setzen() {
 			*)   _bs_zeile="dtparam=${_bs_b}=on" ;;
 		esac
 
-		if grep -q "^${_bs_zeile}$" "$BOOT_CFG" 2>/dev/null; then
-			info "schon gesetzt: $_bs_zeile"
-			continue
-		fi
+		# Ueber manifest_line, nicht per `printf >>`. Die Funktion tut
+		# dasselbe -- pruefen, anhaengen, Trockenlauf beachten -- und
+		# traegt den Eintrag zusaetzlich ins Manifest, mitsamt der
+		# Unterscheidung `vorher_da` gegen `neu`.
+		#
+		# Vorher stand hier ein eigenes `printf >>`: dieselbe Aufgabe,
+		# zweiter Weg, und der benutzte war der, der nichts festhielt.
+		# Damit war die Zeile in der Bootkonfiguration nicht
+		# zurueckbaubar (Architekturregel 10l).
+		_bs_vorher=0
+		grep -q "^${_bs_zeile}$" "$BOOT_CFG" 2>/dev/null && _bs_vorher=1
 
-		if is_dry_run; then
-			info "[wuerde anhaengen] $_bs_zeile"
-			continue
-		fi
-
-		printf '%s\n' "$_bs_zeile" >>"$BOOT_CFG"
-		info "gesetzt: $_bs_zeile"
-		_bs_neu=$((_bs_neu + 1))
+		manifest_line "$BOOT_CFG" "$_bs_zeile" || {
+			err "Konnte $_bs_zeile nicht setzen."
+			return 1
+		}
+		[ "$_bs_vorher" -eq 0 ] && ! is_dry_run &&
+			_bs_neu=$((_bs_neu + 1))
 	done
 
 	# Der HAT braucht den Tonausgang des Boards nicht -- er bringt einen
 	# eigenen Codec mit. DietPi setzt audio=off; das bleibt so, es stoert
 	# nicht. Erwaehnt wird es, damit niemand spaeter danach sucht.
 	grep -q "^dtparam=audio=off" "$BOOT_CFG" 2>/dev/null && \
-		info "dtparam=audio=off bleibt — der HAT hat einen eigenen Codec."
+		info "dtparam=audio=off bleibt -- der HAT hat einen eigenen Codec."
 
 	ANZAHL_NEU="$_bs_neu"
 	return 0
@@ -221,12 +226,12 @@ busse_setzen() {
 
 ANZAHL_NEU=0
 log "Busse"
-busse_setzen || { log_close 2; exit 2; }
+bus_enable || { log_close 2; exit 2; }
 log ""
 
 # --- Herstellertreiber ----------------------------------------------------
 
-treiber_holen_und_bauen() {
+driver_fetch_and_build() {
 	[ -n "$QUELLE" ] || {
 		info "Kein Herstellertreiber noetig fuer diese Anzeige."
 		return 0
@@ -235,7 +240,7 @@ treiber_holen_und_bauen() {
 	_tb_dir="$QUELLEN/$TYP"
 
 	log "Treiberquelle"
-	netz_git "$QUELLE" "$_tb_dir" || return 1
+	network_git "$QUELLE" "$_tb_dir" || return 1
 
 	# Im Trockenlauf wurde nichts geholt -- dann auf die Datei zu pruefen
 	# hiesse, das eigene Nichtstun als Fehler zu melden.
@@ -275,14 +280,14 @@ treiber_holen_und_bauen() {
 		have_cmd "$_tb_c" || _tb_fehlt="$_tb_fehlt $_tb_c"
 	done
 	if [ -n "$_tb_fehlt" ]; then
-		info "Bauwerkzeug fehlt:$_tb_fehlt — wird nachgeholt."
-		netz_apt build-essential device-tree-compiler || {
+		info "Bauwerkzeug fehlt:$_tb_fehlt -- wird nachgeholt."
+		network_apt build-essential device-tree-compiler || {
 			err "Bauwerkzeug nicht installierbar."
 			return 1
 		}
 		for _tb_c in make gcc; do
 			have_cmd "$_tb_c" || {
-				err "$_tb_c fehlt weiterhin — der Treiberbau wuerde scheitern."
+				err "$_tb_c fehlt weiterhin -- der Treiberbau wuerde scheitern."
 				return 1
 			}
 		done
@@ -331,7 +336,7 @@ treiber_holen_und_bauen() {
 	return 0
 }
 
-if ! treiber_holen_und_bauen; then
+if ! driver_fetch_and_build; then
 	err "Treiber konnte nicht eingerichtet werden."
 	# Nur auf eine Sicherung verweisen, die es wirklich gibt. Ein Verweis
 	# auf einen Rueckweg, den niemand angelegt hat, ist schlimmer als
@@ -360,16 +365,16 @@ fi
 if sh -c "$PRUEFE" >/dev/null 2>&1; then
 	log "Ergebnis: $NAME eingerichtet und nachgewiesen."
 	info "Nachweis: $PRUEFE"
-	_alsa="$(anzeige_get "$TYP" alsa_karte)"
+	_alsa="$(display_get "$TYP" alsa_karte)"
 	[ -n "$_alsa" ] && info "ALSA-Karte: $_alsa"
-	gruppen_richten
+	group_ensure
 	log_close 0; exit 0
 fi
 
 # Nicht nachweisbar ist nicht dasselbe wie gescheitert: Overlay und
 # Kernelmodul laden erst beim naechsten Start. Das wird gesagt, statt
 # Erfolg zu behaupten oder Fehlschlag zu melden.
-gruppen_richten
+group_ensure
 log "Ergebnis: eingerichtet, aber noch nicht nachweisbar."
 warn "Das ist der Normalfall direkt nach der Installation: Overlay und"
 warn "Kernelmodul werden beim Start geladen."

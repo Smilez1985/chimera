@@ -1,5 +1,5 @@
 #!/bin/sh
-# Chimera installer — Modul 30: Kernel-Headers.
+# Chimera installer -- Modul 30: Kernel-Headers.
 #
 # Eigenes Modul, obwohl es nur ein Paket ist. Grund: Das richtige Paket
 # haengt am Board UND an der Kernelfassung, und es gibt Faelle, in denen
@@ -22,13 +22,13 @@ _HERE="$(cd "$(dirname "$0")/.." && pwd)"
 . "$_HERE/lib/common.sh"
 . "$_HERE/lib/detect.sh"
 . "$_HERE/lib/profiles.sh"
-. "$_HERE/lib/netz.sh"
-. "$_HERE/lib/bestand.sh"
+. "$_HERE/lib/network.sh"
+. "$_HERE/lib/manifest.sh"
 
-CHIMERA_MODUL="30-headers"; export CHIMERA_MODUL
+CHIMERA_STEP="30-install-headers"; export CHIMERA_STEP
 
 [ -n "${CHIMERA_LOGFILE:-}" ] || log_open "headers" || \
-	warn "Kein Protokoll moeglich — Lauf wird nicht festgehalten."
+	warn "Kein Protokoll moeglich -- Lauf wird nicht festgehalten."
 
 BOARD="$(detect_board)"
 OS="$(detect_os)"
@@ -47,13 +47,13 @@ info "Kernel:  $KVER"
 # eine leere Huelle.
 HDIR="$(rootpath "/lib/modules/$KVER/build")"
 
-headers_brauchbar() {
+headers_usable() {
 	[ -d "$HDIR" ] || return 1
 	[ -f "$HDIR/Makefile" ] || return 1
 	return 0
 }
 
-if headers_brauchbar; then
+if headers_usable; then
 	info "Headers: vorhanden ($HDIR)"
 	log ""
 	log "Ergebnis: nichts zu tun."
@@ -72,7 +72,7 @@ POOL="$(profile_get "$BOARD" header_pool)"
 if [ -z "$PKG" ]; then
 	warn "Fuer dieses Board ist kein Header-Paket hinterlegt."
 	warn "Es wird nicht geraten (Regel 10g). Ohne Headers kann Modul 40"
-	warn "keinen Treiber bauen — eine Anzeige ohne Fremdtreiber geht"
+	warn "keinen Treiber bauen -- eine Anzeige ohne Fremdtreiber geht"
 	warn "trotzdem."
 	log_close 1; exit 1
 fi
@@ -106,7 +106,7 @@ fi
 log ""
 log "Wird geholt: $PKG"
 
-if ! bestand_apt "$PKG"; then
+if ! manifest_apt "$PKG"; then
 	err "Header-Paket liess sich nicht installieren: $PKG"
 	err ""
 	err "Bekannte Kombinationen fuer dieses Board:"
@@ -131,7 +131,7 @@ if is_dry_run; then
 	log_close 0; exit 0
 fi
 
-if headers_brauchbar; then
+if headers_usable; then
 	info "Bauverzeichnis: $HDIR"
 	log ""
 	log "Ergebnis: Headers stehen."
@@ -143,6 +143,6 @@ err "Haeufigste Ursache: Das Paket gehoert zu einer anderen"
 err "Kernelfassung als der laufenden ($KVER)."
 err ""
 err "Was jetzt hilft: Kernel aktualisieren und neu starten, dann erneut"
-err "laufen lassen — dann passen Kernel und Headers wieder zusammen."
+err "laufen lassen -- dann passen Kernel und Headers wieder zusammen."
 log_close 2
 exit 2

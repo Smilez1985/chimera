@@ -1,5 +1,5 @@
 #!/bin/sh
-# Chimera installer — Modul 10: preflight.
+# Chimera installer -- Modul 10: preflight.
 #
 # Aendert NICHTS. Es erfasst, meldet und urteilt. Das ist Absicht: Dieses
 # Modul muss auf einem fremden Geraet gefahrlos laufen koennen, bevor
@@ -7,13 +7,13 @@
 #
 # Exitcode:
 #   0  Board und Betriebssystem erkannt, unterstuetzt, es kann weitergehen
-#   1  kein passendes Profil — es geht weiter, aber ohne Boardwissen:
+#   1  kein passendes Profil -- es geht weiter, aber ohne Boardwissen:
 #      erkannt-aber-noch-nicht-unterstuetzt (Radxa vor der Portierung)
 #      oder gar nicht erkannt und vom Nutzer bestaetigt (Regel 10k)
 #   2  der Nutzer hat abgelehnt, oder es war niemand da, der zustimmen
 #      konnte (nicht-interaktiv ohne CHIMERA_ASSUME_YES)
 #
-# Es wird nicht abgebrochen, weil ein Board unbekannt ist — unbekannt
+# Es wird nicht abgebrochen, weil ein Board unbekannt ist -- unbekannt
 # heisst ungetestet, nicht unvereinbar (Regel 10k). Abgebrochen wird nur,
 # wenn die Entscheidung darueber niemand getroffen hat.
 
@@ -28,7 +28,7 @@ _HERE="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Wenn direkt aufgerufen (nicht ueber chimera-install), eigenes Protokoll.
 [ -n "${CHIMERA_LOGFILE:-}" ] || log_open "preflight" || \
-	warn "Kein Protokoll moeglich — Lauf wird nicht festgehalten."
+	warn "Kein Protokoll moeglich -- Lauf wird nicht festgehalten."
 
 BOARD="$(detect_board)"
 OS="$(detect_os)"
@@ -71,7 +71,7 @@ fi
 # identisch. Das wird gesagt, statt die Option stillschweigend zu
 # ignorieren: eine Option ohne Wirkung ist ein offenes Ende.
 log "Chimera preflight"
-is_dry_run && info "(preflight aendert nie etwas — Betriebsart ohne Folgen)"
+is_dry_run && info "(preflight aendert nie etwas -- Betriebsart ohne Folgen)"
 log ""
 log "Board und System"
 info "Board:          $BOARD ($(profile_get "$BOARD" name))"
@@ -85,12 +85,12 @@ log ""
 log "Whisplay HAT"
 case "$WHISPLAY_STATE" in
 	present) info "erkannt (product_id=${WHISPLAY_PID:-?} product_ver=${WHISPLAY_VER:-?})" ;;
-	foreign) warn "Fremder HAT im EEPROM — kein PiSugar-Board" ;;
+	foreign) warn "Fremder HAT im EEPROM -- kein PiSugar-Board" ;;
 	absent)  info "kein EEPROM lesbar (HAT nicht aufgesteckt oder ohne EEPROM)" ;;
 esac
 if [ "$WHISPLAY_STATE" = present ]; then
 	warn "Revision V1 gegen V2 ist am EEPROM noch nicht unterscheidbar."
-	warn "Auf V1 fuehrt die Button-Leitung 5 V — ein Tastendruck kann das"
+	warn "Auf V1 fuehrt die Button-Leitung 5 V -- ein Tastendruck kann das"
 	warn "Board stromlos schalten. Vor dem ersten Tastendruck klaeren."
 fi
 if whisplay_soundcard_live; then
@@ -104,14 +104,14 @@ info "root: ${_root_dev:-unbekannt}"
 case "$_root_dev" in
 	*mmcblk*p*|*mmcblk*)
 		if printf '%s' "$_root_dev" | grep -q 'mmcblk0'; then
-			info "Hinweis: Systemtraeger pruefen (SD oder eMMC?) — 'lsblk' zeigt es."
+			info "Hinweis: Systemtraeger pruefen (SD oder eMMC?) -- 'lsblk' zeigt es."
 		fi ;;
 esac
 if have_dir /sys/block/mmcblk1 || have_dir /sys/block/sda; then
-	info "Weiterer Datentraeger vorhanden — moeglicher Rettungsweg."
+	info "Weiterer Datentraeger vorhanden -- moeglicher Rettungsweg."
 else
 	warn "Kein zweiter Datentraeger erkennbar. Laeuft das System vom eMMC,"
-	warn "gibt es bei kaputter Bootkonfiguration nichts auszubauen — die"
+	warn "gibt es bei kaputter Bootkonfiguration nichts auszubauen -- die"
 	warn "Rettung braucht dann Herstellerwerkzeug an einem PC."
 fi
 log ""
@@ -145,18 +145,18 @@ unknown|unsupported_rpi|unsupported_radxa)
 	info "raspberrypi,model-zero-2-w   (Raspberry Pi Zero 2 W)"
 	info "radxa,zero3w                 (Radxa ZERO 3W)"
 	log ""
-	warn "Das heisst nicht, dass es nicht laeuft — es heisst, dass es"
+	warn "Das heisst nicht, dass es nicht laeuft -- es heisst, dass es"
 	warn "niemand geprueft hat. Ungeprueft bleiben: Anzeige (SPI-Bus und"
 	warn "-Takt), Audio (Codec, ALSA-Vorlage) und die Overlays."
 	warn ""
 	warn "Ohne Profil wird KEIN Overlay in die Bootkonfiguration"
-	warn "geschrieben — dieser eine Schritt kostet bei einem Geraet ohne"
+	warn "geschrieben -- dieser eine Schritt kostet bei einem Geraet ohne"
 	warn "Bildschirm sonst den Ausbau der SD-Karte. Die betroffenen Module"
 	warn "melden sich ab, statt zu raten."
 	warn ""
 	warn "Laeuft es bei dir: bitte melden, dann wird daraus ein Profil."
 	log ""
-	if ! confirm_risk "Ungetestetes Board — auf eigene Gefahr fortfahren?"; then
+	if ! confirm_risk "Ungetestetes Board -- auf eigene Gefahr fortfahren?"; then
 		err "Abgebrochen. Ein bekanntes Profil waehlt --force-board."
 		log_close 2; exit 2
 	fi
@@ -171,7 +171,7 @@ if [ "$OS" != dietpi ]; then
 	info "Hinweis: DietPi ist das Betriebssystem der Wahl (headless, schlank)."
 fi
 if [ "$BOOT" = unknown ]; then
-	warn "Bootmethode nicht erkannt — Modul 60 kann das Overlay nicht sicher"
+	warn "Bootmethode nicht erkannt -- Modul 60 kann das Overlay nicht sicher"
 	warn "einhaengen. Bitte melden, mit dem Inhalt von /boot."
 fi
 
@@ -196,12 +196,12 @@ fi
 
 if [ "$WM8960" = absent ] && [ "$(profile_get "$BOARD" wm8960_builtin)" != yes ]; then
 	warn "snd-soc-wm8960 nicht gefunden. Der Whisplay-Treiber setzt den Codec"
-	warn "voraus und ergaenzt ihn nur — Modul 40 muss ihn dann bauen."
+	warn "voraus und ergaenzt ihn nur -- Modul 40 muss ihn dann bauen."
 fi
 
 # Das Sprachmodell liegt grundsaetzlich ausserhalb (Architekturregel 5):
 # weder der BCM2837 noch der RK3566 koennen es tragen. Beim RK3566 hilft
-# auch die NPU nicht — Rockchips rknn-llm unterstuetzt sie gar nicht.
+# auch die NPU nicht -- Rockchips rknn-llm unterstuetzt sie gar nicht.
 # Der Speicher entscheidet nur, ob STT und TTS gleichzeitig geladen
 # bleiben koennen oder rotieren muessen.
 info "Sprachmodell laeuft ausserhalb (Anthropic-Abo oder Ollama im Netz)."
@@ -212,7 +212,7 @@ fi
 
 log ""
 if [ "$NO_PROFILE" = 1 ]; then
-	log "Ergebnis: kein Profil fuer dieses Board — Lauf auf eigene Gefahr."
+	log "Ergebnis: kein Profil fuer dieses Board -- Lauf auf eigene Gefahr."
 	log "  Boardabhaengige Module melden sich ab, statt zu raten (Regel 10k)."
 	log_close 1; exit 1
 fi

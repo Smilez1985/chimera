@@ -1,8 +1,8 @@
 #!/bin/sh
-# Tests fuer Architekturregel 10k — unbekanntes Board warnt, verbietet nicht.
+# Tests fuer Architekturregel 10k -- unbekanntes Board warnt, verbietet nicht.
 #
 # Geprueft wird das Modul als Ganzes (nicht eine nachgebaute Logik, Regel 9):
-# 10-preflight.sh laeuft gegen ein erfundenes Wurzelverzeichnis, und es wird
+# 10-check-system.sh laeuft gegen ein erfundenes Wurzelverzeichnis, und es wird
 # sein echter Exitcode und seine echte Ausgabe bewertet.
 #
 # Jeder Test hat eine GEGENPROBE. Die wichtigste ist die gegen das alte
@@ -23,14 +23,14 @@ ok()  { PASS=$((PASS+1)); printf '  ok    %s\n' "$1"; }
 bad() { FAIL=$((FAIL+1)); printf '  FAIL  %s\n' "$1"; }
 check() {
 	if [ "$2" = "$3" ]; then ok "$1"
-	else bad "$1 — erwartet '$3', bekam '$2'"; fi
+	else bad "$1 -- erwartet '$3', bekam '$2'"; fi
 }
 contains() {
 	if printf '%s' "$2" | grep -qi -- "$3"; then ok "$1"
-	else bad "$1 — '$3' fehlt in der Ausgabe"; fi
+	else bad "$1 -- '$3' fehlt in der Ausgabe"; fi
 }
 lacks() {
-	if printf '%s' "$2" | grep -qi -- "$3"; then bad "$1 — '$3' kam doch vor"
+	if printf '%s' "$2" | grep -qi -- "$3"; then bad "$1 -- '$3' kam doch vor"
 	else ok "$1"; fi
 }
 
@@ -56,7 +56,7 @@ run_preflight() {
 	           CHIMERA_LOG_DIR="$_rp_root/logs" \
 	           CHIMERA_MODE=run \
 	           "$@" \
-	           sh "$HERE/modules/10-preflight.sh" <"$_rp_in" 2>&1)"
+	           sh "$HERE/steps/10-check-system.sh" <"$_rp_in" 2>&1)"
 	RC=$?
 	set -e
 }
@@ -108,7 +108,7 @@ rm -rf "$R"
 
 echo "== Bekanntes Board bleibt unberuehrt =="
 
-# Der Pi Zero 2 W hat ein Profil — keine Warnung, keine Frage, Exitcode 0.
+# Der Pi Zero 2 W hat ein Profil -- keine Warnung, keine Frage, Exitcode 0.
 mkroot "Raspberry Pi Zero 2 W Rev 1.0" "raspberrypi,model-zero-2-w brcm,bcm2837"
 run_preflight "$R" /dev/null
 check "Zero 2 W wird unterstuetzt" "$RC" "0"
@@ -132,7 +132,7 @@ CHIMERA_MODE=dry
 confirm_risk "Test?" && ok "Trockenlauf fragt nicht, blockiert aber auch nicht" \
 	|| bad "Trockenlauf blockiert"
 
-# Ohne Terminal steigt confirm_risk vor der Antwort aus — das ist richtig
+# Ohne Terminal steigt confirm_risk vor der Antwort aus -- das ist richtig
 # so, macht aber jede Pruefung der Antwortauswertung durch confirm_risk
 # hindurch blind. Deshalb wird answer_is_yes direkt aufgerufen: dieselbe
 # Funktion, die confirm_risk benutzt, nicht eine nachgebaute (Regel 9).

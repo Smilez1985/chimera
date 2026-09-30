@@ -1,5 +1,5 @@
 #!/bin/sh
-# Chimera installer — Anzeigen und ihre Treiber.
+# Chimera installer -- Anzeigen und ihre Treiber.
 #
 # Nicht "der Whisplay-Installer wird aufgerufen", sondern: **Jede Anzeige
 # ist ein Eintrag mit demselben Satz Felder.** Der Whisplay-HAT ist der
@@ -22,7 +22,7 @@
 #   pruefe        Befehl, der NACH der Installation treffen muss (Regel 10j)
 #   hinweis       was ein Mensch dazu wissen muss
 
-anzeige_get() {
+display_get() {
 	_ag_typ="$1"
 	_ag_feld="$2"
 
@@ -103,7 +103,7 @@ anzeige_get() {
 		alsa_karte)  echo "" ;;
 		erkennung)   echo "immer" ;;
 		pruefe)      echo "true" ;;
-		hinweis)     echo "Chimera laeuft blind — Gesicht wird berechnet, aber nicht gezeigt." ;;
+		hinweis)     echo "Chimera laeuft blind -- Gesicht wird berechnet, aber nicht gezeigt." ;;
 		*)           echo "" ;;
 		esac
 		;;
@@ -116,7 +116,7 @@ anzeige_get() {
 }
 
 # Alle bekannten Anzeigen, in der Reihenfolge, in der erkannt wird.
-anzeigen_liste() {
+display_list() {
 	echo "whisplay st7789 epaper keine"
 }
 
@@ -130,7 +130,7 @@ anzeigen_liste() {
 # Wichtig: Ohne aktives I2C liest die Firmware das EEPROM gar nicht erst.
 # Ein fehlender HAT-Knoten vor dem ersten Einschalten von i2c_arm sagt
 # deshalb nichts aus.
-anzeige_erkennen() {
+display_detect() {
 	_ae_hat="$(rootpath /proc/device-tree/hat)"
 
 	if [ -d "$_ae_hat" ]; then
@@ -153,6 +153,6 @@ anzeige_erkennen() {
 
 # Ist I2C ueberhaupt an? Ohne das ist die Erkennung blind, und dieser
 # Unterschied muss sichtbar bleiben.
-anzeige_erkennung_moeglich() {
+display_detect_possible() {
 	[ -n "$(find "$(rootpath /dev)" -maxdepth 1 -name 'i2c-*' 2>/dev/null | head -1)" ]
 }

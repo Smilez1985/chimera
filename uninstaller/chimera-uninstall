@@ -1,0 +1,181 @@
+#!/bin/sh
+# Chimera -- Deinstallation, Haupteinstieg.
+#
+# Gegenstueck zu `installer/chimera-install` (Architekturregel 10l). Ruft
+# die Schritte in `steps/` in UMGEKEHRTER Nummernfolge auf: Was zuletzt
+# angelegt wurde, wird zuerst entfernt. Ein Dienst muss weg sein, bevor
+# man ihm die Dateien unter den Fuessen wegzieht.
+#
+# Die einzige Wahrheitsquelle ist das Manifest
+# (/var/lib/chimera/manifest.tsv). Ohne Manifest wird NICHT geraten --
+# dann bricht der Lauf ab und sagt, warum. Ein Deinstallierer, der raet,
+# loescht entweder Fremdes oder laesst Eigenes liegen.
+#
+# Aufruf:
+#   chimera-uninstall                 alle Schritte, rueckwaerts
+#   chimera-uninstall --only 40       nur der passende Schritt
+#   chimera-uninstall --list          Schritte auflisten
+#   chimera-uninstall --dry-run       nur berichten, nichts aendern
+#   chimera-uninstall --manifest F    anderes Manifest verwenden
+#   chimera-uninstall --remove-packages  auch Pakete entfernen (siehe unten)
+#
+# Exitcode: der des ersten fehlgeschlagenen Schritts, sonst 0.
+
+set -eu
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# Die Bibliotheken liegen beim Installer -- sie werden geteilt, nicht
+# kopiert. Zwei Fassungen derselben Logik laufen sonst auseinander, und
+# die seltener benutzte ist die falsche.
+LIB="$(cd "$HERE/../installer/lib" && pwd)"
+. "$LIB/common.sh"
+. "$LIB/manifest.sh"
+
+MODE=run
+ONLY=""
+# Vorgabe: Pakete BEHALTEN. Der vorsichtige Weg ist der voreingestellte,
+# nicht der, den man extra absichern muss. Ein `apt-get remove git python3`
+# auf einem gewachsenen System ist kein Aufraeumen.
+KEEP_PACKAGES=1
+VERSION="$(cat "$HERE/../VERSION" 2>/dev/null || echo '?')"
+
+usage() {
+	cat <<EOF
+chimera-uninstall $VERSION
+
+  --only <praefix>     nur der passende Schritt (z. B. 40)
+  --list               verfuegbare Schritte anzeigen
+  --dry-run            nichts aendern, nur berichten
+  --manifest <datei>   anderes Manifest verwenden
+  --remove-packages    auch die von Chimera installierten Pakete entfernen
+                       (Vorgabe: behalten -- sie zu entfernen bringt wenige
+                       Megabyte und kann per Abhaengigkeit mehr mitreissen)
+  --log-dir <dir>      wohin das Protokoll geschrieben wird
+  -h, --help           diese Hilfe
+EOF
+}
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--only)     ONLY="${2:?--only braucht einen Wert}"; shift 2 ;;
+		--dry-run)  MODE=dry; shift ;;
+		--list)     MODE=list; shift ;;
+		--manifest) CHIMERA_MANIFEST="${2:?--manifest braucht einen Wert}"; shift 2 ;;
+		--remove-packages) KEEP_PACKAGES=0; shift ;;
+		# Alter Name, bleibt gueltig: Er war in einer frueheren Fassung
+		# der Hilfe genannt. Eine Option stillschweigend fallenzulassen
+		# bricht Skripte, die sie benutzen.
+		--keep-packages) KEEP_PACKAGES=1; shift ;;
+		--log-dir)  CHIMERA_LOG_DIR="${2:?--log-dir braucht einen Wert}"; shift 2 ;;
+		-h|--help)  usage; exit 0 ;;
+		*) err "Unbekannte Option: $1"; usage >&2; exit 2 ;;
+	esac
+done
+
+export KEEP_PACKAGES
+
+# Rueckwaerts: 40 vor 30 vor 20. `sort -r` genuegt, weil die Nummern
+# zweistellig und gleich breit sind -- bei dreistelligen waere eine
+# numerische Sortierung noetig. Steht hier, damit es beim Erweitern
+# auffaellt.
+steps_list() {
+	find "$HERE/steps" -name '[0-9]*-*.sh' 2>/dev/null | sort -r
+}
+
+if [ "$MODE" = list ]; then
+	printf 'Schritte in Ausfuehrungsfolge (rueckwaerts):\n'
+	steps_list | while read -r s; do printf '  %s\n' "$(basename "$s" .sh)"; done
+	exit 0
+fi
+
+log_open "uninstall" || warn "Kein Protokoll moeglich -- Lauf wird nicht festgehalten."
+
+log "chimera-uninstall $VERSION"
+[ "$MODE" = dry ] && info "Trockenlauf -- es wird nichts geaendert."
+[ -n "$ONLY" ] && info "Nur Schritt: $ONLY"
+
+# --- Ohne Manifest wird nicht geraten ------------------------------------
+#
+# Das ist der Kern. Ein fehlendes Manifest heisst nicht "nichts
+# installiert", es heisst "ich weiss es nicht" -- und das sind zwei
+# verschiedene Dinge (Architekturregel 10j).
+if [ ! -f "$CHIMERA_MANIFEST" ]; then
+	err "Kein Manifest unter: $CHIMERA_MANIFEST"
+	err ""
+	err "Damit ist unbekannt, was Chimera am System geaendert hat. Es wird"
+	err "nichts entfernt -- Raten hiesse, fremde Dateien zu loeschen oder"
+	err "eigene liegenzulassen."
+	err ""
+	err "Wenn die Installation von Hand oder mit einer aelteren Fassung"
+	err "lief, steht in docs/UNINSTALL.md, was manuell zu pruefen ist."
+	log_close 2
+	exit 2
+fi
+
+EINTRAEGE="$(manifest_list | grep -c . || true)"
+info "Manifest: $CHIMERA_MANIFEST ($EINTRAEGE Eintraege)"
+log ""
+
+manifest_report
+
+log ""
+
+FAILED=0
+FIRST_RC=0
+RAN=0
+
+for step in $(steps_list); do
+	name="$(basename "$step" .sh)"
+
+	if [ -n "$ONLY" ]; then
+		case "$name" in
+			"$ONLY"|"$ONLY"-*) : ;;
+			*) continue ;;
+		esac
+	fi
+
+	RAN=$((RAN + 1))
+	_log_raw "--- Schritt $name ---"
+
+	set +e
+	CHIMERA_MODE="$MODE" CHIMERA_LOGFILE="$CHIMERA_LOGFILE" sh "$step"
+	rc=$?
+	set -e
+
+	if [ "$rc" -ne 0 ]; then
+		FAILED=$((FAILED + 1))
+		[ "$FIRST_RC" -eq 0 ] && FIRST_RC=$rc
+		_log_raw "Schritt $name: Exitcode $rc"
+		# Anders als beim Installer wird hier NICHT abgebrochen. Ein
+		# halb zurueckgebauter Zustand ist schlimmer als ein vollstaendig
+		# versuchter: Bleibt der Dienst stehen, weil das Entfernen der
+		# Dateien scheiterte, laeuft ein Dienst auf fehlenden Dateien.
+		# Deshalb: weitermachen, alles melden, am Ende Bilanz.
+		warn "Schritt $name hatte einen Befund -- der Lauf geht weiter."
+	else
+		_log_raw "Schritt $name: ok"
+	fi
+done
+
+if [ "$RAN" -eq 0 ]; then
+	err "Kein Schritt ausgefuehrt${ONLY:+ -- kein Treffer fuer '$ONLY'}."
+	log_close 2
+	exit 2
+fi
+
+log ""
+if [ "$FAILED" -eq 0 ]; then
+	log "Fertig: $RAN Schritt(e), ohne Fehler."
+	# Was bleibt, wird benannt -- nicht verschwiegen. Eintraege mit
+	# `vorher_da` gehoeren dem Nutzer und bleiben absichtlich stehen.
+	VORHER="$(manifest_list paket | grep -c 'vorher_da' || true)"
+	if [ "${VORHER:-0}" -gt 0 ]; then
+		info "$VORHER Paket(e) blieben stehen: sie waren vor Chimera da."
+	fi
+else
+	warn "Fertig: $RAN Schritt(e), $FAILED mit Befund."
+	warn "Das System ist moeglicherweise nur teilweise zurueckgebaut."
+	warn "Das Protokoll nennt jeden Einzelfall."
+fi
+log_close "$FIRST_RC"
+exit "$FIRST_RC"

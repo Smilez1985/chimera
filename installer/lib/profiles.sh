@@ -1,5 +1,5 @@
 #!/bin/sh
-# Chimera installer — Boardprofile.
+# Chimera installer -- Boardprofile.
 #
 # ALLES Boardabhaengige steht hier, nicht verstreut in Fallunterscheidungen
 # quer durch die Module. Ein neues Board ist ein Eintrag in dieser Datei.
@@ -10,8 +10,8 @@
 # unbemerkt.
 #
 # Felder:
-#   supported        yes | not_yet    — kein Platzhalter im Code, ein Zustand
-#   header_stage     1 | 2            — woher die Kernel-Headers kommen
+#   supported        yes | not_yet    -- kein Platzhalter im Code, ein Zustand
+#   header_stage     1 | 2            -- woher die Kernel-Headers kommen
 #   header_pkg       Distributionspaket fuer Stufe 1
 #   header_pool      Paketquelle fuer Stufe 2
 #   spi_bus/cs/speed LCD-Anbindung
@@ -58,7 +58,7 @@ profile_get() {
 		ram_mb)         echo "1024-8192" ;;
 		# DietPi baut fuer dieses Board keinen eigenen Kernel, sondern
 		# nutzt Armbians rockchip64-Familie. Die Headers-Pakete existieren
-		# im Armbian-Index — deshalb Stufe 2 und nicht Stufe 3.
+		# im Armbian-Index -- deshalb Stufe 2 und nicht Stufe 3.
 		header_stage)   echo "2" ;;
 		header_pkg)     echo "linux-headers-current-rockchip64" ;;
 		header_pool)    echo "https://apt.armbian.com" ;;
@@ -92,7 +92,7 @@ profile_get() {
 #
 # Der Hersteller-Installer bindet hart auf EINE Kernelversion und bricht
 # sonst ab. Das ist ehrlich, aber unbequem: ein Kernelupdate macht die
-# Installation unbaubar. Hier steht stattdessen eine Tabelle — und eine
+# Installation unbaubar. Hier steht stattdessen eine Tabelle -- und eine
 # unbekannte Version fuehrt zu einem Abbruch MIT Auskunft, nicht zu einem
 # Rateversuch.
 #

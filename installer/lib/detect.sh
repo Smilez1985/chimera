@@ -1,5 +1,5 @@
 #!/bin/sh
-# Chimera installer — Erkennung von Board, Betriebssystem und Bootmethode.
+# Chimera installer -- Erkennung von Board, Betriebssystem und Bootmethode.
 #
 # Drei UNABHAENGIGE Achsen. Derselbe Chip unter DietPi und unter Radxas
 # Abbild sind zwei Installationsfaelle, weil Overlay-Ablage und
@@ -23,19 +23,19 @@ detect_board() {
 	_db_model="$(read_dt /proc/device-tree/model || true)"
 	_db_compat="$(read_dt_list /proc/device-tree/compatible || true)"
 
-	# Radxa Zero 3W / 3E — rk3566
+	# Radxa Zero 3W / 3E -- rk3566
 	if printf '%s\n' "$_db_compat" | grep -qi '^radxa,zero3'; then
 		echo rpi_placeholder >/dev/null   # kein Treffer auf Pi-Zweig
 		echo radxa_zero3w; return 0
 	fi
 
-	# Raspberry Pi Zero 2 W — bcm2837/bcm2710
+	# Raspberry Pi Zero 2 W -- bcm2837/bcm2710
 	if printf '%s\n' "$_db_compat" | grep -qi '^raspberrypi,model-zero-2-w'; then
 		echo rpi_zero2w; return 0
 	fi
 
 	# Rueckfall ueber den Klartextnamen, aber nur fuer die Modelle, die wir
-	# wirklich unterstuetzen — kein Sammelmuster.
+	# wirklich unterstuetzen -- kein Sammelmuster.
 	case "$_db_model" in
 		*"Raspberry Pi Zero 2 W"*) echo rpi_zero2w;    return 0 ;;
 		*"Radxa ZERO 3W"*|*"Radxa Zero 3W"*) echo radxa_zero3w; return 0 ;;
@@ -54,7 +54,7 @@ detect_board() {
 # --- Betriebssystem -------------------------------------------------------
 #
 # DietPi ist die Zielplattform. Es setzt auf Debian auf, deshalb reicht
-# os-release allein nicht — DietPi meldet sich dort als Debian.
+# os-release allein nicht -- DietPi meldet sich dort als Debian.
 detect_os() {
 	if have_file /boot/dietpi.txt || have_file /boot/dietpi/.version \
 	   || have_dir /boot/dietpi; then
@@ -117,12 +117,12 @@ detect_overlay_dir() {
 
 # --- Whisplay HAT ---------------------------------------------------------
 #
-# Der HAT hat ein EEPROM, das der Kernel in den Gerätebaum einhaengt. Damit
+# Der HAT hat ein EEPROM, das der Kernel in den Geraetebaum einhaengt. Damit
 # ist die Platine erkennbar, ohne draufzuschauen.
 #
 # OFFEN: ob sich daraus V1 gegen V2 unterscheiden laesst. Bekannt ist nur
 # product_id 0x0001. Solange das nicht geklaert ist, bleibt die Warnung
-# stehen — auf V1 fuehrt die Button-Leitung 5 V und ein Tastendruck kann
+# stehen -- auf V1 fuehrt die Button-Leitung 5 V und ein Tastendruck kann
 # das Board stromlos schalten.
 detect_whisplay() {
 	_dw_vendor="$(read_dt /proc/device-tree/hat/vendor || true)"
@@ -139,7 +139,7 @@ detect_whisplay() {
 	esac
 }
 
-# Ist die Whisplay-Soundkarte schon im laufenden Gerätebaum?
+# Ist die Whisplay-Soundkarte schon im laufenden Geraetebaum?
 whisplay_soundcard_live() {
 	_wl="$(read_dt /proc/device-tree/sound/compatible || true)"
 	case "$_wl" in

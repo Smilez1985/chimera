@@ -1250,6 +1250,75 @@ Bereits eingetreten: Modul 10 lag zunächst ohne Aufrufer da (kein
 verdrahtet, Letzteres ist im Quelltext als „noch ohne Aufrufer, gebraucht
 von Modul 60" vermerkt.
 
+### Architekturregel 10l — Jeder Installationsschritt hat sein Gegenstück
+
+**Ein Schritt, der etwas anlegt, wird zusammen mit dem Schritt geschrieben,
+der es zurücknimmt.** Nicht später, nicht am Ende, nicht „wenn der
+Installer final ist". Zu `installer/steps/NN-install-x.sh` gehört
+`uninstaller/steps/NN-remove-x.sh`, und beide entstehen im selben
+Arbeitsgang.
+
+Dazu gehört zweitens: **Jede Änderung am System wird ins Manifest
+geschrieben** (`installer/lib/manifest.sh`, Datei
+`/var/lib/chimera/manifest.tsv`). Wer nicht einträgt, kann nicht
+zurückbauen — und ein Deinstallierer, der raten muss, löscht entweder
+Fremdes oder lässt Eigenes liegen.
+
+Die Begründung ist nicht Symmetrie, sondern **Prüfbarkeit**: Der
+Rückbauschritt ist der einzige echte Test des Manifesteintrags. Er
+beantwortet die Frage, ob überhaupt genug festgehalten wurde, um die
+Änderung umzukehren. Solange niemand aus dem Manifest liest, ist jeder
+Eintrag eine unbelegte Behauptung.
+
+Der Gegenentwurf — erst alle Installationsschritte, danach der
+Deinstallierer — hat zwei Kosten, die vorher gemessen werden können:
+Erstens stellt man am Ende fest, dass mehrere Schritte in einer Form
+protokolliert haben, aus der sich nichts zurückbauen lässt, und korrigiert
+sie rückwärts. Zweitens ist der Rückbau eines Dienstes oder eines
+Kernelmoduls eine Reihenfolgefrage (stoppen, deaktivieren, entfernen,
+`daemon-reload`), die man beim Anlegen im Kopf hat und Monate später
+rekonstruieren muss.
+
+Belegter Ausgangspunkt dieser Regel: Das Manifest kennt acht Arten
+(`paket`, `zeile`, `datei`, `verzeich`, `dienst`, `gruppe`, `modul`,
+`sicherung`). Benutzt wurden drei. Ob `dienst` und `modul` in einer
+rückbaubaren Form eingetragen werden, war zum Zeitpunkt dieser Regel
+**ungeprüft**, weil es keinen Leser gab — ein offenes Ende nach
+Architekturregel 10h, und zwar in genau dem Bauteil, dessen Zweck der
+Rückbau ist.
+
+Zwei Folgen für die Praxis:
+
+- Ein Schritt, der nichts verändert, braucht kein Gegenstück.
+  `10-check-system` prüft nur und trägt darum auch nichts ein.
+- Der Deinstallierer läuft in **umgekehrter Reihenfolge** der Nummern und
+  fasst nur an, was im Manifest als `neu` steht. Was als `vorher_da`
+  vermerkt ist, gehört dem Nutzer und bleibt.
+
+### Architekturregel 10m — Ausführbares bleibt reines ASCII
+
+Alles unter `installer/` und `uninstaller/` ist **ASCII**, und die Locale
+wird im Programm festgelegt (`LC_ALL=C`), nicht von der Umgebung erwartet.
+
+Zwei Gründe, beide nachgemessen:
+
+Eine Fehlermeldung mit Umlaut wird auf einer Konsole ohne gesetztes `LANG`
+zu Fragezeichen — und in einer systemd-Unit ist `LANG` standardmäßig leer.
+Das trifft die Ausgabe genau dann, wenn man sie lesen will.
+
+`sort` ordnet unter `de_DE.UTF-8` anders als unter `C`, und `grep [a-z]`
+fasst dort auch Umlaute. Ein Installer, der je nach Umgebung anders
+sortiert, ist nicht reproduzierbar.
+
+Gemessener Ausgangszustand: 14 von 15 Shell-Dateien enthielten Nicht-ASCII
+(`ä`, `Ä`, `—`), `LC_ALL` war nirgends gesetzt. Geprüft wird das von
+`installer/tests/test-portability.sh`, mit Gegenprobe in beide Richtungen —
+ein Gegenbeispiel im Kommentar (`kein [[ ]] verwenden`) darf **nicht**
+anschlagen, sonst treibt der Test die Warnhinweise aus der Dokumentation.
+
+Für Dokumentation gilt das nicht: `.md`-Dateien sind UTF-8 und dürfen
+Typografie benutzen.
+
 ## 11. Headless
 
 Chimera hat **keine grafische Oberfläche.** Es gibt den 240×280-Bildschirm
@@ -1377,4 +1446,6 @@ die Historie umgeschrieben.
 - **10f** — Keine Container auf dem Gerät
 - **10g** — Nie raten
 - **10h** — Gebaut ist erst, wenn verdrahtet ist
+- **10l** — Jeder Installationsschritt hat sein Gegenstück
+- **10m** — Ausführbares bleibt reines ASCII
 - **13a** — Vor jedem Push wird geprüft, und die Prüfung beweist ihre Sehfähigkeit

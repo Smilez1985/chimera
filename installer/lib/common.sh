@@ -1,10 +1,20 @@
 #!/bin/sh
-# Chimera installer — gemeinsame Helfer.
+# Chimera installer -- gemeinsame Helfer.
 #
 # POSIX sh, keine bash-Abhaengigkeit: das Ding laeuft auf DietPi, aber auch
 # in einer schlanken Testumgebung. Keine Arrays, kein [[ ]], kein local
-# ausserhalb von Funktionen (dash kennt local, POSIX nicht — wir bleiben
+# ausserhalb von Funktionen (dash kennt local, POSIX nicht -- wir bleiben
 # bei dash-Kompatibilitaet, das ist DietPis /bin/sh).
+
+# Locale festnageln. Nicht aus Ordnungsliebe: `sort` ordnet unter
+# de_DE.UTF-8 anders als unter C, und `grep [a-z]` fasst dort auch Umlaute.
+# Ein Installer, der je nach Umgebung anders sortiert, ist nicht
+# reproduzierbar -- und auf dem Zielgeraet ist der Aufrufer ein
+# systemd-Dienst mit leerem LANG, nicht die Shell des Entwicklers.
+#
+# LC_ALL sticht LANG und alle LC_*; darum genau diese Variable.
+LC_ALL=C
+export LC_ALL
 
 # Wurzelverzeichnis fuer alle Systemabfragen. Im Betrieb "", in Tests ein
 # temporaeres Verzeichnis mit erfundenen Dateien. Dadurch ist die gesamte
@@ -18,7 +28,18 @@
 # genau dann braucht man ihn: wenn etwas schiefging und die Frage lautet,
 # was vorher anders war.
 : "${CHIMERA_LOG_DIR:=${CHIMERA_ROOT}/var/log/chimera}"
-CHIMERA_LOGFILE=""
+
+# Mit `:=` statt `=`, damit ein von aussen gesetzter Wert erhalten bleibt
+# (der Laeufer reicht das Protokoll an die Schritte durch) und die Variable
+# auch dann definiert ist, wenn sie vorher `unset` war.
+#
+# Der Unterschied ist unter `set -u` kein Feinheit: Ein Skript, das
+# common.sh laedt, CHIMERA_LOGFILE aber nicht setzt, starb beim ersten
+# Protokollschreiben mit "parameter not set" -- und weil das auf stderr
+# ging und der Aufrufer stderr wegwarf, sah es aus wie ein stiller
+# Abbruch mitten in einer Funktion. Gekostet hat das eine Stunde Suche im
+# falschen Bauteil.
+: "${CHIMERA_LOGFILE:=}"
 
 log_open() {
 	_lo_name="${1:-chimera}"
@@ -30,14 +51,19 @@ log_open() {
 	}
 	CHIMERA_LOGFILE="$CHIMERA_LOG_DIR/${_lo_name}-$(date +%Y%m%d-%H%M%S).log"
 	: >"$CHIMERA_LOGFILE" 2>/dev/null || { CHIMERA_LOGFILE=""; return 1; }
-	_log_raw "=== chimera $_lo_name — $(date '+%Y-%m-%d %H:%M:%S') ==="
+	_log_raw "=== chimera $_lo_name -- $(date '+%Y-%m-%d %H:%M:%S') ==="
 	_log_raw "Version: $(cat "$(dirname "$0")/../VERSION" 2>/dev/null || echo '?')"
 	return 0
 }
 
 # Nur in die Datei, nicht auf den Schirm.
+#
+# Der Zugriff nutzt ${...:-}, damit eine nicht gesetzte Variable unter
+# `set -u` kein Abbruch ist. Protokollieren ist eine Nebensache; es darf
+# den Lauf nicht beenden. Passiert ist genau das: Ein Aufrufer hatte
+# CHIMERA_LOGFILE ge-unsett, und der Lauf starb beim ersten info().
 _log_raw() {
-	[ -n "$CHIMERA_LOGFILE" ] || return 0
+	[ -n "${CHIMERA_LOGFILE:-}" ] || return 0
 	printf '%s\n' "$*" >>"$CHIMERA_LOGFILE" 2>/dev/null || true
 }
 
@@ -146,7 +172,7 @@ log_close() {
 	_lc_rc="${1:-0}"
 	if [ "$_lc_rc" -eq 0 ]; then _log_raw "=== Ergebnis: Erfolg (0) ==="
 	else _log_raw "=== Ergebnis: Exitcode $_lc_rc ==="; fi
-	[ -n "$CHIMERA_LOGFILE" ] && printf 'Protokoll: %s\n' "$CHIMERA_LOGFILE"
+	[ -n "${CHIMERA_LOGFILE:-}" ] && printf 'Protokoll: %s\n' "$CHIMERA_LOGFILE"
 	log_rotate
 	return 0
 }
@@ -158,7 +184,7 @@ die() { err "$*"; log_close 1; exit 1; }
 # Pfad im Zielsystem in einen echten Pfad uebersetzen.
 rootpath() { printf '%s%s' "$CHIMERA_ROOT" "$1"; }
 
-# Datei lesen, leer wenn nicht vorhanden. Kein Fehler — Abwesenheit ist
+# Datei lesen, leer wenn nicht vorhanden. Kein Fehler -- Abwesenheit ist
 # hier eine gueltige Aussage, kein Ausnahmefall.
 read_file() {
 	_rf_p="$(rootpath "$1")"
@@ -166,15 +192,15 @@ read_file() {
 	cat "$_rf_p" 2>/dev/null
 }
 
-# Gerätebaum-Strings sind nullterminiert. tr statt cat, sonst hängen
-# Nullbytes in der Variablen und jeder Vergleich wird unzuverlässig.
+# Geraetebaum-Strings sind nullterminiert. tr statt cat, sonst haengen
+# Nullbytes in der Variablen und jeder Vergleich wird unzuverlaessig.
 read_dt() {
 	_rd_p="$(rootpath "$1")"
 	[ -r "$_rd_p" ] || return 1
 	tr -d '\0' <"$_rd_p" 2>/dev/null
 }
 
-# compatible enthaelt mehrere nullgetrennte Kennungen — in Zeilen wandeln.
+# compatible contains mehrere nullgetrennte Kennungen -- in Zeilen wandeln.
 read_dt_list() {
 	_rl_p="$(rootpath "$1")"
 	[ -r "$_rl_p" ] || return 1
@@ -252,19 +278,36 @@ write_atomic() {
 
 # Sicherung mit Zeitstempel.
 #
-# NOCH OHNE AUFRUFER: Wird von Modul 60 (Overlay/Bootkonfiguration)
-# gebraucht, das es noch nicht gibt. Steht hier, weil die Regel dazu
-# bereits feststeht und getestet ist -- nicht als Vorrat, sondern damit
-# Modul 60 sie nicht neu erfindet.
+# Eine Fremddatei sichern, bevor sie angefasst wird.
 #
 # Eine kaputte Bootkonfiguration auf einem Geraet ohne Bildschirm bedeutet
 # im besten Fall SD-Karte ausbauen. Laeuft das System vom eMMC, gibt es
 # nichts auszubauen -- dann braucht die Rettung Herstellerwerkzeug an
 # einem PC.
+#
+# Aufrufer: steps/40-install-display.sh (bus_enable), vor dem Anhaengen an
+# config.txt.
+#
+# Die Sicherung wird ins Manifest eingetragen, sonst weiss die
+# Deinstallation nicht, welche Kopie zu welchem Original gehoert -- und
+# eine Sicherung, die niemand zuordnen kann, ist nur noch Muell im
+# Dateisystem (Architekturregel 10l).
 backup_file() {
 	_bf_f="$1"
 	[ -f "$_bf_f" ] || return 0
 	_bf_b="${_bf_f}.chimera-$(date +%Y%m%d-%H%M%S).bak"
 	cp -p "$_bf_f" "$_bf_b" || return 1
 	info "Sicherung: $_bf_b"
+
+	# manifest.sh ist nicht ueberall geladen -- common.sh ist die
+	# unterste Schicht und darf sie nicht voraussetzen. Darum pruefen,
+	# statt zu hoffen: Fehlt die Funktion, wird das GESAGT, nicht
+	# stillschweigend uebergangen (Architekturregel 8a).
+	if command -v manifest_record >/dev/null 2>&1; then
+		manifest_record sicherung "$_bf_b" "$_bf_f"
+	else
+		warn "Sicherung nicht im Manifest festgehalten (manifest.sh"
+		warn "nicht geladen) -- die Deinstallation kann sie nicht"
+		warn "zuordnen: $_bf_b"
+	fi
 }
