@@ -1,29 +1,39 @@
 #!/bin/sh
-# Nachsehen, was tatsaechlich am System ist.
+# Nachsehen, was tatsaechlich am System ist -- um zu BERICHTEN, nicht um
+# zu entfernen.
 #
-# Das Manifest sagt, was Chimera GETAN hat. Diese Bibliothek sagt, was
-# JETZT da ist. Beides ist noetig, und beides beantwortet eine andere
-# Frage:
+# DIE GRUNDREGEL (Architekturregel 10o):
 #
-#   Manifest:  "ich habe python3-pil neu installiert"
-#   Nachsehen: "python3-pil ist installiert"
+#   Was nicht im Manifest steht, ist nicht vom Installer und wird vom
+#   Uninstaller nicht angefasst.
 #
-# Fehlt das Manifest, wird nicht abgebrochen und nicht geraten -- es wird
-# nachgesehen. Was dabei eindeutig Chimera gehoert (eigene Pfade, eigene
-# Dienstnamen), wird entfernt. Was mehrdeutig ist, wird GENANNT und dem
-# Nutzer zur Entscheidung gegeben.
+# Das Manifest ist die einzige Quelle fuer die Frage "darf ich das
+# entfernen". Diese Bibliothek beantwortet eine andere Frage, naemlich
+# "was ist da" -- und zwar zum Berichten:
 #
-# Die Grenze des Nachsehens, ehrlich benannt: Ob ein Paket VOR Chimera
-# schon installiert war, steht nirgends im System. Das ist Historie, und
-# die kennt nur das Manifest. `dpkg-query` sagt "installiert", nicht
-# "von wem". Wer ohne Manifest Pakete entfernt, entfernt auf Verdacht --
-# deshalb werden sie dort nur berichtet.
+#   Manifest:  "ich habe python3-pil neu installiert"  -> entfernbar
+#   Nachsehen: "python3-pil ist installiert"           -> Auskunft
+#
+# Fehlt das Manifest, wird nicht abgebrochen, nicht geraten und NICHTS
+# entfernt. Es wird nachgesehen und berichtet, damit der Nutzer die Fakten
+# hat und selbst entscheiden kann.
+#
+# Warum keine Ausnahme fuer "eindeutig eigene" Pfade wie /opt/chimera:
+# Weil "eindeutig" eine Annahme ist, und zwar eine ueber ein System, das
+# man nicht kennt. Dort kann ein Verzeichnis liegen, das jemand von Hand
+# angelegt hat, eine Kopie, ein Einhaengepunkt, ein Symlink auf etwas
+# anderes. Ein Uninstaller, der ohne Beleg loescht, weil der Name passt,
+# raet -- nur mit mehr Selbstvertrauen.
+#
+# Eine frueherer Entwurf dieser Datei hat genau das getan (eigene Pfade
+# ohne Manifest entfernt). Das war falsch.
 
-# --- Was gehoert eindeutig Chimera? --------------------------------------
+# --- Pfade, nach denen berichtend gesucht wird ----------------------------
 #
-# Eigene Pfade und eigene Namen. Hier ist kein Zweifel moeglich: Ein
-# Verzeichnis /opt/chimera hat niemand anders angelegt.
-chimera_own_paths() {
+# ACHTUNG: Diese Liste ist eine SUCHLISTE fuer den Bericht, keine
+# Loeschliste. Ohne Manifesteintrag wird hier nichts entfernt -- auch nicht
+# /opt/chimera. Der Name legt eine Herkunft nahe, er belegt sie nicht.
+chimera_known_paths() {
 	cat <<EOF
 ${CHIMERA_ROOT}/opt/chimera
 ${CHIMERA_ROOT}/var/lib/chimera
@@ -34,7 +44,8 @@ ${CHIMERA_ROOT}/usr/local/bin/chimera-uninstall
 EOF
 }
 
-chimera_own_services() {
+# Ebenfalls nur eine Suchliste fuer den Bericht.
+chimera_known_services() {
 	cat <<'EOF'
 chimera.service
 chimera-face.service
@@ -112,14 +123,14 @@ discover_report() {
 
 	_dr_gefunden=0
 
-	for _dr_p in $(chimera_own_paths); do
+	for _dr_p in $(chimera_known_paths); do
 		if discover_path "$_dr_p"; then
 			info "vorhanden: $_dr_p"
 			_dr_gefunden=$((_dr_gefunden + 1))
 		fi
 	done
 
-	for _dr_s in $(chimera_own_services); do
+	for _dr_s in $(chimera_known_services); do
 		# Der Aufruf MUSS in einer Bedingung stehen. Steht er nackt da,
 		# beendet `set -e` den Lauf, sobald die Funktion etwas anderes als
 		# 0 zurueckgibt -- und 1 ("nicht da") wie 2 ("kann nicht sehen")
@@ -138,7 +149,13 @@ discover_report() {
 	done
 
 	if [ "$_dr_gefunden" -eq 0 ]; then
-		info "Nichts gefunden, was eindeutig Chimera gehoert."
+		info "Nichts von den bekannten Pfaden und Diensten gefunden."
+	else
+		info ""
+		info "Diese Funde bleiben unangetastet. Ohne Manifesteintrag ist"
+		info "nicht belegt, dass der Installer sie angelegt hat -- und was"
+		info "nicht im Manifest steht, fasst der Uninstaller nicht an."
+		info "Wer sie entfernen will, tut es von Hand."
 	fi
 
 	# Die Zahl steht in DISCOVER_FOUND, nicht in einer Datei. Hier stand

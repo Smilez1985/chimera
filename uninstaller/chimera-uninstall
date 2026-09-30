@@ -96,20 +96,22 @@ log "chimera-uninstall $VERSION"
 [ "$MODE" = dry ] && info "Trockenlauf -- es wird nichts geaendert."
 [ -n "$ONLY" ] && info "Nur Schritt: $ONLY"
 
-# --- Ohne Manifest wird nachgesehen, nicht abgebrochen -------------------
+# --- Ohne Manifest wird nachgesehen und berichtet, nicht entfernt --------
 #
-# Ein fehlendes Manifest heisst nicht "nichts installiert" und auch nicht
-# "Ende" -- es heisst, dass die Herkunft unbekannt ist. Die Anwesenheit ist
-# dagegen feststellbar: Pakete stehen in der Paketdatenbank, Dienste kennt
-# systemd, Verzeichnisse liegen im Dateisystem.
+# Zwei Regeln greifen hier zusammen:
 #
-# Also: Fakten holen und erledigen, was eindeutig ist.
+#   10n: Fehlt eine Auskunft, wird sie geholt -- kein Abbruch, kein Raten.
+#   10o: Was nicht im Manifest steht, ist nicht vom Installer und wird
+#        nicht angefasst.
 #
-# Eindeutig ist alles, was nur Chimera angelegt haben kann -- eigene Pfade
-# (/opt/chimera), eigene Dienstnamen. Nicht eindeutig ist ein Systempaket
-# oder eine dtparam-Zeile: Ob `git` vor Chimera da war, steht nirgends im
-# System. Das ist Historie, und die kennt nur das Manifest. Solche Funde
-# werden GENANNT, nicht stillschweigend angefasst und nicht verschwiegen.
+# Die Anwesenheit ist feststellbar (Paketdatenbank, systemd, Dateisystem).
+# Die HERKUNFT ist es nicht: `dpkg-query` sagt "installiert", nicht "von
+# wem". Ob `dtparam=spi=on` von Chimera stammt oder vom Nutzer, ist am
+# System nicht ablesbar.
+#
+# Also: nachsehen, vollstaendig berichten, nichts entfernen. Der Nutzer
+# bekommt die Fakten und entscheidet. Das ist kein Ausweichen -- es ist der
+# Unterschied zwischen einer Auskunft und einer Annahme.
 if [ -f "$CHIMERA_MANIFEST" ]; then
 	EINTRAEGE="$(manifest_list | grep -c . || true)"
 	info "Manifest: $CHIMERA_MANIFEST ($EINTRAEGE Eintraege)"
@@ -123,9 +125,15 @@ else
 	log ""
 	discover_report
 	log ""
-	info "Ohne Manifest wird entfernt, was eindeutig Chimera gehoert."
-	info "Systempakete und Zeilen in Fremddateien werden nur berichtet:"
-	info "ob sie vor Chimera da waren, ist am System nicht ablesbar."
+	# Diese Meldung sagte bis eben "Ohne Manifest wird entfernt, was
+	# eindeutig Chimera gehoert" -- ein Rest des alten, falschen Entwurfs.
+	# Der Code entfernte schon nichts mehr, die Meldung versprach es aber
+	# weiter. Ein Widerspruch zwischen Meldung und Verhalten ist die
+	# gefaehrlichere Sorte: Der Nutzer glaubt der Meldung.
+	info "Ohne Manifest wird NICHTS entfernt (Architekturregel 10o)."
+	info "Was der Installer getan hat, steht nur im Manifest -- ein Fund am"
+	info "System belegt keine Herkunft. Alles Gefundene wird berichtet, die"
+	info "Entscheidung bleibt bei Ihnen."
 	CHIMERA_HAVE_MANIFEST=0
 fi
 export CHIMERA_HAVE_MANIFEST

@@ -54,9 +54,152 @@ Hardware ist vorhanden, also nicht blockiert.
 - [x] Komponenten-Pipeline (kam mit)
 - [x] Blink-Engine, Nachlauf-Effekte, Software-Dimming (kamen mit)
 - [x] Mood-Übergänge über alle Felder, weich und hart (Regel 6b)
-- [ ] Statuszeile in den 40 zusätzlichen Zeilen
-- [ ] Bildrate auf Zielhardware messen (in der Sandbox 0,7 ms je Bild,
-      das Zielgerät ist deutlich langsamer)
+- [x] Bildrate auf Zielhardware gemessen: 39,3 ms je Bild
+      (zeichnen 3,4 · umrechnen 7,9 · **SPI senden 28,1**) = 25,4 Bilder/s
+      Obergrenze. 15 Bilder/s brauchen 59 % des Budgets.
+      **Befund: Die Übertragung kostet 70 % — mehr als Zeichnen und
+      Umrechnen zusammen.** War nicht erwartet und verschiebt den Engpass.
+- [ ] **Statuszeile in den 40 zusätzlichen Zeilen — nach der
+      Prioritäts-Grammatik**, nicht als Sonderfall
+
+      Vorbild: HATFaces `docs/konzept/07_Text_Overlay.md` (Analyse in
+      `../VERGLEICH-HATFACES.md`). Übernommen wird das Modell, nicht der
+      Code — dort gibt es keinen.
+
+      - [ ] Quellen-Katalog mit fester Basis-Priorität, **Abstände ≥ 10**
+            (damit neue Quellen ohne Umnummerierung einsortiert werden —
+            genau das Problem, das die Regelnummern heute haben: `5h`
+            steht zwischen `5b` und `5c`)
+      - [ ] **Pro Quelle genau ein Slot.** Ein „Update" ist ein neuer
+            Eintrag derselben Quelle, der den alten verdrängt
+      - [ ] Auflösung: Priorität → jüngster Zeitstempel → feste
+            Quellenreihenfolge. **Die dritte Stufe ist nicht optional**,
+            sonst ist das Ergebnis bei gleichzeitigen Einträgen nicht
+            reproduzierbar
+      - [ ] **Auto-Renew statt langer Laufzeit** für anhaltende Zustände:
+            kurze TTL plus Bedingung, die sie zurücksetzt. Erlischt von
+            selbst, wenn die Bedingung wegfällt — kein explizites Löschen,
+            kein Leck
+      - [ ] Chimeras Quellen (nicht HATFaces' — dort gibt es ein Gateway
+            und Plugins, hier nicht): Abschaltmeldung, Temperaturwarnung,
+            Anbieter nicht erreichbar, Agentenzustand
+            (denkt/hört/antwortet), Akkustand, Leerlaufbeschriftung
+      - [ ] Muster sind **reine Funktionen** `f(t, farbe) -> farbe`, ohne
+            eigene Zeitgeber. Die Zeit gehört dem Verwalter, nicht dem
+            Muster
+- [ ] **Anzeige an die Temperatur koppeln**, begründet mit der SPI-Messung
+
+      HATFaces' Begründung trifft Chimeras eigene Zahl: *jede
+      Pixeländerung ist eine SPI-Übertragung*. Wir haben gemessen, dass
+      SPI 70 % kostet, aber keine Folge gezogen.
+
+      - [ ] Drei Stufen (`ok`, `warn`, `critical`), Schwellen **für den
+            Pi Zero 2 W selbst messen** — HATFaces' 62/67/75 °C gelten
+            für den RK3566
+      - [ ] Bei `warn` weniger Fläche neu zeichnen, bei `critical` nur
+            noch die Statuszeile
+      - [ ] Stille Degradation: Der Agent erfährt es nicht. **Das ist eine
+            Entscheidung, keine Selbstverständlichkeit** — sie steht hier,
+            damit sie nicht stillschweigend anders ausfällt
+      - [ ] Schließt Befund B6 ab (`docs/PRUEFUNG-H4.md`): Die
+            Temperaturkopplung hat nie funktioniert, die Schwellen sind
+            also nie erprobt worden
+
+## Phase 3b — Gesichter als Pakete, die das Modell selbst anlegen darf
+
+**Ein Gesicht reicht nicht.** Das Sprachmodell soll ein eigenes Gesicht
+erfinden und **ablegen** können — nicht nur einen Ausdruck für den
+Augenblick erzeugen, sondern einen Charakter, der den Neustart übersteht
+und wieder aufgerufen werden kann.
+
+Vorbild: HATFaces `docs/konzept/04_Character_Plugin_Format.md`. Dessen
+Leitsatz trifft genau das, was Chimeras Mood-Schema schon tut:
+
+> Was du als Daten ausdrücken kannst, drück nicht als Code aus.
+
+**Warum das kein Neubau ist.** Die Teile liegen bereits vor, sie sind nur
+nicht verbunden:
+
+| vorhanden | wofür |
+|---|---|
+| `mood/schema.py` | Vokabular als einzige Wahrheitsquelle; `EnumField` lässt unbekannte Werte ausdrücklich durch (»Was gezeichnet werden kann, darf auch erfunden werden«) |
+| `mood/validate.py` | prüft Erfundenes gegen die Grenzen (Regel 2) |
+| `mood/registry.py` | hält Moods, vergibt Nummern, `add(origin=…)`, `prune()`, `save()`/`load()` atomar |
+| `agent/skills.py` | **das Discovery-Muster ist schon gebaut**: Verzeichnis-Scan, Kopfteil mit Metadaten, `Requires`-Prüfung, Unbrauchbares wird übersprungen statt zu stürzen |
+| `mood/draw.py` | freie Formen für Werte, die kein fertiges Bauteil haben |
+
+Was fehlt, ist die Schicht darüber: ein **Gesicht** ist mehr als ein Mood.
+Es ist ein Bündel aus Moods, Vorgaben, Namen und Herkunft.
+
+- [ ] **Format festlegen — und zwar JSON, nicht TOML**
+
+      HATFaces nimmt TOML mit Pydantic-Validierung. Für Chimera ist das
+      die falsche Wahl, aus zwei Gründen, und beide sind nachprüfbar:
+      Erstens schreibt hier **das Modell** die Datei, und Modelle erzeugen
+      zuverlässig JSON — das ist das Format, in dem sie ohnehin antworten.
+      Zweitens ist `json` in der Standardbibliothek; Pydantic wäre eine
+      Abhängigkeit auf 512 MB, und `skills.py` hat aus genau diesem Grund
+      schon auf einen YAML-Leser verzichtet.
+      Validiert wird mit `mood/validate.py`, das es bereits gibt.
+
+- [ ] **Verzeichnisaufbau**, nach dem Muster von `skills.py`
+
+      ```
+      faces/
+        <name>/
+          face.json          Pflicht: Name, Herkunft, Moods, Vorgaben
+          README.md          optional, vom Modell geschrieben
+          assets/            optional, vorgezeichnete Teile
+      ```
+
+      Suchpfade in Vorrangfolge, wie bei den Skills:
+      `$CHIMERA_FACES` → `./faces/` → `~/.config/chimera/faces/` →
+      `/usr/local/share/chimera/faces/`. **Verdrängung wird protokolliert**
+      — sonst rätselt man, warum die Systemfassung die eigene überschreibt.
+
+- [ ] **Der Agent bekommt Werkzeuge dafür** (heute kann er Ausdrücke
+      setzen, aber nichts ablegen)
+
+      - [ ] `gesicht_anlegen(name, beschreibung)` — validiert, schreibt
+            atomar, lädt nach
+      - [ ] `gesicht_wechseln(name)`
+      - [ ] `gesicht_liste()` / `gesicht_beschreiben(name)`
+      - [ ] `mood_in_gesicht_legen(gesicht, name, felder)`
+
+- [ ] **Grenzen, die das Modell nicht überschreiten darf**
+
+      Das ist der Teil, den HATFaces nicht braucht (dort schreibt ein
+      Mensch die Manifeste) und Chimera sehr wohl:
+
+      - [ ] **Obergrenze für Anzahl und Größe.** `registry.py` hat
+            `capacity` und `prune()` — das muss für Gesichter genauso
+            gelten, sonst füllt ein Modell in einer Schleife die SD-Karte
+      - [ ] **Nur unterhalb des Gesichterverzeichnisses schreiben.** Ein
+            Name wie `../../etc/` darf nicht durchkommen; Pfadprüfung vor
+            dem Schreiben, nicht danach
+      - [ ] **Kein Python in einem Gesicht.** HATFaces erlaubt
+            `behaviors.py` je Charakter. Hier ist das ausgeschlossen:
+            Ein Modell, das ausführbaren Code ablegt, den ein Dauerdienst
+            lädt, ist eine Fernausführung mit Extraschritten
+            (Regeln 5f, 5j)
+      - [ ] **Eingebautes ist geschützt.** `Entry.protected` gibt es
+            schon; ein generiertes Gesicht darf ein mitgeliefertes nicht
+            überschreiben
+      - [ ] **Herkunft wird festgehalten** (`origin`: mitgeliefert,
+            generiert, von Hand). Ohne das ist später nicht
+            unterscheidbar, was das Modell erfunden hat
+
+- [ ] **Was NICHT übernommen wird** — mit Grund, damit es nicht später
+      „vergessen" heißt:
+
+      - Fünf Suchpfade wie bei HATFaces → vier genügen, der fünfte war für
+        Distributionspakete gedacht, die es hier nicht gibt
+      - `[compatibility]`-Abschnitt mit SemVer-Bereichen → Chimera hat ein
+        Panel und eine Auflösung; ein Gesicht, das 320×240 verlangt, ist
+        ein Problem, das es hier nicht gibt
+      - Live-Nachladen ohne Neustart → nett, aber der Renderer hält den
+        Bildspeicher (Regel 7). Nachladen heißt hier: nächster Bildlauf
+        liest neu, kein Austausch im laufenden Zeichnen
 
 > **Der Weg zum fertigen Gerät steht in `docs/HYBRID-PLAN.md`** (Stufen
 > H1–H8). Was von openclawgotchi und OpenMinis übernommen wird und was
@@ -165,10 +308,33 @@ Setzt Phase 5 voraus (Audioaufnahme läuft bereits). Details in
 
 Einzeln nachrüstbar, in dieser Reihenfolge.
 
+> **Achtung, die Modellwahl unten muss überprüft werden.** HATFaces hat auf
+> einem Cortex-A55 (RK3566) 8 Varianten über 18,6 min vermessen und kommt
+> zum umgekehrten Ergebnis dessen, was hier stand:
+>
+> **fp32 schlägt int8 um Faktor 1,7.** Grund: Der Kern hat kein I8MM, das
+> int8-Matrixprodukt fällt auf skalare Pfade zurück, während fp32 NEON
+> voll nutzt. Ausgeschlossen wurden dort außerdem alle fp16
+> (Laufzeit-Unverträglichkeit) und alle `high`-Varianten (thermisch nicht
+> tragbar).
+>
+> **Was sich überträgt und was nicht:** Der Pi Zero 2 W hat Cortex-**A53**,
+> ebenfalls ohne I8MM — das *Argument* gilt also. Die *Zahlen* nicht: Der
+> A53 ist schwächer, RTF 0,63 wird er nicht erreichen. Es genügt aber, die
+> zwei plausiblen Varianten zu prüfen statt acht.
+>
+> Auswahlregel: **fp32 vor int8, `low` vor `medium`, fp16 gar nicht.**
+> Quelle: `../VERGLEICH-HATFACES.md`, HATFaces
+> `docs/konzept/03_Stand_2026-04-17.md`.
+
 - [ ] sherpa-onnx auf der Zielhardware, Modelle laden
 - [ ] VAD (`silero_vad_v5`)
-- [ ] STT (`nemo-fast-conformer-ctc-en-de-es-fr-int8`), Latenz messen
-- [ ] TTS (`thorsten_emotional-medium-int8`)
+- [ ] STT: **fp32-Variante zuerst messen**, nicht die int8 (bisher war
+      `nemo-fast-conformer-ctc-en-de-es-fr-int8` vorgesehen), Latenz messen
+- [ ] TTS: **`low`/fp32 zuerst**, dann `medium`/fp32 zum Vergleich
+      (bisher war `thorsten_emotional-medium-int8` vorgesehen)
+- [ ] **RTF auf dem Gerät messen, nicht übernehmen.** Grenze: RTF < 1,2 für
+      Dialog, sonst blockiert die Ausgabe
 - [ ] TTS-Emotion an Mood koppeln (Architekturregel 4b)
 
 ### Mienenspiel beim Sprechen (`docs/DESIGN.md` §4.1)

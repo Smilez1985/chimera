@@ -1338,6 +1338,40 @@ Auskunft und ohne jede Meldung. Genau so starb der erste Lauf: kein
 `systemctl` in der Testumgebung, Rückgabe 2, Abbruch. Ebenso killte ein
 `printf > "${VAR:-/dev/null}"` als Nebensache den Hauptlauf.
 
+### Architekturregel 10o — Was nicht im Manifest steht, gehört nicht uns
+
+**Der Deinstallierer entfernt ausschließlich, was im Manifest steht.** Kein
+Fund am System berechtigt zum Löschen, so naheliegend der Name auch ist.
+
+Das ist die Grenze zu Architekturregel 10n: Nachsehen liefert eine
+**Auskunft**, keine Erlaubnis. Beides zu vermischen ist der Kern des
+Problems — wer aus „da liegt ein Verzeichnis namens `/opt/chimera`" schließt
+„das habe ich angelegt", hat geraten, nur mit mehr Selbstvertrauen.
+
+Denn dort kann liegen: etwas von Hand Angelegtes, eine Kopie, ein
+Einhängepunkt, ein Verweis auf etwas anderes, ein gleichnamiges Verzeichnis
+eines fremden Werkzeugs. Der Name ist ein Indiz, kein Beleg. Der Beleg ist
+der Manifesteintrag, und den gibt es genau dann, wenn der Installer es
+selbst getan hat.
+
+Folgen:
+
+- Ohne Manifest wird **nichts** entfernt. Es wird nachgesehen, vollständig
+  berichtet, und die Handlung bleibt beim Nutzer.
+- Auch mit Manifest gilt die Unterscheidung `neu` gegen `vorher_da`: Ein
+  Eintrag belegt, dass wir es *gesehen* haben, nicht dass wir es *angelegt*
+  haben.
+- Die Suchlisten im Deinstallierer sind **Suchlisten für den Bericht**,
+  keine Löschlisten. Sie heißen deshalb `chimera_known_paths`, nicht
+  `chimera_own_paths` — ein früherer Entwurf hieß so und hat genau deshalb
+  gelöscht, was er nur gefunden hatte.
+
+Die Regel kostet Bequemlichkeit: Nach einer Installation von Hand oder mit
+einer Fassung ohne Manifest bleibt Arbeit für den Nutzer. Das ist der
+richtige Preis. Die Gegenrechnung wäre ein Werkzeug, das auf einem fremden
+System nach Namensmustern löscht, und dessen Fehler bemerkt niemand
+rechtzeitig.
+
 ### Architekturregel 10m — Ausführbares bleibt reines ASCII
 
 Alles unter `installer/` und `uninstaller/` ist **ASCII**, und die Locale
@@ -1492,4 +1526,5 @@ die Historie umgeschrieben.
 - **10l** — Jeder Installationsschritt hat sein Gegenstück
 - **10m** — Ausführbares bleibt reines ASCII
 - **10n** — Nachsehen, nicht abbrechen und nicht raten
+- **10o** — Was nicht im Manifest steht, gehört nicht uns
 - **13a** — Vor jedem Push wird geprüft, und die Prüfung beweist ihre Sehfähigkeit

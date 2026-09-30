@@ -235,3 +235,11 @@ jobs:
             echo "Bootkonfiguration veraendert, obwohl Herkunft unbekannt."
             exit 1; }
           echo "Nachgesehen, berichtet, nichts geraten — richtig."
+
+          # Regel 10o: ein Fund ohne Manifesteintrag wird NICHT entfernt,
+          # auch wenn der Name auf Chimera hindeutet. Der Name ist ein
+          # Indiz, kein Beleg — dort kann ein Einhaengepunkt liegen.
+          [ -d "$R/opt/chimera" ] || {
+            echo "Regel 10o verletzt: /opt/chimera ohne Beleg entfernt."
+            exit 1; }
+          echo "Fund ohne Manifesteintrag unangetastet — richtig."

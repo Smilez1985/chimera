@@ -178,6 +178,72 @@ grep -q 'Herkunft' "$W2/lauf.log" &&
 	ok "die unbekannte Herkunft wird ausdruecklich genannt" ||
 	bad "kein Hinweis auf die unbekannte Herkunft -- irrefuehrend"
 
+# --- 7. Regel 10o: ohne Manifesteintrag wird NICHTS entfernt ------------
+#
+# Der Fall, der einen frueheren Entwurf entlarvt hat: Er suchte ohne
+# Manifest nach "eindeutig eigenen" Pfaden wie /opt/chimera und entfernte
+# sie. Das war falsch -- der Name ist ein Indiz, kein Beleg. Dort kann ein
+# Einhaengepunkt liegen, eine Kopie, ein gleichnamiges fremdes Verzeichnis.
+#
+# Geprueft wird das Ergebnis: Das Verzeichnis MUSS nach dem Lauf noch da
+# sein, und die Datei darin auch.
+W3="$W/regel-10o"
+mkdir -p "$W3/boot/firmware" "$W3/var/log/chimera" "$W3/opt/chimera/unterordner"
+printf 'von Hand angelegt, nicht vom Installer\n' \
+	>"$W3/opt/chimera/fremd.txt"
+printf 'dtparam=spi=on\n' >"$W3/boot/firmware/config.txt"
+
+CHIMERA_MODE=run \
+CHIMERA_ROOT="$W3" \
+CHIMERA_LOG_DIR="$W3/var/log/chimera" \
+CHIMERA_MANIFEST="$W3/kein-manifest.tsv" \
+	sh "$REPO/uninstaller/chimera-uninstall" >"$W3/lauf.log" 2>&1 || true
+
+[ -d "$W3/opt/chimera" ] &&
+	ok "Regel 10o: /opt/chimera bleibt (kein Manifesteintrag)" ||
+	bad "Regel 10o VERLETZT: /opt/chimera wurde ohne Beleg entfernt"
+
+[ -f "$W3/opt/chimera/fremd.txt" ] &&
+	ok "Regel 10o: fremde Datei darin bleibt" ||
+	bad "Regel 10o VERLETZT: fremde Datei entfernt"
+
+[ -d "$W3/opt/chimera/unterordner" ] &&
+	ok "Regel 10o: Unterordner bleibt" ||
+	bad "Regel 10o VERLETZT: Unterordner entfernt"
+
+# Aber gefunden werden MUSS es -- sonst waere der Bericht nutzlos, und die
+# Regel wuerde durch Wegsehen statt durch Zurueckhaltung erfuellt.
+grep -q 'opt/chimera' "$W3/lauf.log" &&
+	ok "der Fund wird trotzdem berichtet" ||
+	bad "der Fund wird nicht berichtet -- Regel 10o durch Wegsehen erfuellt"
+
+# Und der Bericht muss sagen, warum nichts passiert. Ein Fund ohne
+# Begruendung sieht wie ein Versehen aus.
+#
+# Geprueft wird der Abschnitt ZWISCHEN dem Verzeichnisfund und der
+# naechsten Ueberschrift -- nicht das ganze Protokoll. Erste Fassung suchte
+# irgendwo nach "bleiben" und fand es im Bootkonfigurations-Teil
+# ("Diese Zeilen bleiben stehen"), also auch dann, wenn beim
+# Verzeichnisfund jede Begruendung fehlte. Die Gegenprobe hat das gefunden.
+#
+# Ein Test, der ein Wort irgendwo sucht, prueft nicht die Stelle, um die
+# es geht.
+# Ab dem Verzeichnisfund bis zur naechsten Ueberschrift lesen.
+# Ueberschriften sind Zeilen ohne Einrueckung; `WARN:`/`FEHLER:`-Zeilen
+# stehen ebenfalls links, gehoeren aber zum Abschnitt und duerfen ihn nicht
+# beenden. Erste Fassung brach dort ab -- und die Begruendung kommt danach.
+ABSCHNITT="$(awk '
+	/opt\/chimera/           { an = 1 }
+	an && /^(WARN|FEHLER):/  { next }
+	an && /^[A-Za-z]/ && !/opt\/chimera/ { exit }
+	an                       { print }
+' "$W3/lauf.log" 2>/dev/null)"
+if printf '%s\n' "$ABSCHNITT" | grep -qi 'nicht im Manifest\|unangetastet'; then
+	ok "es wird begruendet, warum der Fund bleibt"
+else
+	bad "keine Begruendung beim Fund -- sieht wie ein Versehen aus"
+fi
+
 # Aufraeumen, aber der Exitcode des Aufraeumens darf das Testergebnis
 # NICHT bestimmen. Genau das ist hier passiert: `rm -rf` scheiterte (in
 # einer PRoot-Sandbox darf nicht jede Datei geloescht werden), gab 1
