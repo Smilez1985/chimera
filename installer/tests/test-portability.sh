@@ -110,11 +110,34 @@ check "alle Shell-Dateien sind reines ASCII" "${FOUND:-keine}" "keine"
 # beweist "keine Funde" nur, dass die Suche nichts tut.
 TMPD="${TMPDIR:-/tmp}"
 KOEDER="$TMPD/.chimera-koeder.$$.sh"
-printf '#!/bin/sh\necho "Gr%s\xc3\xbc%sn"\n' '' '' >"$KOEDER"
+
+# Den Koeder mit awk erzeugen, nicht mit printf.
+#
+# Grund, in der CI gelernt: `printf '\xc3\xbc'` funktioniert in BusyBox,
+# aber NICHT in dash -- POSIX kennt nur die Oktalform, nicht \x. Auf dash
+# landete die Zeichenfolge literal in der Datei, der Koeder war reines
+# ASCII, und die Gegenprobe meldete voellig zu Recht "Test ist blind".
+#
+# Ein Portabilitaetstest, dessen eigener Koeder nicht portabel ist, war
+# eine schoene Ironie -- und ein echter Fund der Selbstpruefung. Ohne sie
+# waere die ASCII-Pruefung auf dash stillschweigend blind gewesen.
+#
+# awk ist hier die verlaesslichere Wahl: sprintf mit Oktal ist in POSIX-awk
+# festgelegt und verhaelt sich in mawk, busybox awk und gawk gleich.
+awk 'BEGIN { printf "#!/bin/sh\necho \"Gr%cn\"\n", 252 }' >"$KOEDER" 2>/dev/null
+
+# Und dann wird GEPRUEFT, ob der Koeder wirklich Nicht-ASCII enthaelt,
+# statt es anzunehmen. Sonst prueft die Gegenprobe im Fehlerfall nur, dass
+# ihr eigener Koeder kaputt ist -- und beschuldigt den Test.
 if LC_ALL=C grep -q '[^ -~	]' "$KOEDER" 2>/dev/null; then
 	ok "Gegenprobe: ein Umlaut wird gefunden"
+elif [ ! -s "$KOEDER" ]; then
+	bad "Gegenprobe unbrauchbar: Koeder konnte nicht erzeugt werden"
 else
-	bad "Gegenprobe: Umlaut NICHT gefunden -- der Test ist blind"
+	# Der Koeder ist da, enthaelt aber kein Nicht-ASCII -- dann liegt es
+	# am Erzeuger, nicht an der Suche. Das ist ein Mangel der Pruefung,
+	# und er wird als solcher benannt (nicht als Mangel des Installers).
+	bad "Gegenprobe unbrauchbar: Koeder enthaelt kein Nicht-ASCII (awk?)"
 fi
 rm -f "$KOEDER"
 

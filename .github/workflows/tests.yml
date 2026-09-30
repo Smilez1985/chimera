@@ -145,7 +145,7 @@ jobs:
           set -eu
           cd installer
           CHIMERA_MODE=check CHIMERA_LOG_DIR=/tmp/logs \
-            sh modules/10-preflight.sh
+            sh steps/10-check-system.sh
           # Exitcode 0 heisst: erkannt und unterstuetzt. Alles andere ist
           # ein Befund -- auch dann, wenn das Skript nicht abstuerzt.
 
@@ -155,7 +155,7 @@ jobs:
           cd installer
           vorher="$(cat "$CHIMERA_ROOT/boot/firmware/config.txt")"
           CHIMERA_MODE=dry CHIMERA_ANZEIGE=whisplay CHIMERA_LOG_DIR=/tmp/logs \
-            sh modules/40-anzeige.sh || true
+            sh steps/40-install-display.sh || true
           nachher="$(cat "$CHIMERA_ROOT/boot/firmware/config.txt")"
           if [ "$vorher" != "$nachher" ]; then
             echo "Der Trockenlauf hat die Bootkonfiguration veraendert."
@@ -170,3 +170,68 @@ jobs:
             exit 1
           fi
           echo "Keine Sicherung angelegt — richtig."
+
+      - name: Rueckbau laeuft und raeumt nur Eigenes weg
+        # Der eigentliche Nachweis des Manifests: Ohne einen Leser ist
+        # jeder Eintrag eine unbelegte Behauptung (Regel 10l).
+        run: |
+          set -eu
+          R="$CHIMERA_ROOT"
+          mkdir -p "$R/var/lib/chimera" "$R/var/log/chimera"
+          printf '# vom Nutzer\ndtparam=watchdog=on\n' \
+            >"$R/boot/firmware/config.txt"
+
+          # Eintragen wie der Installer: eine fremde Zeile als vorher_da,
+          # eine eigene als neu.
+          CHIMERA_ROOT="$R" \
+          CHIMERA_MANIFEST="$R/var/lib/chimera/manifest.tsv" \
+          CHIMERA_LOG_DIR="$R/var/log/chimera" \
+          CHIMERA_STEP=ci sh -c '
+            . installer/lib/common.sh
+            . installer/lib/manifest.sh
+            manifest_line "$CHIMERA_ROOT/boot/firmware/config.txt" \
+              "dtparam=watchdog=on" >/dev/null
+            manifest_line "$CHIMERA_ROOT/boot/firmware/config.txt" \
+              "dtparam=spi=on" >/dev/null'
+
+          CHIMERA_ROOT="$R" \
+          CHIMERA_MANIFEST="$R/var/lib/chimera/manifest.tsv" \
+          CHIMERA_LOG_DIR="$R/var/log/chimera" \
+            sh uninstaller/chimera-uninstall
+
+          cfg="$R/boot/firmware/config.txt"
+          if grep -q '^dtparam=spi=on$' "$cfg"; then
+            echo "Die eigene Zeile steht noch da — der Rueckbau wirkt nicht."
+            exit 1
+          fi
+          if ! grep -q '^dtparam=watchdog=on$' "$cfg"; then
+            echo "FREMDE Zeile entfernt — der Rueckbau greift zu weit."
+            exit 1
+          fi
+          echo "Eigenes entfernt, Fremdes stehen gelassen — richtig."
+
+      - name: Rueckbau ohne Manifest bricht nicht ab
+        # Regel 10n: nachsehen, nicht abbrechen und nicht raten. Ohne
+        # Manifest ist die Herkunft unbekannt, die Anwesenheit nicht --
+        # also wird berichtet und die Bootkonfiguration NICHT angefasst.
+        run: |
+          set -eu
+          R="$(mktemp -d)"
+          mkdir -p "$R/boot/firmware" "$R/var/log/chimera" "$R/opt/chimera"
+          printf '# vom Nutzer\ndtparam=spi=on\n' >"$R/boot/firmware/config.txt"
+          vorher="$(cat "$R/boot/firmware/config.txt")"
+
+          CHIMERA_ROOT="$R" \
+          CHIMERA_LOG_DIR="$R/var/log/chimera" \
+          CHIMERA_MANIFEST="$R/gibt-es-nicht.tsv" \
+            sh uninstaller/chimera-uninstall >/tmp/ohne.log 2>&1
+
+          grep -q 'Kein Manifest' /tmp/ohne.log || {
+            echo "Das fehlende Manifest wurde nicht benannt."; exit 1; }
+          grep -q 'opt/chimera' /tmp/ohne.log || {
+            echo "Es wurde nicht nachgesehen."; exit 1; }
+          nachher="$(cat "$R/boot/firmware/config.txt")"
+          [ "$vorher" = "$nachher" ] || {
+            echo "Bootkonfiguration veraendert, obwohl Herkunft unbekannt."
+            exit 1; }
+          echo "Nachgesehen, berichtet, nichts geraten — richtig."
