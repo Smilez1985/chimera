@@ -1287,13 +1287,56 @@ rückbaubaren Form eingetragen werden, war zum Zeitpunkt dieser Regel
 Architekturregel 10h, und zwar in genau dem Bauteil, dessen Zweck der
 Rückbau ist.
 
-Zwei Folgen für die Praxis:
+Drei Folgen für die Praxis:
 
 - Ein Schritt, der nichts verändert, braucht kein Gegenstück.
   `10-check-system` prüft nur und trägt darum auch nichts ein.
 - Der Deinstallierer läuft in **umgekehrter Reihenfolge** der Nummern und
   fasst nur an, was im Manifest als `neu` steht. Was als `vorher_da`
   vermerkt ist, gehört dem Nutzer und bleibt.
+- **Ein fehlendes Manifest ist kein Grund abzubrechen.** Siehe die
+  folgende Regel.
+
+### Architekturregel 10n — Nachsehen, nicht abbrechen und nicht raten
+
+Fehlt eine Auskunft, wird sie **geholt**, nicht ersetzt — nicht durch einen
+Abbruch und nicht durch eine Annahme. Das ist die Anwendung von
+Architekturregel 10g („Nie raten") auf den Fall, dass die eigene
+Aufzeichnung fehlt.
+
+Konkret beim Deinstallierer ohne Manifest: Die **Anwesenheit** ist immer
+feststellbar. Pakete stehen in der Paketdatenbank, Dienste kennt `systemd`,
+Verzeichnisse liegen im Dateisystem, Gruppenmitgliedschaften sagt `id`.
+Also wird nachgesehen und erledigt, was eindeutig ist.
+
+Eindeutig ist, was nur Chimera angelegt haben kann: eigene Pfade
+(`/opt/chimera`, `/var/lib/chimera`), eigene Dienstnamen
+(`chimera.service`). Dort braucht es kein Manifest — ein Verzeichnis
+`/opt/chimera` hat niemand anders erzeugt.
+
+**Was Nachsehen grundsätzlich nicht liefert, ist die Herkunft.** Ob `git`
+vor Chimera installiert war, steht nirgends im System; `dpkg-query` sagt
+„installiert", nicht „von wem". Ob `dtparam=spi=on` in der `config.txt` von
+Chimera stammt oder vom Nutzer, ist am System nicht ablesbar. Das ist
+Historie, und die kennt nur das Manifest.
+
+Für diese Fälle gilt: **Fund nennen, Handlung dem Nutzer lassen.** Nicht
+verschweigen (das wäre Regel 8a) und nicht auf Verdacht entfernen — wer dem
+Nutzer sein SPI abschaltet, weil eine Zeile *auch* von Chimera stammen
+könnte, hat geraten.
+
+Die Unterscheidung spiegelt sich in jeder Feststellung: Sie gibt **drei**
+Zustände zurück, nie zwei — `ist da`, `ist nicht da`, `kann nicht
+nachsehen`. Wer die letzten beiden zusammenfasst, meldet Aufgeräumtheit,
+wo er blind ist.
+
+Zwei belegte Fallen beim Bauen dieser Bibliothek, beide derselbe
+Mechanismus: Eine Feststellungsfunktion, deren Rückgabewert `1` oder `2`
+ein normaler Befund ist, **muss in einer Bedingung aufgerufen werden**.
+Steht der Aufruf nackt da, beendet `set -e` den Lauf — mit dem Exitcode der
+Auskunft und ohne jede Meldung. Genau so starb der erste Lauf: kein
+`systemctl` in der Testumgebung, Rückgabe 2, Abbruch. Ebenso killte ein
+`printf > "${VAR:-/dev/null}"` als Nebensache den Hauptlauf.
 
 ### Architekturregel 10m — Ausführbares bleibt reines ASCII
 
@@ -1448,4 +1491,5 @@ die Historie umgeschrieben.
 - **10h** — Gebaut ist erst, wenn verdrahtet ist
 - **10l** — Jeder Installationsschritt hat sein Gegenstück
 - **10m** — Ausführbares bleibt reines ASCII
+- **10n** — Nachsehen, nicht abbrechen und nicht raten
 - **13a** — Vor jedem Push wird geprüft, und die Prüfung beweist ihre Sehfähigkeit

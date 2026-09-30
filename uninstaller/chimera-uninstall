@@ -30,6 +30,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 LIB="$(cd "$HERE/../installer/lib" && pwd)"
 . "$LIB/common.sh"
 . "$LIB/manifest.sh"
+# Nachsehen, was am System ist -- gebraucht, wenn das Manifest fehlt.
+. "$HERE/lib/discover.sh"
 
 MODE=run
 ONLY=""
@@ -94,29 +96,39 @@ log "chimera-uninstall $VERSION"
 [ "$MODE" = dry ] && info "Trockenlauf -- es wird nichts geaendert."
 [ -n "$ONLY" ] && info "Nur Schritt: $ONLY"
 
-# --- Ohne Manifest wird nicht geraten ------------------------------------
+# --- Ohne Manifest wird nachgesehen, nicht abgebrochen -------------------
 #
-# Das ist der Kern. Ein fehlendes Manifest heisst nicht "nichts
-# installiert", es heisst "ich weiss es nicht" -- und das sind zwei
-# verschiedene Dinge (Architekturregel 10j).
-if [ ! -f "$CHIMERA_MANIFEST" ]; then
-	err "Kein Manifest unter: $CHIMERA_MANIFEST"
-	err ""
-	err "Damit ist unbekannt, was Chimera am System geaendert hat. Es wird"
-	err "nichts entfernt -- Raten hiesse, fremde Dateien zu loeschen oder"
-	err "eigene liegenzulassen."
-	err ""
-	err "Wenn die Installation von Hand oder mit einer aelteren Fassung"
-	err "lief, steht in docs/UNINSTALL.md, was manuell zu pruefen ist."
-	log_close 2
-	exit 2
+# Ein fehlendes Manifest heisst nicht "nichts installiert" und auch nicht
+# "Ende" -- es heisst, dass die Herkunft unbekannt ist. Die Anwesenheit ist
+# dagegen feststellbar: Pakete stehen in der Paketdatenbank, Dienste kennt
+# systemd, Verzeichnisse liegen im Dateisystem.
+#
+# Also: Fakten holen und erledigen, was eindeutig ist.
+#
+# Eindeutig ist alles, was nur Chimera angelegt haben kann -- eigene Pfade
+# (/opt/chimera), eigene Dienstnamen. Nicht eindeutig ist ein Systempaket
+# oder eine dtparam-Zeile: Ob `git` vor Chimera da war, steht nirgends im
+# System. Das ist Historie, und die kennt nur das Manifest. Solche Funde
+# werden GENANNT, nicht stillschweigend angefasst und nicht verschwiegen.
+if [ -f "$CHIMERA_MANIFEST" ]; then
+	EINTRAEGE="$(manifest_list | grep -c . || true)"
+	info "Manifest: $CHIMERA_MANIFEST ($EINTRAEGE Eintraege)"
+	log ""
+	manifest_report
+	CHIMERA_HAVE_MANIFEST=1
+else
+	warn "Kein Manifest unter: $CHIMERA_MANIFEST"
+	warn "Die Herkunft der Funde ist damit unbekannt -- es wird"
+	warn "nachgesehen, was da ist."
+	log ""
+	discover_report
+	log ""
+	info "Ohne Manifest wird entfernt, was eindeutig Chimera gehoert."
+	info "Systempakete und Zeilen in Fremddateien werden nur berichtet:"
+	info "ob sie vor Chimera da waren, ist am System nicht ablesbar."
+	CHIMERA_HAVE_MANIFEST=0
 fi
-
-EINTRAEGE="$(manifest_list | grep -c . || true)"
-info "Manifest: $CHIMERA_MANIFEST ($EINTRAEGE Eintraege)"
-log ""
-
-manifest_report
+export CHIMERA_HAVE_MANIFEST
 
 log ""
 

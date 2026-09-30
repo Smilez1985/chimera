@@ -25,6 +25,7 @@ set -eu
 _HERE="$(cd "$(dirname "$0")/../.." && pwd)"
 . "$_HERE/installer/lib/common.sh"
 . "$_HERE/installer/lib/manifest.sh"
+. "$_HERE/uninstaller/lib/discover.sh"
 
 CHIMERA_STEP="40-remove-display"; export CHIMERA_STEP
 
@@ -34,6 +35,62 @@ CHIMERA_STEP="40-remove-display"; export CHIMERA_STEP
 BEFUND=0
 
 log "Anzeige zurueckbauen"
+
+# --- Ohne Manifest: nachsehen und berichten ------------------------------
+#
+# Die dtparam-Zeilen sind der Fall, in dem Nachsehen die Herkunft NICHT
+# liefert. `dtparam=spi=on` in der config.txt kann von Chimera oder vom
+# Nutzer stammen -- am System ist das nicht unterscheidbar. Ein Rueckbau
+# auf Verdacht schaltet ihm das SPI ab, das er fuer etwas anderes braucht.
+#
+# Darum: Fakten nennen, Handlung dem Nutzer lassen. Das ist kein
+# Ausweichen, es ist die einzige ehrliche Antwort auf eine Frage, deren
+# Daten fehlen.
+if [ "${CHIMERA_HAVE_MANIFEST:-1}" = "0" ]; then
+	BOOT="$(rootpath /boot/firmware/config.txt)"
+	[ -f "$BOOT" ] || BOOT="$(rootpath /boot/config.txt)"
+
+	if [ -f "$BOOT" ]; then
+		info "Gefunden in $BOOT:"
+		_gefunden=0
+		for _z in "dtparam=spi=on" "dtparam=i2c_arm=on" "dtparam=i2s=on" \
+		          "dtoverlay=whisplay-soundcard"; do
+			if discover_line "$BOOT" "$_z"; then
+				info "  $_z"
+				_gefunden=$((_gefunden + 1))
+			fi
+		done
+		if [ "$_gefunden" -eq 0 ]; then
+			info "  keine der von Chimera gesetzten Zeilen"
+		else
+			info ""
+			info "Diese Zeilen bleiben stehen. Ohne Manifest ist nicht"
+			info "feststellbar, ob Chimera sie gesetzt hat oder Sie selbst."
+			info "Wer sie entfernen will, tut es von Hand -- und sichert"
+			info "die Datei vorher. Eine kaputte Bootkonfiguration kostet"
+			info "den Ausbau der Speicherkarte."
+		fi
+	else
+		warn "Keine Bootkonfiguration gefunden -- nichts nachzusehen."
+	fi
+
+	log ""
+	log "Gruppen"
+	# Die Gruppe ist der Gegenfall: Hier IST nachsehen eindeutig genug.
+	# Chimera nimmt den Dienstnutzer in `audio` auf; ist er drin und gibt
+	# es kein Manifest, wird das berichtet, aber nicht angefasst -- auch
+	# eine Gruppenmitgliedschaft kann aus anderem Grund bestehen.
+	for _u in "${CHIMERA_USER:-dietpi}" chimera; do
+		if discover_group_member audio "$_u" 2>/dev/null; then
+			info "$_u ist in Gruppe audio -- bleibt (Herkunft unbekannt)."
+		fi
+	done
+
+	log ""
+	info "Ein Neustart ist nicht noetig: es wurde nichts geaendert."
+	log_close 0
+	exit 0
+fi
 
 # --- 1. Zeilen aus der Bootkonfiguration ---------------------------------
 #

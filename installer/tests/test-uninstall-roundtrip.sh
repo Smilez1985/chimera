@@ -135,6 +135,49 @@ else
 	bad "Trockenlauf hat die Zeile entfernt -- er aendert das System"
 fi
 
+# --- 6. Ohne Manifest: nachsehen, nicht abbrechen, nichts zerstoeren ----
+#
+# Ein fehlendes Manifest ist kein Grund abzubrechen -- die Anwesenheit ist
+# feststellbar, nur die Herkunft nicht. Geprueft wird daher dreierlei:
+# Der Lauf laeuft, er berichtet die Funde, und er laesst die
+# Bootkonfiguration UNVERAENDERT (weil er dort nicht entscheiden kann).
+W2="$W/ohne-manifest"
+mkdir -p "$W2/boot" "$W2/var/log/chimera" "$W2/opt/chimera"
+printf '# fremd\ndtparam=watchdog=on\ndtparam=spi=on\n' >"$W2/boot/config.txt"
+SUMME_VOR="$(cat "$W2/boot/config.txt" | wc -l)"
+
+CHIMERA_MODE=run \
+CHIMERA_ROOT="$W2" \
+CHIMERA_LOG_DIR="$W2/var/log/chimera" \
+CHIMERA_MANIFEST="$W2/gibt-es-nicht.tsv" \
+	sh "$REPO/uninstaller/chimera-uninstall" >"$W2/lauf.log" 2>&1
+RC3=$?
+
+check "Lauf ohne Manifest bricht nicht ab" "$RC3" "0"
+
+grep -q 'Kein Manifest' "$W2/lauf.log" &&
+	ok "das fehlende Manifest wird benannt" ||
+	bad "das fehlende Manifest wird verschwiegen"
+
+grep -q 'opt/chimera' "$W2/lauf.log" &&
+	ok "eigenes Verzeichnis wird gefunden" ||
+	bad "eigenes Verzeichnis nicht gefunden -- es wurde nicht nachgesehen"
+
+grep -q 'dtparam=spi=on' "$W2/lauf.log" &&
+	ok "der Fund in der Bootkonfiguration wird berichtet" ||
+	bad "der Fund wird nicht berichtet"
+
+SUMME_NACH="$(cat "$W2/boot/config.txt" | wc -l)"
+check "Bootkonfiguration unveraendert (Herkunft unbekannt)" \
+	"$SUMME_NACH" "$SUMME_VOR"
+
+# Und die Gegenprobe zur Gegenprobe: Es darf NICHT so aussehen, als haette
+# er aufgeraeumt. Eine Meldung "fertig, ohne Fehler" ohne den Hinweis auf
+# die unbekannte Herkunft waere irrefuehrend.
+grep -q 'Herkunft' "$W2/lauf.log" &&
+	ok "die unbekannte Herkunft wird ausdruecklich genannt" ||
+	bad "kein Hinweis auf die unbekannte Herkunft -- irrefuehrend"
+
 # Aufraeumen, aber der Exitcode des Aufraeumens darf das Testergebnis
 # NICHT bestimmen. Genau das ist hier passiert: `rm -rf` scheiterte (in
 # einer PRoot-Sandbox darf nicht jede Datei geloescht werden), gab 1
