@@ -352,6 +352,22 @@ Offen bleibt:
 - [x] Rangordnung im Gedächtnis (nur lesbar gegen agentgeschrieben)
 - [ ] Auslagern bei `Action.OFFLOAD`: erkannt wird es, getan noch nicht
 - [ ] Schleifenzustand auf die RGB-LED (braucht Hardware)
+- [ ] **Regel 10q, Messen:** `VmRSS`/`VmHWM`/`VmSwap` je Arbeitsschritt ins
+      Protokoll, mit Gegenprobe über `numpy.ones(...)`
+- [ ] **Regel 10q, Begrenzen:** Selbstbegrenzung mit eigenem Exitcode,
+      Schwelle als Anteil von `MemTotal` in der Profiltabelle
+- [ ] **Regel 10q, Nachweis:** beim Start im Kernelprotokoll nach einem
+      Speichertod des Vorlaufs suchen
+- [ ] **Regel 10p:** Startmarke und Quarantäne, spätestens mit dem ersten
+      gespeicherten Zustand, den der Start liest (Gesichter 8b,
+      `active_model.json`)
+- [ ] **Zu entscheiden:** Speicher-Controller am Pi einschalten
+      (`cgroup_enable=memory`, Bootdatei) oder bei der Selbstbegrenzung
+      bleiben. Der RPi-Kernel startet mit `cgroup_disable=memory`, und
+      `MemoryMax=` wirkt dort nicht (gemessen)
+- [ ] Systemd-Unit gibt es noch nicht (das Manifest kennt nur die Art
+      `dienst`). Wenn sie entsteht: `StartLimitBurst=` (10p) und
+      Prüfung des Controllers (10q)
 
 ## Phase 7 — Restliche Peripherie
 

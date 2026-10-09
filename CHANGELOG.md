@@ -99,8 +99,20 @@ oder in der Roadmap.
 - Atomares Schreiben mit geprüftem `mktemp`; leere Eingaben werden
   abgelehnt.
 
+**Blaupause**
+- **Regel 10p:** Was beim Laden abstürzt, wird beim nächsten Start nicht
+  wieder geladen (Startmarke, Quarantäne, gemeldeter Rückfall,
+  `StartLimitBurst=`).
+- **Regel 10q:** Speicher wird am Prozess gemessen (`VmRSS`/`VmHWM`/
+  `VmSwap`) und vom Prozess selbst begrenzt. Anlass ist ein auf zwei
+  Geräten unabhängig ausgewertetes Absturzbild einer Android-App.
+
 ### Bekannte Einschränkungen
 
+- **`MemoryMax=` wirkt auf dem Pi nicht.** Der RPi-Kernel startet mit
+  `cgroup_disable=memory`. Gemessen: 150 MB unter `MemoryMax=20M` liefen
+  durch. Regel 10q setzt deshalb auf Selbstbegrenzung, die noch nicht
+  gebaut ist (Roadmap Phase 6).
 - **Keine Sprachein- oder -ausgabe.** Sprache, Wake-Word und
   Umgebungshören sind entworfen, aber nicht gebaut.
 - **Die Abo-Marke wird nicht aufgefrischt.** Läuft sie ab, greift der

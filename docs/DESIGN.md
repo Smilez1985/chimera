@@ -1510,6 +1510,129 @@ anschlagen, sonst treibt der Test die Warnhinweise aus der Dokumentation.
 Für Dokumentation gilt das nicht: `.md`-Dateien sind UTF-8 und dürfen
 Typografie benutzen.
 
+### Anlass für 10p und 10q: ein gemessenes Absturzbild
+
+Ein Agenten-Harness auf zwei Android-Geräten stürzte an zwei Tagen
+wiederholt ab. Ausgewertet wurde auf beiden Geräten unabhängig
+voneinander, auf einem davon mit Root-Zugriff und einer laufenden
+Speichermessung je Prozess. Der Auslöser (die Darstellung der Chatliste)
+betrifft Chimera nicht. Das Muster dagegen ist plattformunabhängig:
+
+1. Der native Speicher stieg in 60–80 s von rund 150 MB auf 5–8 GB, vor
+   dem Absturz zur Hälfte ausgelagert. Der Speicher der Laufzeitumgebung
+   blieb bei 30–120 MB. Wer nur ihn beobachtet, sieht einen gesunden
+   Prozess.
+2. Der Absturzbericht nannte eine Regex-Bibliothek, also den, der als
+   Nächster Speicher wollte, nicht den, der ihn verbraucht hatte. Das
+   führte zuerst zu einer Fehldiagnose.
+3. Die Grenze, an der es endete, war die des Speicherverwalters, nicht
+   die des Geräts. Beide Abstürze mit Messung blieben bei rund 8 GB
+   stehen. Davor meldete der Verwalter, dass er für einzelne
+   Blockgrößen keine Seiten mehr bekommt. Das passt zum Quelltext von
+   scudo (32 Größenklassen zu je 256 MB). Ob Android genau diese
+   Einstellung baut, ist nicht nachgeprüft. Eine Meldung ist ein Zeuge,
+   keine Diagnose (Regel 10g).
+4. Nach jedem Absturz stellte das Programm beim Start dieselbe Sitzung
+   wieder her: vier Abstürze in 40 s auf dem einen Gerät, ein zweiter
+   nach 60 s auf dem anderen.
+
+### Architekturregel 10p — Was beim Laden abstürzt, wird beim nächsten Start nicht wieder geladen
+
+Ein Dienst, der beim Start Zustand wiederherstellt, bildet zusammen mit
+einem Neustarter (systemd `Restart=`) eine Schleife, sobald genau dieser
+Zustand den Absturz auslöst. Jeder Neustart lädt ihn erneut. Das Gerät
+wirkt kaputt, obwohl nur eine Datei schuld ist.
+
+**Heute ist Chimera nicht betroffen.** Beim Start wird nur die
+mitgelieferte `data/moods-builtin.json` geladen (`app.py`). Sie ist Teil
+des Repos und nicht vom Modell erzeugt. `Registry.save()` hat in `src/`
+keinen Aufrufer, `faces/` (Regel 8b) und `active_model.json` (§4a) stehen
+nur in diesem Dokument, der Gesprächsverlauf liegt nur im Arbeitsspeicher.
+Die Regel gilt **ab dem ersten gespeicherten Zustand, den der Start
+liest**. Der wichtigste Fall werden vom Modell angelegte Gesichter sein:
+Regel 2 prüft deren Grenzen und Schema, aber nicht, ob das Zeichnen eines
+gültigen Gesichts den Renderer oder den Speicher eines 512-MB-Geräts
+sprengt.
+
+**Umsetzung:**
+
+1. Vor dem Laden einer Zustandsquelle eine Startmarke schreiben
+   (`/var/lib/chimera/laedt.<quelle>`). Gelöscht wird sie erst nach dem
+   Laden **und** dem ersten Bild bzw. ersten Umlauf, denn im Anlass kam
+   der Absturz nicht beim Lesen, sondern beim Darstellen.
+2. Findet ein Start die Marke eines früheren Laufs, wird diese Quelle
+   nicht geladen, sondern zur Seite gelegt
+   (`<datei>.quarantaene-<zeit>`). Gestartet wird mit dem Standard.
+3. Das Zurückfallen wird **gemeldet**, im Protokoll (Regel 10e) und
+   sichtbar (§7). Läuft das Gerät weiter, ohne dass jemand erfährt, warum
+   das Gesicht fehlt, ist das stiller Erfolg (Regel 8a).
+4. Die Unit begrenzt die Neustarts (`StartLimitIntervalSec=`,
+   `StartLimitBurst=`) für den Fall, dass Schritt 2 versagt.
+
+**Gegenprobe (Regel 9):** Eine Quelle anlegen, deren Laden den Prozess
+beendet (`os._exit(1)` im Testpfad, nicht im Produktivcode). Ohne die
+Regel stirbt der zweite Start genauso. Mit der Regel läuft er mit dem
+Standard, die Quarantänedatei existiert und das Protokoll nennt sie.
+
+### Architekturregel 10q — Speicher wird am Prozess gemessen und vom Prozess begrenzt
+
+**Messen:** Pythons eigene Mittel (`tracemalloc`, `gc`,
+`sys.getsizeof`) sehen nur Python-Objekte. Was C-Bibliotheken belegen
+(Spracherkennung, Sprachsynthese, onnxruntime, numpy, PIL), ist für sie
+unsichtbar, und genau dort entstehen auf dem Gerät die Lecks. Das
+Protokoll (Regel 10e) schreibt deshalb je Arbeitsschritt `VmRSS`,
+`VmHWM` und `VmSwap` aus `/proc/self/status` mit, in kB und ohne
+Zusatzpaket. Arbeitsschritte sind mindestens: Start, Mood laden oder
+wechseln, Spracherkennung, Sprachsynthese, Umlauf des Agenten.
+`VmSwap` gehört dazu, weil zram und die Auslagerungsdatei (Regel 5e) ein
+Leck erst schlucken: Im Anlass war die Hälfte schon ausgelagert, und das
+Gerät wurde zäh, bevor es abstürzte.
+
+**Begrenzen:** Die naheliegende Grenze, `MemoryMax=`/`MemoryHigh=` in der
+systemd-Unit, **wirkt auf dem Pi nicht**. Der Raspberry-Pi-Kernel startet
+mit `cgroup_disable=memory`, der Wert steht in `/proc/cmdline`, aber
+nicht in `cmdline.txt`. Der Speicher-Controller fehlt dann in
+`/sys/fs/cgroup/cgroup.controllers`.
+Gemessen am Zero 2 W (DietPi, Kernel 6.18, systemd 257): Ein Prozess
+belegte 150 MB unter `MemoryMax=20M` und lief durch. Die Gegenprobe
+`RuntimeMaxSec=1` griff, systemd hat die Eigenschaften also übernommen.
+Eine solche Zeile in der Unit wäre stiller Erfolg (Regel 8a).
+
+Daraus folgt:
+
+- Der Dienst begrenzt sich selbst. Liegt `VmRSS + VmSwap` über einer
+  Schwelle, beendet er sich geordnet mit eigenem Exitcode und
+  Protokolleintrag. Die Schwelle ist ein Anteil von `MemTotal` und steht
+  in der Profiltabelle (Regel 10c), nicht als feste Zahl im Code.
+- Steht `MemoryMax=` trotzdem in der Unit, prüft der Installer, ob
+  `memory` in `cgroup.controllers` steht, und meldet es, wenn nicht
+  (Regel 10j: wer prüft, muss etwas sehen können).
+- Den Controller einzuschalten (`cgroup_enable=memory` in `cmdline.txt`)
+  wäre eine Änderung an einer Bootdatei. Sie ist hier **nicht
+  entschieden** und gehört, falls gewollt, in ein Installermodul mit
+  Sicherung und Rückweg.
+
+**Nachweis eines Speichertods:** Unter Linux gibt es keinen
+Absturzbericht, der Kernel beendet den Prozess per SIGKILL. Ohne
+Speicher-Controller kann systemd den Tod nicht als `oom-kill` einordnen,
+die Spur steht nur im Kernelprotokoll (`journalctl -k`,
+„Out of memory: Killed process"). Der Protokollanfang beim nächsten Start
+sucht danach und schreibt den Fund hin. Sonst sieht der Absturz aus wie
+ein sauberer Neustart. Auch die Selbstbegrenzung hinterlässt ihre Spur,
+über den eigenen Exitcode.
+
+**Fehlersuche (zu Regel 10g):** Bei Speichermangel nennt der
+Absturzbericht den, der als Nächster Speicher wollte. Erst die
+Speicherkurve vor dem Absturz lesen, dann den Stack.
+
+**Gegenprobe (Regel 9):** Einen Schritt bauen, der über eine
+C-Bibliothek Speicher belegt (`numpy.ones(...)`) und nicht freigibt.
+`tracemalloc` meldet dabei wenig, `VmRSS` muss den Anstieg zeigen, und
+über der Schwelle muss sich der Dienst mit seinem Exitcode beenden.
+Zeigt das Protokoll den Anstieg nicht, misst es das Falsche. Für die
+Prüfung des Controllers: Ein Testprozess mit `MemoryMax=20M` belegt
+150 MB. Läuft er durch, muss der Installer warnen.
+
 ## 11. Headless
 
 Chimera hat **keine grafische Oberfläche.** Es gibt den 240×280-Bildschirm
@@ -1644,4 +1767,6 @@ die Historie umgeschrieben.
 - **10m** — Ausführbares bleibt reines ASCII
 - **10n** — Nachsehen, nicht abbrechen und nicht raten
 - **10o** — Was nicht im Manifest steht, gehört nicht uns
+- **10p** — Was beim Laden abstürzt, wird beim nächsten Start nicht wieder geladen
+- **10q** — Speicher wird am Prozess gemessen und vom Prozess begrenzt
 - **13a** — Vor jedem Push wird geprüft, und die Prüfung beweist ihre Sehfähigkeit
