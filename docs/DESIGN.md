@@ -1715,7 +1715,7 @@ Tabelle, nicht vorsorglich.
   state/                         root:root 700  -- Manifest, Standdateien
   config/                        root:chimera 750, .env 640
   logs/installer/                Protokolle von Install und Uninstall
-/home/chimera/chimera/           chimera:chimera 700
+/home/<nutzer>/chimera/          chimera:chimera 700
   data/                          Gedächtnis, Moods, Arbeitsordner (CHIMERA_HOME)
   logs/productive/               Protokolle des Dienstes
 ```
@@ -1797,7 +1797,7 @@ Dienstes löst die Prüfsumme von `productive/` aus.
 **Protokolle löscht er nie von sich aus**, weder `logs/installer/` noch
 `logs/productive/`: Gerade nach einem Rückbau braucht man sie, um zu
 sehen, was passiert ist. Löschen nur auf ausdrückliche Anforderung
-(opt-in). Dasselbe gilt für `config/` und `/home/chimera/chimera/data/`
+(opt-in). Dasselbe gilt für `config/` und `/home/<nutzer>/chimera/data/`
 (INSTALLER.md §6). Den Nutzer
 `chimera` entfernt er nur, wenn sein Home dabei mitgeht (also nur bei
 angeforderter Löschung der Daten und Protokolle). Sonst bliebe
