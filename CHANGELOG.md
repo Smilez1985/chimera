@@ -11,6 +11,13 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 ## [Unreleased]
 
 ### Hinzugefügt
+- **Dienst:** Chimera läuft als systemd-Dienst `chimera.service` unter
+  eigenem Systemnutzer `chimera`, startet nach einer Aktualisierung neu
+  und begrenzt Neustarts bei wiederholtem Absturz.
+- **Dienst:** `python -m chimera --dienst` läuft ohne Terminal bis zum
+  Stoppsignal; Telegram startet mit, wenn ein Token eingetragen ist.
+- **Rückbau:** `chimera-uninstall` entfernt Dienst und Dienstnutzer; ein
+  schon vorhandener Nutzer und die Nutzerdaten bleiben.
 - **Rueckbau:** Die Python-Umgebung (venv samt Verdrahtung) laesst sich
   mit Rueckbauen — `chimera-uninstall` fuert den Schritt 50 jetzt mit.
 - **Konfiguration:** Die Umgebungsvorlage `.env.example` wird als

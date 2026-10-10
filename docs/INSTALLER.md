@@ -418,6 +418,70 @@ exakt dieses Layout nach — der erste Testbaum trug die Struktur an der
 falschen Stelle, der echte Lauf wäre an `requirements.txt fehlt`
 gescheitert, unentdeckt weil der Test grün war.
 
+### 4c. Modul 98 — Dienst (Dienstnutzer und systemd-Unit)
+
+Chimera läuft als Dauerdienst `chimera.service`. Die Logik steht in
+`installer/lib/service.sh`, der Schritt ruft nur auf — so ist sie ohne
+systemd prüfbar (`tests/test-service.sh`, Werkzeuge als Shell-Funktionen).
+
+**Eigener Systemnutzer `chimera`, nicht root.** Der Agent hat ein
+Werkzeug, das Programme startet; die Schranken davor (`agent/safety.py`)
+sind ernst gemeint, aber eine Schranke ersetzt keine fehlenden Rechte.
+Gibt es den Nutzer schon, wird er übernommen und als `vorher_da`
+vermerkt — der Rückbau löscht ihn dann nie (neue Manifest-Art `nutzer`).
+
+**Hardwaregruppen in der Unit, nicht am Nutzer.** `SupplementaryGroups=`
+nennt nur Gruppen, die es auf dem System gibt (`audio spi gpio i2c video`,
+gefiltert per `getent`) — eine fehlende Gruppe ließe systemd den Start
+verweigern. Damit gibt es kein `usermod` und nichts zurückzunehmen außer
+der Unit.
+
+**Datenablage `/var/lib/chimera/daten`** (`StateDirectory=`, 700, gehört
+dem Dienstnutzer), dort liegt `CHIMERA_HOME`. Das Manifest daneben in
+`/var/lib/chimera` gehört root und bleibt für den Dienst unbeschreibbar:
+Sonst könnte ein Werkzeugaufruf des Agenten bestimmen, was der
+Deinstallierer löscht. `ProtectSystem=strict` und `ProtectHome=read-only`
+setzen das durch.
+
+**Startbegrenzung (Regel 10p, Punkt 4).** `StartLimitIntervalSec=300`
+und `StartLimitBurst=5` stehen in `[Unit]` — in `[Service]` ignoriert
+systemd sie mit einer Warnung im Journal, und die Unit sieht trotzdem
+richtig aus. `Restart=on-failure`, aber `RestartPreventExitStatus=2`:
+Exitcode 2 heißt „Konfiguration falsch" (etwa Telegram-Token ohne
+erlaubte Absender), und ein Neustart würde daran nichts ändern.
+
+**Dienstmodus im Programm.** `ExecStart` ruft `python -m chimera
+--dienst`. Ohne ihn liefe das Terminalgespräch: Unter systemd ist stdin
+leer, das Gespräch endet sofort mit 0, und die Unit hielte das für ein
+sauberes Ende. `--dienst` wartet auf SIGTERM, öffnet Telegram, wenn ein
+Token gesetzt ist, und läuft ohne Sprachmodell weiter (Gesicht).
+
+**Nachweis: aktiv nach 10 s und `NRestarts=0`.** `is-active` allein
+sieht eine Neustartschleife als gesund, wenn man im richtigen Moment
+fragt. Erst wenn beides stimmt, gilt der Schritt als erledigt.
+
+**Ein `git pull` startet den Dienst neu.** Der Schritt hält eine
+Prüfsumme über `src/` und `requirements.txt` fest
+(`/var/lib/chimera/dienst-stand`) — erst **nach** gelungenem Nachweis.
+Weicht sie ab, wird neu gestartet; sonst liefe nach „pull plus
+Installerlauf" weiter der alte Code (Regel 10). Ein gescheiterter Start
+hält keinen Stand fest, der nächste Lauf versucht es erneut.
+
+**Lesbarkeit vorher prüfen.** Die `.pth` aus Schritt 50 zeigt ins Repo.
+Liegt es in einem geschlossenen Verzeichnis (`/root`), kann der
+Dienstnutzer das Programm nicht lesen, und der Dienst stirbt beim Start.
+Der Schritt prüft das per `runuser` vor dem Schreiben der Unit und
+bricht benannt ab (Ausweg: Repo nach `/opt/chimera/repo`).
+
+**Speicherbegrenzung steht nicht in der Unit.** `MemoryMax=` wirkt auf dem
+Pi nicht (Regel 10q, gemessen) und wäre stiller Erfolg. Die
+Selbstbegrenzung im Prozess ist ein eigener Punkt der Roadmap.
+
+**Rückbau** (`uninstaller/steps/98-remove-service.sh`): stoppen und
+abschalten (`disable --now`, am Ergebnis geprüft), Unit und Standdatei
+entfernen, `daemon-reload`, zuletzt den Nutzer — nur wenn er `neu` ist.
+Die Nutzerdaten bleiben (§6).
+
 ---
 
 ## 5. Modul 60 — Overlay und Bootkonfiguration

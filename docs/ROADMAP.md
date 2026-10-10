@@ -365,9 +365,10 @@ Offen bleibt:
       (`cgroup_enable=memory`, Bootdatei) oder bei der Selbstbegrenzung
       bleiben. Der RPi-Kernel startet mit `cgroup_disable=memory`, und
       `MemoryMax=` wirkt dort nicht (gemessen)
-- [ ] Systemd-Unit gibt es noch nicht (das Manifest kennt nur die Art
-      `dienst`). Wenn sie entsteht: `StartLimitBurst=` (10p) und
-      Prüfung des Controllers (10q)
+- [x] Systemd-Unit mit `StartLimitBurst=` in `[Unit]` (10p, Punkt 4) —
+      Schritt 98, Abnahme am Gerät offen
+- [ ] Prüfung des Speicher-Controllers, falls `MemoryMax=` je in die Unit
+      kommt (10q) — die Unit trägt es bewusst nicht
 
 ## Phase 7 — Restliche Peripherie
 
@@ -495,7 +496,8 @@ Der einfache Fall: Header kommen aus dem Distributionspaket.
 - [ ] Auf beiden Boards gleich einrichten — auch wo es nicht nötig wäre
 - [ ] Python-Umgebung, Modelle laden und Pruefsummen verifizieren
 - [ ] `.env` aus Vorlage, Ollama-Adresse erfragen
-- [ ] systemd-Unit
+- [x] systemd-Unit und Dienstnutzer (Schritt 98) — Abnahme am Gerät offen:
+      `systemctl is-active` nach 10 s, `NRestarts=0`
 - [ ] `migrate_from()` fuer Uebergaenge (I2)
 - [ ] Deinstallation, die den Ausgangszustand wiederherstellt
 
