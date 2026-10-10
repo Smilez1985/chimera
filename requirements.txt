@@ -1,0 +1,11 @@
+# Chimera — Python-Abhaengigkeiten.
+#
+# Die EINE Quelle fuer die Python-Umgebung: Der Installer liest sie
+# (`steps/50-python.sh`), niemand anderer rät. Eine Abhaengigkeit kommt
+# hier rein, wenn Code sie importiert — nicht im Voraus, nicht "weil
+# spater gebraucht".
+#
+# Gehalte: stdlib-Module stehen hier NICHT. Das Modul soll auf dem Pi
+# Zero (512 MB) ohne grosse Zusatzfaesser laufen; was nur in einer
+# Ausnahme gebraucht wird, waehlt der Installer gezielt dazu, nicht hier.
+Pillow>=10.0.0

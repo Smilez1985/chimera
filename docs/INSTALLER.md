@@ -369,6 +369,37 @@ Ablauf:
 Die Quelle ist GPL-2.0 (Linux). Wird sie mitgeliefert statt geladen,
 gehört der Lizenzhinweis dazu und ein Vermerk in `THIRD_PARTY.md`.
 
+### 4b. Modul 50 — Python-Umgebung (venv)
+
+Chimera ist ein Python-Dauerprozess. Debian hält `/usr/lib/python3` von
+apt ab und lehnt `pip` dort seit Trixie ab (PEP 668) — zu Recht. Zwei
+Wege lösen das: ein **venv** oder Systempakete mit
+`--break-system-packages`. Chimera nimmt das venv:
+
+- `--break-system-packages` wechselt die Tür aus, die Debian genau aus
+  diesem Grund schließt — ein pip-Lauf dort kann Debian-Pakete
+  überbieten, ohne dass der Nutzer es sieht.
+- Ein venv gehört ganz Chimera, liegt unter `/opt/chimera/venv`, und
+  steht im Manifest (`verzeich`) — die Deinstallation kann es als
+  Ganzes entfernen, ohne fremde Pakete anzufassen.
+
+**`requirements.txt` im Repo ist die eine Quelle** der
+Python-Abhängigkeiten. Der Installer liest sie, niemand anderer rät.
+Stdlib-Module stehen dort nicht; was nur in einer Ausnahme gebraucht
+wird, holt der Installer gezielt dazu (Schritt 20), nicht die
+Anforderungsliste.
+
+**Das Repo bleibt die Quelle des Moduls.** Chimera wird nicht ins venv
+kopiert — ein `git pull` plus Installerlauf muss genügen (Regel 10).
+Statt einer Kopie verdrahtet Schritt 50 den Quellpfad als
+`chimera.pth` im `site-packages` des venv: das Modul ist dann unter
+`python -m chimera` erreichbar, folgt aber dem Repo.
+
+**Der Nachweis ist das Modul selbst**, nicht der Exitcode von pip:
+`venv/bin/python -m chimera --pruefen` muss durchlaufen. Ein pip-Lauf
+meldet Erfolg auch dann, wenn das Modul selbst nicht lauffähig ist
+(Regel 10j).
+
 ---
 
 ## 5. Modul 60 — Overlay und Bootkonfiguration
