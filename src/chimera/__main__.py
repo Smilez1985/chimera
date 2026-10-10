@@ -132,7 +132,7 @@ def dienst(chi, stop: threading.Event | None = None, env=None) -> int:
 
     if not chi.registry.available():
         log.warning("Kein Sprachmodell erreichbar — Dienst läuft ohne "
-                    "Gespräch weiter (Gesicht). Werte in /etc/chimera/.env.")
+                    "Gespräch weiter (Gesicht). Werte in /opt/chimera/config/.env.")
 
     if chi.start_display():
         log.info("Gesicht zeichnet.")

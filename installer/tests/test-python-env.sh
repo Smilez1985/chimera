@@ -27,7 +27,7 @@ if [ -z "$W" ] || [ ! -d "$W" ]; then
 	printf 'mktemp lieferte kein Testverzeichnis in %s\n' "$CHIMERA_TESTDIR"
 	exit 2
 fi
-trap 'rm -rf "$W"' EXIT INT TERM
+trap '[ -n "${KEEP:-}" ] || rm -rf "$W"' EXIT INT TERM
 
 ok()  { PASS=$((PASS+1)); printf '  ok    %s\n' "$1"; }
 bad() { FAIL=$((FAIL+1)); printf '  FAIL  %s\n' "$1"; }
@@ -52,10 +52,13 @@ printf '=== Python-Umgebung (Modul 50) ===\n'
 # Nachweis `python -m chimera --pruefen` braucht sie, und der Test soll
 # den echten Weg fahren, nicht einen behelfsmaessigen.
 mkbaum() {
-	BAUM="$W/$1"
-	# Treuer Baum: das echte Layout ist repo/installer/{lib,steps},
-	# Repo-Wurzel traegt requirements.txt, .env.example und src/.
-	mkdir -p "$BAUM/installer/steps" "$BAUM/etc"
+	# BAUM ist die Systemwurzel, BAUM/repo das Repo darin -- getrennt wie
+	# auf dem Geraet. Lag das Repo frueher selbst an der Wurzel, landete
+	# productive/ IM Repo, und der Inhaltshash des Repos aenderte sich
+	# durch die eigene Kopie (Kopie "wich ab").
+	WURZEL="$W/$1"
+	BAUM="$WURZEL/repo"
+	mkdir -p "$BAUM/installer/steps" "$WURZEL/etc"
 	cp -r "$HERE/lib" "$BAUM/installer/lib"
 	cp "$HERE/steps/50-python.sh" "$BAUM/installer/steps/50-python.sh"
 	mkdir -p "$BAUM/src"
@@ -64,11 +67,11 @@ mkbaum() {
 	# Auch die Konfigurationsvorlage gehoert zur Kopie (Schritt 50 legt
 	# /etc/chimera/.env daraus ab).
 	cp "$HERE/../.env.example" "$BAUM/.env.example" 2>/dev/null || true
-	printf 'ID=debian\nVERSION_CODENAME=trixie\n' >"$BAUM/etc/os-release" 2>/dev/null \
+	printf 'ID=debian\nVERSION_CODENAME=trixie\n' >"$WURZEL/etc/os-release" 2>/dev/null \
 		|| true
-	CHIMERA_ROOT="$BAUM"; export CHIMERA_ROOT
-	CHIMERA_MANIFEST="$BAUM/var/lib/chimera/manifest.tsv"
-	CHIMERA_LOG_DIR="$BAUM/var/log/chimera"; export CHIMERA_LOG_DIR
+	CHIMERA_ROOT="$WURZEL"; export CHIMERA_ROOT
+	CHIMERA_MANIFEST="$WURZEL/opt/chimera/state/manifest.tsv"
+	CHIMERA_LOG_DIR="$WURZEL/logs"; export CHIMERA_LOG_DIR
 	mkdir -p "$(dirname "$CHIMERA_MANIFEST")" "$CHIMERA_LOG_DIR"
 	MANIFEST="$CHIMERA_MANIFEST"
 }
@@ -85,7 +88,7 @@ setze_anforderungen() {
 # Den Schritt fahren. $1 Modus. Setzt RC und OUT.
 fahr() {
 	set +e
-	OUT="$(env CHIMERA_ROOT="$BAUM" CHIMERA_MANIFEST="$MANIFEST" \
+	OUT="$(env CHIMERA_ROOT="$WURZEL" CHIMERA_MANIFEST="$MANIFEST" \
 	           CHIMERA_LOG_DIR="$CHIMERA_LOG_DIR" CHIMERA_MODE="$1" \
 	           sh "$BAUM/installer/steps/50-python.sh" 2>&1)"
 	RC=$?
@@ -113,7 +116,7 @@ setze_anforderungen "pip"
 fahr dry
 check "Trockenlauf -> rc 0" "$RC" "0"
 contains "announced" "$OUT" "[wuerde anlegen]"
-if [ -d "$BAUM/opt/chimera/venv" ]; then
+if [ -d "$WURZEL/opt/chimera/productive/venv" ]; then
 	bad "Trockenlauf hat ein venv angelegt"
 else ok "Trockenlauf hat kein venv angelegt"; fi
 
@@ -122,22 +125,22 @@ mkbaum "echt"
 setze_anforderungen ""
 fahr run
 check "echter Lauf -> rc 0" "$RC" "0"
-if [ -d "$BAUM/opt/chimera/venv" ]; then
+if [ -d "$WURZEL/opt/chimera/productive/venv" ]; then
 	ok "venv wurde angelegt"
 else bad "venv wurde NICHT angelegt"; fi
-if [ -d "$BAUM/var/lib/chimera" ]; then
+if [ -f "$CHIMERA_MANIFEST" ]; then
 	ok "Manifest liegt in der Testwurzel"
 else bad "Manifest fehlt"; fi
 contains "Nachweis nannt" "$OUT" "nachweisbar"
 
 # Und die Verdrahtung stimmt: die .pth zeigt auf die Kopie.
-_PTH="$(find "$BAUM/opt/chimera/venv" -name 'chimera.pth' 2>/dev/null | head -1)"
+_PTH="$(find "$WURZEL/opt/chimera/productive/venv" -name 'chimera.pth' 2>/dev/null | head -1)"
 if [ -n "$_PTH" ] && [ -f "$_PTH" ]; then
 	_ZIEL="$(cat "$_PTH")"
-	if [ "$_ZIEL" = "$BAUM/src" ]; then
-		ok ".pth verweist auf die Quellkopie"
+	if [ "$_ZIEL" = "$WURZEL/opt/chimera/productive/code/src" ]; then
+		ok ".pth verweist auf productive/code (nicht auf den Startbaum)"
 	else
-		bad ".pth verweist auf das Falsche: $_ZIEL (erwartet $BAUM/src)"
+		bad ".pth verweist auf das Falsche: $_ZIEL (erwartet productive/code/src)"
 	fi
 else bad ".pth wurde nicht angelegt"; fi
 
@@ -145,7 +148,7 @@ else bad ".pth wurde nicht angelegt"; fi
 # Die Vorlage wird als /etc/chimera/.env abgelegt, mit Platzhaltern; die
 # abgelegte Datei bleibt bei einem zweiten Lauf unangetastet (dort stehen
 # spaeter echte Werte).
-ENVF="$BAUM/etc/chimera/.env"
+ENVF="$WURZEL/opt/chimera/config/.env"
 if [ -f "$ENVF" ]; then
 	ok "Umgebungskonfiguration abgelegt"
 else bad "Umgebungskonfiguration fehlt: $ENVF"; fi
@@ -155,9 +158,9 @@ else bad "Vorlage ohne bekannten Platzhalter"; fi
 if [ "$(stat -c %a "$ENVF" 2>/dev/null)" = "600" ]; then
 	ok "Konfiguration ist 600"
 else bad "Rechte der Konfiguration: $(stat -c %a "$ENVF" 2>/dev/null)"; fi
-if [ ! -d "$W/trocken/etc/chimera" ]; then
+if [ ! -d "$W/trocken/opt/chimera/config" ]; then
 	ok "Trockenlauf hat keine Konfiguration abgelegt"
-else bad "Trockenlauf hat nach /etc/chimera geschrieben"; fi
+else bad "Trockenlauf hat nach config/ geschrieben"; fi
 
 # --- Fall 5: idempotent ----------------------------------------------------
 # Der zweite Lauf kommt in den Zustand "bereits nachweisbar" und aendert
@@ -168,15 +171,15 @@ setze_anforderungen ""
 fahr run
 _rc_erster="$RC"
 _mk_erster="$BAUM"
-_mk_erster_pth="$(find "$BAUM/opt/chimera/venv" -name 'chimera.pth' 2>/dev/null | wc -l)"
+_mk_erster_pth="$(find "$WURZEL/opt/chimera/productive/venv" -name 'chimera.pth' 2>/dev/null | wc -l)"
 fahr run
 check "zweiter Lauf -> rc 0" "$RC" "$_rc_erster"
-_pth_jetzt="$(find "$BAUM/opt/chimera/venv" -name 'chimera.pth' 2>/dev/null | wc -l)"
+_pth_jetzt="$(find "$WURZEL/opt/chimera/productive/venv" -name 'chimera.pth' 2>/dev/null | wc -l)"
 check "nur eine .pth, nicht doppelt" "$_pth_jetzt" "1"
 
 # Die Konfiguration wird vom zweiten Lauf NICHT ueberschrieben -- dort
 # stehen spaeter echte Werte. Also einen Wert eintragen und nachmessen.
-ENVZ="$BAUM/etc/chimera/.env"
+ENVZ="$WURZEL/opt/chimera/config/.env"
 printf '# vom Nutzer\nOLLAMA_API_BASE=http://ollama-server:11434\n' >>"$ENVZ"
 fahr run
 check "zweiter Lauf -> rc 0 (Feld 5)" "$RC" "$_rc_erster"
@@ -195,7 +198,7 @@ setze_anforderungen ""
 sed 's|write_atomic "\$_pth" |true |' "$BAUM/installer/steps/50-python.sh" \
 	>"$BAUM/installer/steps/50-python-gegenprobe.sh"
 set +e
-OUT="$(env CHIMERA_ROOT="$BAUM" CHIMERA_MANIFEST="$MANIFEST" \
+OUT="$(env CHIMERA_ROOT="$WURZEL" CHIMERA_MANIFEST="$MANIFEST" \
            CHIMERA_LOG_DIR="$CHIMERA_LOG_DIR" CHIMERA_MODE=run \
            sh "$BAUM/installer/steps/50-python-gegenprobe.sh" 2>&1)"
 RC=$?

@@ -153,7 +153,7 @@ check "--downgrade=true: source/ = 0.1.0" "$(cat "$SRC/VERSION")" 0.1.0
 
 # Online: Testrepo mit Tags, hoechster Tag gewinnt; Zweigspitze zaehlt nie.
 G="$W/repo"; baum "$G" 0.2.0
-( cd "$G" && git init -q && git config user.email t@example.invalid && git config user.name t &&
+( cd "$G" && git init -q && git config user.email test@example.com && git config user.name t &&
   git add -A && git commit -qm a && git tag v0.2.0 &&
   printf '0.10.0\n' >VERSION && printf 'print(10)\n' >src/chimera/__main__.py &&
   git commit -qam b && git tag v0.10.0 &&
@@ -166,7 +166,7 @@ check "online: source/ = hoechster Tag 0.10.0" "$(cat "$SRC/VERSION")" 0.10.0
 
 # Ohne Tags: kein veroeffentlichter Stand, lokaler gilt; Spitze nie.
 G2="$W/repo2"; baum "$G2" 5.0.0
-( cd "$G2" && git init -q && git config user.email t@example.invalid && git config user.name t &&
+( cd "$G2" && git init -q && git config user.email test@example.com && git config user.name t &&
   git add -A && git commit -qm a ) >/dev/null 2>&1
 QUELLE="$G2"
 installer "$W/a"

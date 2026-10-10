@@ -7,7 +7,7 @@
 # man ihm die Dateien unter den Fuessen wegzieht.
 #
 # Die einzige Wahrheitsquelle ist das Manifest
-# (/var/lib/chimera/manifest.tsv). Ohne Manifest wird NICHT geraten --
+# (/opt/chimera/state/manifest.tsv). Ohne Manifest wird NICHT geraten --
 # dann bricht der Lauf ab und sagt, warum. Ein Deinstallierer, der raet,
 # loescht entweder Fremdes oder laesst Eigenes liegen.
 #
@@ -53,6 +53,8 @@ chimera-uninstall $VERSION
                        (Vorgabe: behalten -- sie zu entfernen bringt wenige
                        Megabyte und kann per Abhaengigkeit mehr mitreissen)
   --log-dir <dir>      wohin das Protokoll geschrieben wird
+  --daten-loeschen     auch Gedaechtnis/Moods im Home loeschen (opt-in)
+  --logs-loeschen      auch die Protokolle loeschen (opt-in)
   -h, --help           diese Hilfe
 EOF
 }
@@ -64,6 +66,10 @@ while [ $# -gt 0 ]; do
 		--list)     MODE=list; shift ;;
 		--manifest) CHIMERA_MANIFEST="${2:?--manifest braucht einen Wert}"; shift 2 ;;
 		--remove-packages) KEEP_PACKAGES=0; shift ;;
+		# Opt-in (DESIGN 10r): ohne diese Schalter bleiben Daten und
+		# Protokolle immer stehen.
+		--daten-loeschen) CHIMERA_DATEN_LOESCHEN=1; shift ;;
+		--logs-loeschen)  CHIMERA_LOGS_LOESCHEN=1; shift ;;
 		# Alter Name, bleibt gueltig: Er war in einer frueheren Fassung
 		# der Hilfe genannt. Eine Option stillschweigend fallenzulassen
 		# bricht Skripte, die sie benutzen.
@@ -75,6 +81,7 @@ while [ $# -gt 0 ]; do
 done
 
 export KEEP_PACKAGES
+export CHIMERA_DATEN_LOESCHEN="${CHIMERA_DATEN_LOESCHEN:-0}" CHIMERA_LOGS_LOESCHEN="${CHIMERA_LOGS_LOESCHEN:-0}"
 
 # Rueckwaerts: 40 vor 30 vor 20. `sort -r` genuegt, weil die Nummern
 # zweistellig und gleich breit sind -- bei dreistelligen waere eine

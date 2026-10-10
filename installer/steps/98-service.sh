@@ -22,9 +22,10 @@ CHIMERA_STEP="98-service"; export CHIMERA_STEP
 [ -n "${CHIMERA_LOGFILE:-}" ] || log_open "service" || \
 	warn "Kein Protokoll moeglich -- Lauf wird nicht festgehalten."
 
-REPO="$(cd "$_HERE/.." && pwd)"
-# Zielpfad (ohne CHIMERA_ROOT) -- systemd liest ihn am Ziel.
-VENV_PY=/opt/chimera/venv/bin/python
+# Der Dienst laeuft aus productive/code (Schritt 50), nicht aus source/.
+# Zielpfade (ohne CHIMERA_ROOT) -- systemd liest sie am Ziel.
+CODE="$(rootpath "$CHIMERA_CODE")"
+VENV_PY="$CHIMERA_VENV/bin/python"
 
 log "Chimera Dienst"
 log ""
@@ -40,9 +41,13 @@ if ! is_dry_run && [ ! -x "$(rootpath "$VENV_PY")" ]; then
 	err "venv fehlt ($VENV_PY) -- Schritt 50 zuerst."
 	log_close 2; exit 2
 fi
+if ! is_dry_run && [ ! -d "$CODE/src/chimera" ]; then
+	err "productive/code fehlt ($CHIMERA_CODE) -- Schritt 50 zuerst."
+	log_close 2; exit 2
+fi
 
 set +e
-service_einrichten "$VENV_PY" "$REPO"
+service_einrichten "$VENV_PY" "$CODE"
 rc=$?
 set -e
 

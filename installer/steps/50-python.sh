@@ -21,14 +21,20 @@ _HERE="$(cd "$(dirname "$0")/.." && pwd)"
 . "$_HERE/lib/network.sh"
 . "$_HERE/lib/manifest.sh"
 . "$_HERE/lib/module.sh"
+. "$_HERE/lib/source.sh"
 
 CHIMERA_STEP="50-python"; export CHIMERA_STEP
 
 [ -n "${CHIMERA_LOGFILE:-}" ] || log_open "python" || \
 	warn "Kein Protokoll moeglich -- Lauf wird nicht festgehalten."
 
-VENV="$(rootpath /opt/chimera/venv)"
+VENV="$(rootpath "$CHIMERA_VENV")"
+# REPO ist der Baum, aus dem dieser Schritt laeuft -- nach Schritt 00 ist
+# das source/. Der Dienst laeuft aber nicht aus source/, sondern aus
+# productive/code (DESIGN Regel 10r): Ein neues source/ aendert am
+# laufenden Dienst nichts, erst dieser Schritt bringt den Stand hinueber.
 REPO="$(cd "$_HERE/.." && pwd)"
+CODE="$(rootpath "$CHIMERA_CODE")"
 REQUIREMENTS="$REPO/requirements.txt"
 ENV_EXAMPLE="$REPO/.env.example"
 PY="$VENV/bin/python"
@@ -46,7 +52,9 @@ log ""
 # Fehlende Werte werden benannt: `python -m chimera --pruefen` nennt
 # jeden Connector, der wegen eines Platzhalters oder fehlenden Schluessels
 # nicht verfuegbar ist.
-ENV_DIR="$(rootpath /etc/chimera)"
+# Ablage: /opt/chimera/config (root). Die Gruppe chimera und die Rechte
+# 750/640 setzt Schritt 98, sobald es den Nutzer gibt; bis dahin 700/600.
+ENV_DIR="$(rootpath "$CHIMERA_CONFIG")"
 ENV_FILE="$ENV_DIR/.env"
 
 if [ -f "$ENV_EXAMPLE" ]; then
@@ -56,7 +64,7 @@ if [ -f "$ENV_EXAMPLE" ]; then
 		if is_dry_run; then
 			info "[wuerde ablegen] $ENV_FILE (aus .env.example)"
 		else
-			mkdir -p "$ENV_DIR" || {
+			( umask 077; mkdir -p "$ENV_DIR" ) || {
 				err "Konfigurationsverzeichnis nicht anlegbar: $ENV_DIR"
 				log_close 2; exit 2
 			}
@@ -65,6 +73,9 @@ if [ -f "$ENV_EXAMPLE" ]; then
 				log_close 2; exit 2
 			}
 			chmod 600 "$ENV_FILE"
+			cp "$ENV_EXAMPLE" "$ENV_DIR/.env.example" 2>/dev/null || true
+			# config/ NICHT als verzeich: Den Rueckbau von 50 soll sie
+			# ueberleben (nur opt-in loeschen, Regel 10r).
 			manifest_record datei "$ENV_FILE" \
 				"$(sha256sum "$ENV_FILE" 2>/dev/null | cut -d' ' -f1)"
 			info "Umgebungskonfiguration abgelegt: $ENV_FILE"
@@ -108,6 +119,30 @@ pruef_ok() {
 	[ -x "$PY" ] && "$PY" -m chimera --pruefen >/dev/null 2>&1
 }
 
+# --- Code nach productive/ ------------------------------------------------
+# Wie Schritt 00: gleicher Inhalt -> nichts zu tun. Kein Versionsvergleich
+# hier -- ueber die Version hat Schritt 00 schon entschieden; was in
+# source/ steht, ist der gewollte Stand.
+log "Code"
+_soll="$(source_hash "$REPO")"
+[ -n "$_soll" ] || { err "Pruefsumme von $REPO leer -- Abbruch."; log_close 2; exit 2; }
+_ist="$(source_hash "$CODE" 2>/dev/null || true)"
+if [ "$_soll" = "$_ist" ]; then
+	info "productive/code ist bereits dieser Stand."
+elif is_dry_run; then
+	info "[wuerde kopieren] $REPO -> $CHIMERA_CODE"
+else
+	if ! is_dry_run && [ "$(id -u)" != 0 ]; then
+		err "productive/ gehoert root -- nur als Verwalter."; log_close 2; exit 2
+	fi
+	source_reparieren "$CODE"
+	source_kopieren "$REPO" "$CODE" "$_soll" || {
+		err "productive/code nicht erneuert."; log_close 2; exit 2; }
+	manifest_has verzeich "$CODE" || manifest_record verzeich "$CODE" ""
+	info "productive/code = $(source_version "$CODE")"
+fi
+log ""
+
 if pruef_ok; then
 	log "Die Python-Umgebung ist bereit und nachweisbar."
 	info "venv: $VENV"
@@ -116,7 +151,7 @@ fi
 
 # --- Voraussetzungen ------------------------------------------------------
 if ! is_dry_run && [ "$(id -u)" != 0 ]; then
-	err "Dieses Modul legt /opt/chimera/venv an und installiert Pakete --"
+	err "Dieses Modul legt $CHIMERA_VENV an und installiert Pakete --"
 	err "das geht nur als Verwalter."
 	err "  sudo sh $0"
 	log_close 2; exit 2
@@ -166,7 +201,7 @@ if venv_ready; then
 else
 	if is_dry_run; then
 		info "[wuerde anlegen] python3 -m venv $VENV"
-		info "[wuerde merken] verzeich /opt/chimera/venv"
+		info "[wuerde merken] verzeich $CHIMERA_VENV"
 	else
 		# Das venv wird neu angelegt, wenn es kaputt ist -- es gehoert
 		# ganz uns, dafuer steht der Eintrag im Manifest.
@@ -222,8 +257,7 @@ log ""
 # Der Pfad ist der Aufruferkontext, kein Hardcode: Der Installer lebt im
 # geklonten Repo, dorthin gehoert auch der Quelltext. _HERE ist bereits
 # das Repo -- dirname($0)/.. -- eine Ebene weiter hoch waere es daneben.
-_REPO="$REPO"
-_srcdir="$_REPO/src"
+_srcdir="$CODE/src"
 
 if is_dry_run; then
 	info "[wuerde verdrahten] $_srcdir als chimera.pth"

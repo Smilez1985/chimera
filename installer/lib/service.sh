@@ -10,11 +10,12 @@
 #     Werkzeug, das Programme startet -- das soll nicht als root laufen.
 #   * Hardwaregruppen stehen in der Unit (SupplementaryGroups=), nicht per
 #     usermod am Nutzer. Dann gibt es nichts zurueckzunehmen ausser der
-#     Unit selbst.
-#   * Nutzerdaten liegen in /var/lib/chimera/daten (StateDirectory=). Das
-#     Manifest in /var/lib/chimera gehoert root und bleibt fuer den Dienst
-#     unbeschreibbar -- sonst koennte ein Werkzeugaufruf des Agenten
-#     festlegen, was der Deinstallierer loescht.
+#     Unit selbst. Fest: audio spi gpio (belegt, DESIGN 10r). Opt-in:
+#     i2c video ueber --mit (CHIMERA_MIT).
+#   * Pfade aus common.sh (Regel 10r): Code und venv unter
+#     /opt/chimera/productive (root), Daten und Dienstprotokolle im Home
+#     des Nutzers. Das Manifest in /opt/chimera/state ist fuer den Dienst
+#     nicht lesbar.
 #   * StartLimit* steht in [Unit], nicht in [Service]: Dort ignoriert
 #     systemd die Werte mit einer Warnung im Journal, und die Unit startet
 #     scheinbar richtig (Regel 10p, Punkt 4).
@@ -28,18 +29,24 @@
 : "${CHIMERA_DIENSTNUTZER:=chimera}"
 : "${CHIMERA_DIENST_WARTEN:=10}"
 
-SERVICE_GRUPPEN_KANDIDATEN="audio spi gpio i2c video"
+SERVICE_GRUPPEN_FEST="audio spi gpio"
 
 service_unit_pfad()  { rootpath "/etc/systemd/system/$CHIMERA_DIENST"; }
-service_stand_pfad() { rootpath /var/lib/chimera/dienst-stand; }
+service_stand_pfad() { rootpath "$CHIMERA_STATE/dienst-stand"; }
 
 # Welche Hardwaregruppen gibt es auf diesem System? systemd verweigert den
 # Start, wenn SupplementaryGroups= eine fehlende Gruppe nennt -- also nur
 # die vorhandenen eintragen.
 service_gruppen() {
 	_sg_l=""
-	for _sg_g in $SERVICE_GRUPPEN_KANDIDATEN; do
-		getent group "$_sg_g" >/dev/null 2>&1 && _sg_l="$_sg_l $_sg_g"
+	for _sg_g in $SERVICE_GRUPPEN_FEST ${CHIMERA_MIT:-}; do
+		case " $_sg_l " in *" $_sg_g "*) continue ;; esac
+		if getent group "$_sg_g" >/dev/null 2>&1; then
+			_sg_l="$_sg_l $_sg_g"
+		else
+			# Benannt, nicht verschwiegen (DESIGN 10r).
+			warn "Gruppe $_sg_g gibt es auf diesem System nicht -- uebersprungen." >&2
+		fi
 	done
 	printf '%s\n' "${_sg_l# }"
 }
@@ -48,6 +55,7 @@ service_gruppen() {
 # Pfade sind Zielpfade (ohne CHIMERA_ROOT), denn systemd liest sie am Ziel.
 service_unit_text() {
 	_su_py="$1"
+	# Pfade aus common.sh (Zielpfade).
 	_su_gr="$2"
 	cat <<EOF
 # Von chimera-install angelegt (Schritt 98). Aenderungen gehen beim
@@ -68,21 +76,27 @@ Group=$CHIMERA_DIENSTNUTZER
 EOF
 	[ -n "$_su_gr" ] && printf 'SupplementaryGroups=%s\n' "$_su_gr"
 	cat <<EOF
-EnvironmentFile=/etc/chimera/.env
-Environment=CHIMERA_HOME=/var/lib/chimera/daten
-Environment=HOME=/var/lib/chimera/daten
+EnvironmentFile=$CHIMERA_CONFIG/.env
+Environment=CHIMERA_HOME=$CHIMERA_DATA
+Environment=HOME=$CHIMERA_HOME_DIR
 Environment=LANG=C.UTF-8
 Environment=PYTHONUNBUFFERED=1
-StateDirectory=chimera/daten
-StateDirectoryMode=0700
-WorkingDirectory=/var/lib/chimera/daten
+# Protokolle erst in den Arbeitsspeicher (Regel 10r) ...
+RuntimeDirectory=chimera/logs/productive
+Environment=CHIMERA_LOG_RAM=/run/chimera/logs/productive
+WorkingDirectory=$CHIMERA_DATA
 ExecStart=$_su_py -m chimera --dienst
+# ... und beim Stoppen gesammelt auf den Datentraeger. ExecStopPost laeuft,
+# bevor systemd das RuntimeDirectory entfernt (innerstes Verzeichnis).
+ExecStopPost=/bin/sh -c 'mkdir -p $CHIMERA_LOGS_PRODUCTIVE && cp -p /run/chimera/logs/productive/*.log $CHIMERA_LOGS_PRODUCTIVE/ 2>/dev/null || true'
 Restart=on-failure
 RestartSec=5
 RestartPreventExitStatus=2
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=read-only
+# Schreiben nur im eigenen Bereich (ProtectHome=read-only sperrt /home).
+ReadWritePaths=$CHIMERA_USER_ROOT
 PrivateTmp=yes
 
 [Install]
@@ -121,8 +135,8 @@ service_nutzer() {
 	have_cmd useradd || { err "useradd fehlt -- Dienstnutzer nicht anlegbar."; return 2; }
 	_sn_shell=/usr/sbin/nologin
 	[ -x "$(rootpath "$_sn_shell")" ] || _sn_shell=/bin/false
-	useradd --system --user-group --no-create-home \
-		--home-dir /var/lib/chimera/daten --shell "$_sn_shell" "$_sn_u" \
+	useradd --system --user-group --create-home \
+		--home-dir "$CHIMERA_HOME_DIR" --shell "$_sn_shell" "$_sn_u" \
 		>/dev/null 2>&1 || true
 	# Am Ergebnis pruefen, nicht am Exitcode.
 	if ! id -u "$_sn_u" >/dev/null 2>&1; then
@@ -131,6 +145,42 @@ service_nutzer() {
 	fi
 	manifest_record nutzer "$_sn_u" neu
 	info "Dienstnutzer angelegt: $_sn_u"
+	return 0
+}
+
+# Bereiche und Rechte herstellen (DESIGN 10r): Home 700 dem Nutzer, darin
+# data/ und logs/productive; config/ root:chimera 750, .env 640. Am
+# Ergebnis geprueft (stat), nicht am Exitcode von chown.
+service_bereiche() {
+	_sb_u="$CHIMERA_DIENSTNUTZER"
+	if is_dry_run; then
+		info "[wuerde einrichten] $CHIMERA_USER_ROOT/{data,logs/productive} ($_sb_u, 700)"
+		info "[wuerde setzen] $CHIMERA_CONFIG root:$_sb_u 750, .env 640"
+		return 0
+	fi
+	for _sb_d in "$CHIMERA_HOME_DIR" "$CHIMERA_USER_ROOT" "$CHIMERA_DATA" \
+	             "$(dirname "$CHIMERA_LOGS_PRODUCTIVE")" "$CHIMERA_LOGS_PRODUCTIVE"; do
+		_sb_p="$(rootpath "$_sb_d")"
+		mkdir -p "$_sb_p" || { err "nicht anlegbar: $_sb_d"; return 2; }
+		chown "$_sb_u:$_sb_u" "$_sb_p" 2>/dev/null
+		chmod 700 "$_sb_p"
+		if [ "$(stat -c '%U %a' "$_sb_p" 2>/dev/null)" != "$_sb_u 700" ]; then
+			err "Rechte nicht gesetzt: $_sb_d (ist: $(stat -c '%U %a' "$_sb_p" 2>/dev/null))"
+			return 2
+		fi
+	done
+	_sb_c="$(rootpath "$CHIMERA_CONFIG")"
+	if [ -d "$_sb_c" ]; then
+		chown "root:$_sb_u" "$_sb_c" 2>/dev/null; chmod 750 "$_sb_c"
+		[ -f "$_sb_c/.env" ] && { chown "root:$_sb_u" "$_sb_c/.env" 2>/dev/null; chmod 640 "$_sb_c/.env"; }
+		if [ "$(stat -c '%G %a' "$_sb_c" 2>/dev/null)" != "$_sb_u 750" ]; then
+			err "config/ nicht fuer $_sb_u lesbar gemacht (ist: $(stat -c '%G %a' "$_sb_c" 2>/dev/null))"
+			return 2
+		fi
+	else
+		warn "config/ fehlt -- Schritt 50 legt sie an; der Dienst startet ohne .env nicht."
+		return 2
+	fi
 	return 0
 }
 
@@ -150,9 +200,8 @@ service_lesbar() {
 	fi
 	err "Der Dienstnutzer $CHIMERA_DIENSTNUTZER kann das Programm nicht lesen:"
 	err "  $_sl_repo/src/chimera/__main__.py"
-	err "Das Repo liegt vermutlich in einem geschlossenen Verzeichnis"
-	err "(z. B. /root). Repo nach /opt/chimera/repo klonen oder die"
-	err "Verzeichnisrechte oeffnen, dann den Lauf wiederholen."
+	err "Die Rechte unter $CHIMERA_PRODUCTIVE sind zu eng (go+rX fehlt)."
+	err "Schritt 50 erneut laufen lassen, dann diesen Schritt."
 	return 2
 }
 
@@ -168,6 +217,7 @@ service_einrichten() {
 
 	log "Dienstnutzer"
 	service_nutzer || return 2
+	service_bereiche || return 2
 	service_lesbar "$_se_repo" || return 2
 	log ""
 
@@ -262,8 +312,14 @@ service_einrichten() {
 # Reihenfolge: stoppen, abschalten, Unit weg, daemon-reload, Nutzer weg.
 # Den Nutzer zuletzt -- ein laufender Prozess unter einem geloeschten
 # Nutzer haelt die UID fest, und userdel verweigert.
-# Nutzerdaten (/var/lib/chimera/daten) bleiben: nur auf ausdrueckliche
-# Anforderung (INSTALLER.md 6).
+#
+# Was bleibt (DESIGN 10r): Daten und Protokolle im Home, config/. Geloescht
+# nur auf ausdrueckliche Anforderung:
+#   CHIMERA_DATEN_LOESCHEN=1  data/ (Gedaechtnis, Moods)
+#   CHIMERA_LOGS_LOESCHEN=1   logs/ (Installer und Dienst)
+# Den Nutzer entfernt der Rueckbau nur, wenn sein Home dabei mitgeht --
+# sonst bliebe ein Home ohne Eigentuemer, und eine spaeter vergebene UID
+# erbte es.
 service_rueckbau() {
 	_sr_befund=0
 	if manifest_has dienst "$CHIMERA_DIENST"; then
@@ -282,12 +338,7 @@ service_rueckbau() {
 	fi
 
 	_sr_f="${TMPDIR:-/tmp}/.chimera-rm-dienst.$$"
-	manifest_list datei | while IFS='	' read -r _sr_p _sr_a; do
-		case "$_sr_p" in
-			*/systemd/system/"$CHIMERA_DIENST"|*/var/lib/chimera/dienst-stand)
-				printf '%s\n' "$_sr_p" ;;
-		esac
-	done >"$_sr_f"
+	manifest_list_von datei 98-service | cut -f1 >"$_sr_f"
 	_sr_unit_weg=0
 	while IFS= read -r _sr_p; do
 		[ -n "$_sr_p" ] || continue
@@ -301,17 +352,37 @@ service_rueckbau() {
 		systemctl daemon-reload >/dev/null 2>&1 || true
 	fi
 
+	# Opt-in: Daten und Protokolle.
+	_sr_ur="$(rootpath "$CHIMERA_USER_ROOT")"
+	_sr_weg=""
+	[ "${CHIMERA_DATEN_LOESCHEN:-0}" = 1 ] && _sr_weg="$_sr_weg $(rootpath "$CHIMERA_DATA")"
+	[ "${CHIMERA_LOGS_LOESCHEN:-0}" = 1 ] && _sr_weg="$_sr_weg $_sr_ur/logs"
+	for _sr_p in $_sr_weg; do
+		[ -e "$_sr_p" ] || continue
+		if is_dry_run; then info "[wuerde entfernen] $_sr_p (angefordert)"; continue; fi
+		rm -rf "$_sr_p"
+		if [ -e "$_sr_p" ]; then warn "blieb stehen: $_sr_p"; _sr_befund=1
+		else info "entfernt (angefordert): $_sr_p"; fi
+	done
+	# Leerer Bereich nach angeforderter Loeschung: mitnehmen.
+	if ! is_dry_run && [ -d "$_sr_ur" ] && [ -z "$(ls -A "$_sr_ur" 2>/dev/null)" ]; then
+		rmdir "$_sr_ur" 2>/dev/null || true
+	fi
+
 	if manifest_has_exact nutzer "$CHIMERA_DIENSTNUTZER" neu; then
-		if is_dry_run; then
-			info "[wuerde entfernen] Nutzer $CHIMERA_DIENSTNUTZER"
+		if [ -d "$_sr_ur" ]; then
+			info "Nutzer $CHIMERA_DIENSTNUTZER bleibt: sein Bereich $CHIMERA_USER_ROOT"
+			info "  (Daten/Protokolle) bleibt. Loeschen nur mit --daten-loeschen --logs-loeschen."
+		elif is_dry_run; then
+			info "[wuerde entfernen] Nutzer $CHIMERA_DIENSTNUTZER samt Home"
 		elif ! id -u "$CHIMERA_DIENSTNUTZER" >/dev/null 2>&1; then
 			info "schon weg: Nutzer $CHIMERA_DIENSTNUTZER"
 		elif have_cmd userdel; then
-			userdel "$CHIMERA_DIENSTNUTZER" >/dev/null 2>&1 || true
+			userdel --remove "$CHIMERA_DIENSTNUTZER" >/dev/null 2>&1 || true
 			if id -u "$CHIMERA_DIENSTNUTZER" >/dev/null 2>&1; then
 				warn "Nutzer blieb: $CHIMERA_DIENSTNUTZER"; _sr_befund=1
 			else
-				info "entfernt: Nutzer $CHIMERA_DIENSTNUTZER"
+				info "entfernt: Nutzer $CHIMERA_DIENSTNUTZER samt Home"
 			fi
 		else
 			warn "userdel fehlt -- Nutzer $CHIMERA_DIENSTNUTZER bleibt."; _sr_befund=1
@@ -319,8 +390,5 @@ service_rueckbau() {
 	elif manifest_has nutzer "$CHIMERA_DIENSTNUTZER"; then
 		info "Nutzer $CHIMERA_DIENSTNUTZER bleibt: er war vor Chimera da."
 	fi
-
-	_sr_daten="$(rootpath /var/lib/chimera/daten)"
-	[ -d "$_sr_daten" ] && info "Nutzerdaten bleiben: $_sr_daten (nur auf Anforderung loeschen)"
 	return "$_sr_befund"
 }

@@ -35,6 +35,9 @@ export LC_ALL
 CHIMERA_OPT=/opt/chimera
 CHIMERA_SOURCE="$CHIMERA_OPT/source"
 CHIMERA_PRODUCTIVE="$CHIMERA_OPT/productive"
+# Code und venv getrennt: source_kopieren tauscht ein Verzeichnis als
+# Ganzes -- laege das venv im Code-Ordner, ginge es bei jedem Tausch mit.
+CHIMERA_CODE="$CHIMERA_PRODUCTIVE/code"
 CHIMERA_VENV="$CHIMERA_PRODUCTIVE/venv"
 CHIMERA_STATE="$CHIMERA_OPT/state"
 CHIMERA_CONFIG="$CHIMERA_OPT/config"

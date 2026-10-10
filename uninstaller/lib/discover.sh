@@ -36,8 +36,8 @@
 chimera_known_paths() {
 	cat <<EOF
 ${CHIMERA_ROOT}/opt/chimera
-${CHIMERA_ROOT}/var/lib/chimera
-${CHIMERA_ROOT}/etc/chimera
+${CHIMERA_ROOT}${CHIMERA_USER_ROOT}
+${CHIMERA_ROOT}/run/chimera
 ${CHIMERA_ROOT}/usr/local/bin/chimera
 ${CHIMERA_ROOT}/usr/local/bin/chimera-install
 ${CHIMERA_ROOT}/usr/local/bin/chimera-uninstall

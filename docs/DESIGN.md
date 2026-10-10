@@ -1767,13 +1767,24 @@ Zwei Vergleiche, mit getrennter Aufgabe:
 - **Welcher Stand der neuere ist:** die Datei `VERSION`, verglichen mit
   `sort -V`. Eine Prüfsumme sagt nur „anders", nicht „neuer".
 
-**Nur Aktualisierungen ersetzen, was schon da ist.** Ein Startbaum mit
-niedrigerer `VERSION` (ein altes Zip) ersetzt `source/` nie. Der Lauf
-benennt das und arbeitet mit dem vorhandenen Stand weiter. Ein
-Rückschritt geht nur gezielt mit `--downgrade=true`, und auch dann
-steht er im Protokoll. Bei gleicher `VERSION`, aber anderer Prüfsumme
-(Entwicklungsstand ohne Versionssprung) gilt der Startbaum als der
-gewollte Stand und ersetzt `source/`, mit Hinweis.
+**Der Hash wiegt schwerer als die Version.** Die Reihenfolge der
+Entscheidung:
+
+1. **Gleicher Hash:** Der Stand ist schon 1:1 da. Der Schritt tut nichts,
+   und der nächste Schritt läuft. Das gilt auch, wenn `VERSION`
+   unterschiedlich ist, denn dann steht in `VERSION` nur ein anderer Text,
+   der Inhalt ist derselbe.
+2. **Anderer Hash, `VERSION` höher oder gleich:** `source/` wird ersetzt.
+   Bei gleicher `VERSION` (Entwicklungsstand ohne Versionssprung) gibt es
+   dazu einen Hinweis.
+3. **Anderer Hash, `VERSION` niedriger** (ein altes Zip): kein Ersatz.
+   Der Lauf benennt das, arbeitet mit dem vorhandenen `source/` weiter
+   und meldet am Ende einen Befund. Ein Rückschritt geht nur gezielt mit
+   `--downgrade=true`, und auch dann steht er im Protokoll.
+
+Das ist der Orchestrator-Grundsatz aller Schritte: Ist das Ziel schon
+da und gleich, wird übersprungen. Geprüft wird der Zustand, nicht eine
+Marke.
 
 **Online wird auf den neuesten Stand gezogen.** Ist das Netz da und die
 Quelle öffentlich erreichbar, holt `00-source` den neuesten

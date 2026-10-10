@@ -50,7 +50,7 @@ feld() {
 	F="$W/$1"
 	R="$F/root"
 	REPO="$F/repo"
-	mkdir -p "$R/etc/systemd/system" "$R/var/lib/chimera" "$R/var/log/chimera" \
+	mkdir -p "$R/etc/systemd/system" "$R/opt/chimera/state" "$R/opt/chimera/config" "$R/logs" \
 		"$REPO/src/chimera"
 	printf 'print(1)\n' >"$REPO/src/chimera/__main__.py"
 	printf 'pillow\n' >"$REPO/requirements.txt"
@@ -68,9 +68,9 @@ lauf() {
 	(
 		set +e
 		CHIMERA_ROOT="$R"; export CHIMERA_ROOT
-		CHIMERA_MANIFEST="$R/var/lib/chimera/manifest.tsv"
-		CHIMERA_LOG_DIR="$R/var/log/chimera"; CHIMERA_LOGFILE=""
-		CHIMERA_MODE=run; CHIMERA_STEP=test
+		CHIMERA_MANIFEST="$R/opt/chimera/state/manifest.tsv"
+		CHIMERA_LOG_DIR="$R/logs"; CHIMERA_LOGFILE=""
+		CHIMERA_MODE=run; CHIMERA_STEP=98-service
 		. "$HERE/lib/common.sh"
 		. "$HERE/lib/manifest.sh"
 		. "$LIB"
@@ -103,13 +103,27 @@ lauf() {
 			else echo 0; fi
 		}
 		sleep() { printf 'sleep %s\n' "$*" >>"$F/spur"; }
+		# Eigentuemer in einer Spurdatei statt echtem chown (Test laeuft
+		# nicht als root); stat liest sie zurueck.
+		chown() { printf '%s %s\n' "$1" "$2" >>"$F/chown"; }
+		stat() {
+			_p="$3"; _o="$(grep " $_p\$" "$F/chown" 2>/dev/null | tail -1 | cut -d' ' -f1)"
+			_m="$(command stat -c %a "$_p")"
+			case "$2" in
+				'%U %a') printf '%s %s\n' "${_o%%:*}" "$_m" ;;
+				'%G %a') printf '%s %s\n' "${_o#*:}" "$_m" ;;
+				*) command stat "$@" ;;
+			esac
+		}
 
 		"$@" >"$F/aus" 2>&1
 		echo $? >"$F/rc"
 	)
 }
 
-PY=/opt/chimera/venv/bin/python
+PY=/opt/chimera/productive/venv/bin/python
+# Bereich des Dienstnutzers -- aus dem Pfadschema, nicht getippt.
+NUTZERBEREICH="$(CHIMERA_ROOT= . "$HERE/lib/common.sh"; printf %s "$CHIMERA_USER_ROOT")"
 UNIT_REL=etc/systemd/system/chimera.service
 
 # --- 1. Unit-Text ---------------------------------------------------------
@@ -127,10 +141,14 @@ hat "ExecStart im Dienstmodus" "$U" "ExecStart=$PY -m chimera --dienst"
 hat "laeuft als eigener Nutzer" "$U" "User=chimera"
 hat "nur vorhandene Gruppen" "$U" "SupplementaryGroups=audio gpio"
 hat_nicht "keine fehlende Gruppe (spi)" "$U" "spi"
-hat "liest die .env" "$U" "EnvironmentFile=/etc/chimera/.env"
+hat_nicht "i2c nicht ohne --mit" "$U" "i2c"
+hat "schreibt nur im eigenen Bereich" "$U" "ReadWritePaths=$NUTZERBEREICH"
+hat "Dienstprotokoll erst im RAM" "$U" "RuntimeDirectory=chimera/logs/productive"
+hat "Protokoll beim Stoppen auf die Karte" "$U" "ExecStopPost="
+hat "liest die .env" "$U" "EnvironmentFile=/opt/chimera/config/.env"
 
 # --- 2. Erstlauf: Nutzer, Manifest, Start, Nachweis -----------------------
-M="$R/var/lib/chimera/manifest.tsv"
+M="$R/opt/chimera/state/manifest.tsv"
 hat "Nutzer angelegt" "$F/nutzer" "chimera"
 hat "Manifest: nutzer neu" "$M" "nutzer	chimera	neu"
 hat "Manifest: dienst aktiviert" "$M" "dienst	chimera.service	aktiviert"
@@ -139,7 +157,7 @@ hat "daemon-reload" "$F/spur" "systemctl daemon-reload"
 hat "enable" "$F/spur" "systemctl enable chimera.service"
 hat "gestartet" "$F/spur" "systemctl restart chimera.service"
 hat "gewartet vor dem Nachweis" "$F/spur" "sleep 10"
-if [ -s "$R/var/lib/chimera/dienst-stand" ]; then ok "Stand festgehalten"
+if [ -s "$R/opt/chimera/state/dienst-stand" ]; then ok "Stand festgehalten"
 else bad "Stand nicht festgehalten"; fi
 
 # --- 3. Zweitlauf aendert nichts -------------------------------------------
@@ -164,7 +182,7 @@ printf '3\n' >"$F/nrestarts"
 lauf service_einrichten "$PY" "$REPO"
 check "Schleife: rc 1" "$(cat "$F/rc")" 1
 hat "Schleife benannt" "$F/aus" "Schleife"
-if [ -e "$R/var/lib/chimera/dienst-stand" ]; then
+if [ -e "$R/opt/chimera/state/dienst-stand" ]; then
 	bad "Schleife: Stand trotzdem festgehalten (naechster Lauf versucht nicht neu)"
 else ok "Schleife: kein Stand festgehalten"; fi
 
@@ -191,7 +209,16 @@ check "Rueckbau rc 0" "$(cat "$F/rc")" 0
 hat "Rueckbau: abgeschaltet" "$F/spur" "systemctl disable --now chimera.service"
 if [ -e "$R/$UNIT_REL" ]; then bad "Rueckbau: Unit blieb"; else ok "Rueckbau: Unit weg"; fi
 hat "Rueckbau: daemon-reload" "$F/spur" "systemctl daemon-reload"
-hat "Rueckbau: Nutzer entfernt" "$F/spur" "userdel chimera"
+# Regel 10r: Daten/Protokolle bleiben ohne Anforderung -- und mit ihnen
+# der Nutzer (kein Home ohne Eigentuemer).
+hat_nicht "Rueckbau ohne Anforderung: Nutzer bleibt" "$F/spur" "userdel"
+if [ -d "$R$NUTZERBEREICH/data" ]; then ok "Rueckbau ohne Anforderung: Daten bleiben"
+else bad "Rueckbau ohne Anforderung: Daten geloescht"; fi
+: >"$F/spur"
+CHIMERA_DATEN_LOESCHEN=1 CHIMERA_LOGS_LOESCHEN=1 lauf service_rueckbau
+hat "Rueckbau mit Anforderung: Nutzer samt Home entfernt" "$F/spur" "userdel --remove chimera"
+if [ -e "$R$NUTZERBEREICH" ]; then bad "Rueckbau mit Anforderung: Bereich blieb"
+else ok "Rueckbau mit Anforderung: Bereich entfernt"; fi
 
 # --- 8b. Dienst laesst sich nicht stoppen -> Befund, nicht Erfolg ----------
 feld haelt
@@ -205,10 +232,11 @@ hat "Dienst laeuft weiter: benannt" "$F/aus" "Dienst laeuft noch"
 feld vorher
 printf 'chimera\n' >"$F/nutzer"
 lauf service_einrichten "$PY" "$REPO"
-hat "vorher da: Manifest vorher_da" "$R/var/lib/chimera/manifest.tsv" "nutzer	chimera	vorher_da"
+hat "vorher da: Manifest vorher_da" "$R/opt/chimera/state/manifest.tsv" "nutzer	chimera	vorher_da"
 hat_nicht "vorher da: kein useradd" "$F/spur" "useradd"
 : >"$F/spur"
-lauf service_rueckbau
+# Auch mit angeforderter Loeschung: ein fremder Nutzer bleibt.
+CHIMERA_DATEN_LOESCHEN=1 CHIMERA_LOGS_LOESCHEN=1 lauf service_rueckbau
 hat_nicht "vorher da: kein userdel" "$F/spur" "userdel"
 hat "vorher da: Nutzer existiert noch" "$F/nutzer" "chimera"
 

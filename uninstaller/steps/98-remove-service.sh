@@ -3,7 +3,7 @@
 #
 # Was Schritt 98 hinterlaesst, steht im Manifest:
 #   dienst  chimera.service (aktiviert)
-#   datei   /etc/systemd/system/chimera.service, /var/lib/chimera/dienst-stand
+#   datei   /etc/systemd/system/chimera.service, /opt/chimera/state/dienst-stand
 #   nutzer  chimera (neu | vorher_da)
 # Ein Nutzer mit `vorher_da` bleibt. Nutzerdaten bleiben immer.
 # Die Logik steht in installer/lib/service.sh (service_rueckbau).
