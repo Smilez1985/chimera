@@ -57,7 +57,7 @@ mkbaum() {
 	cp -r "$HERE/lib" "$BAUM/lib"
 	mkdir -p "$BAUM/steps"
 	cp "$HERE/steps/50-python.sh" "$BAUM/steps/50-python.sh"
-	mkdir -p "$BAUM/src/chimera"
+	mkdir -p "$BAUM/src"
 	cp -r "$HERE/../src/chimera" "$BAUM/src/chimera" 2>/dev/null || true
 	printf 'ID=debian\nVERSION_CODENAME=trixie\n' >"$BAUM/etc/os-release" 2>/dev/null \
 		|| true
@@ -154,14 +154,17 @@ check "nur eine .pth, nicht doppelt" "$_pth_jetzt" "1"
 # --- Gegenprobe: ohne Verdrahtung ----------------------------------------
 # Der Schritt wird geaendert: die .pth wird NICHT geschrieben. Dann muss
 # der Lauf melden, dass das Modul nicht lauffaehig ist (rc 2).
+# Der mutierte Schritt bleibt im Baum (unter steps/): der Schritt loest
+# seine lib relativ zu $0 auf (dirname "$0"/..). Ausserhalb von $BAUM
+# faende er sie nicht und braeche aus dem falschen Grund ab.
 mkbaum "gegenprobe"
 setze_anforderungen ""
 sed 's|write_atomic "\$_pth" |true |' "$BAUM/steps/50-python.sh" \
-	>"$W/gegenprobe-step.sh"
+	>"$BAUM/steps/50-python-gegenprobe.sh"
 set +e
 OUT="$(env CHIMERA_ROOT="$BAUM" CHIMERA_MANIFEST="$MANIFEST" \
            CHIMERA_LOG_DIR="$CHIMERA_LOG_DIR" CHIMERA_MODE=run \
-           sh "$W/gegenprobe-step.sh" 2>&1)"
+           sh "$BAUM/steps/50-python-gegenprobe.sh" 2>&1)"
 RC=$?
 set -e
 check "Gegenprobe: ohne Verdrahtung -> rc 2" "$RC" "2"

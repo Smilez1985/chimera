@@ -169,8 +169,10 @@ find_bashisms() {
 	_fb_f="$1"
 	_fb_hit=""
 	_fb_code="$(code_only "$_fb_f")"
-	# [[ ]] -- gibt es in dash/BusyBox nicht
-	printf '%s\n' "$_fb_code" | grep -q '\[\[' &&
+	# [[ ]] -- gibt es in dash/BusyBox nicht. Das Zeichen '[[' kommt aber
+	# auch in POSIX-Zeichenklassen ([[:space:]]) vor -- dort ist es kein
+	# Bashism. Ein '[[', dem NICHT ':' folgt, ist es.
+	printf '%s\n' "$_fb_code" | grep -q '\[\[[^:]' &&
 		_fb_hit="$_fb_hit [[]]"
 	# ${var//muster/ersatz} -- Ersetzung gibt es nur in bash
 	printf '%s\n' "$_fb_code" | grep -q '\${[A-Za-z_][A-Za-z_0-9]*//' &&

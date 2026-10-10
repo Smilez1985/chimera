@@ -11,6 +11,8 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 ## [Unreleased]
 
 ### Hinzugefügt
+- **Rueckbau:** Die Python-Umgebung (venv samt Verdrahtung) laesst sich
+  mit Rueckbauen — `chimera-uninstall` fuert den Schritt 50 jetzt mit.
 - **Installer:** Ein Modul kann "eingerichtet, Neustart noetig" (rc 3)
   melden, ohne den Lauf abzubrechen. Der Neustartwunsch wird EINMAL am
   Ende gemeldet, der Gesamt-Exitcode bleibt 3.
@@ -32,8 +34,18 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   ein unbrauchbares `TMPDIR` bricht BENANNT ab statt still weiterzulaufen.
 - **Installer:** Kernelfassung kommt aus `kernel_version()`; die
   Fallback-Falle (`read_file … || uname -r`) ist behoben.
+- **Installer:** Die Verdrahtungsdatei `chimera.pth` steht als Art
+  `datei` (mit Pruefsumme) im Manifest, nicht mehr als `verzeich`.
 - **Tests:** Die Testsuite richtet ihr Arbeitsverzeichnis selbst ein und
   haengt nicht mehr an einem bestimmten `TMPDIR`.
+
+### Behoben
+- **Tests:** Der Modul-50-Test baute die Quellkopie verschachtelt
+  (`src/chimera/chimera`) — der echte Lauf brach mit rc 2 ab. Ebenso
+  legte die Gegenprobe ihren Schritt ausserhalb des Baums ab und
+  scheiterte am fehlenden `common.sh`, nicht an der Verdrahtung.
+- **Tests:** Der Bashism-Detektor schlug bei POSIX-Zeichenklassen
+  (`[[:space:]]`) an — Fehlalarm.
 
 ## [0.1.0] — unveröffentlicht
 

@@ -199,7 +199,7 @@ else
 		err "Verdrahtung nicht anlegbar: $_pth"
 		log_close 2; exit 2
 	}
-	manifest_record verzeich "$_pth" "Repo-Quelle: $_srcdir"
+	manifest_record datei "$_pth" "$(sha256sum "$_pth" 2>/dev/null | cut -d' ' -f1)"
 	info "Verdrahtet: $_pth -> $_srcdir"
 fi
 log ""
