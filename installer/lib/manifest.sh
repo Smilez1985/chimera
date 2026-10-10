@@ -118,6 +118,19 @@ manifest_has_exact() {
 		"$CHIMERA_MANIFEST" 2>/dev/null
 }
 
+# Eintraege einer Art, die EIN bestimmtes Modul angelegt hat.
+# $1 Art, $2 Modul (CHIMERA_STEP des Installationsschritts).
+#
+# Ein Rueckbau entfernt nur, was sein eigener Schritt eingetragen hat. Die
+# Art allein genuegt nicht: `verzeich` benutzten zuerst nur Schritt 50
+# (venv), dann auch Schritt 00 (source/) -- der Rueckbau von 50 entfernte
+# daraufhin source/ mit, samt dem laufenden Deinstallierer.
+manifest_list_von() {
+	[ -f "$CHIMERA_MANIFEST" ] || return 0
+	awk -F'\t' -v a="$1" -v m="$2" '$1 !~ /^#/ && $3 == a && $2 == m { print $4 "\t" $5 }' \
+		"$CHIMERA_MANIFEST" 2>/dev/null
+}
+
 # Alle Eintraege einer Art ausgeben (Pfad/Name, eine Zeile je Eintrag).
 manifest_list() {
 	[ -f "$CHIMERA_MANIFEST" ] || return 0

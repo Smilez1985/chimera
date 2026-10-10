@@ -4,8 +4,8 @@
 # Was Schritt 50 am System hinterlaesst, steht im Manifest:
 #   verzeich  das venv (Angabe leer)
 #   datei     die Verdrahtung chimera.pth (Angabe: Pruefsumme)
-# Die Art `verzeich` benutzt ausschliesslich Schritt 50 -- dieses Modul
-# entfernt genau diese Eintraege und nichts daneben.
+# Entfernt wird nur, was Schritt 50 SELBST eingetragen hat (Spalte Modul) --
+# `verzeich` benutzt auch Schritt 00 (source/).
 #
 # Das venv und die .pth sind von Chimera angelegt, es gibt kein
 # `vorher_da`: Wer sie entfernen laesst, hat sie von Chimera anlegen
@@ -35,14 +35,14 @@ _TD="${TMPDIR:-/tmp}"
 _F="$_TD/.chimera-rm-py.$$"
 : >"$_F"
 
-manifest_list datei | while IFS='	' read -r _d_pfad _d_angabe; do
+manifest_list_von datei 50-python | while IFS='	' read -r _d_pfad _d_angabe; do
 	case "$_d_pfad" in
 		*/chimera.pth) printf '%s\n' "$_d_pfad" >>"$_F" ;;
 		*) continue ;;
 	esac
 done
 
-manifest_list verzeich | while IFS='	' read -r _v_pfad _v_angabe; do
+manifest_list_von verzeich 50-python | while IFS='	' read -r _v_pfad _v_angabe; do
 	# Gurt: niemals eine Wurzel oder leere Zeichenkette fassen.
 	case "$_v_pfad" in
 		""|/|"${CHIMERA_ROOT:-/}") continue ;;
