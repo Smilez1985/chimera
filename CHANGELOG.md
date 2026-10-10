@@ -13,6 +13,10 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 ### Hinzugefügt
 - **Rueckbau:** Die Python-Umgebung (venv samt Verdrahtung) laesst sich
   mit Rueckbauen — `chimera-uninstall` fuert den Schritt 50 jetzt mit.
+- **Konfiguration:** Die Umgebungsvorlage `.env.example` wird als
+  `/etc/chimera/.env` abgelegt (600, nur Platzhalter) — ohne eine von
+  Hand ausgefuellte Datei zu ueberschreiben. Was fehlt, nennt
+  `--pruefen`.
 - **Installer:** Ein Modul kann "eingerichtet, Neustart noetig" (rc 3)
   melden, ohne den Lauf abzubrechen. Der Neustartwunsch wird EINMAL am
   Ende gemeldet, der Gesamt-Exitcode bleibt 3.
@@ -40,6 +44,10 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   haengt nicht mehr an einem bestimmten `TMPDIR`.
 
 ### Behoben
+- **Installer:** Modul 50 rechnete mit der Repo-Wurzel, wo
+  `dirname($0)/..` (`installer/`) liegt — eine echte Installation
+  waere an `requirements.txt fehlt` gescheitert. Der Testbaum trug die
+  Struktur an der falschen Stelle, deshalb blieb es unentdeckt.
 - **Tests:** Der Modul-50-Test baute die Quellkopie verschachtelt
   (`src/chimera/chimera`) — der echte Lauf brach mit rc 2 ab. Ebenso
   legte die Gegenprobe ihren Schritt ausserhalb des Baums ab und

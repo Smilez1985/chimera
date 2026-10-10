@@ -53,12 +53,17 @@ printf '=== Python-Umgebung (Modul 50) ===\n'
 # den echten Weg fahren, nicht einen behelfsmaessigen.
 mkbaum() {
 	BAUM="$W/$1"
-	mkdir -p "$BAUM/etc"
-	cp -r "$HERE/lib" "$BAUM/lib"
-	mkdir -p "$BAUM/steps"
-	cp "$HERE/steps/50-python.sh" "$BAUM/steps/50-python.sh"
+	# Treuer Baum: das echte Layout ist repo/installer/{lib,steps},
+	# Repo-Wurzel traegt requirements.txt, .env.example und src/.
+	mkdir -p "$BAUM/installer/steps" "$BAUM/etc"
+	cp -r "$HERE/lib" "$BAUM/installer/lib"
+	cp "$HERE/steps/50-python.sh" "$BAUM/installer/steps/50-python.sh"
 	mkdir -p "$BAUM/src"
 	cp -r "$HERE/../src/chimera" "$BAUM/src/chimera" 2>/dev/null || true
+	cp "$HERE/../requirements.txt" "$BAUM/requirements.txt" 2>/dev/null || true
+	# Auch die Konfigurationsvorlage gehoert zur Kopie (Schritt 50 legt
+	# /etc/chimera/.env daraus ab).
+	cp "$HERE/../.env.example" "$BAUM/.env.example" 2>/dev/null || true
 	printf 'ID=debian\nVERSION_CODENAME=trixie\n' >"$BAUM/etc/os-release" 2>/dev/null \
 		|| true
 	CHIMERA_ROOT="$BAUM"; export CHIMERA_ROOT
@@ -82,7 +87,7 @@ fahr() {
 	set +e
 	OUT="$(env CHIMERA_ROOT="$BAUM" CHIMERA_MANIFEST="$MANIFEST" \
 	           CHIMERA_LOG_DIR="$CHIMERA_LOG_DIR" CHIMERA_MODE="$1" \
-	           sh "$BAUM/steps/50-python.sh" 2>&1)"
+	           sh "$BAUM/installer/steps/50-python.sh" 2>&1)"
 	RC=$?
 	set -e
 }
@@ -136,6 +141,24 @@ if [ -n "$_PTH" ] && [ -f "$_PTH" ]; then
 	fi
 else bad ".pth wurde nicht angelegt"; fi
 
+# --- Fall 4a: Umgebungskonfiguration --------------------------------------
+# Die Vorlage wird als /etc/chimera/.env abgelegt, mit Platzhaltern; die
+# abgelegte Datei bleibt bei einem zweiten Lauf unangetastet (dort stehen
+# spaeter echte Werte).
+ENVF="$BAUM/etc/chimera/.env"
+if [ -f "$ENVF" ]; then
+	ok "Umgebungskonfiguration abgelegt"
+else bad "Umgebungskonfiguration fehlt: $ENVF"; fi
+if grep -q 'OLLAMA_API_BASE=http://dein-server:11434' "$ENVF" 2>/dev/null; then
+	ok "Vorlage enthaelt Platzhalter, keine echten Werte"
+else bad "Vorlage ohne bekannten Platzhalter"; fi
+if [ "$(stat -c %a "$ENVF" 2>/dev/null)" = "600" ]; then
+	ok "Konfiguration ist 600"
+else bad "Rechte der Konfiguration: $(stat -c %a "$ENVF" 2>/dev/null)"; fi
+if [ ! -d "$W/trocken/etc/chimera" ]; then
+	ok "Trockenlauf hat keine Konfiguration abgelegt"
+else bad "Trockenlauf hat nach /etc/chimera geschrieben"; fi
+
 # --- Fall 5: idempotent ----------------------------------------------------
 # Der zweite Lauf kommt in den Zustand "bereits nachweisbar" und aendert
 # nichts Wesentliches. Messbar: die Zeitdauer der venv-Erstellung ist
@@ -151,6 +174,16 @@ check "zweiter Lauf -> rc 0" "$RC" "$_rc_erster"
 _pth_jetzt="$(find "$BAUM/opt/chimera/venv" -name 'chimera.pth' 2>/dev/null | wc -l)"
 check "nur eine .pth, nicht doppelt" "$_pth_jetzt" "1"
 
+# Die Konfiguration wird vom zweiten Lauf NICHT ueberschrieben -- dort
+# stehen spaeter echte Werte. Also einen Wert eintragen und nachmessen.
+ENVZ="$BAUM/etc/chimera/.env"
+printf '# vom Nutzer\nOLLAMA_API_BASE=http://ollama-server:11434\n' >>"$ENVZ"
+fahr run
+check "zweiter Lauf -> rc 0 (Feld 5)" "$RC" "$_rc_erster"
+if grep -q 'vom Nutzer' "$ENVZ" && grep -q 'ollama-server' "$ENVZ"; then
+	ok "Nutzerwerte blieben stehen (kein Ueberschreiben)"
+else bad "zweiter Lauf hat die Konfiguration ueberschrieben"; fi
+
 # --- Gegenprobe: ohne Verdrahtung ----------------------------------------
 # Der Schritt wird geaendert: die .pth wird NICHT geschrieben. Dann muss
 # der Lauf melden, dass das Modul nicht lauffaehig ist (rc 2).
@@ -159,12 +192,12 @@ check "nur eine .pth, nicht doppelt" "$_pth_jetzt" "1"
 # faende er sie nicht und braeche aus dem falschen Grund ab.
 mkbaum "gegenprobe"
 setze_anforderungen ""
-sed 's|write_atomic "\$_pth" |true |' "$BAUM/steps/50-python.sh" \
-	>"$BAUM/steps/50-python-gegenprobe.sh"
+sed 's|write_atomic "\$_pth" |true |' "$BAUM/installer/steps/50-python.sh" \
+	>"$BAUM/installer/steps/50-python-gegenprobe.sh"
 set +e
 OUT="$(env CHIMERA_ROOT="$BAUM" CHIMERA_MANIFEST="$MANIFEST" \
            CHIMERA_LOG_DIR="$CHIMERA_LOG_DIR" CHIMERA_MODE=run \
-           sh "$BAUM/steps/50-python-gegenprobe.sh" 2>&1)"
+           sh "$BAUM/installer/steps/50-python-gegenprobe.sh" 2>&1)"
 RC=$?
 set -e
 check "Gegenprobe: ohne Verdrahtung -> rc 2" "$RC" "2"

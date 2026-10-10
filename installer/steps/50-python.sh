@@ -28,10 +28,53 @@ CHIMERA_STEP="50-python"; export CHIMERA_STEP
 	warn "Kein Protokoll moeglich -- Lauf wird nicht festgehalten."
 
 VENV="$(rootpath /opt/chimera/venv)"
-REQUIREMENTS="$_HERE/requirements.txt"
+REPO="$(cd "$_HERE/.." && pwd)"
+REQUIREMENTS="$REPO/requirements.txt"
+ENV_EXAMPLE="$REPO/.env.example"
 PY="$VENV/bin/python"
 
 log "Chimera Python-Umgebung"
+log ""
+
+# --- Umgebungskonfiguration ------------------------------------------------
+# Die Vorlage .env.example liegt im Repo (Platzhalter, nie echte Werte,
+# Zugangsdaten gehoeren nicht ins Repo). Der Installer legt sie als
+# /etc/chimera/.env ab, WENN dort noch keine steht -- eine von Hand
+# ausgefuellte Datei wird nie ueberschrieben. Die Vorlage liegt daneben,
+# damit ein Ausfuellen nachtraeglich uebersichtlich bleibt.
+#
+# Fehlende Werte werden benannt: `python -m chimera --pruefen` nennt
+# jeden Connector, der wegen eines Platzhalters oder fehlenden Schluessels
+# nicht verfuegbar ist.
+ENV_DIR="$(rootpath /etc/chimera)"
+ENV_FILE="$ENV_DIR/.env"
+
+if [ -f "$ENV_EXAMPLE" ]; then
+	if [ -f "$ENV_FILE" ]; then
+		info "Umgebungskonfiguration vorhanden: $ENV_FILE (bleibt unangetastet)"
+	else
+		if is_dry_run; then
+			info "[wuerde ablegen] $ENV_FILE (aus .env.example)"
+		else
+			mkdir -p "$ENV_DIR" || {
+				err "Konfigurationsverzeichnis nicht anlegbar: $ENV_DIR"
+				log_close 2; exit 2
+			}
+			cp "$ENV_EXAMPLE" "$ENV_FILE" || {
+				err "Umgebungskonfiguration nicht anlegbar: $ENV_FILE"
+				log_close 2; exit 2
+			}
+			chmod 600 "$ENV_FILE"
+			manifest_record datei "$ENV_FILE" \
+				"$(sha256sum "$ENV_FILE" 2>/dev/null | cut -d' ' -f1)"
+			info "Umgebungskonfiguration abgelegt: $ENV_FILE"
+			warn "Werte eintragen: OLLAMA_API_BASE, ANTHROPIC_API_KEY oder"
+			warn "Abo-Anmeldung. Was fehlt, nennt 'python -m chimera --pruefen'."
+		fi
+	fi
+else
+	warn ".env.example fehlt im Repo -- keine Umgebungskonfiguration abgelegt."
+fi
 log ""
 
 # --- Was brauchen wir? ----------------------------------------------------
@@ -179,7 +222,7 @@ log ""
 # Der Pfad ist der Aufruferkontext, kein Hardcode: Der Installer lebt im
 # geklonten Repo, dorthin gehoert auch der Quelltext. _HERE ist bereits
 # das Repo -- dirname($0)/.. -- eine Ebene weiter hoch waere es daneben.
-_REPO="$_HERE"
+_REPO="$REPO"
 _srcdir="$_REPO/src"
 
 if is_dry_run; then

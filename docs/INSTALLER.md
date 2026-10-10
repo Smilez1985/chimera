@@ -400,6 +400,24 @@ Statt einer Kopie verdrahtet Schritt 50 den Quellpfad als
 meldet Erfolg auch dann, wenn das Modul selbst nicht lauffähig ist
 (Regel 10j).
 
+**Umgebungskonfiguration.** Die Vorlage `.env.example` liegt im
+Repo-Wurzelverzeichnis — nur mit Platzhaltern, nie mit echten Werten
+(Regel 12). Schritt 50 legt sie als `/etc/chimera/.env` ab, **nur wenn
+dort noch keine steht**: eine von Hand ausgefüllte Datei wird nie
+überschrieben, der zweite Installerlauf ändert nichts (idempotent).
+Rechte 600 ab Anlage — in die Datei gehören später Schlüssel. Die
+Vorlage bleibt daneben als `/etc/chimera/.env.example`. Was fehlt oder
+noch auf dem Platzhalter steht, benennt `python -m chimera --pruefen`
+je Connector — der Installer meldet keinen Erfolg für Werte, die er
+nicht hat.
+
+**Pfadregeln des Schritts:** Repo-Wurzel ist `dirname($0)/../..` relativ
+zum Schritt (`installer/steps/` → Repo), daraus kommen
+`requirements.txt`, `.env.example` und `src/`. Der Testbaum bildet
+exakt dieses Layout nach — der erste Testbaum trug die Struktur an der
+falschen Stelle, der echte Lauf wäre an `requirements.txt fehlt`
+gescheitert, unentdeckt weil der Test grün war.
+
 ---
 
 ## 5. Modul 60 — Overlay und Bootkonfiguration
