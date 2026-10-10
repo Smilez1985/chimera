@@ -2,13 +2,19 @@
 # Tests fuer lib/module.sh -- "liegt die .ko da" ist nicht "laedt sie".
 #
 # Geprueft wird die echte Funktion, in einem erfundenen Wurzelverzeichnis
-# und mit Attrappen fuer modprobe/depmod (Regel 9: nicht die Logik
-# nachbauen, sondern das echte Skript laufen lassen).
+# (Regel 9: nicht die Logik nachbauen, sondern das echte Skript laufen
+# lassen). Die Werkzeuge `depmod` und `modprobe` stehen als SHELL-FUNKTIONEN
+# in der Pruefumgebung bereit, nicht als Dateien im PATH:
 #
-# Warum das wichtig ist: Vorher pruefte Schritt 40 nur, ob eine Datei
-# `snd-soc-whisplay*` unter /lib/modules liegt. Ein Modul, das nicht laedt
-# -- ABI-inkompatibel, oder der Geraetebaum-Eintrag fehlt noch -- bekam
-# damit ein "gebaut" und ging als Erfolg durch (Regel 10j).
+#   * Der Test prueft die LOGIK von kernel_module_state -- ob depmod vor
+#     dem Laden laeuft und ob der Ladefall/Nichtladefall richtig ausgelesen
+#     wird. Das zu pruefen gehoert nicht zur Funktion, sondern zur
+#     Umgebung: einen Weg zu suchen, der je Rechner anders aussieht
+#     (Ubuntu hat echte modprobe/depmod in /usr/sbin), macht den Test
+#     abhaengig von Dingen, die er nicht einrichtet. Genau das war der
+#     erste CI-Lauf, der hier rot war, waehrend er lokal gruen war.
+#   * Funktionen statt Dateien sind unter jeder Shell gleich und
+#     unanfaellig gegen den PATH des CI-Runners.
 #
 # Gegenprobe: eine Kopie von module.sh, in der der Ladeversuch zu `true`
 # verkuerzt ist. Sie muss "geladen" melden, wo die echte "nicht_geladen"
@@ -17,7 +23,6 @@
 set -eu
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-HERE="$(cd "$HERE" && pwd)"
 export HERE
 PASS=0; FAIL=0
 
@@ -43,47 +48,63 @@ printf '=== Kernelmodul: Zustand statt Datei ===\n'
 
 KVER="9.9.9-test"
 R="$W/root"
-mkdir -p "$R/proc/sys/kernel" "$R/lib/modules" "$W/bin"
+mkdir -p "$R/proc/sys/kernel" "$R/lib/modules"
 printf '%s\n' "$KVER" >"$R/proc/sys/kernel/osrelease"
 
-# --- Attrappen -------------------------------------------------------------
-# modprobe liest ihren Ausgang aus einer Datei: 0 = laedt, 1 = scheitert.
-# depmod hinterlaesst eine Spur, damit pruefbar ist, dass sie VOR dem
-# Laden laeuft.
-cat >"$W/bin/modprobe" <<EOF
-#!/bin/sh
-echo "\$*" >>"$W/modprobe-aufrufe.txt"
-exit "\$(cat "$W/modprobe-rc" 2>/dev/null || echo 0)"
-EOF
-cat >"$W/bin/depmod" <<EOF
-#!/bin/sh
-echo "\$*" >>"$W/depmod-aufrufe.txt"
-exit 0
-EOF
-chmod +x "$W/bin/modprobe" "$W/bin/depmod"
-PATH="$W/bin:$PATH"; export PATH
-
 # --- Aufrufer --------------------------------------------------------------
-# In einer eigenen Datei, damit die Quotes nicht dreifach verschachtelt
-# werden. $1 Fassung von module.sh, $2 Muster, $3 Name.
+#
+# In einer eigenen Datei, damit die Attrappen als Funktionen zur Verfuegung
+# stehen. Ausgang des (Attrappen-)modprobe liest er aus $W/modprobe-rc.
+# $1 Fassung von module.sh, $2 Muster, $3 Name.
 cat >"$W/aufruf.sh" <<'EOF'
 #!/bin/sh
 . "$HERE/lib/common.sh"
+
+# Attrappen als FUNKTIONEN: unter jeder Shell gleich, unanfaellig gegen
+# den PATH des CI-Runners. Spurdateien zeigen, dass und was aufgerufen
+# wurde.
+#
+# Die PFADE kommen als UMGEBUNG vom Test, nicht als `$W` an dieser Stelle:
+# Der heredoc ist quoted und expandiert nicht, und eine Variable an dieser
+# Stelle zu erwarten, waere ein stiller Leerlauf -- genau der Befund der
+# ersten Fassung: Die Attrappen "wurden nicht aufgerufen", weil ihr Ziel
+# nach / zeigte statt in das Testverzeichnis.
+: "${SPUR_DEPMOD:?keine Spurdatei uebergeben}"
+: "${SPUR_MODPROBE:?keine Spurdatei uebergeben}"
+: "${MODPROBE_RC:?keine RC-Datei uebergeben}"
+
+depmod() {
+	printf '%s\n' "$*" >>"$SPUR_DEPMOD"
+	return 0
+}
+
+modprobe() {
+	printf '%s\n' "$*" >>"$SPUR_MODPROBE"
+	return "$(cat "$MODPROBE_RC" 2>/dev/null || echo 0)"
+}
+
+# Die Attributpruefung kennt nur diese beiden Namen. Jede andere Antwort
+# waere eine andere Umgebung als die, die der Test einrichtet.
+have_cmd() {
+	case "$1" in
+		depmod|modprobe) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
 . "$1"
 kernel_module_state "$2" "$3"
 EOF
 chmod +x "$W/aufruf.sh"
 
 # lauf $1 = Fassung. Setzt OUT und RC.
-#
-# Der PATH wird pro Aufruf gesetzt, nicht nur einmal im Skript: Einer
-# Umgebung, die ihn zwischenzeitlich veraendert (oder Attrappen und echte
-# Werkzeuge mischt), wird damit begegnet, statt auf die Reihenfolge zu
-# hoffen. Das echten modprobe/depmod auf einem CI-Runner sind Faehnlinge
-# dieser Art.
 lauf() {
 	set +e
-	OUT="$(CHIMERA_ROOT="$R" PATH="$W/bin:$PATH" sh "$W/aufruf.sh" "$1" \
+	OUT="$(CHIMERA_ROOT="$R" \
+		SPUR_DEPMOD="$W/depmod-aufrufe.txt" \
+		SPUR_MODPROBE="$W/modprobe-aufrufe.txt" \
+		MODPROBE_RC="$W/modprobe-rc" \
+		sh "$W/aufruf.sh" "$1" \
 		'snd-soc-whisplay*' 'snd-soc-whisplay-soundcard' 2>&1)"
 	RC=$?
 	set -e
@@ -101,14 +122,6 @@ printf 0 >"$W/modprobe-rc"
 rm -f "$W/modprobe-aufrufe.txt" "$W/depmod-aufrufe.txt"
 lauf "$HERE/lib/module.sh"
 check ".ko da und ladbar -> geladen" "$OUT" "geladen"
-[ "$OUT" = "geladen" ] || {
-	# Diagnose: welche Werkzeuge sieht der innere Aufruf wirklich?
-	_diag="$(CHIMERA_ROOT="$R" PATH="$W/bin:$PATH" sh -c \
-		'command -v depmod || echo "kein depmod";
-		 command -v modprobe || echo "kein modprobe";
-		 printf "PATH=%s\n" "$PATH"' 2>&1 | sed 's/^/        /')"
-	printf '  DIAG  innerer Aufruf:\n%s\n' "$_diag"
-}
 if [ -s "$W/depmod-aufrufe.txt" ]; then ok "depmod laeuft vor dem Ladeversuch"
 else bad "depmod wurde nicht aufgerufen -- Abhaengigkeiten bleiben alt"; fi
 if grep -q 'snd-soc-whisplay-soundcard' "$W/modprobe-aufrufe.txt" 2>/dev/null; then
