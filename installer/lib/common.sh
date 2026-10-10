@@ -21,13 +21,54 @@ export LC_ALL
 # Erkennung ohne Zielhardware pruefbar (Architekturregel 9).
 : "${CHIMERA_ROOT:=}"
 
+# --- Pfadschema (DESIGN Regel 10r) -----------------------------------------
+#
+# Die EINE Stelle, an der die Pfade stehen. Schritte, Rueckbau und Unit
+# lesen sie von hier -- ein Pfad, der in zwei Dateien steht, driftet.
+# Alle Werte sind ZIELPFADE (ohne CHIMERA_ROOT); wer am Dateisystem
+# arbeitet, setzt `rootpath` davor.
+#
+# Getrennt nach Eigentuemer: was root ausfuehrt oder liest, liegt unter
+# /opt/chimera und ist fuer den Agenten nicht aenderbar; was der Agent
+# schreiben darf, liegt in seinem Home.
+: "${CHIMERA_NUTZER:=chimera}"
+CHIMERA_OPT=/opt/chimera
+CHIMERA_SOURCE="$CHIMERA_OPT/source"
+CHIMERA_PRODUCTIVE="$CHIMERA_OPT/productive"
+CHIMERA_VENV="$CHIMERA_PRODUCTIVE/venv"
+CHIMERA_STATE="$CHIMERA_OPT/state"
+CHIMERA_CONFIG="$CHIMERA_OPT/config"
+CHIMERA_HOME_DIR="/home/$CHIMERA_NUTZER"
+CHIMERA_USER_ROOT="$CHIMERA_HOME_DIR/chimera"
+CHIMERA_DATA="$CHIMERA_USER_ROOT/data"
+# Protokolle: geschrieben wird in den Arbeitsspeicher, gesammelt auf den
+# Datentraeger (log_sync).
+CHIMERA_RUNLOG=/run/chimera/logs
+CHIMERA_LOGS_INSTALLER="$CHIMERA_OPT/logs/installer"
+CHIMERA_LOGS_PRODUCTIVE="$CHIMERA_USER_ROOT/logs/productive"
+
 # --- Ausgabe ---------------------------------------------------------------
 
 # Protokoll. Jeder Lauf hinterlaesst eine Datei -- auch ein erfolgreicher.
 # Ein Lauf, der nichts hinterlaesst, ist spaeter nicht nachvollziehbar, und
 # genau dann braucht man ihn: wenn etwas schiefging und die Frage lautet,
 # was vorher anders war.
-: "${CHIMERA_LOG_DIR:=${CHIMERA_ROOT}/var/log/chimera}"
+#
+# Zwei Orte (DESIGN Regel 10r): Geschrieben wird in den Arbeitsspeicher
+# (CHIMERA_LOG_DIR, tmpfs unter /run), auf den Datentraeger kommt das
+# Protokoll gesammelt per log_sync (CHIMERA_LOG_ZIEL). So schreibt nicht
+# jede Zeile auf die SD, sondern ein Lauf einmal am Ende. /var/log taugt
+# nicht als Ziel: DietPi haelt es im RAM und leert es stuendlich.
+#
+# Setzt jemand nur CHIMERA_LOG_DIR (--log-dir, Tests), ist das Ziel
+# derselbe Ordner -- dann gibt es nichts abzugleichen, und ein Test
+# schreibt nie versehentlich nach /opt.
+if [ -n "${CHIMERA_LOG_DIR:-}" ]; then
+	: "${CHIMERA_LOG_ZIEL:=$CHIMERA_LOG_DIR}"
+else
+	CHIMERA_LOG_DIR="${CHIMERA_ROOT}${CHIMERA_RUNLOG}/installer"
+	: "${CHIMERA_LOG_ZIEL:=${CHIMERA_ROOT}${CHIMERA_LOGS_INSTALLER}}"
+fi
 
 # Mit `:=` statt `=`, damit ein von aussen gesetzter Wert erhalten bleibt
 # (der Laeufer reicht das Protokoll an die Schritte durch) und die Variable
@@ -51,6 +92,10 @@ log_open() {
 	}
 	CHIMERA_LOGFILE="$CHIMERA_LOG_DIR/${_lo_name}-$(date +%Y%m%d-%H%M%S).log"
 	: >"$CHIMERA_LOGFILE" 2>/dev/null || { CHIMERA_LOGFILE=""; return 1; }
+	# Nur wer das Protokoll geoeffnet hat, gleicht es am Ende ab. Ein
+	# Schritt unter dem Laeufer schreibt in dessen Datei und gleicht nicht
+	# selbst ab -- sonst schriebe jeder Schritt einmal auf die Karte.
+	_CHIMERA_LOG_EIGEN=1
 	_log_raw "=== chimera $_lo_name -- $(date '+%Y-%m-%d %H:%M:%S') ==="
 	_log_raw "Version: $(cat "$(dirname "$0")/../VERSION" 2>/dev/null || echo '?')"
 	return 0
@@ -72,18 +117,51 @@ info() { printf '  %s\n' "$*";         _log_raw "  $*"; }
 warn() { printf 'WARN: %s\n' "$*" >&2; _log_raw "WARN: $*"; }
 err()  { printf 'FEHLER: %s\n' "$*" >&2; _log_raw "FEHLER: $*"; }
 
+# Protokolle aus dem Arbeitsspeicher auf den Datentraeger bringen.
+#
+# Nur was sich geaendert hat, wird geschrieben (cmp), und jede Datei ueber
+# eine Sidecar-Datei mit `mv` -- ein Abbruch mittendrin hinterlaesst kein
+# halbes Protokoll. Am Ergebnis geprueft: Eine Kopie, die nicht gleich ist,
+# ist ein Befund (rc 1), kein stiller Erfolg.
+log_sync() {
+	[ "$CHIMERA_LOG_ZIEL" = "$CHIMERA_LOG_DIR" ] && return 0
+	[ -d "$CHIMERA_LOG_DIR" ] || return 0
+	mkdir -p "$CHIMERA_LOG_ZIEL" 2>/dev/null || return 1
+	_ls_rc=0
+	for _ls_f in "$CHIMERA_LOG_DIR"/*.log; do
+		[ -f "$_ls_f" ] || continue
+		_ls_z="$CHIMERA_LOG_ZIEL/$(basename "$_ls_f")"
+		cmp -s "$_ls_f" "$_ls_z" 2>/dev/null && continue
+		_ls_t="$_ls_z.neu.$$"
+		# Geprueft wird das Ziel, nicht der Exitcode von mv: Ist das Ziel
+		# ein Verzeichnis gleichen Namens, schiebt mv die Datei hinein und
+		# meldet Erfolg -- am Zielpfad steht dann kein Protokoll.
+		if cp "$_ls_f" "$_ls_t" 2>/dev/null && cmp -s "$_ls_f" "$_ls_t" &&
+		   mv -f "$_ls_t" "$_ls_z" 2>/dev/null && [ -f "$_ls_z" ] &&
+		   cmp -s "$_ls_f" "$_ls_z"; then
+			:
+		else
+			rm -f "$_ls_t" 2>/dev/null
+			_ls_rc=1
+		fi
+	done
+	return "$_ls_rc"
+}
+
 # Protokolle aufraeumen: die juengsten CHIMERA_LOG_KEEP behalten. Sonst
 # laeuft auf einem Geraet, das monatelang durchlaeuft, die Karte voll --
 # ausgerechnet wegen der Dateien, die beim Debuggen helfen sollen.
 : "${CHIMERA_LOG_KEEP:=20}"
 log_rotate() {
-	[ -d "$CHIMERA_LOG_DIR" ] || return 0
-	_lr_n=0
-	# Neueste zuerst; alles ab Position KEEP+1 faellt weg.
-	for _lr_f in $(ls -1t "$CHIMERA_LOG_DIR"/*.log 2>/dev/null); do
-		_lr_n=$((_lr_n + 1))
-		[ "$_lr_n" -le "$CHIMERA_LOG_KEEP" ] && continue
-		rm -f "$_lr_f" 2>/dev/null || true
+	for _lr_d in "$CHIMERA_LOG_DIR" "$CHIMERA_LOG_ZIEL"; do
+		[ -d "$_lr_d" ] || continue
+		_lr_n=0
+		# Neueste zuerst; alles ab Position KEEP+1 faellt weg.
+		for _lr_f in $(ls -1t "$_lr_d"/*.log 2>/dev/null); do
+			_lr_n=$((_lr_n + 1))
+			[ "$_lr_n" -le "$CHIMERA_LOG_KEEP" ] && continue
+			rm -f "$_lr_f" 2>/dev/null || true
+		done
 	done
 }
 
@@ -172,7 +250,18 @@ log_close() {
 	_lc_rc="${1:-0}"
 	if [ "$_lc_rc" -eq 0 ]; then _log_raw "=== Ergebnis: Erfolg (0) ==="
 	else _log_raw "=== Ergebnis: Exitcode $_lc_rc ==="; fi
-	[ -n "${CHIMERA_LOGFILE:-}" ] && printf 'Protokoll: %s\n' "$CHIMERA_LOGFILE"
+	if [ "${_CHIMERA_LOG_EIGEN:-0}" = 1 ] && [ -n "${CHIMERA_LOGFILE:-}" ]; then
+		if log_sync; then
+			_lc_f="$CHIMERA_LOG_ZIEL/$(basename "$CHIMERA_LOGFILE")"
+		else
+			printf 'WARN: Protokoll nicht auf den Datentraeger gebracht (%s).\n' \
+				"$CHIMERA_LOG_ZIEL" >&2
+			_lc_f="$CHIMERA_LOGFILE"
+		fi
+		printf 'Protokoll: %s\n' "$_lc_f"
+	elif [ -n "${CHIMERA_LOGFILE:-}" ]; then
+		printf 'Protokoll: %s\n' "$CHIMERA_LOGFILE"
+	fi
 	log_rotate
 	return 0
 }

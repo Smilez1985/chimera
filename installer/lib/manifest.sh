@@ -34,11 +34,13 @@
 # entfernen. Wer das nicht mitschreibt, reisst beim Aufraeumen halbe
 # Systeme mit.
 
-: "${CHIMERA_MANIFEST:=${CHIMERA_ROOT}/var/lib/chimera/manifest.tsv}"
+: "${CHIMERA_MANIFEST:=${CHIMERA_ROOT}${CHIMERA_STATE}/manifest.tsv}"
 
 manifest_init() {
 	_bi_d="$(dirname "$CHIMERA_MANIFEST")"
-	mkdir -p "$_bi_d" 2>/dev/null || {
+	# state/ gehoert root und ist fuer den Dienstnutzer nicht einmal
+	# lesbar (Regel 10r): Das Manifest legt fest, was der Rueckbau loescht.
+	( umask 077; mkdir -p "$_bi_d" ) 2>/dev/null && chmod 700 "$_bi_d" 2>/dev/null || {
 		warn "Manifest nicht anlegbar: $_bi_d"
 		warn "Es wird installiert, aber nicht festgehalten -- eine spaetere"
 		warn "Deinstallation muesste raten. Das ist ein Mangel, kein Detail."
