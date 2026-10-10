@@ -35,6 +35,8 @@ chimera-install $VERSION
   --dry-run          nichts aendern, nur berichten
   --check            nur pruefen, Exitcode sagt den Zustand
   --log-dir <dir>    wohin das Protokoll geschrieben wird
+  --downgrade=true   aelteren Stand bewusst nach source/ uebernehmen
+  --mit <gruppe>     Opt-in-Recht fuer den Dienstnutzer (i2c, video)
   -h, --help         diese Hilfe
 EOF
 }
@@ -46,10 +48,27 @@ while [ $# -gt 0 ]; do
 		--check)   MODE=check; shift ;;
 		--list)    MODE=list;  shift ;;
 		--log-dir) CHIMERA_LOG_DIR="${2:?--log-dir braucht einen Wert}"; shift 2 ;;
+		--downgrade=true)  CHIMERA_DOWNGRADE=true; shift ;;
+		--downgrade=false) CHIMERA_DOWNGRADE=false; shift ;;
+		--mit)
+			case "${2:-}" in
+				i2c|video) CHIMERA_MIT="${CHIMERA_MIT:+$CHIMERA_MIT }$2" ;;
+				*) err "--mit kennt nur: i2c video"; exit 2 ;;
+			esac
+			shift 2 ;;
 		-h|--help) usage; exit 0 ;;
 		*) err "Unbekannte Option: $1"; usage >&2; exit 2 ;;
 	esac
 done
+
+export CHIMERA_DOWNGRADE="${CHIMERA_DOWNGRADE:-false}" CHIMERA_MIT="${CHIMERA_MIT:-}"
+
+# Die Argumente fuer den Neustart aus source/ (I8) festhalten -- nach der
+# Schleife oben sind sie verbraucht.
+ARGS_NEU=""
+[ "$MODE" = dry ] && ARGS_NEU="$ARGS_NEU --dry-run"
+[ "$MODE" = check ] && ARGS_NEU="$ARGS_NEU --check"
+[ -n "$ONLY" ] && ARGS_NEU="$ARGS_NEU --only $ONLY"
 
 steps_list() {
 	# Nummerisch sortiert, damit 10 vor 90 kommt.
@@ -74,6 +93,13 @@ log ""
 
 FAILED=0
 FIRST_RC=0
+# Ein Befund aus Schritt 00 vor dem Neustart (aelterer Startbaum abgelehnt)
+# zaehlt mit -- sonst verschwaende er im exec (stiller Erfolg).
+if [ -f "$CHIMERA_LOG_DIR/.befund-quelle" ] && [ "${CHIMERA_NEU_GESTARTET:-0}" = 1 ]; then
+	warn "Quelle: $(cat "$CHIMERA_LOG_DIR/.befund-quelle")"
+	FAILED=1; FIRST_RC=1
+fi
+rm -f "$CHIMERA_LOG_DIR/.befund-quelle" 2>/dev/null || true
 RAN=0
 NEUSTART=0
 
@@ -97,7 +123,23 @@ for mod in $(steps_list); do
 	rc=$?
 	set -e
 
-	if [ "$rc" -eq 0 ]; then
+	if [ "$rc" -eq 4 ]; then
+		# I8: source/ wurde erneuert. Ab jetzt arbeitet der Installer aus
+		# source/, nicht aus dem Startbaum. Der Merker verhindert eine
+		# Schleife: Meldet 00 auch im Neustart 4, ist etwas kaputt.
+		if [ "${CHIMERA_NEU_GESTARTET:-0}" = 1 ]; then
+			err "Modul $name meldet auch nach dem Neustart eine neue Quelle -- Abbruch."
+			log_close 2; exit 2
+		fi
+		_neu="$(rootpath "$CHIMERA_SOURCE")/installer/chimera-install"
+		[ -f "$_neu" ] || { err "source/ ohne Installer ($_neu)."; log_close 2; exit 2; }
+		_log_raw "Modul $name: source/ erneuert -- Neustart aus $_neu"
+		log "Neustart aus $CHIMERA_SOURCE"
+		log_close 0 >/dev/null
+		CHIMERA_NEU_GESTARTET=1; export CHIMERA_NEU_GESTARTET
+		# shellcheck disable=SC2086
+		exec sh "$_neu" $ARGS_NEU
+	elif [ "$rc" -eq 0 ]; then
 		_log_raw "Modul $name: ok"
 	elif [ "$rc" -eq 3 ]; then
 		# 3 heisst: eingerichtet, aber der Nachweis gelingt erst nach
