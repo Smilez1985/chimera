@@ -144,7 +144,17 @@ hat_nicht "keine fehlende Gruppe (spi)" "$U" "spi"
 hat_nicht "i2c nicht ohne --mit" "$U" "i2c"
 hat "schreibt nur im eigenen Bereich" "$U" "ReadWritePaths=$NUTZERBEREICH"
 hat "Dienstprotokoll erst im RAM" "$U" "RuntimeDirectory=chimera/logs/productive"
-hat "Protokoll beim Stoppen auf die Karte" "$U" "ExecStopPost="
+hat "Protokoll beim Stoppen auf die Karte" "$U" \
+	"ExecStopPost=-/bin/sh /opt/chimera/productive/code/installer/bin/log-abgleich.sh"
+hat "Abgleich kennt sein Ziel" "$U" "Environment=CHIMERA_LOG_KARTE=$NUTZERBEREICH/logs/productive"
+TD="$R/etc/systemd/system/chimera-logabgleich.service"
+TT="$R/etc/systemd/system/chimera-logabgleich.timer"
+hat "Ruhezeit-Abgleich: Dienst mit --ruhig" "$TD" "log-abgleich.sh --ruhig"
+hat "Ruhezeit-Abgleich laeuft als Dienstnutzer" "$TD" "User=chimera"
+# Kein RuntimeDirectory im Kurzdienst: systemd loeschte es an dessen Ende
+# -- und mit ihm die Protokolle des laufenden Hauptdienstes.
+hat_nicht "Ruhezeit-Abgleich loescht den RAM-Ordner nicht" "$TD" "RuntimeDirectory"
+hat "Timer alle 5 Minuten" "$TT" "OnUnitActiveSec=5min"
 hat "liest die .env" "$U" "EnvironmentFile=/opt/chimera/config/.env"
 
 # --- 2. Erstlauf: Nutzer, Manifest, Start, Nachweis -----------------------
@@ -153,6 +163,9 @@ hat "Nutzer angelegt" "$F/nutzer" "chimera"
 hat "Manifest: nutzer neu" "$M" "nutzer	chimera	neu"
 hat "Manifest: dienst aktiviert" "$M" "dienst	chimera.service	aktiviert"
 hat "Manifest: Unit als datei" "$M" "datei	$R/$UNIT_REL"
+hat "Manifest: Timer als datei" "$M" "datei	$TT"
+hat "Manifest: Timer aktiviert" "$M" "dienst	chimera-logabgleich.timer	aktiviert"
+hat "Timer eingeschaltet" "$F/spur" "systemctl enable --now chimera-logabgleich.timer"
 hat "daemon-reload" "$F/spur" "systemctl daemon-reload"
 hat "enable" "$F/spur" "systemctl enable chimera.service"
 hat "gestartet" "$F/spur" "systemctl restart chimera.service"
@@ -207,7 +220,16 @@ lauf service_einrichten "$PY" "$REPO"
 lauf service_rueckbau
 check "Rueckbau rc 0" "$(cat "$F/rc")" 0
 hat "Rueckbau: abgeschaltet" "$F/spur" "systemctl disable --now chimera.service"
+hat "Rueckbau: Timer abgeschaltet" "$F/spur" "systemctl disable --now chimera-logabgleich.timer"
+_t="$(grep -n 'disable --now chimera-logabgleich.timer' "$F/spur" | cut -d: -f1)"
+_d="$(grep -n 'disable --now chimera.service' "$F/spur" | cut -d: -f1)"
+if [ -n "$_t" ] && [ -n "$_d" ] && [ "$_t" -lt "$_d" ]; then ok "Rueckbau: Timer vor dem Dienst"
+else bad "Rueckbau: Timer nicht vor dem Dienst abgeschaltet"; fi
 if [ -e "$R/$UNIT_REL" ]; then bad "Rueckbau: Unit blieb"; else ok "Rueckbau: Unit weg"; fi
+if [ -e "$R/etc/systemd/system/chimera-logabgleich.timer" ] || \
+   [ -e "$R/etc/systemd/system/chimera-logabgleich.service" ]; then
+	bad "Rueckbau: Timer-Units blieben"
+else ok "Rueckbau: Timer-Units weg"; fi
 hat "Rueckbau: daemon-reload" "$F/spur" "systemctl daemon-reload"
 # Regel 10r: Daten/Protokolle bleiben ohne Anforderung -- und mit ihnen
 # der Nutzer (kein Home ohne Eigentuemer).
@@ -226,7 +248,7 @@ lauf service_einrichten "$PY" "$REPO"
 : >"$F/haelt"
 lauf service_rueckbau
 check "Dienst laeuft weiter: Rueckbau rc 1" "$(cat "$F/rc")" 1
-hat "Dienst laeuft weiter: benannt" "$F/aus" "Dienst laeuft noch"
+hat "Dienst laeuft weiter: benannt" "$F/aus" "laeuft noch: chimera.service"
 
 # --- 9. Ein vorher vorhandener Nutzer bleibt -------------------------------
 feld vorher

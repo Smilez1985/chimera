@@ -18,6 +18,7 @@ import threading
 
 from .agent.session import Channel
 from .app import build
+from .protokoll import datei_einrichten
 
 log = logging.getLogger("chimera")
 
@@ -42,6 +43,10 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(
         level=logging.DEBUG if args.ausfuehrlich else logging.INFO,
         format="%(levelname)-7s %(name)s: %(message)s")
+    if args.dienst:
+        # Zusaetzlich zum Journal eine Datei im RAM (Regel 10r); auf die
+        # Karte bringt sie der Abgleich der Unit, nicht Python.
+        datei_einrichten()
 
     chi = build(probe_network=not args.offline)
     # Ab hier ist ein Panel moeglicherweise offen. Jeder Ausstieg muss es

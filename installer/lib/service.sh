@@ -31,6 +31,13 @@
 
 SERVICE_GRUPPEN_FEST="audio spi gpio"
 
+# Protokollabgleich RAM -> Karte (DESIGN 10r). Das Skript liegt im Code,
+# den Schritt 50 nach productive/code kopiert (root-eigen, lesbar).
+SERVICE_LOG_RAM=/run/chimera/logs/productive
+SERVICE_ABGLEICH="$CHIMERA_CODE/installer/bin/log-abgleich.sh"
+SERVICE_TIMER=chimera-logabgleich.timer
+SERVICE_TIMER_DIENST=chimera-logabgleich.service
+
 service_unit_pfad()  { rootpath "/etc/systemd/system/$CHIMERA_DIENST"; }
 service_stand_pfad() { rootpath "$CHIMERA_STATE/dienst-stand"; }
 
@@ -83,12 +90,14 @@ Environment=LANG=C.UTF-8
 Environment=PYTHONUNBUFFERED=1
 # Protokolle erst in den Arbeitsspeicher (Regel 10r) ...
 RuntimeDirectory=chimera/logs/productive
-Environment=CHIMERA_LOG_RAM=/run/chimera/logs/productive
+Environment=CHIMERA_LOG_RAM=$SERVICE_LOG_RAM
+Environment=CHIMERA_LOG_KARTE=$CHIMERA_LOGS_PRODUCTIVE
 WorkingDirectory=$CHIMERA_DATA
 ExecStart=$_su_py -m chimera --dienst
-# ... und beim Stoppen gesammelt auf den Datentraeger. ExecStopPost laeuft,
-# bevor systemd das RuntimeDirectory entfernt (innerstes Verzeichnis).
-ExecStopPost=/bin/sh -c 'mkdir -p $CHIMERA_LOGS_PRODUCTIVE && cp -p /run/chimera/logs/productive/*.log $CHIMERA_LOGS_PRODUCTIVE/ 2>/dev/null || true'
+# ... und gesammelt auf den Datentraeger: beim Stoppen hier, in Ruhezeiten
+# ueber $SERVICE_TIMER. Ein Weg (log_sync). ExecStopPost laeuft, bevor
+# systemd das RuntimeDirectory entfernt (innerstes Verzeichnis).
+ExecStopPost=-/bin/sh $SERVICE_ABGLEICH
 Restart=on-failure
 RestartSec=5
 RestartPreventExitStatus=2
@@ -102,6 +111,63 @@ PrivateTmp=yes
 [Install]
 WantedBy=multi-user.target
 EOF
+}
+
+# Ruhezeit-Abgleich: ein kurzer Dienst plus Timer. KEIN RuntimeDirectory=
+# hier -- systemd loeschte es beim Ende dieses Kurzdienstes, und mit ihm die
+# Protokolle des laufenden Hauptdienstes. Fehlt der RAM-Ordner (Dienst
+# aus), endet das Skript mit 0.
+service_timer_dienst_text() {
+	cat <<EOF
+# Von chimera-install angelegt (Schritt 98). Protokolle RAM -> Karte.
+[Unit]
+Description=Chimera -- Protokolle in Ruhezeiten auf den Datentraeger
+
+[Service]
+Type=oneshot
+User=$CHIMERA_DIENSTNUTZER
+Group=$CHIMERA_DIENSTNUTZER
+Environment=CHIMERA_LOG_RAM=$SERVICE_LOG_RAM
+Environment=CHIMERA_LOG_KARTE=$CHIMERA_LOGS_PRODUCTIVE
+ExecStart=/bin/sh $SERVICE_ABGLEICH --ruhig
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=$CHIMERA_USER_ROOT
+PrivateTmp=yes
+EOF
+}
+
+service_timer_text() {
+	cat <<EOF
+# Von chimera-install angelegt (Schritt 98).
+[Unit]
+Description=Chimera -- Protokollabgleich alle 5 Minuten pruefen
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target
+EOF
+}
+
+# Eine Unit-Datei idempotent schreiben. $1 Pfad, $2 Text.
+# Setzt _sd_neu=1, wenn geschrieben (oder im Trockenlauf: wuerde).
+# rc 0 ok, 2 Fehler.
+service_datei() {
+	if [ -f "$1" ] && [ "$(cat "$1")" = "$2" ]; then
+		info "unveraendert: $1"
+		return 0
+	fi
+	_sd_neu=1
+	if is_dry_run; then info "[wuerde schreiben] $1"; return 0; fi
+	mkdir -p "$(dirname "$1")" || { err "Verzeichnis fehlt: $(dirname "$1")"; return 2; }
+	printf '%s\n' "$2" | write_atomic "$1" || return 2
+	manifest_has datei "$1" || manifest_record datei "$1" ""
+	info "geschrieben: $1"
+	return 0
 }
 
 # Stand des Programms, den der laufende Dienst geladen hat. Aendert er
@@ -222,20 +288,13 @@ service_einrichten() {
 	log ""
 
 	log "Unit"
-	_se_text="$(service_unit_text "$_se_py" "$(service_gruppen)")"
-	_se_neu=0
-	if [ -f "$_se_unit" ] && [ "$(cat "$_se_unit")" = "$_se_text" ]; then
-		info "Unit unveraendert: $_se_unit"
-	elif is_dry_run; then
-		info "[wuerde schreiben] $_se_unit"
-		_se_neu=1
-	else
-		mkdir -p "$(dirname "$_se_unit")" || { err "Unit-Verzeichnis fehlt."; return 2; }
-		printf '%s\n' "$_se_text" | write_atomic "$_se_unit" || return 2
-		manifest_has datei "$_se_unit" || manifest_record datei "$_se_unit" ""
-		info "Unit geschrieben: $_se_unit"
-		_se_neu=1
-	fi
+	_sd_neu=0
+	service_datei "$_se_unit" "$(service_unit_text "$_se_py" "$(service_gruppen)")" || return 2
+	_se_neu=$_sd_neu
+	_sd_neu=0
+	service_datei "$(dirname "$_se_unit")/$SERVICE_TIMER_DIENST" "$(service_timer_dienst_text)" || return 2
+	service_datei "$(dirname "$_se_unit")/$SERVICE_TIMER" "$(service_timer_text)" || return 2
+	_se_timer_neu=$_sd_neu
 
 	_se_code="$(service_code_stand "$_se_repo")"
 	_se_alt="$(cat "$_se_stand" 2>/dev/null || true)"
@@ -246,7 +305,13 @@ service_einrichten() {
 		return 0
 	fi
 
-	[ "$_se_neu" = 1 ] && systemctl daemon-reload
+	{ [ "$_se_neu" = 1 ] || [ "$_se_timer_neu" = 1 ]; } && systemctl daemon-reload
+
+	if ! manifest_has dienst "$SERVICE_TIMER"; then
+		systemctl enable --now "$SERVICE_TIMER" >/dev/null 2>&1 || {
+			err "systemctl enable --now $SERVICE_TIMER schlug fehl."; return 2; }
+		manifest_record dienst "$SERVICE_TIMER" aktiviert
+	fi
 
 	if ! manifest_has dienst "$CHIMERA_DIENST"; then
 		systemctl enable "$CHIMERA_DIENST" >/dev/null 2>&1 || {
@@ -322,20 +387,22 @@ service_einrichten() {
 # erbte es.
 service_rueckbau() {
 	_sr_befund=0
-	if manifest_has dienst "$CHIMERA_DIENST"; then
+	# Timer zuerst: er soll nicht mitten im Rueckbau einen Abgleich starten.
+	for _sr_e in $SERVICE_TIMER $CHIMERA_DIENST; do
+		manifest_has dienst "$_sr_e" || continue
 		if is_dry_run; then
-			info "[wuerde] systemctl disable --now $CHIMERA_DIENST"
+			info "[wuerde] systemctl disable --now $_sr_e"
 		elif have_cmd systemctl; then
-			systemctl disable --now "$CHIMERA_DIENST" >/dev/null 2>&1 || true
-			if [ "$(systemctl is-active "$CHIMERA_DIENST" 2>/dev/null)" = active ]; then
-				warn "Dienst laeuft noch: $CHIMERA_DIENST"; _sr_befund=1
+			systemctl disable --now "$_sr_e" >/dev/null 2>&1 || true
+			if [ "$(systemctl is-active "$_sr_e" 2>/dev/null)" = active ]; then
+				warn "laeuft noch: $_sr_e"; _sr_befund=1
 			else
-				info "gestoppt und abgeschaltet: $CHIMERA_DIENST"
+				info "gestoppt und abgeschaltet: $_sr_e"
 			fi
 		else
-			warn "systemctl fehlt -- Dienst nicht abschaltbar."; _sr_befund=1
+			warn "systemctl fehlt -- $_sr_e nicht abschaltbar."; _sr_befund=1
 		fi
-	fi
+	done
 
 	_sr_f="${TMPDIR:-/tmp}/.chimera-rm-dienst.$$"
 	manifest_list_von datei 98-service | cut -f1 >"$_sr_f"

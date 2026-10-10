@@ -11,6 +11,8 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 ## [Unreleased]
 
 ### Hinzugefügt
+- **Protokolle:** Der Dienst schreibt sein Protokoll als Datei und bringt es beim
+  Stoppen und in Ruhezeiten (spätestens stündlich) auf die Speicherkarte.
 - **Speicher:** Der Installer richtet zram (75 % des Arbeitsspeichers) und
   eine nach Kartengröße gestaffelte Auslagerungsdatei ein (2/4/8/16 GiB);
   der Rückbau stellt den früheren Zustand wieder her.

@@ -92,5 +92,17 @@ mutation ohne-warten \
 	's/^\t\tsleep "\$CHIMERA_DIENST_WARTEN"$/\t\t:/' \
 	"gewartet vor dem Nachweis"
 
+# M8: Kurzdienst bekommt ein RuntimeDirectory -- loeschte beim Ende den
+# RAM-Ordner des laufenden Hauptdienstes.
+mutation timer-runtimedir \
+	's/^ExecStart=\/bin\/sh \$SERVICE_ABGLEICH --ruhig$/RuntimeDirectory=chimera\/logs\/productive\
+ExecStart=\/bin\/sh $SERVICE_ABGLEICH --ruhig/' \
+	"Ruhezeit-Abgleich loescht den RAM-Ordner nicht"
+
+# M9: Timer wird beim Rueckbau nicht abgeschaltet.
+mutation timer-bleibt \
+	's/^\tfor _sr_e in \$SERVICE_TIMER \$CHIMERA_DIENST; do$/\tfor _sr_e in $CHIMERA_DIENST; do/' \
+	"Rueckbau: Timer abgeschaltet"
+
 printf '\nErgebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

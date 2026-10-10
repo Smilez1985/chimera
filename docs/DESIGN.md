@@ -1773,6 +1773,27 @@ letzten Abgleich geschrieben wurde. Wer genau diesen Teil braucht
 Ruhezeit, Abgleich und Rotation stehen in `lib/common.sh`, nicht je
 Logger. Ein zweiter Mechanismus daneben wäre eine Doppelimplementierung.
 
+Ausführung beim Dienst (11.10.2026):
+
+- **Der Dienst schreibt eine Datei je Start** (`dienst-<zeit>.log`) in
+  `$CHIMERA_LOG_RAM`, zusätzlich zum Journal. Je Start, nicht eine feste
+  Datei: Sonst überschriebe der nächste Start beim Abgleich das
+  Protokoll des vorigen — genau das, das man nach einem Absturz braucht.
+- **Größendeckel im Schreiber, Anzahl in `common.sh`.** `/run` ist ein
+  tmpfs von rund 90 MiB (chimera-pi gemessen), ein geschwätziger Logger
+  füllte ihn und störte das ganze System. Python teilt deshalb ab 1 MiB
+  in Stücke (`dienst-<zeit>.1.log`, höchstens drei). Wie viele Dateien
+  auf der Karte bleiben, regelt `log_rotate` — das bleibt die eine Stelle.
+- **Ein Abgleichsweg für Stopp und Ruhezeit.** `installer/bin/log-abgleich.sh`
+  lädt `common.sh` und ruft `log_sync`; `ExecStopPost=` der Dienst-Unit
+  ruft ihn sofort, ein Timer (`chimera-logabgleich.timer`, alle 5 min)
+  mit `--ruhig`. Ruhig heißt: Abgleich, wenn seit 120 s nichts mehr
+  geschrieben wurde — **oder spätestens nach einer Stunde**, sonst
+  erreichte ein ununterbrochen schreibender Dienst die Karte nie, und ein
+  Stromausfall nähme alles mit.
+- Der Timer läuft als Dienstnutzer mit derselben Abschottung wie der
+  Dienst und gehört zu Schritt 98 (Manifest, Rückbau).
+
 **Der Installer arbeitet immer aus `source/`, egal woher der Code
 kam.** Startbaum kann ein Git-Klon sein, ein offline hingeschobenes Zip
 oder später ein Paket (apt, npm). Jede Quelle führt in denselben

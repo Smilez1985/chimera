@@ -498,6 +498,20 @@ Token gesetzt ist, und läuft ohne Sprachmodell weiter (Gesicht).
 sieht eine Neustartschleife als gesund, wenn man im richtigen Moment
 fragt. Erst wenn beides stimmt, gilt der Schritt als erledigt.
 
+**Protokolle: Datei im RAM, Abgleich beim Stopp und in Ruhezeiten**
+(DESIGN 10r). `--dienst` schreibt zusätzlich zum Journal
+`dienst-<zeit>.log` nach `$CHIMERA_LOG_RAM` (`RuntimeDirectory=`), ab
+1 MiB in Stücken `dienst-<zeit>.1.log` (höchstens drei). Auf die Karte
+bringt sie `installer/bin/log-abgleich.sh` (lädt `common.sh`, ruft
+`log_sync`/`log_rotate`): als `ExecStopPost=` sofort, und über
+`chimera-logabgleich.timer` alle 5 min mit `--ruhig` — abgeglichen wird,
+wenn 120 s nichts geschrieben wurde, spätestens aber nach einer Stunde.
+Der Kurzdienst des Timers hat bewusst **kein** `RuntimeDirectory=`:
+systemd löschte es an dessen Ende und mit ihm die Protokolle des
+laufenden Hauptdienstes. Timer und Kurzdienst stehen im Manifest
+(`datei`, `dienst`); der Rückbau schaltet den Timer vor dem Dienst ab.
+Mit echtem systemd 257 am chimera-pi geprüft (11.10.2026).
+
 **Ein `git pull` startet den Dienst neu.** Der Schritt hält eine
 Prüfsumme über `src/` und `requirements.txt` fest
 (`/opt/chimera/state/dienst-stand`) — erst **nach** gelungenem Nachweis.
