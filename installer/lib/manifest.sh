@@ -28,6 +28,7 @@
 #   gruppe     Nutzer einer Gruppe hinzugefuegt    Angabe: Nutzer
 #   nutzer     Systemnutzer (Dienst)                Angabe: vorher_da|neu
 #   modul      Kernelmodul gebaut und installiert  Angabe: Version
+#   swapdatei  Auslagerung umgestellt (Schritt 25) Angabe: vorher:<MiB>:<Ort>
 #
 # Die Unterscheidung `vorher_da` gegen `neu` ist der wichtigste Teil: Ein
 # Paket, das es vor Chimera schon gab, darf eine Deinstallation NICHT
@@ -289,7 +290,7 @@ manifest_report() {
 		return 0
 	}
 	log "Was Chimera am System geaendert hat"
-	for _bb_a in paket zeile datei verzeich dienst gruppe nutzer modul sicherung; do
+	for _bb_a in paket zeile datei verzeich dienst gruppe nutzer modul swapdatei sicherung; do
 		_bb_n="$(manifest_list "$_bb_a" | grep -c . || true)"
 		[ "${_bb_n:-0}" -gt 0 ] && info "$_bb_a: $_bb_n"
 	done

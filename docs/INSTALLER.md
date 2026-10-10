@@ -110,18 +110,19 @@ schlägt den Neustartwunsch.
 
 | # | Modul | Aufgabe |
 |---|---|---|
-| 10 | `preflight` | Board und Betriebssystem erkennen, Whisplay-Revision, Speicher, Platz |
-| 20 | `packages` | Systempakete |
-| 30 | `kernel-headers` | Header beschaffen — **der schwierige Teil** (§3) |
-| 40 | `wm8960` | Codec-Modul prüfen, notfalls bauen (§4) |
-| 50 | `whisplay-driver` | Whisplay-Soundkarte bauen und einhängen |
-| 60 | `overlay` | Gerätebaum-Overlay, kollidierende abschalten (§5) |
-| 70 | `alsa` | Audio-Konfiguration |
-| 80 | `python` | Umgebung und Abhängigkeiten |
-| 90 | `models` | sherpa-onnx-Modelle laden und prüfen |
-| 95 | `config` | `.env` aus Vorlage, Ollama-Adresse erfragen |
+| 00 | `source` | lokale SSOT-Kopie `source/`; der Läufer startet daraus neu (Baustein 2) |
+| 10 | `check-system` | Board und Betriebssystem erkennen, Whisplay-Revision, Speicher, Platz |
+| 20 | `install-packages` | Systempakete |
+| 25 | `speicher` | zram (75 %) und Auslagerungsdatei, gestaffelt nach Kartengröße (§4b) |
+| 30 | `install-headers` | Header beschaffen — **der schwierige Teil** (§3) |
+| 40 | `install-display` | WM8960-Codec, Whisplay-Soundkarte, Bootkonfiguration (§4) |
+| 50 | `python` | Umgebung und Abhängigkeiten |
+| 60 | `overlay` *(geplant)* | Gerätebaum-Overlay, kollidierende abschalten (§5) |
+| 70 | `alsa` *(geplant)* | Audio-Konfiguration |
+| 80 | `models` *(geplant)* | sherpa-onnx-Modelle laden und prüfen |
+| 95 | `config` *(geplant)* | `.env` aus Vorlage, Ollama-Adresse erfragen |
 | 98 | `service` | systemd-Unit |
-| 99 | `migrate` | Übergänge von älteren Installationen |
+| 99 | `migrate` *(geplant)* | Übergänge von älteren Installationen |
 
 Nummerierung mit Lücken, damit sich später etwas dazwischen schiebt, ohne
 alles umzubenennen.
@@ -369,6 +370,41 @@ Ablauf:
 Die Quelle ist GPL-2.0 (Linux). Wird sie mitgeliefert statt geladen,
 gehört der Lizenzhinweis dazu und ein Vermerk in `THIRD_PARTY.md`.
 
+### 4a. Modul 25 — Speicher (zram und Auslagerungsdatei)
+
+Die Logik steht in `installer/lib/speicher.sh`, geprueft in
+`tests/test-speicher.sh` (Werkzeuge als Shell-Funktionen) und auf
+echter Hardware (chimera-pi, 11.10.2026). Mechanik aus PiPortal
+uebernommen, nicht nachgebaut:
+
+- **zram** ueber das Paket `zram-tools`: Konfiguration
+  `/etc/default/zramswap` (`PERCENT=75`, `ALGO=lz4`, `PRIORITY=100`),
+  Dienst `zramswap.service`. Das Paketskript rechnet
+  `MemTotal * PERCENT / 100` und haelt `/dev/zram0` in `/proc/swaps`.
+- **Auslagerungsdatei** ueber DietPis eigenes Werkzeug
+  `dietpi-set_swapfile <MiB> <Pfad>`: Es pflegt fstab und
+  `/boot/dietpi.txt` selbst, damit der Firstboot nichts zurueckdreht.
+  Groesse: gestaffelt nach Groesse des Systemdatentraegers (2/4/8/16 GiB,
+  Dezimal-GB wie aufgedruckt, gemessen in sysfs am Blockgeraet).
+- **Idempotent nach Zustand:** Zielgroesse erreicht und aktiv -> nichts
+  tun. Zu wenig Platz (Reserve 8 GiB, `CHIMERA_SWAP_RESERVE_MIB`)
+  -> Befund, nicht kuerzen. Fremde zram-Verwaltung
+  (`systemd-zram-generator`, `rpi-swap`, `dphys-swapfile`) -> Abbruch mit
+  benannter Meldung; deren Umstellen ist ein offenes Ende (ROADMAP).
+- **Manifest:** frueher Zustand der Datei als neue Art `swapdatei`
+  (`vorher:<MiB>:<Ort>`, nur der ERSTE Umbau wird vermerkt — ein
+  spaeterer Kartenwechsel ueberschreibt den Ausgangszustand nicht),
+  `zram-tools` als `paket`, Original der zram-Konfiguration als
+  `sicherung`.
+- **Bewusste Ausnahme:** beim Ersetzen schaltet DietPis Werkzeug mit
+  `swapoff -a` kurz ALLE Auslagerung ab, auch zram — danach wird
+  `zramswap` neu gestartet (nach Zustand gemessen, nicht nach Marke).
+  Design 5e begruendet die Ausnahme.
+- **Rueckbau** (`uninstaller/steps/25-remove-speicher.sh`): fruehere
+  Groesse und Ort mit demselben Werkzeug zurueck, zram-Konfiguration aus
+  der Sicherung, `zramswap` neu. Das Paket nimmt Rueckbau 20 (`neu`, nur
+  auf Wunsch).
+
 ### 4b. Modul 50 — Python-Umgebung (venv)
 
 Chimera ist ein Python-Dauerprozess. Debian hält `/usr/lib/python3` von
@@ -379,8 +415,9 @@ Wege lösen das: ein **venv** oder Systempakete mit
 - `--break-system-packages` wechselt die Tür aus, die Debian genau aus
   diesem Grund schließt — ein pip-Lauf dort kann Debian-Pakete
   überbieten, ohne dass der Nutzer es sieht.
-- Ein venv gehört ganz Chimera, liegt unter `/opt/chimera/venv`, und
-  steht im Manifest (`verzeich`) — die Deinstallation kann es als
+- Ein venv gehört ganz Chimera, liegt unter `/opt/chimera/productive/venv`
+  (Regel 10r: Code und venv getrennt, damit der Tausch von `code/` das
+  venv nicht mitnimmt), und steht im Manifest (`verzeich`) — die Deinstallation kann es als
   Ganzes entfernen, ohne fremde Pakete anzufassen.
 
 **`requirements.txt` im Repo ist die eine Quelle** der
@@ -402,11 +439,11 @@ meldet Erfolg auch dann, wenn das Modul selbst nicht lauffähig ist
 
 **Umgebungskonfiguration.** Die Vorlage `.env.example` liegt im
 Repo-Wurzelverzeichnis — nur mit Platzhaltern, nie mit echten Werten
-(Regel 12). Schritt 50 legt sie als `/etc/chimera/.env` ab, **nur wenn
+(Regel 12). Schritt 50 legt sie als `/opt/chimera/config/.env` ab, **nur wenn
 dort noch keine steht**: eine von Hand ausgefüllte Datei wird nie
 überschrieben, der zweite Installerlauf ändert nichts (idempotent).
 Rechte 600 ab Anlage — in die Datei gehören später Schlüssel. Die
-Vorlage bleibt daneben als `/etc/chimera/.env.example`. Was fehlt oder
+Vorlage bleibt daneben als `/opt/chimera/config/.env.example`. Was fehlt oder
 noch auf dem Platzhalter steht, benennt `python -m chimera --pruefen`
 je Connector — der Installer meldet keinen Erfolg für Werte, die er
 nicht hat.
@@ -436,9 +473,10 @@ gefiltert per `getent`) — eine fehlende Gruppe ließe systemd den Start
 verweigern. Damit gibt es kein `usermod` und nichts zurückzunehmen außer
 der Unit.
 
-**Datenablage `/var/lib/chimera/daten`** (`StateDirectory=`, 700, gehört
-dem Dienstnutzer), dort liegt `CHIMERA_HOME`. Das Manifest daneben in
-`/var/lib/chimera` gehört root und bleibt für den Dienst unbeschreibbar:
+**Datenablage `/home/<nutzer>/chimera/data`** (700, gehört dem
+Dienstnutzer, in Schritt 98 angelegt und geprüft), dort liegt
+`CHIMERA_HOME`. Das Manifest in `/opt/chimera/state` gehört root und
+bleibt für den Dienst unlesbar (Regel 10r):
 Sonst könnte ein Werkzeugaufruf des Agenten bestimmen, was der
 Deinstallierer löscht. `ProtectSystem=strict` und `ProtectHome=read-only`
 setzen das durch.
@@ -462,7 +500,7 @@ fragt. Erst wenn beides stimmt, gilt der Schritt als erledigt.
 
 **Ein `git pull` startet den Dienst neu.** Der Schritt hält eine
 Prüfsumme über `src/` und `requirements.txt` fest
-(`/var/lib/chimera/dienst-stand`) — erst **nach** gelungenem Nachweis.
+(`/opt/chimera/state/dienst-stand`) — erst **nach** gelungenem Nachweis.
 Weicht sie ab, wird neu gestartet; sonst liefe nach „pull plus
 Installerlauf" weiter der alte Code (Regel 10). Ein gescheiterter Start
 hält keinen Stand fest, der nächste Lauf versucht es erneut.

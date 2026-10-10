@@ -608,10 +608,14 @@ Der Installer richtet deshalb **immer** ein:
   geht (Python-Objekte, Modellpuffer, Bildpuffer), komprimiert das gut.
   Auf 512 MB entstehen so real nutzbare Reserven in dreistelliger
   Megabyte-Höhe.
-- **Auslagerungsdatei auf dem Systemdatenträger**, ein Viertel von dessen
-  Größe, als zweite Stufe unterhalb von zram. Sie liegt dort, wo das
-  System liegt: auf dem Pi die SD-Karte, auf dem Radxa der eMMC. Damit
-  läuft der Radxa ohne SD-Karte — und wo eine steckt, wird sie geschont.
+- **Auslagerungsdatei auf dem Systemdatenträger**, gestaffelt nach der
+  Größe des Systemdatenträgers: bis 8 GiB Karte 2 GiB, bis 16 GiB Karte
+  4 GiB, bis 32 GiB Karte 8 GiB, darüber 16 GiB — als zweite Stufe unterhalb
+  von zram. Sie liegt dort, wo das System liegt: auf dem Pi die SD-Karte,
+  auf dem Radxa der eMMC. Damit läuft der Radxa ohne SD-Karte — und wo eine
+  steckt, wird sie geschont. Für einen Agenten-Harness ist viel Auslagerung
+  OOM-Schutz, kein Luxus (Entscheidung smilez, 11.10.2026): Auf der
+  Chimera-Testbench (128 GiB Karte, 463 MiB RAM) sind das 16 GiB.
 
 Das ist die bewährte Aufstellung aus den übrigen Projekten auf dieser
 Hardware (Noisy, PiPortal) und keine Chimera-Erfindung. Ein früherer
@@ -636,7 +640,11 @@ Zum Verschleiß der Karte: Er entsteht durch **Schreiben**, und die zweite
 Stufe wird selten beschrieben, wenn zram davor liegt. Die
 Auslagerungsneigung (`vm.swappiness`) wird trotzdem niedrig gehalten, und
 das Protokoll hält fest, wie viel tatsächlich ausgelagert wurde — damit
-Vermutung durch Messung ersetzt werden kann (Regel 10g).
+Vermutung durch Messung ersetzt werden kann (Regel 10g). Welcher Wert
+dafür richtig liegt, ist offen: „niedrig gehalten“ stammt aus der
+Karte-schonen-Lesart, aber zram-Aufstellungen empfehlen eher hohe Werte,
+weil zram im Arbeitsspeicher liegt und der Zugriff dort billig ist. Bis
+zur Messung (10g) bleibt vm.swappiness unangetastet (Regel: nie raten).
 
 **Auf dem Radxa ist beides nicht nötig und wird trotzdem eingerichtet.**
 Ein Aufbau, der sich je nach Board unterscheidet, erzeugt zwei Systeme,
@@ -646,28 +654,42 @@ ausgerechnet auf dem Gerät, das seltener läuft.
 **Idempotent, nach Zustand statt nach Marke.** Ein Lauf misst, was ist,
 und ändert nur, was abweicht:
 
-- **zram:** Fehlt das Werkzeug, wird es nachinstalliert (nur wenn es
-  fehlt, `paket` im Manifest mit `vorher_da|neu`). Gemessen wird das
-  aktive Gerät (`/proc/swaps`, `zramctl`), nicht eine Konfigurationsdatei.
-  Liegt seine Größe bei 75 % von `MemTotal` (Toleranz eine Seite je
-  Rundung), passiert nichts.
+- **zram:** Mechanik über `zram-tools` (Paket, `paket` im Manifest mit
+  `vorher_da|neu`), Konfiguration `/etc/default/zramswap`
+  (`PERCENT=75`, `ALGO=lz4`, `PRIORITY=100`), Dienst `zramswap.service`.
+  Gemessen wird das aktive Gerät (`/proc/swaps`, `disksize` in sysfs),
+  nicht die Konfigurationsdatei. Liegt seine Größe bei 75 % von
+  `MemTotal` (Toleranz eine Seite je Rundung), passiert nichts.
 - **Auslagerungsdatei:** ein Viertel der Größe des Systemdatenträgers
-  (das Dateisystem von `/`, gemessen mit `df`, nicht aus einer Tabelle).
-  Existiert sie in der richtigen Größe und ist aktiv, passiert nichts.
-  Weicht die Größe ab, wird sie ersetzt: neue Datei daneben, aktivieren,
-  alte abschalten, dann löschen. Es gibt keinen Moment ohne
-  Auslagerung. Passt sie nicht auf den Datenträger (weniger freier Platz
-  als nötig plus Reserve), wird abgebrochen und benannt, nicht gekürzt.
+  gemessen am Blockgerät in sysfs, nicht aus einer Tabelle). Existiert
+  sie in der richtigen Größe und ist aktiv, passiert nichts. Passt die
+  Sollgröße nicht auf den Datenträger (weniger freier Platz als nötig
+  plus Reserve, 8 GiB wie in PiPortal), wird sie NICHT gekürzt — die
+  bisherige Auslagerung bleibt, wie sie ist, und der Lauf meldet einen
+  Befund.
+  **Bewusste Ausnahme:** Beim Ersetzen schaltet DietPis Werkzeug
+  `dietpi-set_swapfile` zuerst mit `swapoff -a` ALLE Auslagerung ab, auch
+  zram, und baut sie dann wieder auf. Im Gegensatz zur ursprünglichen
+  Forderung „keinen Moment ohne Auslagerung“ gibt es den Moment also
+  kurz — nur bei einer Größenänderung, nicht bei jedem Lauf. Das Werkzeug
+  zu ersetzen, um die Lücke zu schließen, wäre ein Nachbau von
+  DietPi-Logik gegen den Erstbestand: nicht getan.
 - **Vorhandene Einrichtungen werden nicht doppelt gebaut.** DietPi bringt
   eine eigene Auslagerung mit (`dietpi-set_swapfile`, Einträge in
-  `/boot/dietpi.txt`). Findet der Installer eine fremde Auslagerung, sagt
-  er es und stellt um, und er hält das Original als `sicherung` fest,
-  damit der Rückbau den Ausgangszustand wiederherstellt. Zwei
+  `/boot/dietpi.txt`). Der Installer BENUTZT DietPis Werkzeug statt es zu
+  umgehen: Es pflegt fstab und `dietpi.txt` selbst, damit der Firstboot
+  nichts zurückdreht, und der Rückbau stellt den Ausgangszustand mit
+  demselben Werkzeug her. Der frühere Zustand steht im Manifest (Art
+  `swapdatei`), die zram-Konfiguration als `sicherung`. Zwei
   Auslagerungsdateien nebeneinander wären zwei Systeme mit unklarem
-  Verhalten.
+  Verhalten; eine fremde zram-Verwaltung für `/dev/zram0`
+  (systemd-zram-generator, rpi-swap) bricht den Schritt mit benannter
+  Meldung ab — ihr Umstellen ist ein offenes Ende (ROADMAP).
 - **Nachweis:** nach dem Lauf beide Einträge in `/proc/swaps` mit den
   Sollgrößen, zram mit höherer Priorität als die Datei. Ein zweiter Lauf
-  ändert nichts (Test).
+  ändert nichts (Test). Erst auf echter Hardware bestätigt:
+  chimera-pi, 11.10.2026 — 16 GiB-Datei in 2,9 s angelegt, Rückbau stellte
+  den Ausgangszustand byte-gleich her.
 
 ---
 

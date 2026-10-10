@@ -11,6 +11,9 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 ## [Unreleased]
 
 ### Hinzugefügt
+- **Speicher:** Der Installer richtet zram (75 % des Arbeitsspeichers) und
+  eine nach Kartengröße gestaffelte Auslagerungsdatei ein (2/4/8/16 GiB);
+  der Rückbau stellt den früheren Zustand wieder her.
 - **Dienst:** Chimera läuft als systemd-Dienst `chimera.service` unter
   eigenem Systemnutzer `chimera`, startet nach einer Aktualisierung neu
   und begrenzt Neustarts bei wiederholtem Absturz.

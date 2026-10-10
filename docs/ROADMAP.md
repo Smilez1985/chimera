@@ -3,7 +3,7 @@
 Was noch fehlt, nach Priorität. Entscheidungen und Begründungen stehen in
 `docs/DESIGN.md`, nicht hier.
 
-Stand: 2026-09-29. Pre-Alpha.
+Stand: 2026-10-11. Pre-Alpha.
 
 ---
 
@@ -560,3 +560,19 @@ Entwurf in `docs/SELBSTUPDATE.md`, Vorlage ist die PiHole-Routine.
 - **Bleibt Telegram** die Hauptschnittstelle, wenn Mikrofon, Lautsprecher
   und Button da sind?
 - **Wake-Word oder Button** als Gesprächsauslöser (siehe Phase 5).
+
+---
+
+## Phase 7 — Installer-Reste und Entwicklungswerkzeuge
+
+- [ ] **Fremde zram-Verwaltung übernehmen.** Schritt 25 bricht heute mit
+  benannter Meldung ab, wenn `systemd-zram-generator`, `rpi-swap` oder
+  `dphys-swapfile` `/dev/zram0` verwaltet. Ziel: sichern und umstellen
+  wie bei DietPi (Regel 5e).
+- [ ] **Auslagerungsdatei ohne DietPi.** Schritt 25 meldet heute einen
+  Befund, wenn `dietpi-set_swapfile` fehlt (Radxa mit anderem System).
+- [ ] **`vm.swappiness` festlegen** — nach Messung (Regel 10g).
+- [ ] **MCP-Server für Chimera.** Ein MCP-Server neuester Generation, der
+  zuerst der Entwicklung den Zugriff auf die Testbench erleichtert und
+  später dem Agenten den tooluse auf der eigenen Hardware. Zuerst ein
+  Entwurf im DESIGN, dann Bau.
