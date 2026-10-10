@@ -643,6 +643,32 @@ Ein Aufbau, der sich je nach Board unterscheidet, erzeugt zwei Systeme,
 die sich unterschiedlich verhalten — und der Fehler zeigt sich dann
 ausgerechnet auf dem Gerät, das seltener läuft.
 
+**Idempotent, nach Zustand statt nach Marke.** Ein Lauf misst, was ist,
+und ändert nur, was abweicht:
+
+- **zram:** Fehlt das Werkzeug, wird es nachinstalliert (nur wenn es
+  fehlt, `paket` im Manifest mit `vorher_da|neu`). Gemessen wird das
+  aktive Gerät (`/proc/swaps`, `zramctl`), nicht eine Konfigurationsdatei.
+  Liegt seine Größe bei 75 % von `MemTotal` (Toleranz eine Seite je
+  Rundung), passiert nichts.
+- **Auslagerungsdatei:** ein Viertel der Größe des Systemdatenträgers
+  (das Dateisystem von `/`, gemessen mit `df`, nicht aus einer Tabelle).
+  Existiert sie in der richtigen Größe und ist aktiv, passiert nichts.
+  Weicht die Größe ab, wird sie ersetzt: neue Datei daneben, aktivieren,
+  alte abschalten, dann löschen. Es gibt keinen Moment ohne
+  Auslagerung. Passt sie nicht auf den Datenträger (weniger freier Platz
+  als nötig plus Reserve), wird abgebrochen und benannt, nicht gekürzt.
+- **Vorhandene Einrichtungen werden nicht doppelt gebaut.** DietPi bringt
+  eine eigene Auslagerung mit (`dietpi-set_swapfile`, Einträge in
+  `/boot/dietpi.txt`). Findet der Installer eine fremde Auslagerung, sagt
+  er es und stellt um, und er hält das Original als `sicherung` fest,
+  damit der Rückbau den Ausgangszustand wiederherstellt. Zwei
+  Auslagerungsdateien nebeneinander wären zwei Systeme mit unklarem
+  Verhalten.
+- **Nachweis:** nach dem Lauf beide Einträge in `/proc/swaps` mit den
+  Sollgrößen, zram mit höherer Priorität als die Datei. Ein zweiter Lauf
+  ändert nichts (Test).
+
 ---
 
 ### Architekturregel 5f — Fremde Werkzeuge sind nicht vertrauenswürdig
@@ -1645,6 +1671,145 @@ Zeigt das Protokoll den Anstieg nicht, misst es das Falsche. Für die
 Prüfung des Controllers: Ein Testprozess mit `MemoryMax=20M` belegt
 150 MB. Läuft er durch, muss der Installer warnen.
 
+### Architekturregel 10r — Der Agent ist ein eigener Nutzer, und was root ausführt, kann er nicht ändern
+
+Chimera läuft immer unter dem Systemnutzer **`chimera`**, den der
+Installer anlegt. Ein vorhandener Nutzer (auf DietPi `dietpi`) ist
+**keine Option**: Er hat dort `sudo` ohne Passwort, ein Agent unter ihm
+wäre faktisch root, und er könnte alles in dessen Home lesen
+(SSH-Schlüssel). Die Regel gilt für jedes Linux, DietPi ist der erste
+Prüffall.
+
+Was der Agent darf, regeln **die Rechte des Nutzers**, nicht nur die
+Schranke in `agent/safety.py`. Die Schranke ist Programmcode und kann
+einen Fehler haben, die Dateirechte setzt der Kernel durch.
+
+**Die Rechte wachsen mit dem Harness, und jedes einzelne ist belegt.**
+Vergeben wird nur, was der heutige Code nachweislich braucht:
+
+| Recht | Wofür | Beleg |
+|---|---|---|
+| Gruppe `audio` | Lautsprecher, Mikrofon | HARDWARE-BEFUNDE: `aplay -l` ohne `audio` leer |
+| Gruppe `spi` | LCD über spidev | HARDWARE-BEFUNDE: `python3-spidev`, `/dev/spidev0.*` |
+| Gruppe `gpio` | LED, Button, Panel-Steuerleitungen über gpiod | HARDWARE-BEFUNDE: `python3-libgpiod` |
+| Schreiben im eigenen Home | Gedächtnis, Moods, Arbeitsordner, Dienstprotokolle | `app.py` (`CHIMERA_HOME`) |
+| Gruppe `i2c` | **opt-in**, erst wenn Code direkt auf I2C zugreift | heute keiner: den Codec spricht der Kerneltreiber an |
+| Gruppe `video` | **opt-in**, etwa sobald ein Kameramodul angeschlossen ist | heute keiner |
+
+Opt-in heißt: Der Installer vergibt die Gruppe nur, wenn ein Profil
+oder eine Option sie anfordert (`--mit i2c`, `--mit video`). Dann steht
+sie in der Unit und im Manifest, und der Rückbau nimmt sie mit.
+
+Nicht vergeben werden: `sudo`, eine Anmeldung per Passwort und
+Schreibrechte außerhalb des eigenen Homes. Eine Gruppe, die es auf
+dem System nicht gibt, wird übersprungen und benannt. Ein neues Recht
+kommt mit dem Code, der es braucht, und mit einer Zeile in dieser
+Tabelle, nicht vorsorglich.
+
+**Pfadschema: getrennt nach Eigentümer.**
+
+```
+/opt/chimera/                    root:root 755  -- für chimera nur lesbar
+  source/                        Kopie des Repos, SSOT des Installers
+  productive/                    laufender Code (aus source/) und venv
+  state/                         root:root 700  -- Manifest, Standdateien
+  config/                        root:chimera 750, .env 640
+  logs/installer/                Protokolle von Install und Uninstall
+/home/chimera/chimera/           chimera:chimera 700
+  data/                          Gedächtnis, Moods, Arbeitsordner (CHIMERA_HOME)
+  logs/productive/               Protokolle des Dienstes
+```
+
+Der Grund für die Trennung: **Wer ein Verzeichnis besitzt, kann dessen
+Einträge ersetzen**, auch wenn sie root gehören (umbenennen braucht nur
+Schreibrecht am Elternverzeichnis). Läge `source/` im Home von `chimera`,
+könnte der Agent es gegen eigenen Code tauschen, und der nächste
+`sudo chimera-install` führte diesen als root aus. Eine Prüfsumme hilft
+dabei nicht, der Angreifer hätte beide Seiten in der Hand. Darum liegt
+alles, was root ausführt oder liest, unter `/opt/chimera`, und der Agent
+kann es nicht ändern. Das Manifest (`state/`) kann er nicht einmal lesen:
+Es legt fest, was der Deinstallierer löscht. Installer und Deinstallierer
+laufen beide als root und **lesen und schreiben es beide**: Für den
+Installer ist es das Melderegister (was er angelegt hat), für den
+Deinstallierer die einzige Wahrheitsquelle (was er entfernen darf).
+Ausgesperrt ist nur der Dienstnutzer.
+
+**Protokolle: erst in den Arbeitsspeicher, dann gesammelt auf den
+Datenträger.** Geschrieben wird nach `/run/chimera/logs/` (tmpfs, für den
+Dienst `RuntimeDirectory=`), nicht direkt auf die SD. Ein Abgleich kopiert
+die Dateien in die Zielordner der Tabelle (`logs/installer/`,
+`logs/productive/`), sobald eine Ruhezeit lang nichts mehr geschrieben
+wurde, und immer beim Stoppen des Dienstes und am Ende eines
+Installerlaufs. So schreibt nicht jeder Logger laufend auf die Karte,
+sondern es gibt einen gebündelten Schreibvorgang. Nach einem Neustart sind
+die Protokolle trotzdem da: `/var/log` hilft dafür nicht, DietPi hält es
+im RAM und leert es stündlich (DietPi-RAMlog #1, Vorgabe).
+
+Der Preis wird benannt: Bei einem Stromausfall fehlt, was seit dem
+letzten Abgleich geschrieben wurde. Wer genau diesen Teil braucht
+(Absturz ohne Stoppen), findet die Spur im Kernelprotokoll (Regel 10q).
+Ruhezeit, Abgleich und Rotation stehen in `lib/common.sh`, nicht je
+Logger. Ein zweiter Mechanismus daneben wäre eine Doppelimplementierung.
+
+**Der Installer arbeitet immer aus `source/`, egal woher der Code
+kam.** Startbaum kann ein Git-Klon sein, ein offline hingeschobenes Zip
+oder später ein Paket (apt, npm). Jede Quelle führt in denselben
+Schritt `00-source`: Startbaum mit `source/` vergleichen, bei Bedarf
+`source/` neu befüllen (Nachbarverzeichnis, dann atomarer Tausch),
+dann per `exec` aus `source/` neu starten. Danach sieht kein Schritt
+mehr den Startbaum.
+
+Zwei Vergleiche, mit getrennter Aufgabe:
+
+- **Ob es derselbe Stand ist:** Prüfsumme über den Inhalt, nicht über
+  den Git-Commit, denn Zip und Paket haben keinen. `.git` und
+  Arbeitsdateien zählen nicht mit.
+- **Welcher Stand der neuere ist:** die Datei `VERSION`, verglichen mit
+  `sort -V`. Eine Prüfsumme sagt nur „anders", nicht „neuer".
+
+**Nur Aktualisierungen ersetzen, was schon da ist.** Ein Startbaum mit
+niedrigerer `VERSION` (ein altes Zip) ersetzt `source/` nie. Der Lauf
+benennt das und arbeitet mit dem vorhandenen Stand weiter. Ein
+Rückschritt geht nur gezielt mit `--downgrade=true`, und auch dann
+steht er im Protokoll. Bei gleicher `VERSION`, aber anderer Prüfsumme
+(Entwicklungsstand ohne Versionssprung) gilt der Startbaum als der
+gewollte Stand und ersetzt `source/`, mit Hinweis.
+
+**Online wird auf den neuesten Stand gezogen.** Ist das Netz da und die
+Quelle öffentlich erreichbar, holt `00-source` den neuesten
+veröffentlichten Stand und nimmt den höheren von beiden (Startbaum oder
+online). „Neuester" heißt der höchste `vX.Y.Z`-Tag (`sort -V`), nicht
+die Spitze eines Zweigs. **Offline** zählt nur, was lokal da ist, und
+der Lauf sagt, dass er nicht nachsehen konnte (Regel 10j). Kein
+Abbruch und kein stilles „ist aktuell".
+
+Heute gibt es noch keinen Tag (Pre-Alpha bleibt ungetaggt). Die
+Online-Prüfung ist trotzdem gebaut und getestet, gegen ein Testrepo mit
+Tags. Findet sie keinen Tag, meldet sie „kein veröffentlichter Stand"
+und es zählt der lokale. Die Spitze eines Zweigs nimmt sie nie ersatzweise:
+Mit dem ersten Tag greift die Regel dann ohne Umbau.
+
+Ein neues `source/` ändert am laufenden Dienst noch nichts. Erst der
+Installerlauf bringt den Stand nach `productive/`. Den Neustart des
+Dienstes löst die Prüfsumme von `productive/` aus.
+
+**Rückbau:** `source/`, `productive/` und `state/` entfernt er.
+**Protokolle löscht er nie von sich aus**, weder `logs/installer/` noch
+`logs/productive/`: Gerade nach einem Rückbau braucht man sie, um zu
+sehen, was passiert ist. Löschen nur auf ausdrückliche Anforderung
+(opt-in). Dasselbe gilt für `config/` und `/home/chimera/chimera/data/`
+(INSTALLER.md §6). Den Nutzer
+`chimera` entfernt er nur, wenn sein Home dabei mitgeht (also nur bei
+angeforderter Löschung der Daten und Protokolle). Sonst bliebe
+ein Home ohne Eigentümer zurück, und eine später vergebene UID erbte es.
+
+**Gegenprobe (Regel 9):** (a) Den Installer aus zwei verschiedenen
+Startpfaden aufrufen. Beide Läufe müssen dasselbe `source/` ergeben, der
+zweite darf nicht kopieren. (b) Als `chimera` versuchen, in `source/`,
+`productive/` und `state/` zu schreiben bzw. umzubenennen. Jeder Versuch
+muss scheitern. (c) Eine Datei im Startbaum ändern. `source/` muss neu
+befüllt werden, `productive/` erst im Installerlauf.
+
 ## 11. Headless
 
 Chimera hat **keine grafische Oberfläche.** Es gibt den 240×280-Bildschirm
@@ -1781,4 +1946,5 @@ die Historie umgeschrieben.
 - **10o** — Was nicht im Manifest steht, gehört nicht uns
 - **10p** — Was beim Laden abstürzt, wird beim nächsten Start nicht wieder geladen
 - **10q** — Speicher wird am Prozess gemessen und vom Prozess begrenzt
+- **10r** — Der Agent ist ein eigener Nutzer, und was root ausführt, kann er nicht ändern
 - **13a** — Vor jedem Push wird geprüft, und die Prüfung beweist ihre Sehfähigkeit
