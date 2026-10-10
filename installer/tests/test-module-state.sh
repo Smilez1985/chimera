@@ -75,9 +75,15 @@ EOF
 chmod +x "$W/aufruf.sh"
 
 # lauf $1 = Fassung. Setzt OUT und RC.
+#
+# Der PATH wird pro Aufruf gesetzt, nicht nur einmal im Skript: Einer
+# Umgebung, die ihn zwischenzeitlich veraendert (oder Attrappen und echte
+# Werkzeuge mischt), wird damit begegnet, statt auf die Reihenfolge zu
+# hoffen. Das echten modprobe/depmod auf einem CI-Runner sind Faehnlinge
+# dieser Art.
 lauf() {
 	set +e
-	OUT="$(CHIMERA_ROOT="$R" sh "$W/aufruf.sh" "$1" \
+	OUT="$(CHIMERA_ROOT="$R" PATH="$W/bin:$PATH" sh "$W/aufruf.sh" "$1" \
 		'snd-soc-whisplay*' 'snd-soc-whisplay-soundcard' 2>&1)"
 	RC=$?
 	set -e
@@ -95,6 +101,14 @@ printf 0 >"$W/modprobe-rc"
 rm -f "$W/modprobe-aufrufe.txt" "$W/depmod-aufrufe.txt"
 lauf "$HERE/lib/module.sh"
 check ".ko da und ladbar -> geladen" "$OUT" "geladen"
+[ "$OUT" = "geladen" ] || {
+	# Diagnose: welche Werkzeuge sieht der innere Aufruf wirklich?
+	_diag="$(CHIMERA_ROOT="$R" PATH="$W/bin:$PATH" sh -c \
+		'command -v depmod || echo "kein depmod";
+		 command -v modprobe || echo "kein modprobe";
+		 printf "PATH=%s\n" "$PATH"' 2>&1 | sed 's/^/        /')"
+	printf '  DIAG  innerer Aufruf:\n%s\n' "$_diag"
+}
 if [ -s "$W/depmod-aufrufe.txt" ]; then ok "depmod laeuft vor dem Ladeversuch"
 else bad "depmod wurde nicht aufgerufen -- Abhaengigkeiten bleiben alt"; fi
 if grep -q 'snd-soc-whisplay-soundcard' "$W/modprobe-aufrufe.txt" 2>/dev/null; then
