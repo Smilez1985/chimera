@@ -392,8 +392,58 @@ Plattformfrage, deshalb eigene Phase und nicht am Ende angehaengt.
 - [x] **Protokolldatei je Lauf, auch bei Erfolg** (Regel 10e)
 - [ ] `--dry-run` und `--check` in den Modulen tatsaechlich auswerten
       (werden bisher nur durchgereicht)
-- [ ] Protokolle aufraeumen (Anzahl oder Alter begrenzen)
+- [x] Protokolle aufraeumen (Anzahl oder Alter begrenzen) —
+      `common.sh:log_rotate`, die juengsten `CHIMERA_LOG_KEEP` bleiben
 - [ ] `VERSION` ins System stempeln, `chimera --version`
+
+### 8a1 — Laeufer (neu, aus Stufe B1)
+- [x] **Exitcodes der Module** (neues I7): 0 = fertig, 1 = Befund,
+      2 = Abbruch, 3 = Neustart noetig. Der Lauf wird von rc 3 NICHT mehr
+      abgebrochen; der Wunsch wird EINMAL am Ende gemeldet, und der
+      Gesamt-Exitcode sagt es weiter (3). Vorher endete der Lauf an
+      Schritt 40 und kam auf einer frischen Installation nie darueber
+      hinaus. Test: `tests/test-launcher-rc3.sh`, mit Gegenprobe gegen
+      die alte Fassung
+- [x] Zeilen an Fremddateien werden ebenfalls ATOMAR geschrieben
+      (Regel I3): nicht mehr `>>`, sondern Inhalt lesen, Zeile anfuegen,
+      in einem Zug ersetzen (`manifest_line` ueber `write_atomic`).
+      Eine Bootkonfiguration, die mitten im Schreiben den Strom verliert,
+      enthaelt sonst eine halbe Zeile
+- [x] `write_atomic` uebernimmt ausser den Rechten auch **Besitzer und
+      Gruppe** des Originals (`chown --reference`)
+
+### 8a2 — Gepruefte Fehlerzweige (neu, aus Stufe B1)
+- [x] `mktemp` wird in Schritt 20 GEPRUEFT (`common.sh:tmp_path`). Vorher
+      stand dort `"${TMPDIR:-/tmp}/.name.$$"` — zeigte TMPDIR ins Leere,
+      starb der Schritt unter `set -e` mit rc 1 und der Laeufer wertete
+      das als Befund und lief weiter
+- [x] **KVER-Falle** (`steps/10`, `steps/30`): `$(read_file … || uname -r)`
+      greift nie, weil der Exitstatus einer Pipe der des letzten Glieds
+      ist. Jetzt `common.sh:kernel_version`, leere Kennung = benannter
+      Abbruch statt `/lib/modules//build`
+- [x] Tests laufen TMPDIR-unabhaengig (`run-tests.sh` richtet sein eigenes
+      Arbeitsverzeichnis ein); der Rundlauftest prueft den Pfad auf die
+      Eigenschaft "liegt unter meinem Arbeitsverzeichnis" statt auf eine
+      Positivliste /tmp|/var/tmp
+
+### 8a3 — Fremdcode und Kernelmodul (neu, aus Stufe B1)
+- [x] **Whisplay-Repo auf einen Commit festgelegt und die aufgerufene
+      Datei gegen eine Pruefsumme geprueft** (I4, 5f). `network_git`
+      nimmt einen Commit (shallow `fetch` auf die Kennung, gemessen),
+      `fremddatei_pruefen` prueft die Datei. Hinterlegt ist
+      Commit `c73051e6…` und sha256 `0767aba3…` (install_driver.sh,
+      10.10.2026). Eine Abweichung wird BENANNT abgebrochen, nicht
+      ausgefuehrt
+- [x] **Kernelmodul wird per `modprobe` geprueft**, nicht nur per
+      Dateiexistenz (`lib/module.sh:kernel_module_state`). Ein
+      ABI-inkompatibles Modul liegt da und laedt trotzdem nicht. Test:
+      `tests/test-module-state.sh`, mit Gegenprobe
+- [x] **Whisplay ohne EEPROM erkannt** (`lib/display.sh`): Overlay-Eintrag
+      in der Bootkonfiguration, ALSA-Karte, gebautes Modul — alles am
+      Herstellertreiber belegt (dtoverlay=whisplay-soundcard,
+      whisplaysound), kein Geraten. Welcher Treffer gilt, steht in
+      `DISPLAY_QUELLE` und wird benannt. Test:
+      `tests/test-display-signatur.sh`, mit Gegenprobe
 
 ### 8b — Modul 10 `preflight` + Boardprofile  ✅ erster Wurf steht
 Liefert sofort Nutzen: klaert die offenen Fragen zum Zielgeraet.
@@ -424,11 +474,16 @@ sonst bedeutet Portieren spaeter ein Durchsuchen aller Module.
 ### 8c — Module 20–70 fuer Pi Zero 2 W
 Der einfache Fall: Header kommen aus dem Distributionspaket.
 - [ ] Systempakete, Header (Stufe 1), Whisplay-Treiber bauen
-- [ ] WM8960 pruefen: **`modprobe` versuchen**, nicht nur Existenz pruefen
-      (ein vorhandenes Modul kann ABI-inkompatibel sein)
+      — Module 20/30/40 stehen im Code; was auf echter Hardware gelaufen
+      ist, steht in `docs/HARDWARE-BEFUNDE.md`
+- [x] WM8960 pruefen: **`modprobe` versuchen**, nicht nur Existenz pruefen
+      (ein vorhandenes Modul kann ABI-inkompatibel sein) — die Pruefung
+      steht jetzt in `lib/module.sh:kernel_module_state` und ist in
+      Schritt 40 verdrahtet; fuer WM8960 wird sie im Codec-Modul
+      benutzt, wenn es gebaut wird
 - [ ] Overlay, kollidierende **umbenennen** statt loeschen
-- [ ] Bootmethode erkennen statt `u-boot-update` vorauszusetzen
-- [ ] Bootdateien vorher sichern
+- [ ] Bootmethode erkennen statt `u-boot-update` vorauszusehen
+- [x] Bootdateien vorher sichern
 - [ ] ALSA-Konfiguration
 
 ### 8d — Module 80–99

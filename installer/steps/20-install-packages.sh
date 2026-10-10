@@ -81,9 +81,25 @@ probe_tool() {
 	return 1
 }
 
+# Zwischendatei ueber tmp_path: mktemp wird geprueft (I3).
+#
+# Vorher stand hier "${TMPDIR:-/tmp}/.chimera-fz.$$". Zeigt TMPDIR auf ein
+# Verzeichnis, das es nicht gibt, starb das Skript unter `set -e` mit rc 1
+# -- und der Laeufer wertete das als Befund und machte weiter. Ein Abbruch,
+# der als Befund durchging: genau die Fehlerklasse aus Regel 8a.
+zwischendatei() {
+	_zw="$(tmp_path "$1")" || {
+		err "Keine Zwischendatei anlegbar -- TMPDIR ist unbrauchbar."
+		err "Dieser Schritt kann sein Ergebnis nicht festhalten, deshalb"
+		err "bricht er ab, statt weiterzulaufen."
+		log_close 2; exit 2
+	}
+	printf '%s\n' "$_zw"
+}
+
 # Die Schleife laeuft in einer Subshell (Pipe) -- dort gesetzte Variablen
 # sind draussen weg. Deshalb ueber eine Datei, die danach gelesen wird.
-_FZ="${TMPDIR:-/tmp}/.chimera-fz.$$"
+_FZ="$(zwischendatei .chimera-fz)"
 : >"$_FZ"
 log "Zwingend"
 packages_required | while IFS='	' read -r pkg test wofuer; do
@@ -94,7 +110,7 @@ MISSING_REQUIRED="$(cat "$_FZ" 2>/dev/null || true)"
 rm -f "$_FZ"
 
 log ""
-_FN="${TMPDIR:-/tmp}/.chimera-fn.$$"
+_FN="$(zwischendatei .chimera-fn)"
 : >"$_FN"
 log "Nuetzlich"
 packages_optional | while IFS='	' read -r pkg test wofuer; do
@@ -147,7 +163,7 @@ fi
 # Erfolg auch dann, wenn das Werkzeug hinterher nicht aufrufbar ist.
 
 log "Nachweis"
-_FR="${TMPDIR:-/tmp}/.chimera-fr.$$"
+_FR="$(zwischendatei .chimera-fr)"
 : >"$_FR"
 packages_required | while IFS='	' read -r pkg test wofuer; do
 	[ -n "$pkg" ] || continue

@@ -13,6 +13,9 @@
 #   chimera-install --log-dir DIR    Ablage des Protokolls
 #
 # Exitcode: der des ersten fehlgeschlagenen Moduls, sonst 0.
+#           Stand ein Schritt auf "Neustart noetig" und war sonst alles in
+#           Ordnung, ist es 3 -- fertig ist der Lauf dann naemlich nicht.
+#           Ein echter Fehler schlaegt den Neustartwunsch.
 
 set -eu
 
@@ -72,6 +75,7 @@ log ""
 FAILED=0
 FIRST_RC=0
 RAN=0
+NEUSTART=0
 
 for mod in $(steps_list); do
 	name="$(basename "$mod" .sh)"
@@ -93,20 +97,31 @@ for mod in $(steps_list); do
 	rc=$?
 	set -e
 
-	if [ "$rc" -ne 0 ]; then
+	if [ "$rc" -eq 0 ]; then
+		_log_raw "Modul $name: ok"
+	elif [ "$rc" -eq 3 ]; then
+		# 3 heisst: eingerichtet, aber der Nachweis gelingt erst nach
+		# einem Neustart (Overlay und Kernelmodul laden beim Start).
+		# Das ist KEIN Abbruch und KEIN Fehler -- genau darum geht es
+		# bei I7. Vorher endete der Lauf hier, und auf einer frischen
+		# Installation kam er damit nie ueber die Anzeige hinaus.
+		NEUSTART=1
+		_log_raw "Modul $name: rc 3 -- Neustart noetig"
+	elif [ "$rc" -eq 1 ]; then
+		# Befund: nichts zu tun, oder die Umgebung ist unvollstaendig.
+		# Kein Profil, aber der Lauf geht weiter (Regel 10k).
+		FAILED=$((FAILED + 1))
+		[ "$FIRST_RC" -eq 0 ] && FIRST_RC=1
+		_log_raw "Modul $name: Befund (rc 1)"
+	else
+		# Ab 2 hat das Modul den Lauf bewusst beendet -- etwa weil eine
+		# Voraussetzung fehlt oder niemand die Warnung bestaetigt hat.
 		FAILED=$((FAILED + 1))
 		[ "$FIRST_RC" -eq 0 ] && FIRST_RC=$rc
 		_log_raw "Modul $name: Exitcode $rc"
-		# Exitcode 1 ist ein Befund, kein Ende: kein Profil, aber der
-		# Lauf geht weiter (Regel 10k). Ab 2 hat das Modul den Lauf
-		# bewusst beendet -- etwa weil niemand die Warnung bestaetigt hat.
-		if [ "$rc" -ge 2 ]; then
-			err "Modul $name bricht den Lauf ab (Exitcode $rc)."
-			log_close "$rc"
-			exit "$rc"
-		fi
-	else
-		_log_raw "Modul $name: ok"
+		err "Modul $name bricht den Lauf ab (Exitcode $rc)."
+		log_close "$rc"
+		exit "$rc"
 	fi
 done
 
@@ -117,10 +132,26 @@ if [ "$RAN" -eq 0 ]; then
 fi
 
 log ""
-if [ "$FAILED" -eq 0 ]; then
+if [ "$FAILED" -eq 0 ] && [ "$NEUSTART" -eq 0 ]; then
 	log "Fertig: $RAN Modul(e), ohne Fehler."
+	ENDE_RC=0
+elif [ "$FAILED" -eq 0 ]; then
+	# Alles eingerichtet, aber etwas davon wird erst nach einem Neustart
+	# nachweisbar. Der Wunsch wird EINMAL gemeldet, hier am Ende -- nicht
+	# je Modul, das ihn aeussert.
+	log "Fertig: $RAN Modul(e), ohne Fehler."
+	warn "Ein Neustart steht aus: Ein Schritt ist eingerichtet, sein"
+	warn "Nachweis gelingt aber erst nach dem Start."
+	warn ""
+	warn "  sudo reboot"
+	warn ""
+	warn "Danach den Lauf wiederholen -- erst dann ist er fertig."
+	ENDE_RC=3
 else
 	warn "Fertig: $RAN Modul(e), $FAILED mit Befund."
+	[ "$NEUSTART" -eq 1 ] && \
+		warn "Ausserdem steht ein Neustart aus (wird erst nach Fehlern gemeldet)."
+	ENDE_RC="$FIRST_RC"
 fi
-log_close "$FIRST_RC"
-exit "$FIRST_RC"
+log_close "$ENDE_RC"
+exit "$ENDE_RC"

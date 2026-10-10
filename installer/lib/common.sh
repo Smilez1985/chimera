@@ -212,9 +212,64 @@ have_file() { [ -e "$(rootpath "$1")" ]; }
 
 # --- Werkzeuge -------------------------------------------------------------
 
+# Laufende Kernelfassung.
+#
+# Warum nicht `$(read_file ... || uname -r)`: Der Exitstatus einer Pipe ist
+# der des LETZTEN Glieds, hier `tr`. Der Ersatz greift damit nie. Fehlt die
+# Datei, bleibt die Variable leer, und der Lauf meldet anschliessend Pfade
+# wie /lib/modules//build -- ein Fehlschlag, der wie ein Ergebnis aussieht
+# (Regel 8a).
+#
+# Reihenfolge: erst die Datei im (ggf. erfundenen) Wurzelverzeichnis, dann
+# der laufende Kernel. Beides wird geprueft; leer ist ein Befund, kein Wert.
+kernel_version() {
+	_kv="$(read_file /proc/sys/kernel/osrelease 2>/dev/null | tr -d '\n')"
+	[ -n "$_kv" ] || _kv="$(uname -r 2>/dev/null || true)"
+	printf '%s\n' "$_kv"
+}
+
 # I4: Vorhandensein pruefen, bevor man sich darauf verlaesst. Ein Exitcode
 # von 0 heisst nicht, dass das Programm existierte.
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+# --- Temporaere Dateien ---------------------------------------------------
+
+# Eine brauchbare temporaere Datei -- oder ein benannter Fehlschlag.
+#
+# Warum nicht einfach "${TMPDIR:-/tmp}/.name.$$": Genau so stand es in
+# Schritt 20, und in einer Umgebung, in der TMPDIR auf ein Verzeichnis
+# zeigt, das es nicht gibt, stirbt das Skript unter `set -e` mitten im
+# Lauf. Der Laeufer wertete den ploetzlichen Exitcode 1 als "Befund" und
+# machte weiter -- ein Abbruch, der als Befund durchging (Regel 8a).
+#
+# mktemp wird geprueft, nicht gehofft: Ist das Ergebnis leer, gibt es
+# KEINEN Pfad, sondern rc 1 und eine Meldung. Der Aufrufer entscheidet,
+# ob das ein Abbruch ist -- verschwiegen wird es nicht.
+#
+# $1 Praefix (ohne Punkt), Ausgabe der Pfad auf stdout.
+tmp_path() {
+	_tp_praefix="${1:-chimera}"
+	_tp_dir="${CHIMERA_TMPDIR:-${TMPDIR:-/tmp}}"
+
+	# Ein Verzeichnis, das es nicht gibt oder in das wir nicht schreiben
+	# koennen, ist kein Arbeitsverzeichnis. Ausweichen ist erlaubt, aber
+	# sichtbar.
+	if [ ! -d "$_tp_dir" ] || [ ! -w "$_tp_dir" ]; then
+		warn "TMPDIR unbrauchbar ($_tp_dir) -- weiche auf /tmp aus."
+		_tp_dir=/tmp
+	fi
+	[ -d "$_tp_dir" ] && [ -w "$_tp_dir" ] || {
+		err "Kein beschreibbares Verzeichnis fuer Zwischendateien."
+		return 1
+	}
+
+	_tp_f="$(mktemp "$_tp_dir/${_tp_praefix}.XXXXXX" 2>/dev/null)" || _tp_f=""
+	if [ -z "$_tp_f" ] || [ ! -f "$_tp_f" ]; then
+		err "mktemp lieferte keinen Pfad in $_tp_dir"
+		return 1
+	fi
+	printf '%s\n' "$_tp_f"
+}
 
 # --- Atomares Schreiben (I3) ----------------------------------------------
 
@@ -264,6 +319,10 @@ write_atomic() {
 	# Rechte des Originals uebernehmen, falls es existiert.
 	if [ -f "$_wa_target" ]; then
 		chmod --reference="$_wa_target" "$_wa_tmp" 2>/dev/null || true
+		# Und Besitzer samt Gruppe. Auf der FAT-Bootpartition ist das
+		# wirkungslos, auf einem ext4-System ohne diesen Schritt gehoerte
+		# die Datei nach jedem Lauf dem Aufrufer statt ihrem Eigentuemer.
+		chown --reference="$_wa_target" "$_wa_tmp" 2>/dev/null || true
 	else
 		chmod 0644 "$_wa_tmp" 2>/dev/null || true
 	fi

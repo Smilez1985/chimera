@@ -247,6 +247,12 @@ network_git() {
 	_ng_url="$1"
 	_ng_ziel="$2"
 	_ng_zweig="${3:-}"
+	# $4 Commit, falls der Inhalt auf einen Stand festgelegt ist (I4).
+	# Setzt man ihn, wird genau dieser Stand geholt und der geholte Baum
+	# per rev-parse dagegen geprueft. Auf einem Hauptzweig wuerde jedes
+	# Commit des Herstellers den naechsten Installerlauf veraendern --
+	# gefuehrt als root.
+	_ng_commit="${4:-}"
 	_ng_versuche="${CHIMERA_DL_VERSUCHE:-20}"
 
 	_ng_host="$(printf '%s' "$_ng_url" | sed -e 's|^[a-z]*://||' -e 's|/.*||' -e 's|:.*||')"
@@ -269,11 +275,32 @@ network_git() {
 
 		if [ -d "$_ng_ziel/.git" ]; then
 			# Schon da: aktualisieren statt neu holen (idempotent).
-			if (cd "$_ng_ziel" && git fetch -q --depth 1 origin && \
-			    git reset -q --hard "origin/$(git rev-parse --abbrev-ref HEAD)"); then
+			if [ -n "$_ng_commit" ]; then
+				if (cd "$_ng_ziel" && git fetch -q --depth 1 origin "$_ng_commit" && \
+				    git checkout -q FETCH_HEAD && \
+				    [ "$(git rev-parse HEAD)" = "$_ng_commit" ]); then
+					info "Auf festgelegten Stand gebracht: $_ng_commit"
+					return 0
+				fi
+			elif (cd "$_ng_ziel" && git fetch -q --depth 1 origin && \
+			      git reset -q --hard "origin/$(git rev-parse --abbrev-ref HEAD)"); then
 				info "Aktualisiert: $_ng_ziel"
 				return 0
 			fi
+		elif [ -n "$_ng_commit" ]; then
+			# Ein einzelner Commit laesst sich nicht mit `clone --branch`
+			# holen -- shallow-Klon und `fetch` auf die Kennung ist der
+			# Weg, der auch bei GitHub traegt (gemessen).
+			if git init -q "$_ng_ziel" && \
+			   (cd "$_ng_ziel" && \
+			    git remote add origin "$_ng_url" && \
+			    git fetch -q --depth 1 origin "$_ng_commit" && \
+			    git checkout -q FETCH_HEAD && \
+			    [ "$(git rev-parse HEAD)" = "$_ng_commit" ]); then
+				info "Geholt: $_ng_ziel ($_ng_commit)"
+				return 0
+			fi
+			rm -rf "$_ng_ziel"
 		else
 			if git clone -q --depth 1 ${_ng_zweig:+--branch "$_ng_zweig"} \
 			      "$_ng_url" "$_ng_ziel"; then
@@ -291,6 +318,52 @@ network_git() {
 
 	err "Nach $_ng_versuche Versuchen nicht geholt: $_ng_url"
 	return 1
+}
+
+# --- Festgelegter Fremdcode (I4) ------------------------------------------
+#
+# Steht fest, WELCHE Datei ausgefuehrt wird? Ein Hersteller kann jederzeit
+# etwas aendern; wird sein Repo auf einem Hauptzweig geholt, fuehrt der
+# naechste Installerlauf stillschweigend anderen Code als root aus.
+#
+# Deshalb: ein hinterlegter Commit UND eine Pruefsumme der Datei, die
+# aufgerufen wird. Beides wird geprueft, und eine fehlende Pruefmoeglichkeit
+# ist kein Freibrief -- eine Zusicherung, die man nicht pruefen kann, ist
+# keine (Regel 8a).
+#
+# $1 Datei, $2 erwartete Pruefsumme
+# Rueckgabe 0 = stimmt, 1 = stimmt nicht oder nicht pruefbar.
+fremddatei_pruefen() {
+	_fp_datei="$1"
+	_fp_soll="$2"
+
+	[ -n "$_fp_soll" ] || {
+		# Kein Sollwert hinterlegt. Das ist kein Fehler, aber es wird
+		# GESAGT -- sonst haelt man es spaeter fuer geprueft.
+		warn "Keine Pruefsumme hinterlegt fuer: $_fp_datei"
+		warn "Der Inhalt kann sich beim Hersteller jederzeit aendern."
+		return 0
+	}
+
+	if ! have_cmd sha256sum; then
+		err "sha256sum fehlt -- die Pruefsumme ist damit nicht pruefbar."
+		err "Ohne sie wird fremder Code nicht ausgefuehrt."
+		return 1
+	fi
+
+	_fp_ist="$(sha256sum "$_fp_datei" 2>/dev/null | awk '{print $1}')"
+	if [ "$_fp_ist" != "$_fp_soll" ]; then
+		err "Der Fremdstand weicht ab: $_fp_datei"
+		err "  erwartet: $_fp_soll"
+		err "  gemessen: ${_fp_ist:-nichts -- nicht lesbar}"
+		err ""
+		err "Das heisst: der Fremdcode hat sich geaendert und niemand hat"
+		err "ihn angesehen. Der Lauf fuehrt ihn nicht aus."
+		return 1
+	fi
+
+	info "Pruefsumme stimmt: $(basename "$_fp_datei")"
+	return 0
 }
 
 # --- Pakete ---------------------------------------------------------------

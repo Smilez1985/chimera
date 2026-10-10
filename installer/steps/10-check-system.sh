@@ -34,7 +34,17 @@ BOARD="$(detect_board)"
 OS="$(detect_os)"
 BOOT="$(detect_boot)"
 OVERLAY_DIR="$(detect_overlay_dir)"
-KVER="$(read_file /proc/sys/kernel/osrelease 2>/dev/null | tr -d '\n' || uname -r)"
+KVER="$(kernel_version)"
+
+# Ohne Kernelfassung ist kein Modulverzeichnis bestimmbar. In einem Schritt,
+# der nichts aendert, koennte man das als Befund durchwinken -- aber jeder
+# folgende Vergleich liefe dann gegen /lib/modules//build und meldete
+# Unsinn. Also Abbruch mit Klartext (I4, Regel 8a).
+if [ -z "$KVER" ]; then
+	err "Kernelfassung nicht ermittelbar: /proc/sys/kernel/osrelease ist"
+	err "nicht lesbar und 'uname -r' lieferte nichts."
+	log_close 2; exit 2
+fi
 
 WHISPLAY_RAW="$(detect_whisplay)"
 WHISPLAY_STATE="${WHISPLAY_RAW%%|*}"

@@ -32,7 +32,17 @@ CHIMERA_STEP="30-install-headers"; export CHIMERA_STEP
 
 BOARD="$(detect_board)"
 OS="$(detect_os)"
-KVER="$(read_file /proc/sys/kernel/osrelease 2>/dev/null | tr -d '\n' || uname -r)"
+KVER="$(kernel_version)"
+
+# Ohne Kernelfassung ist kein Modulverzeichnis bestimmbar. Alles Weitere
+# waere geraten (/lib/modules//build), deshalb ein Abbruch mit Klartext --
+# nicht ein Befund, der den Lauf mit unsinnigen Pfaden fortsetzt.
+if [ -z "$KVER" ]; then
+	err "Kernelfassung nicht ermittelbar: /proc/sys/kernel/osrelease ist"
+	err "nicht lesbar und 'uname -r' lieferte nichts. Ohne sie sind"
+	err "Header- und Modulpfade nicht bestimmbar."
+	log_close 2; exit 2
+fi
 
 log "Chimera Kernel-Headers"
 log ""

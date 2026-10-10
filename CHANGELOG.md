@@ -8,6 +8,33 @@ einer bewussten Abweichung: **ein Versionssprung bricht keine laufende
 Installation.** Was ein Release an bestehenden Installationen ändert,
 erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 
+## [Unreleased]
+
+### Hinzugefügt
+- **Installer:** Ein Modul kann "eingerichtet, Neustart noetig" (rc 3)
+  melden, ohne den Lauf abzubrechen. Der Neustartwunsch wird EINMAL am
+  Ende gemeldet, der Gesamt-Exitcode bleibt 3.
+- **Installer:** Der Whisplay-Herstellerinstaller wird auf einen Commit
+  festgelegt und vor dem Aufruf gegen eine Pruefsumme geprueft. Ein
+  geaenderter Fremdstand bricht BENANNT ab, statt als root ausgefuehrt zu
+  werden.
+- **Installer:** Der Whisplay-HAT wird auch ohne programmiertes EEPROM
+  erkannt — ueber den `dtoverlay`-Eintrag, die ALSA-Karte und das gebaute
+  Kernelmodul. Welche Quelle gegriffen hat, wird benannt.
+- **Installer:** Kernelmodule werden per `modprobe` geprueft, nicht mehr
+  nur per Dateiexistenz — ein ABI-inkompatibles Modul meldet keinen
+  Erfolg mehr.
+
+### Geaendert
+- **Installer:** Zeilen an der Bootkonfiguration werden atomar
+  geschrieben statt per `>>` angehaengt.
+- **Installer:** Geprueftes Anlegen von Zwischendateien in Schritt 20;
+  ein unbrauchbares `TMPDIR` bricht BENANNT ab statt still weiterzulaufen.
+- **Installer:** Kernelfassung kommt aus `kernel_version()`; die
+  Fallback-Falle (`read_file … || uname -r`) ist behoben.
+- **Tests:** Die Testsuite richtet ihr Arbeitsverzeichnis selbst ein und
+  haengt nicht mehr an einem bestimmten `TMPDIR`.
+
 ## [0.1.0] — unveröffentlicht
 
 **Nicht getaggt.** Pre-Alpha bleibt ungetaggt, bis eine Fassung auf echter

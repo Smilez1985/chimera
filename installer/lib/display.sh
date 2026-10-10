@@ -40,6 +40,11 @@ display_get() {
 		busse)       echo "spi i2c_arm i2s" ;;
 		quelle)      echo "https://github.com/PiSugar/Whisplay.git" ;;
 		installer)   echo "install_driver.sh" ;;
+		# Fremdcode festgelegt (Regel I4, 5f): genau dieser Commit, und die
+		# aufgerufene Datei muss GENAU diese Pruefsumme haben, bevor sie
+		# ausgefuehrt wird. Gemessen 10.10.2026, Stand "main".
+		commit)      echo "c73051e64dc62aced1853d16f33d4614fec5bee4" ;;
+		sha256)      echo "0767aba3cbfe59cb1c63a003d49cd0eee6a0a2a8b30b07c2cf2717c637a24078" ;;
 		# Der Hersteller liefert EINEN Treiber fuer WM8960 und ES8389;
 		# beide melden sich als dieselbe Karte. Deshalb genuegt hier ein
 		# Name statt einer Fallunterscheidung nach Codec.
@@ -122,34 +127,127 @@ display_list() {
 
 # --- Erkennung ------------------------------------------------------------
 #
-# Welche Anzeige steckt dran? Geprueft wird das HAT-EEPROM: Es traegt den
-# Herstellernamen und ist die einzige Kennung, die wirklich zur Platine
-# gehoert. Fehlt es, heisst das NICHT "keine Anzeige" -- es heisst "keine,
-# die sich selbst meldet" (Regel 10j).
+# Welche Anzeige steckt dran?
 #
-# Wichtig: Ohne aktives I2C liest die Firmware das EEPROM gar nicht erst.
-# Ein fehlender HAT-Knoten vor dem ersten Einschalten von i2c_arm sagt
-# deshalb nichts aus.
+# Das HAT-EEPROM ist die beste Quelle -- es traegt den Herstellernamen und
+# gehoert wirklich zur Platine. Aber es ist nicht die EINZIGE, und beim
+# ausgelieferten Whisplay ist es nachweislich NICHT programmiert
+# (docs/HARDWARE-BEFUNDE.md). Wer nur dort nachsieht, findet "keins" und
+# bricht ab, obwohl die Anzeige angeschlossen ist.
+#
+# Deshalb mehrere Quellen, in dieser Reihenfolge:
+#
+#   1. HAT-EEPROM          -- meldet sich die Platine selbst?
+#   2. weitere Kennungen   -- siehe display_signaturen()
+#   3. nichts davon        -- "unbekannt" (EEPROM da) oder "keins"
+#
+# Welche Quelle angeschlagen hat, steht danach in DISPLAY_QUELLE. Ein
+# Treffer wird also BENANNT und geht nicht als stiller Erfolg durch
+# (Regel 10e). Widersprechen sich zwei Quellen, wird das gemeldet.
+
+# Weitere Kennungen einer Anzeige, Form je Zeile `quelle:wert`.
+#
+# Whisplay: Alles hier ist am Herstellertreiber belegt, nicht geraten
+# (audio/whisplay-soundcard/scripts/install.sh am Commit c73051e6, gegen
+# geprueft mit docs/HARDWARE-BEFUNDE.md). Ohne EEPROM schreibt der
+# Installer `dtoverlay=whisplay-soundcard` in die Bootkonfiguration,
+# traegt die Module in /etc/modules ein und benennt die ALSA-Karte
+# `whisplaysound`. Nach der Installation sieht das aus wie hier:
+#
+#   config.txt:  dtoverlay=whisplay-soundcard
+#   /proc/asound/cards:  whisplaysound
+#   /lib/modules/<kver>/...:  snd-soc-whisplay-soundcard.ko
+#
+display_signaturen() {
+	case "$1" in
+	whisplay)
+		echo "overlay:dtoverlay=whisplay-soundcard"
+		echo "alsa:whisplaysound"
+		echo "modul:snd-soc-whisplay"
+		;;
+	*) : ;;
+	esac
+}
+
+# Trifft eine der Kennungen zu? Ausgabe die passende Zeile, sonst nichts.
+display_signatur_treffer() {
+	for _ds_z in $(display_signaturen "$1"); do
+		_ds_q="${_ds_z%%:*}"
+		_ds_w="${_ds_z#*:}"
+		case "$_ds_q" in
+		overlay)
+			_ds_p=""
+			for _ds_k in /boot/firmware/config.txt /boot/config.txt; do
+				[ -f "$(rootpath "$_ds_k")" ] && { _ds_p="$_ds_k"; break; }
+			done
+			[ -n "$_ds_p" ] || continue
+			grep -qxF "$_ds_w" "$(rootpath "$_ds_p")" 2>/dev/null || continue
+			;;
+		alsa)
+			# /proc/asound/cards statt `aplay -l`: aplay haengt an der
+			# Gruppe `audio`, und ein Nachweis, der von den Rechten des
+			# Aufrufers abhaengt, misst nicht das System.
+			read_file /proc/asound/cards 2>/dev/null | grep -qi -- "$_ds_w" || continue
+			;;
+		modul)
+			[ -n "$(kernel_module_datei "${_ds_w}*")" ] || continue
+			;;
+		*)
+			continue
+			;;
+		esac
+		printf '%s\n' "$_ds_z"
+		return 0
+	done
+	return 1
+}
+
 display_detect() {
+	DISPLAY_QUELLE=""
+	DISPLAY_TYP="keins"
 	_ae_hat="$(rootpath /proc/device-tree/hat)"
+	_ae_hat_da=0
 
 	if [ -d "$_ae_hat" ]; then
+		_ae_hat_da=1
 		_ae_v="$(read_dt /proc/device-tree/hat/vendor 2>/dev/null || echo '')"
 		_ae_p="$(read_dt /proc/device-tree/hat/product 2>/dev/null || echo '')"
 
 		case "$_ae_v$_ae_p" in
-			*PiSugar*|*Whisplay*|*whisplay*) echo "whisplay"; return 0 ;;
+			*PiSugar*|*Whisplay*|*whisplay*)
+				DISPLAY_QUELLE="eeprom"
+				DISPLAY_TYP="whisplay"
+				echo "whisplay"; return 0 ;;
 		esac
+		# Ein EEPROM ist da, aber unbekannt. KEIN Abbruch an dieser
+		# Stelle: erst die uebrigen Quellen pruefen, sonst bliebe ein
+		# HAT mit unprogrammiertem EEPROM unerkannt.
+		DISPLAY_TYP="unbekannt"
+	fi
 
-		# Ein EEPROM ist da, aber wir kennen es nicht. Das wird gesagt,
-		# nicht verschwiegen -- und es wird NICHT geraten (Regel 10g).
+	for _ae_t in $(display_list); do
+		_ae_treffer="$(display_signatur_treffer "$_ae_t" || true)"
+		[ -n "$_ae_treffer" ] || continue
+		DISPLAY_QUELLE="$_ae_treffer"
+		DISPLAY_TYP="$_ae_t"
+		echo "$_ae_t"; return 0
+	done
+
+	if [ "$_ae_hat_da" -eq 1 ]; then
+		# Ein EEPROM ist da, aber wir kennen es nicht -- und keine
+		# weitere Kennung passt. Das wird gesagt, nicht verschwiegen,
+		# und es wird NICHT geraten (Regel 10g).
 		echo "unbekannt"
 		return 1
 	fi
 
+	DISPLAY_TYP="keins"
 	echo "keins"
 	return 1
 }
+
+# Woher die Erkennung ihr Ergebnis hat (leer, wenn nichts erkannt wurde).
+display_quelle() { printf '%s\n' "${DISPLAY_QUELLE:-}"; }
 
 # Ist I2C ueberhaupt an? Ohne das ist die Erkennung blind, und dieser
 # Unterschied muss sichtbar bleiben.

@@ -30,6 +30,7 @@ _HERE="$(cd "$(dirname "$0")/.." && pwd)"
 . "$_HERE/lib/network.sh"
 . "$_HERE/lib/display.sh"
 . "$_HERE/lib/manifest.sh"
+. "$_HERE/lib/module.sh"
 
 CHIMERA_STEP="40-install-display"; export CHIMERA_STEP
 
@@ -69,6 +70,8 @@ fi
 
 TYP="${CHIMERA_ANZEIGE:-}"
 
+DISPLAY_TYP=""; DISPLAY_QUELLE=""
+
 if [ -n "$TYP" ]; then
 	info "Anzeige vorgegeben: $TYP"
 else
@@ -77,7 +80,13 @@ else
 		warn "Das ist keine Aussage ueber die Hardware, sondern ueber die"
 		warn "Sichtbarkeit: Ohne i2c_arm liest die Firmware kein HAT-EEPROM."
 	fi
-	TYP="$(display_detect || true)"
+	# Ohne Subshell aufgerufen, damit die Erkennung auch sagt, WOHER ihr
+	# Ergebnis kommt (display_quelle). Mit `$()` waere die Quelle dort
+	# verloren gegangen, wo sie gebraucht wird.
+	display_detect >/dev/null 2>&1 || true
+	TYP="${DISPLAY_TYP:-keins}"
+	_ERKENNUNG="$(display_quelle)"
+	[ -n "$_ERKENNUNG" ] && info "Erkennung: $_ERKENNUNG"
 	case "$TYP" in
 		whisplay)  info "Erkannt: $(display_get whisplay name)" ;;
 		unbekannt)
@@ -102,6 +111,8 @@ NAME="$(display_get "$TYP" name)" || {
 BUSSE="$(display_get "$TYP" busse)"
 QUELLE="$(display_get "$TYP" quelle)"
 INSTALLER="$(display_get "$TYP" installer)"
+QUELLE_COMMIT="$(display_get "$TYP" commit)"
+QUELLE_SHA="$(display_get "$TYP" sha256)"
 PRUEFE="$(display_get "$TYP" pruefe)"
 HINWEIS="$(display_get "$TYP" hinweis)"
 
@@ -110,6 +121,7 @@ info "Aufloesung: $(display_get "$TYP" breite)x$(display_get "$TYP" hoehe), \
 $(display_get "$TYP" fps) Bilder/s"
 info "Busse:      ${BUSSE:-keine}"
 [ -n "$HINWEIS" ] && info "Hinweis:    $HINWEIS"
+[ -n "$QUELLE_COMMIT" ] && info "Quelle:     festgelegt auf Commit $QUELLE_COMMIT"
 log ""
 
 # --- Gruppen --------------------------------------------------------------
@@ -240,7 +252,7 @@ driver_fetch_and_build() {
 	_tb_dir="$QUELLEN/$TYP"
 
 	log "Treiberquelle"
-	network_git "$QUELLE" "$_tb_dir" || return 1
+	network_git "$QUELLE" "$_tb_dir" "" "$QUELLE_COMMIT" || return 1
 
 	# Im Trockenlauf wurde nichts geholt -- dann auf die Datei zu pruefen
 	# hiesse, das eigene Nichtstun als Fehler zu melden.
@@ -255,6 +267,11 @@ driver_fetch_and_build() {
 		err "Hat sich der Aufbau des Fremdrepos geaendert?"
 		return 1
 	}
+
+	# Bevor fremder Code als root laeuft: stimmt er mit dem festgelegten
+	# Stand ueberein? (Regel I4, 5f) -- die Pruefung selbst steht in
+	# lib/network.sh, damit sie auch ohne Schritt 40 messbar ist.
+	fremddatei_pruefen "$_tb_dir/$INSTALLER" "$QUELLE_SHA" || return 1
 
 	log ""
 	log "Herstellerinstaller"
@@ -315,24 +332,42 @@ driver_fetch_and_build() {
 	# "eingerichtet, nur noch nicht nachweisbar". Das ist Beschoenigung,
 	# und genau die Fehlerklasse aus Regel 8a.
 	#
-	# Deshalb wird jetzt am ERGEBNIS unterschieden: Gibt es das gebaute
-	# Kernelmodul? Wenn nein, ist es ein Fehlschlag -- egal was der
-	# Exitcode sagt und egal ob ein Neustart bevorsteht.
+	# Deshalb wird jetzt am ERGEBNIS unterschieden.
 	if [ "$_tb_rc" != 0 ]; then
 		warn "Herstellerinstaller endete mit Exitcode $_tb_rc."
 	fi
 
-	if ! find /lib/modules/"$(uname -r)" -name 'snd-soc-whisplay*' 2>/dev/null |
-	     head -1 | grep -q .; then
+	# Nicht "liegt die .ko da", sondern "laedt sie". Ein vorhandenes Modul
+	# kann ABI-inkompatibel sein, oder der Geraetebaum-Eintrag des Overlays
+	# fehlt noch -- dann liegt die Datei da und laedt trotzdem nicht. Ein
+	# blosser Dateitest meldete dafuer Erfolg (Regel 10j, I4).
+	_tb_zustand="$(kernel_module_state 'snd-soc-whisplay*' \
+		'snd-soc-whisplay-soundcard' 2>/dev/null || echo 'unbekannt')"
+
+	case "$_tb_zustand" in
+	nicht_gebaut)
 		err "Das Kernelmodul wurde nicht gebaut."
 		err "Grund steht in: $_tb_log"
 		_tb_grund="$(grep -iE 'command not found|Kommando nicht gefunden|No such file|error:' \
 			"$_tb_log" 2>/dev/null | head -3)"
 		[ -n "$_tb_grund" ] && printf '%s\n' "$_tb_grund" | sed 's/^/    /' >&2
 		return 1
-	fi
+		;;
+	geladen)
+		info "Kernelmodul gebaut und geladen."
+		;;
+	*)
+		# Gebaut, aber (noch) nicht ladbar. Das ist meistens kein Fehler,
+		# sondern die Folge davon, dass der Geraetebaum-Eintrag erst beim
+		# naechsten Start wirkt. Gemeldet wird es trotzdem -- und der
+		# Nachweis unten entscheidet, nicht diese Zeile.
+		info "Kernelmodul gebaut."
+		warn "Es laedt noch nicht. Meist fehlt der Geraetebaum-Eintrag,"
+		warn "der erst nach einem Neustart wirkt -- der Nachweis unten"
+		warn "sagt, ob es daran lag."
+		;;
+	esac
 
-	info "Kernelmodul gebaut."
 	return 0
 }
 

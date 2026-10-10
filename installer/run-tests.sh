@@ -18,6 +18,54 @@
 set -eu
 cd "$(dirname "$0")"
 
+# --- Eigenes Spielfeld ----------------------------------------------------
+#
+# Der Laeufer darf nicht an derselben Klippe scheitern, die er prueft.
+#
+# In manchen Umgebungen zeigt TMPDIR auf ein Verzeichnis, das es hier gar
+# nicht gibt (in der Android-App z. B. auf einen Pfad ausserhalb der
+# Sandbox). mktemp liefert dann einen LEEREN Pfad, und ein Test, der dort
+# einen Koeder anlegt, meldet "nicht anlegbar" -- obwohl der Installer in
+# Ordnung ist. Der Lauf war dann rot wegen der Umgebung, nicht wegen des
+# Codes.
+#
+# Deshalb: ein brauchbares Verzeichnis selbst einrichten und TMPDIR darauf
+# setzen, BEVOR die erste Testdatei startet. Geprueft wird wie ueberall --
+# mktemp kann auch hier einen leeren Pfad liefern, und das ist ein Abbruch,
+# kein stiller Weiterlauf.
+#
+# CHIMERA_TEST_TMPDIR ueberstimmt die Wahl (fuer einen Lauf, der bewusst
+# woanders arbeiten soll).
+if [ -n "${CHIMERA_TEST_TMPDIR:-}" ]; then
+	_tk_kandidaten="$CHIMERA_TEST_TMPDIR"
+else
+	_tk_kandidaten="${TMPDIR:-} /tmp /var/tmp $PWD"
+fi
+
+_tk_dir=""
+for _tk_k in $_tk_kandidaten; do
+	[ -n "$_tk_k" ] || continue
+	[ -d "$_tk_k" ] && [ -w "$_tk_k" ] && { _tk_dir="$_tk_k"; break; }
+done
+
+if [ -z "$_tk_dir" ]; then
+	printf 'FEHLER: kein beschreibbares Arbeitsverzeichnis gefunden.\n' >&2
+	printf 'Geprueft: %s\n' "$_tk_kandidaten" >&2
+	exit 2
+fi
+
+_TESTS_TMP="$(mktemp -d "$_tk_dir/.chimera-tests.XXXXXX" 2>/dev/null)" || _TESTS_TMP=""
+if [ -z "$_TESTS_TMP" ] || [ ! -d "$_TESTS_TMP" ]; then
+	printf 'FEHLER: mktemp lieferte kein Arbeitsverzeichnis in %s\n' "$_tk_dir" >&2
+	exit 2
+fi
+
+TMPDIR="$_TESTS_TMP"
+export TMPDIR
+trap 'rm -rf "$_TESTS_TMP"' EXIT INT TERM
+
+printf 'Arbeitsverzeichnis: %s\n\n' "$TMPDIR"
+
 GESAMT=0
 SCHLECHT=0
 

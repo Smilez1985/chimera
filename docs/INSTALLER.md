@@ -37,11 +37,32 @@ und ein nachfolgendes `install` bekommt eine leere Quelle — die Zieldatei
 wird geleert. Bei `/boot/…`-Dateien bootet das Gerät danach nicht mehr.
 Teuer gelernt, gilt hier unverändert.
 
+**Das gilt auch fürs Anhängen.** Eine Zeile an eine Fremddatei hängen
+(`>>`) sieht harmloser aus als ein Überschreiben, ist es aber nicht: Fällt
+die Spannung mitten im Schreiben aus, bleibt die Datei halb geschrieben —
+und in einer `config.txt` ist eine halbe Zeile so gut wie keine. Zeilen
+werden deshalb ebenfalls über Sidecar und `mv` geschrieben: Inhalt lesen,
+Zeile anfügen, in einem Zug ersetzen. `write_atomic` kann beides; das
+Anhängen ist ein Sonderfall davon.
+
+Neben den Rechten übernimmt das Verfahren auch **Besitzer und Gruppe** der
+Zieldatei (`chown --reference`). Auf der FAT-Bootpartition ist das
+bedeutungslos, auf einem ext4-System ohne `--reference` aber würde die
+Datei nach jedem Installerlauf dem Aufrufer gehören.
+
 ### I4 — Nichts ungeprüft aufrufen
 
 Ein Rückgabewert von 0 heißt nicht, dass das Programm existierte. Vor dem
 Aufruf prüfen, nach dem Aufruf das Ergebnis prüfen — nicht nur den
 Exitcode.
+
+**Für fremden Code heißt das: auf einen Stand festgelegt.** Ein
+Hersteller-Repo wird nicht auf dem Hauptzweig geholt und dann als root
+ausgeführt — es wird auf **einen Commit** festgelegt, und der Installer,
+der ausgeführt wird, wird **vor** dem Aufruf gegen eine hinterlegte
+Prüfsumme geprüft. Weicht sie ab, bricht der Lauf benannt ab, statt den
+geänderten Code zu starten. Ohne das ist `git pull` beim Hersteller
+gleichbedeutend mit „führe aus, was heute dort steht".
 
 ### I5 — Fremde Distributionspakete nie über `/` entpacken
 
@@ -57,6 +78,31 @@ unbrauchbar machen kann.
 
 `--dry-run` ist bei Kernelmodulen und Bootdateien keine Bequemlichkeit,
 sondern Selbstschutz.
+
+### I7 — Der Exitcode eines Moduls sagt, wie es weitergeht
+
+Ein Installer, der alles außer 0 als Abbruch behandelt, kommt bei einem
+Neustart nie über die betroffene Stelle hinaus. Umgekehrt darf ein echter
+Fehler nicht als Befund durchgewinkt werden. Deshalb vier Fälle:
+
+| rc | Bedeutung | Was der Läufer tut |
+|---|---|---|
+| 0 | Ziel erreicht und nachgewiesen | weiter |
+| 1 | Befund: nichts zu tun, oder Umgebung unvollständig | weiter, am Ende melden |
+| 2 | Abbruch: Voraussetzung fehlt, oder niemand hat zugestimmt | Lauf endet hier |
+| 3 | eingerichtet, aber **Neustart nötig** für den Nachweis | weiter, Neustart **einmal** am Ende |
+
+**rc 3 bricht den Lauf nicht ab.** Genau darum geht es: Overlay und
+Kernelmodul laden erst beim nächsten Start, und ein Lauf, der deshalb
+endet, führt die folgenden Module nie aus — auf einer frischen
+Installation also nie über den Anzeigeschritt hinaus. Der Läufer merkt
+sich den Wunsch, führt alles Übrige aus und sagt am Ende **einmal**, dass
+ein Neustart ansteht.
+
+Der Rückgabewert des Gesamtlaufs bleibt sprechend: Kommt ein
+Neustartwunsch und ist sonst alles in Ordnung, endet der Lauf mit 3 —
+nicht mit 0, denn fertig ist er nicht. Ein echter Fehler (rc 1 oder 2)
+schlägt den Neustartwunsch.
 
 ---
 

@@ -36,11 +36,23 @@ mkdir -p "$W/boot" "$W/var/lib/chimera" "$W/var/log/chimera" || {
 }
 
 # mktemp-Falle: Bei kaputtem TMPDIR liefert es einen leeren Pfad, und
-# `rm -rf ""` oder Schreiben nach "/..." trifft das echte System. Darum
-# selbst pruefen, statt zu hoffen.
+# `rm -rf ""` oder Schreiben nach "/..." trifft das echte System.
+#
+# Geprueft wird deshalb die Eigenschaft, auf die es ankommt: dass der Pfad
+# UNTER dem benutzten Arbeitsverzeichnis liegt und unseren Namen traegt.
+# Vorher stand hier eine Positivliste /tmp|/var/tmp -- eine Annaeherung an
+# "harmloser Ort", nicht an "mein eigener Pfad". Sie brach, sobald die
+# Umgebung ihr Arbeitsverzeichnis woanders hinlegt (in der Android-App
+# zeigt TMPDIR ausserhalb der ueblichen Sandbox-Pfade), und der Test war
+# dann rot wegen der Umgebung, nicht wegen des Codes.
 case "$W" in
-	/tmp/*|/var/tmp/*) : ;;
+	*chimera-roundtrip.*) : ;;
 	*) printf 'Unerwarteter Testpfad, Abbruch: %s\n' "$W"; exit 2 ;;
+esac
+[ "$W" != "$TMPD" ] || { printf 'Testpfad gleich Arbeitsverzeichnis: %s\n' "$W"; exit 2; }
+case "$W" in
+	"$TMPD"/?*) : ;;
+	*) printf 'Testpfad liegt nicht unter dem Arbeitsverzeichnis: %s\n' "$W"; exit 2 ;;
 esac
 
 CHIMERA_ROOT="$W"; export CHIMERA_ROOT

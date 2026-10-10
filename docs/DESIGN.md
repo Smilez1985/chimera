@@ -817,6 +817,18 @@ Abhängigkeiten nachinstalliert und der passende Treiber aktiviert.
 Bei mehrdeutigem Befund wird **gemeldet und vorgeschlagen**, nicht
 geraten — ein falscher Treiber kann ein E-Paper beschädigen (Regel 10g).
 
+**Ein Panel ohne Selbstmeldung ist kein fehlendes Panel.** Das
+HAT-EEPROM ist die beste Quelle, aber nicht die einzige und auf dem
+ausgelieferten Whisplay-Exemplar nachweislich **nicht programmiert**. Wer
+nur dort nachsieht, findet „keins" und bricht ab, obwohl die Anzeige
+angeschlossen ist. Deshalb mehrere Quellen, in fester Reihenfolge:
+EEPROM, Einträge in der Bootkonfiguration, bereits geladene oder
+vorhandene Kernelmodule, Geräteknoten (`/dev/spidev*`), und erst zuletzt
+die Einstellung des Nutzers. Jede Quelle, die anschlägt, wird **benannt** —
+damit ein Fehlschluss nachvollziehbar bleibt und nicht als stiller Treffer
+durchgeht (Regel 10e). Widersprechen sich zwei Quellen, wird gefragt
+statt gewählt.
+
 ### Architekturregel 7 — Ein Prozess, ein Framebuffer
 
 openclawgotchis Display-Layer startet pro Update einen `sudo`-Subprozess

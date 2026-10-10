@@ -36,6 +36,7 @@ mkdir -p "$CHIMERA_LOG_DIR"
 
 . "$HERE/lib/common.sh"
 . "$HERE/lib/network.sh"
+. "$HERE/lib/module.sh"
 . "$HERE/lib/display.sh"
 
 echo "== Erreichbarkeit =="

@@ -217,10 +217,51 @@ manifest_line() {
 		return 0
 	fi
 
-	printf '%s\n' "$_bz_zeile" >>"$_bz_datei" || {
-		err "Konnte nicht schreiben: $_bz_datei"
+	# Anhaengen heisst hier NICHT `>>`. Auch das laeuft ueber Sidecar und
+	# mv (Regel I3): Eine Bootkonfiguration, die mitten im Schreiben den
+	# Strom verliert, enthaelt eine halbe Zeile -- und in einer config.txt
+	# ist eine halbe Zeile so gut wie keine.
+	#
+	# Der Inhalt wird also gelesen, die Zeile angehaengt, und das Ergebnis
+	# in einem Zug an seinen Platz gesetzt. Rechte und Besitzer uebernimmt
+	# write_atomic von der Originaldatei.
+	#
+	# Fehlt die Datei, entsteht sie. Ist sie da und NICHT lesbar, wird
+	# abgebrochen -- sonst wuerde aus dem Anhaengen ein Leeren.
+	_zk="$(tmp_path .chimera-zeile)" || {
+		err "Keine Zwischendatei anlegbar -- nichts geaendert."
 		return 1
 	}
+
+	if [ -e "$_bz_datei" ] && [ ! -r "$_bz_datei" ]; then
+		rm -f "$_zk"
+		err "Nicht lesbar, deshalb nicht anfassbar: $_bz_datei"
+		return 1
+	fi
+
+	if [ -f "$_bz_datei" ]; then
+		if ! cp "$_bz_datei" "$_zk"; then
+			rm -f "$_zk"
+			err "Kopie nicht anlegbar: $_bz_datei"
+			return 1
+		fi
+	else
+		: >"$_zk" || { rm -f "$_zk"; err "Zwischendatei nicht beschreibbar"; return 1; }
+	fi
+
+	if ! printf '%s\n' "$_bz_zeile" >>"$_zk"; then
+		rm -f "$_zk"
+		err "Zeile nicht anhaengbar: $_bz_zeile"
+		return 1
+	fi
+
+	if ! write_atomic "$_bz_datei" <"$_zk"; then
+		rm -f "$_zk"
+		err "Konnte nicht schreiben: $_bz_datei"
+		return 1
+	fi
+	rm -f "$_zk"
+
 	info "gesetzt: $_bz_zeile"
 	manifest_record zeile "$_bz_datei" "neu:$_bz_zeile"
 }

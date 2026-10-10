@@ -113,9 +113,20 @@ Zustand — unabhängig davon, in welchem es war.
 |---|---|
 | HAT-EEPROM (`/proc/device-tree/hat/`) | Whisplay (PiSugar), andere HATs mit EEPROM |
 | Gerätebaum-Overlays in der Bootkonfiguration | was eingerichtet wurde |
+| Gebaute Kernelmodule (`/lib/modules/…`) | der Treiber eines Panels wurde installiert |
+| ALSA-Karte (`/proc/asound/cards`) | Panels mit eigenem Codec (Whisplay: `whisplaysound`) |
 | SPI-Geräte (`/dev/spidev*`) | ob überhaupt SPI aktiv ist |
 | Panel-Antwort | ST7789 lässt sich auslesen; E-Paper nicht zuverlässig |
 | Einstellung | letzte Instanz, wenn nichts eindeutig ist |
+
+**Der Whisplay-HAT ist der Fall, der das erzwingt.** Auf dem
+ausgelieferten Exemplar ist das EEPROM nachweislich **nicht
+programmiert** — der HAT-Knoten bleibt auch nach einem Neustart leer
+(`docs/HARDWARE-BEFUNDE.md`). Wer nur dort nachsieht, findet „keins" und
+bricht ab, obwohl die Anzeige angeschlossen ist. Die übrigen Quellen sind
+deshalb am Herstellertreiber belegt, nicht vermutet: Er schreibt
+`dtoverlay=whisplay-soundcard` in die Bootkonfiguration, trägt die Module
+in `/etc/modules` ein und benennt die ALSA-Karte `whisplaysound`.
 
 **Nicht alles ist erkennbar.** Ein E-Paper meldet sich nicht von selbst —
 die mono- und die B-Variante sind elektrisch gleich. Dafür bleibt die
