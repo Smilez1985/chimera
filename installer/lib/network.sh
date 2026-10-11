@@ -42,13 +42,24 @@ network_reachable() {
 	#
 	# curl ist in dieser Hinsicht berechenbar und ueberall gleich.
 	if have_cmd curl; then
+		# Schema nach Port. Vorher stand hier immer https -- gegen
+		# deb.debian.org:80 scheitert dann der TLS-Handshake (curl rc 35),
+		# und der Installer wartete am chimera-pi (11.10.2026) 600 s auf ein
+		# Netz, das die ganze Zeit da war.
+		case "$_ne_port" in
+			80|8080) _ne_url="http://$_ne_host:$_ne_port" ;;
+			*)       _ne_url="https://$_ne_host:$_ne_port" ;;
+		esac
 		curl -s -o /dev/null --max-time "$_ne_frist" \
 			--connect-timeout "$_ne_frist" \
-			"https://$_ne_host:$_ne_port" >/dev/null 2>&1 && return 0
-		# Auch ein HTTP-Fehler beweist, dass jemand geantwortet hat --
-		# gefragt ist die Erreichbarkeit, nicht der Inhalt.
+			"$_ne_url" >/dev/null 2>&1 && return 0
+		# Jede Antwort der Gegenstelle beweist Erreichbarkeit -- gefragt ist
+		# nicht der Inhalt: HTTP-Fehler (22), leere Antwort (52), Abbruch
+		# beim Empfang (56), und ebenso ein gescheiterter TLS-Handshake (35)
+		# oder ein Zertifikatsfehler (60): Dafuer musste jemand antworten.
+		# Nicht dabei: 6 (Name), 7 (Verbindung), 28 (Frist) -- das ist "weg".
 		case "$?" in
-			0|22|52|56) return 0 ;;
+			0|22|35|52|56|60) return 0 ;;
 		esac
 		return 1
 	fi

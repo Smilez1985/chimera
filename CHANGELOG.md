@@ -56,6 +56,8 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   haengt nicht mehr an einem bestimmten `TMPDIR`.
 
 ### Behoben
+- **Installer:** Die Netzprüfung vor `apt` erkennt den Paketspiegel wieder als
+  erreichbar; vorher wartete der Lauf zehn Minuten und brach ab.
 - **Installer:** Auf Debian ohne `python3-venv` erkennt Schritt 50 jetzt, dass
   das venv nicht anlegbar ist, und holt das Paket nach.
 - **Installer:** Modul 50 rechnete mit der Repo-Wurzel, wo

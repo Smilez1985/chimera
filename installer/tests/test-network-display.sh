@@ -48,6 +48,28 @@ else
 	bad "github.com nicht erreichbar -- haengt das Geraet am Netz?"
 fi
 
+# Port 80 so, wie Schritt 50 ihn ruft (manifest_apt -> deb.debian.org:80).
+# Die alte Fassung sprach dort immer https -- TLS gegen einen
+# Klartext-Port scheitert, und der Installer wartete am chimera-pi
+# 600 s auf ein vorhandenes Netz.
+if network_reachable deb.debian.org 80 8; then
+	ok "Port 80 (apt-Spiegel) wird als erreichbar erkannt"
+else
+	bad "deb.debian.org:80 nicht erreichbar -- Schema falsch oder kein Netz?"
+fi
+# Gegenprobe: die alte Fassung (immer https, rc 35 nicht als Antwort).
+_alt="$CHIMERA_TESTDIR/network-alt.sh"
+sed -e 's|^			80\|8080) _ne_url="http://\$_ne_host:\$_ne_port" ;;$|			nie) : ;;|' \
+    -e 's/^			0|22|35|52|56|60) return 0 ;;$/			0|22|52|56) return 0 ;;/' \
+	"$HERE/lib/network.sh" >"$_alt"
+if cmp -s "$HERE/lib/network.sh" "$_alt"; then
+	bad "Gegenprobe Port 80: Mutation griff nicht"
+elif ( . "$_alt"; network_reachable deb.debian.org 80 8 ); then
+	bad "Gegenprobe Port 80: alte Fassung haelt Port 80 fuer erreichbar"
+else
+	ok "Gegenprobe Port 80: alte Fassung meldet faelschlich 'weg'"
+fi
+
 # Gegenprobe: 192.0.2.0/24 ist per Norm fuer Doku reserviert und wird
 # nirgends geroutet. Antwortet das, stimmt etwas mit der Pruefung nicht.
 if network_reachable 192.0.2.1 443 3; then
