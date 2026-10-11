@@ -123,6 +123,9 @@ class StatusLine:
         # und ohne Sprachmodell meldete nie jemand etwas.
         self._grundtext = grundtext
         self._arbiter = Arbiter(reihenfolge=REIHENFOLGE)
+        # Fertig gezeichneter Streifen und wofuer er gilt (siehe zeichnen()).
+        self._streifen = None
+        self._streifen_schluessel = None
 
         # Die Abstände werden beim Bauen geprüft, nicht beim Prüflauf: Ein
         # falsch einsortierter Katalog soll auffallen, sobald jemand ihn
@@ -233,6 +236,24 @@ class StatusLine:
         breite, hoehe = bild.size
         oben = hoehe - self.hoehe
 
+        # Puffer (11.10.2026): Der Text aendert sich selten, das Bild 15-mal
+        # je Sekunde. Gemessen am chimera-pi: neu rendern 1,67 ms je Bild,
+        # fertigen Streifen einkopieren 0,04 ms. Neu gezeichnet wird nur, wenn
+        # sich Text, Quelle oder Bildgroesse aendern. Der Puffer gilt nur mit
+        # deckendem Hintergrund -- ohne ihn muss der Text auf das Bild selbst.
+        if stil.hintergrund is not None:
+            schluessel = (g.quelle, str(g.inhalt), breite, self.hoehe, bild.mode)
+            if self._streifen is None or self._streifen_schluessel != schluessel:
+                try:
+                    from PIL import Image
+                except ImportError:
+                    return bild
+                streifen = Image.new(bild.mode, (breite, self.hoehe), stil.hintergrund)
+                self._text_zeichnen(streifen, 0, g, stil)
+                self._streifen, self._streifen_schluessel = streifen, schluessel
+            bild.paste(self._streifen, (0, oben))
+            return bild
+
         try:
             from PIL import ImageDraw
         except ImportError:
@@ -240,7 +261,13 @@ class StatusLine:
             # Aufrufers und darf ihn nicht abbrechen -- aber es wird auch
             # nicht so getan, als sei etwas passiert.
             return bild
+        self._text_zeichnen(bild, oben, g, stil)
+        return bild
 
+    def _text_zeichnen(self, bild, oben: int, g, stil: "Stil") -> None:
+        """Hintergrund (falls deckend) und Text ab Zeile ``oben`` zeichnen."""
+        from PIL import ImageDraw
+        breite = bild.size[0]
         zeichner = ImageDraw.Draw(bild)
 
         # Der Hintergrund wird in beiden Fällen gleich gezeichnet -- die
@@ -251,7 +278,7 @@ class StatusLine:
         # Hier standen erst zwei Zweige mit identischem Inhalt. Das sah nach
         # einer Unterscheidung aus, die es nicht gibt.
         if stil.hintergrund is not None:
-            zeichner.rectangle([0, oben, breite, hoehe], fill=stil.hintergrund)
+            zeichner.rectangle([0, oben, breite, oben + self.hoehe], fill=stil.hintergrund)
 
         text = str(g.inhalt)
         schrift = self._schrift
@@ -266,4 +293,3 @@ class StatusLine:
             x, y = 4, oben + 4
 
         zeichner.text((x, y), text, fill=stil.vordergrund, font=schrift)
-        return bild

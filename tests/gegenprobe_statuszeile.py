@@ -126,6 +126,18 @@ mutation("grundtext-ungefangen", "chimera/display/statusline.py",
          "        text = self._grundtext()",
          "RuntimeError: kaputt", roh=True)
 
+# M10: Puffer prueft den Text nicht -- ein alter Streifen bleibt stehen.
+mutation("puffer-veraltet", "chimera/display/statusline.py",
+         "            if self._streifen is None or self._streifen_schluessel != schluessel:",
+         "            if self._streifen is None:",
+         "neuer Text: neu gezeichnet (kein veralteter Text)")
+
+# M11: kein Puffer -- jedes Bild neu (Wirkung gleich, aber teuer).
+mutation("ohne-puffer", "chimera/display/statusline.py",
+         "            if self._streifen is None or self._streifen_schluessel != schluessel:",
+         "            if True:",
+         "gleicher Text: Streifen wiederverwendet (kein Neuzeichnen)")
+
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(1 if FAIL else 0)
