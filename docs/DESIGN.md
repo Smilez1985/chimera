@@ -891,6 +891,24 @@ dokumentierten `resource_tracker`-Workarounds: Python 3.13+ `track=False`,
 Display-Anbindung: ein Adapter nimmt ein fertiges `PIL.Image`, wandelt
 nach RGB565 und ruft `board.draw_image()`.
 
+**Ergänzung (11.10.2026) — woher der Panel-Treiber kommt.** Der
+Hersteller liefert kein pip-Paket `whisplay`; seine eigenen Beispiele und
+sein Daemon hängen `runtime/` per `sys.path` an (Befund
+`WHISPLAY-HERSTELLER.md`, Frage 3). Chimera verdrahtet dasselbe
+Verzeichnis aus dem auf Commit und Prüfsumme festgelegten Herstellerbaum
+(Regel 5f) per zweiter `.pth` ins venv, und holt dessen Abhängigkeiten
+(`spidev`, `gpiod`) per pip **ins venv**, nicht über das System-Python.
+`spidev` baut dort aus Quelltext; die nötigen Header (`python3-dev`) sind
+eine Abhängigkeit der Anzeige und stehen im Anzeigeprofil, nicht in einer
+zweiten Liste. Welche Anzeige es ist, entscheidet Schritt 40 und hält es
+fest; Schritt 50 liest das, statt erneut zu erkennen (Regel 10g). Am
+chimera-pi lief der Dienst ohne diese Verdrahtung mit `NullPanel`, obwohl
+Panel und Treiber funktionierten — der Nachweis von Schritt 50 prüft
+deshalb, dass der Treiber im venv ladbar ist, ohne ihn zu importieren
+(ein `WhisplayBoard()` belegte GPIO-Leitungen des laufenden Dienstes).
+Den `whisplay-daemon` des Herstellers nutzt Chimera nicht: Er beansprucht
+LCD, LED und Taste exklusiv und verträgt sich nicht mit Regel 7.
+
 ### Architekturregel 7c — Konkurrierende Anzeigequellen werden zentral aufgelöst
 
 Mehrere Stellen wollen dasselbe Ausgabegerät bespielen: die Statuszeile

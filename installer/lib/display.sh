@@ -18,6 +18,11 @@
 #   quelle        git-Adresse des Herstellertreibers, leer = keiner noetig
 #   installer     Pfad im geholten Baum, den wir aufrufen
 #   alsa_karte    ALSA-Kartenname nach der Installation, leer = kein Ton
+#   laufzeit      Verzeichnis im geholten Baum mit dem Python-Treiber,
+#                 leer = keiner (Schritt 50 verdrahtet es per .pth)
+#   py_modul      Modul, das sich danach im venv importieren lassen muss
+#   pip           Python-Pakete fuer den Treiber (ins venv, Schritt 50)
+#   apt           Systempakete, die diese pip-Pakete zum Bauen brauchen
 #   erkennung     wie man prueft, ob die Anzeige da ist
 #   pruefe        Befehl, der NACH der Installation treffen muss (Regel 10j)
 #   hinweis       was ein Mensch dazu wissen muss
@@ -49,6 +54,20 @@ display_get() {
 		# beide melden sich als dieselbe Karte. Deshalb genuegt hier ein
 		# Name statt einer Fallunterscheidung nach Codec.
 		alsa_karte)  echo "whisplaysound" ;;
+		# Python-Ansteuerung des Panels (LCD, LED, Taste). Der Hersteller
+		# liefert kein pip-Paket: eingebunden wird `runtime/` aus dem
+		# geholten Baum, so wie seine eigenen Beispiele es per sys.path
+		# tun (WHISPLAY-HERSTELLER.md, Frage 3). Was whisplay.py
+		# importiert, kommt per pip ins venv -- `spidev` baut dort aus
+		# Quelltext und braucht die Python-Header (gemessen am chimera-pi
+		# 11.10.2026: spidev 3.8 Quellbau, gpiod 2.5.0 als Wheel).
+		laufzeit)    echo "runtime" ;;
+		py_modul)    echo "whisplay" ;;
+		# Auch diese Datei ist Fremdcode, der im Dienst laeuft (I4, 5f):
+		# Pruefsumme von runtime/whisplay.py am festgelegten Commit.
+		py_sha256)   echo "75d621ccf35eaf9610642e4d05bb9720e9fcc4778a021aa87e90d37a8dc496c2" ;;
+		pip)         echo "spidev>=3.6 gpiod>=2.2" ;;
+		apt)         echo "python3-dev" ;;
 		erkennung)   echo "hat_eeprom:PiSugar" ;;
 		pruefe)      echo "aplay -l 2>/dev/null | grep -qi whisplaysound" ;;
 		hinweis)     echo "Braucht Kernel-Headers; der Treiber wird aus Quelltext gebaut." ;;
@@ -251,6 +270,15 @@ display_quelle() { printf '%s\n' "${DISPLAY_QUELLE:-}"; }
 
 # Ist I2C ueberhaupt an? Ohne das ist die Erkennung blind, und dieser
 # Unterschied muss sichtbar bleiben.
+#
+# Gefragt wird der KERNEL (/sys/bus/i2c/devices/i2c-N = ein registrierter
+# Bus), nicht der Geraeteknoten. /dev/i2c-N entsteht erst mit dem Modul
+# i2c-dev, das nur fuer Zugriff aus dem Userspace noetig ist -- der
+# Codec-Treiber braucht es nicht (HARDWARE-BEFUNDE, "Fallen bei der
+# Erkennung"). Am chimera-pi (11.10.2026) lief I2C nachweislich (i2c-1,
+# wm8960 an 1-001a), /dev/i2c-* fehlte, und Schritt 40 warnte trotzdem
+# "I2C ist nicht aktiv".
 display_detect_possible() {
-	[ -n "$(find "$(rootpath /dev)" -maxdepth 1 -name 'i2c-*' 2>/dev/null | head -1)" ]
+	[ -n "$(find "$(rootpath /sys/bus/i2c/devices)" -maxdepth 1 -name 'i2c-*' \
+		2>/dev/null | head -1)" ]
 }

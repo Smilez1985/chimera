@@ -219,12 +219,23 @@ else
 	ok "ohne I2C: Erkennung wird als unmoeglich gemeldet"
 fi
 
-# Gegenprobe: mit I2C-Geraet ist sie moeglich.
+# Die Falle aus HARDWARE-BEFUNDE: /dev/i2c-* allein (Userspace-Knoten
+# ohne registrierten Bus im Kernel) ist KEIN Beleg fuer aktives I2C.
 : >"$_R/dev/i2c-1"
 if display_detect_possible; then
-	ok "Gegenprobe: mit I2C ist die Erkennung moeglich"
+	bad "nur /dev/i2c-1 ohne Kernel-Bus gilt als aktives I2C"
 else
-	bad "Gegenprobe: I2C da, gilt aber als unmoeglich"
+	ok "nur /dev/i2c-1 ohne Kernel-Bus: nicht als aktiv gewertet"
+fi
+rm -f "$_R/dev/i2c-1"
+
+# Gegenprobe: Bus im Kernel registriert, aber KEIN /dev/i2c-* (i2c-dev
+# nicht geladen) -- genau der Zustand am chimera-pi. Muss moeglich sein.
+mkdir -p "$_R/sys/bus/i2c/devices/i2c-1"
+if display_detect_possible; then
+	ok "Gegenprobe: Kernel-Bus i2c-1 ohne /dev-Knoten -> moeglich"
+else
+	bad "Gegenprobe: Kernel-Bus i2c-1 da, gilt aber als unmoeglich"
 fi
 
 # HAT-EEPROM mit PiSugar-Kennung -> whisplay

@@ -56,6 +56,11 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   haengt nicht mehr an einem bestimmten `TMPDIR`.
 
 ### Behoben
+- **Anzeige:** Der Installer holt den Whisplay-Paneltreiber und seine
+  Python-Pakete selbst ins venv; der Dienst zeigt das Gesicht, statt ohne
+  Anzeige zu laufen.
+- **Installer:** Die Anzeige-Erkennung meldet I2C nicht mehr fälschlich als
+  inaktiv, wenn nur der Userspace-Zugang `i2c-dev` fehlt.
 - **Installer:** Die Netzprüfung vor `apt` erkennt den Paketspiegel wieder als
   erreichbar; vorher wartete der Lauf zehn Minuten und brach ab.
 - **Installer:** Auf Debian ohne `python3-venv` erkennt Schritt 50 jetzt, dass

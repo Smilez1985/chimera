@@ -43,7 +43,7 @@ BOOT_CFG="$(rootpath /boot/firmware/config.txt)"
 
 # Wohin Fremdquelltext geholt wird. Nicht nach /tmp: Ein zweiter Lauf soll
 # nicht erneut laden muessen (Idempotenz).
-QUELLEN="${CHIMERA_QUELLEN:-$(rootpath /opt/chimera/quellen)}"
+QUELLEN="${CHIMERA_QUELLEN:-$(rootpath "$CHIMERA_QUELLEN_PFAD")}"
 
 log "Chimera Anzeige"
 log ""
@@ -123,6 +123,27 @@ info "Busse:      ${BUSSE:-keine}"
 [ -n "$HINWEIS" ] && info "Hinweis:    $HINWEIS"
 [ -n "$QUELLE_COMMIT" ] && info "Quelle:     festgelegt auf Commit $QUELLE_COMMIT"
 log ""
+
+# --- Entscheidung festhalten ----------------------------------------------
+#
+# Welche Anzeige es ist, entscheidet DIESER Schritt (Erkennung oder
+# CHIMERA_ANZEIGE). Schritt 50 braucht die Antwort, um den Python-Treiber
+# der Anzeige ins venv zu holen -- erraten soll er sie nicht ein zweites
+# Mal (Regel 10g). Geschrieben wird vor jedem Ausstieg, auch vor dem
+# "schon eingerichtet": Gerade dann fehlte bisher der Treiber im venv.
+ANZEIGE_DATEI="$(rootpath "$CHIMERA_STATE")/anzeige"
+if is_dry_run; then
+	info "[wuerde merken] Anzeige $TYP in $CHIMERA_STATE/anzeige"
+elif [ "$(cat "$ANZEIGE_DATEI" 2>/dev/null || true)" != "$TYP" ]; then
+	manifest_init || true
+	if printf '%s\n' "$TYP" | write_atomic "$ANZEIGE_DATEI"; then
+		manifest_record datei "$ANZEIGE_DATEI" \
+			"$(sha256sum "$ANZEIGE_DATEI" 2>/dev/null | cut -d' ' -f1)"
+	else
+		err "Anzeige nicht festhaltbar: $ANZEIGE_DATEI"
+		log_close 2; exit 2
+	fi
+fi
 
 # --- Gruppen --------------------------------------------------------------
 #

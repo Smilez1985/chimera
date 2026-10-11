@@ -217,6 +217,26 @@ gruppe_zuruecknehmen || BEFUND=1
 
 log ""
 
+# --- 2b. Festgehaltene Anzeige (state/anzeige) ----------------------------
+# Schritt 40 merkt sich dort, welche Anzeige es ist; Schritt 50 liest es.
+# Nur Dateien, die dieser Schritt selbst eingetragen hat.
+log "Festgehaltene Anzeige"
+for _ad in $(manifest_list_von datei 40-install-display | cut -f1); do
+	case "$_ad" in */anzeige) ;; *) continue ;; esac
+	if is_dry_run; then
+		info "[wuerde entfernen] $_ad"
+		continue
+	fi
+	rm -f "$_ad" 2>/dev/null || true
+	if [ -e "$_ad" ]; then
+		warn "blieb stehen: $_ad"; BEFUND=1
+	else
+		info "entfernt: $_ad"
+	fi
+done
+
+log ""
+
 # --- 3. Was absichtlich bleibt, wird benannt ------------------------------
 #
 # Schweigen ist hier nicht zulaessig (Architekturregel 8a): Wer nicht sagt,

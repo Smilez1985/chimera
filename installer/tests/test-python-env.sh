@@ -277,5 +277,86 @@ set -e
 check "Gegenprobe: ohne Verdrahtung -> rc 2" "$RC" "2"
 contains "Fehlursache benannt" "$OUT" "pruefen"
 
+# --- Fall 6: Anzeigetreiber (Whisplay) ins venv ---------------------------
+# Schritt 40 hat "whisplay" festgehalten. Schritt 50 muss die Treiber-
+# pakete ins venv holen und den Herstellerbaum (runtime/) verdrahten. Am
+# chimera-pi (11.10.2026) fehlte genau das: der Dienst lief mit NullPanel.
+#
+# Ohne Netz und ohne Quellbau: spidev und gpiod kommen als Attrappen-Wheels
+# (PIP_FIND_LINKS, --no-index), whisplay.py als Attrappe mit der Pruefsumme,
+# die der Test im Profil einsetzt. apt wird nicht gebraucht: python3-dev
+# gilt hier als vorhanden (manifest_package_present ueber eine Huelle).
+mkbaum "anzeige"
+setze_anforderungen "pip"
+_wh="$W/wheels"
+python3 "$HERE/tests/fake-wheel.py" "$_wh" spidev 3.8 >/dev/null
+python3 "$HERE/tests/fake-wheel.py" "$_wh" gpiod 2.5.0 >/dev/null
+_rt="$WURZEL/opt/chimera/quellen/whisplay/runtime"
+mkdir -p "$_rt" "$WURZEL/opt/chimera/state"
+printf 'import spidev, gpiod\nclass WhisplayBoard: pass\n' >"$_rt/whisplay.py"
+_sha="$(sha256sum "$_rt/whisplay.py" | cut -d' ' -f1)"
+_echt_sha="$(sh -c ". '$HERE/lib/common.sh'; . '$HERE/lib/display.sh'; display_get whisplay py_sha256")"
+sed "s/$_echt_sha/$_sha/" "$BAUM/installer/lib/display.sh" >"$W/display.sh.t" &&
+	cp "$W/display.sh.t" "$BAUM/installer/lib/display.sh"
+printf 'whisplay\n' >"$WURZEL/opt/chimera/state/anzeige"
+mkdir -p "$W/bin-dpkg"
+printf '#!/bin/sh\n# Huelle: jedes Paket gilt als installiert\nprintf installed\n' \
+	>"$W/bin-dpkg/dpkg-query"
+chmod +x "$W/bin-dpkg/dpkg-query"
+fahr_anzeige() {
+	set +e
+	OUT="$(env PATH="$W/bin-dpkg:$PATH" PIP_NO_INDEX=1 PIP_FIND_LINKS="$_wh" \
+	           CHIMERA_ROOT="$WURZEL" CHIMERA_MANIFEST="$MANIFEST" \
+	           CHIMERA_LOG_DIR="$CHIMERA_LOG_DIR" CHIMERA_MODE=run \
+	           sh "$1" 2>&1)"
+	RC=$?
+	set -e
+}
+fahr_anzeige "$BAUM/installer/steps/50-python.sh"
+check "Anzeigetreiber: Lauf rc 0" "$RC" "0"
+_vpy="$WURZEL/opt/chimera/productive/venv/bin/python"
+if "$_vpy" -c 'import whisplay, spidev, gpiod' 2>/dev/null; then
+	ok "whisplay, spidev, gpiod im venv importierbar"
+else bad "Treiber im venv nicht importierbar"; printf '%s\n' "$OUT" | tail -8; fi
+if grep -q 'chimera-anzeige.pth' "$MANIFEST"; then
+	ok "chimera-anzeige.pth steht im Manifest (Rueckbau)"
+else bad "chimera-anzeige.pth fehlt im Manifest"; fi
+fahr_anzeige "$BAUM/installer/steps/50-python.sh"
+check "Anzeigetreiber: zweiter Lauf rc 0" "$RC" "0"
+contains "zweiter Lauf: nichts mehr zu tun" "$OUT" "bereit und nachweisbar"
+
+# Fremdcode geaendert -> Pruefsumme greift, Treiber wird nicht verdrahtet.
+mkbaum "anzeige-sha"
+setze_anforderungen "pip"
+_rt="$WURZEL/opt/chimera/quellen/whisplay/runtime"
+mkdir -p "$_rt" "$WURZEL/opt/chimera/state"
+printf 'import spidev, gpiod\nclass WhisplayBoard: pass  # veraendert\n' >"$_rt/whisplay.py"
+printf 'whisplay\n' >"$WURZEL/opt/chimera/state/anzeige"
+fahr_anzeige "$BAUM/installer/steps/50-python.sh"
+check "veraenderter Fremdtreiber -> rc 2" "$RC" "2"
+contains "Abweichung wird benannt" "$OUT" "Fremdstand weicht ab"
+
+# Gegenprobe: alter Schritt ohne Treiberblock (Stand vor dem Fix) kommt
+# auf demselben Baum durch, OHNE dass whisplay im venv ladbar ist -- genau
+# der stille Erfolg vom Geraet.
+mkbaum "anzeige-gegenprobe"
+setze_anforderungen "pip"
+_rt="$WURZEL/opt/chimera/quellen/whisplay/runtime"
+mkdir -p "$_rt" "$WURZEL/opt/chimera/state"
+cp "$W/anzeige/opt/chimera/quellen/whisplay/runtime/whisplay.py" "$_rt/whisplay.py"
+printf 'whisplay\n' >"$WURZEL/opt/chimera/state/anzeige"
+git -C "$HERE/.." show c88f6c7:installer/steps/50-python.sh \
+	>"$BAUM/installer/steps/50-python-alt.sh" 2>/dev/null || true
+if [ -s "$BAUM/installer/steps/50-python-alt.sh" ]; then
+	fahr_anzeige "$BAUM/installer/steps/50-python-alt.sh"
+	if "$WURZEL/opt/chimera/productive/venv/bin/python" -c 'import whisplay' 2>/dev/null; then
+		bad "Gegenprobe: alter Schritt verdrahtet den Treiber doch"
+	else
+		ok "Gegenprobe: alter Schritt laesst whisplay im venv fehlen (rc $RC)"
+	fi
+else
+	ok "Gegenprobe uebersprungen: kein git-Stand (nur im Repo messbar)"
+fi
+
 printf '\nErgebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

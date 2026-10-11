@@ -3,7 +3,8 @@
 #
 # Was Schritt 50 am System hinterlaesst, steht im Manifest:
 #   verzeich  das venv (Angabe leer)
-#   datei     die Verdrahtung chimera.pth (Angabe: Pruefsumme)
+#   datei     die Verdrahtung chimera.pth und chimera-anzeige.pth
+#             (Angabe: Pruefsumme)
 # Entfernt wird nur, was Schritt 50 SELBST eingetragen hat (Spalte Modul) --
 # `verzeich` benutzt auch Schritt 00 (source/).
 #
@@ -37,7 +38,7 @@ _F="$_TD/.chimera-rm-py.$$"
 
 manifest_list_von datei 50-python | while IFS='	' read -r _d_pfad _d_angabe; do
 	case "$_d_pfad" in
-		*/chimera.pth) printf '%s\n' "$_d_pfad" >>"$_F" ;;
+		*/chimera.pth|*/chimera-anzeige.pth) printf '%s\n' "$_d_pfad" >>"$_F" ;;
 		*) continue ;;
 	esac
 done
@@ -67,7 +68,7 @@ fi
 BEFUND=0
 while IFS= read -r _z; do
 	case "$_z" in
-		*/chimera.pth) rm -f "$_z" || BEFUND=1 ;;
+		*/chimera.pth|*/chimera-anzeige.pth) rm -f "$_z" || BEFUND=1 ;;
 		*)             rm -rf "$_z" || BEFUND=1 ;;
 	esac
 	# Am Ergebnis pruefen, nicht am Exitcode.

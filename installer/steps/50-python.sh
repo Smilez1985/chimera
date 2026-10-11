@@ -22,6 +22,7 @@ _HERE="$(cd "$(dirname "$0")/.." && pwd)"
 . "$_HERE/lib/manifest.sh"
 . "$_HERE/lib/module.sh"
 . "$_HERE/lib/source.sh"
+. "$_HERE/lib/display.sh"
 
 CHIMERA_STEP="50-python"; export CHIMERA_STEP
 
@@ -119,9 +120,54 @@ venv_ready() {
 		>/dev/null 2>&1 && "$PY" -m pip --version >/dev/null 2>&1
 }
 
+# --- Anzeige: welcher Python-Treiber gehoert dazu? -------------------------
+#
+# Schritt 40 hat festgehalten, welche Anzeige es ist (state/anzeige). Hat
+# sie einen Python-Treiber (Feld `laufzeit`), gehoert er ins venv: seine
+# pip-Pakete, die Systempakete zum Bauen, und eine zweite .pth auf das
+# Treiberverzeichnis im geholten Herstellerbaum. Ohne das lief der Dienst
+# am chimera-pi (11.10.2026) mit NullPanel -- "No module named 'whisplay'"
+# -- obwohl Panel und Treiber funktionierten; die Pakete, die dort lagen,
+# stammten von einem Handversuch, nicht vom Installer.
+ANZEIGE="$(cat "$(rootpath "$CHIMERA_STATE")/anzeige" 2>/dev/null || true)"
+ANZEIGE_LAUFZEIT=""; ANZEIGE_MODUL=""; ANZEIGE_PIP=""; ANZEIGE_APT=""
+ANZEIGE_SHA=""
+if [ -n "$ANZEIGE" ] && display_get "$ANZEIGE" name >/dev/null 2>&1; then
+	ANZEIGE_LAUFZEIT="$(display_get "$ANZEIGE" laufzeit)"
+	ANZEIGE_MODUL="$(display_get "$ANZEIGE" py_modul)"
+	ANZEIGE_PIP="$(display_get "$ANZEIGE" pip)"
+	ANZEIGE_APT="$(display_get "$ANZEIGE" apt)"
+	ANZEIGE_SHA="$(display_get "$ANZEIGE" py_sha256)"
+fi
+QUELLEN_DIR="${CHIMERA_QUELLEN:-$(rootpath "$CHIMERA_QUELLEN_PFAD")}"
+TREIBER_DIR=""
+[ -n "$ANZEIGE_LAUFZEIT" ] && TREIBER_DIR="$QUELLEN_DIR/$ANZEIGE/$ANZEIGE_LAUFZEIT"
+# In die .pth kommt derselbe Pfad wie bei chimera.pth ($CODE/src): mit
+# CHIMERA_ROOT davor. Auf dem Geraet ist die Wurzel leer, im Test zeigt er
+# in den Testbaum -- dann ist die Verdrahtung dort auch wirklich ladbar.
+TREIBER_ZIEL="$TREIBER_DIR"
+
+# Laesst sich der Treiber im venv laden? Nur IMPORT der Abhaengigkeiten und
+# Auffinden des Moduls -- NICHT importieren: whisplay.py erkennt beim
+# Import die Plattform, und ein WhisplayBoard() wuerde GPIO-Leitungen
+# belegen, die der laufende Dienst haelt.
+treiber_ok() {
+	[ -n "$ANZEIGE_MODUL" ] || return 0
+	[ -x "$PY" ] || return 1
+	"$PY" - "$ANZEIGE_MODUL" "$ANZEIGE_PIP" <<'PYEOF' >/dev/null 2>&1
+import importlib, importlib.util, re, sys
+modul, pip = sys.argv[1], sys.argv[2].split()
+for p in pip:
+    importlib.import_module(re.split(r"[<>=!~ ]", p, 1)[0])
+sys.exit(0 if importlib.util.find_spec(modul) else 1)
+PYEOF
+}
+
 pruef_ok() {
 	# Das Modul selbst -- es kennt --pruefen und meldet, was da ist.
-	[ -x "$PY" ] && "$PY" -m chimera --pruefen >/dev/null 2>&1
+	# Dazu der Anzeigetreiber: Ein Dienst, der mit NullPanel startet,
+	# besteht --pruefen, zeigt aber nichts.
+	[ -x "$PY" ] && "$PY" -m chimera --pruefen >/dev/null 2>&1 && treiber_ok
 }
 
 # --- Code nach productive/ ------------------------------------------------
@@ -259,6 +305,76 @@ else
 	fi
 fi
 log ""
+
+# --- Anzeigetreiber -------------------------------------------------------
+if [ -n "$ANZEIGE_LAUFZEIT" ]; then
+	log "Anzeigetreiber ($ANZEIGE)"
+	if is_dry_run; then
+		[ -n "$ANZEIGE_APT" ] && info "[wuerde sicherstellen] Systempakete: $ANZEIGE_APT"
+		info "[wuerde installieren] $ANZEIGE_PIP"
+		info "[wuerde verdrahten] $TREIBER_ZIEL als chimera-anzeige.pth"
+	else
+		# Treiberbaum da? Ihn holt Schritt 40 (festgelegter Commit). Fehlt
+		# er, ist das ein Fehler der Reihenfolge, kein Grund zu raten.
+		if [ ! -f "$TREIBER_DIR/$ANZEIGE_MODUL.py" ]; then
+			err "Anzeigetreiber fehlt: $TREIBER_DIR/$ANZEIGE_MODUL.py"
+			err "Schritt 40 holt ihn -- erst 40, dann dieser Schritt."
+			log_close 2; exit 2
+		fi
+		# Fremdcode, der im Dienst laeuft: Pruefsumme wie beim Installer.
+		fremddatei_pruefen "$TREIBER_DIR/$ANZEIGE_MODUL.py" "$ANZEIGE_SHA" || {
+			log_close 2; exit 2; }
+
+		# Systempakete nur, wenn sie fehlen (wie PiPortal ensure_pkg);
+		# manifest_apt haelt vorher_da/neu fest.
+		if [ -n "$ANZEIGE_APT" ]; then
+			_aa_fehlt=""
+			for _aa_p in $ANZEIGE_APT; do
+				manifest_package_present "$_aa_p" || _aa_fehlt="$_aa_fehlt $_aa_p"
+			done
+			if [ -n "$_aa_fehlt" ]; then
+				manifest_apt $_aa_fehlt || {
+					err "Systempakete fuer den Anzeigetreiber nicht installierbar:$_aa_fehlt"
+					log_close 2; exit 2
+				}
+			else
+				info "Systempakete vorhanden: $ANZEIGE_APT"
+			fi
+		fi
+
+		# shellcheck disable=SC2086
+		if "$PY" -m pip install $ANZEIGE_PIP; then
+			info "Treiberpakete installiert: $ANZEIGE_PIP"
+		else
+			err "pip hat die Treiberpakete nicht installiert: $ANZEIGE_PIP"
+			log_close 2; exit 2
+		fi
+
+		_sitedir_a="$("$PY" -c 'import sysconfig; print(sysconfig.get_path("purelib"))')" || {
+			err "site-packages-Pfad nicht feststellbar im venv."
+			log_close 2; exit 2
+		}
+		_pth_a="$_sitedir_a/chimera-anzeige.pth"
+		printf '%s\n' "$TREIBER_ZIEL" | write_atomic "$_pth_a" || {
+			err "Verdrahtung des Anzeigetreibers nicht anlegbar: $_pth_a"
+			log_close 2; exit 2
+		}
+		manifest_record datei "$_pth_a" "$(sha256sum "$_pth_a" 2>/dev/null | cut -d' ' -f1)"
+		info "Verdrahtet: $_pth_a -> $TREIBER_ZIEL"
+
+		if treiber_ok; then
+			info "Anzeigetreiber im venv ladbar: $ANZEIGE_MODUL"
+		else
+			err "Anzeigetreiber im venv nicht ladbar: $ANZEIGE_MODUL"
+			log_close 2; exit 2
+		fi
+	fi
+	log ""
+elif [ -n "$ANZEIGE" ]; then
+	info "Anzeige $ANZEIGE braucht keinen Python-Treiber."
+else
+	info "Keine Anzeige festgehalten (Schritt 40) -- kein Anzeigetreiber."
+fi
 
 # --- Verdrahtung ----------------------------------------------------------
 #
