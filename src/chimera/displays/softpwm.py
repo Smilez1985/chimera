@@ -8,6 +8,13 @@ Backlight.
 
 ``LOW=an``-Leitungen (Whisplay: Backlight und LED) werden über
 ``aktiv_low=True`` behandelt: 100 % Helligkeit heißt dann Leitung unten.
+
+**Fester Pegel kostet nichts (11.10.2026).** Die Vorlage schläft auch bei
+0 % und 100 % je Periode und setzt die Leitung neu -- bei 1 kHz sind das
+tausend Wecker je Sekunde für einen Pegel, der sich nicht ändert. Gemessen
+am chimera-pi: Backlight 100 % = 4,8 % eines Kerns, LED aus je 0,4 %.
+Hier wird ein fester Pegel EINMAL gesetzt, und der Faden wartet, bis sich
+der Tastgrad ändert. Nur echte Zwischenwerte takten.
 """
 
 from __future__ import annotations
@@ -24,6 +31,7 @@ class SoftPWM:
         self.tastgrad = 0.0
         self._laeuft = False
         self._faden: threading.Thread | None = None
+        self._geaendert = threading.Event()
 
     def _pegel(self, an: bool) -> int:
         return (0 if an else 1) if self.aktiv_low else (1 if an else 0)
@@ -38,10 +46,14 @@ class SoftPWM:
         self._faden.start()
 
     def setze_tastgrad(self, tastgrad: float) -> None:
-        self.tastgrad = max(0.0, min(100.0, float(tastgrad)))
+        neu = max(0.0, min(100.0, float(tastgrad)))
+        if neu != self.tastgrad:
+            self.tastgrad = neu
+            self._geaendert.set()
 
     def stop(self, *, endpegel_an: bool = False) -> None:
         self._laeuft = False
+        self._geaendert.set()          # aus dem Warten holen
         if self._faden is not None:
             self._faden.join(timeout=1.0)
             self._faden = None
@@ -53,15 +65,16 @@ class SoftPWM:
     def _schleife(self) -> None:
         while self._laeuft:
             tg = self.tastgrad
-            if tg <= 0:
-                self._setze(self._pegel(False))
-                time.sleep(self.periode)
-            elif tg >= 100:
-                self._setze(self._pegel(True))
-                time.sleep(self.periode)
-            else:
-                an = self.periode * tg / 100.0
-                self._setze(self._pegel(True))
-                time.sleep(an)
-                self._setze(self._pegel(False))
-                time.sleep(self.periode - an)
+            if tg <= 0 or tg >= 100:
+                # Fester Pegel: setzen, dann schlafen, bis jemand den
+                # Tastgrad aendert (oder stop ruft). Kein Takt.
+                self._geaendert.clear()
+                self._setze(self._pegel(tg >= 100))
+                if self.tastgrad == tg and self._laeuft:
+                    self._geaendert.wait()
+                continue
+            an = self.periode * tg / 100.0
+            self._setze(self._pegel(True))
+            time.sleep(an)
+            self._setze(self._pegel(False))
+            time.sleep(self.periode - an)

@@ -405,6 +405,9 @@ class NoisyRenderer:
         # Eine selbstgebaute waere ein zweites Exemplar, das niemand fuellt
         # -- genau der Fehler B2 aus der Blaupausenpruefung.
         self.statusline = None
+        # Die LED (Regel 7c): derselbe Gedanke wie die Statuszeile --
+        # uebergeben, nicht hier gebaut. ``None`` heisst: keine LED.
+        self.led = None
 
         # Diese beiden standen in Noisy im Konstruktor, den Chimera
         # ersetzt hat -- sie gehoeren zum Zustand und werden hier gesetzt.
@@ -2323,12 +2326,18 @@ class NoisyRenderer:
         if img is None:
             img = self.render()
         if img is not None:
+            # Die Zeit kommt von hier, nicht aus Zeile oder LED (Regel 7d).
+            # Der Renderer hält die Uhr, beide bekommen sie gesagt -- dieselbe.
+            import time as _t
+            jetzt_ms = int(_t.monotonic() * 1000)
             if self.statusline is not None:
-                # Die Zeit kommt von hier, nicht aus der Zeile (Regel 7d).
-                # Der Renderer hält die Uhr, die Zeile bekommt sie gesagt.
-                import time as _t
-                self.statusline.zeichnen(img, jetzt_ms=int(_t.monotonic() * 1000))
+                self.statusline.zeichnen(img, jetzt_ms=jetzt_ms)
             self.panel.show(img)
+            if self.led is not None:
+                # Grundzustand der LED = Glow des Gesichts, das eben
+                # gezeichnet wurde -- dieselbe Farbe, nicht eine zweite Quelle.
+                self.led.anwenden(self.panel, jetzt_ms,
+                                  glow=tuple(self.current_glow_color))
         return img
 
     def run(self, stop=None):
@@ -2398,4 +2407,6 @@ class NoisyRenderer:
                     Image.new('RGB', (self.WIDTH, self.HEIGHT), BLACK))
             except Exception as exc:                  # noqa: BLE001
                 log.debug("Abschaltbild ging nicht mehr: %s", exc)
+            if self.led is not None:
+                self.led.aus(self.panel)
             log.info("Renderer beendet.")

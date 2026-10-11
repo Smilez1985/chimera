@@ -23,6 +23,9 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 - **Installer:** Python-Abhängigkeiten werden mit Versionsprüfung
   hergestellt — Fehlendes oder Veraltetes wird geholt, Vorhandenes nicht
   angefasst; numpy gehört jetzt dazu.
+- **Anzeige:** Die RGB-LED zeigt den Zustand (hört zu, denkt, spricht,
+  Warnungen) und sonst gedimmt die Farbe des Gesichts; die Seitentaste
+  quittiert per LED.
 - **Boot:** `chimera-hardware.service` erkennt bei jedem Start die Anzeige,
   lädt den Ton und übergibt beides an den Dienst — nach einem Kartentausch
   startet das Gerät ohne Installerlauf richtig (`chimera-install --hardware`).
@@ -83,6 +86,10 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Anzeige:** Die Statuszeile unter dem Gesicht wird wieder gezeichnet —
+  sie war gebaut, aber nicht an den Renderer angeschlossen.
+- **Anzeige:** Backlight und LED belasten bei festem Pegel die CPU nicht
+  mehr (vorher rund 7 % eines Kerns im Leerlauf).
 - **Anzeige:** Der Installer holt den Whisplay-Paneltreiber und seine
   Python-Pakete selbst ins venv; der Dienst zeigt das Gesicht, statt ohne
   Anzeige zu laufen.

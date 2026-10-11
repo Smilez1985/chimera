@@ -396,8 +396,16 @@ Offen bleibt:
 
 ## Phase 7 — Restliche Peripherie
 
-- [ ] RGB-LED an Mood-Glow
-- [ ] Button: Gesten (kurz / lang / mehrfach)
+- [x] RGB-LED an Mood-Glow (`display/led.py`, Verwalter nach Regel 7c,
+      Muster als reine Funktionen der Zeit, Regel 7d) — 48 Prüfungen,
+      Gegenprobe 7 Mutationen
+- [x] Statuszeile angeschlossen (war gebaut, aber nie an den Renderer gegeben)
+- [x] Taste verdrahtet: quittiert per LED, protokolliert
+- [ ] Button: Gesten (kurz / lang / mehrfach) und Bedeutung (Wake-Word-
+      Ersatz, DESIGN §3.4) — hängt am Audio-Prozess
+- [ ] Software-PWM bei Zwischenwerten: Backlight 50 % kostet ~9 % eines
+      Kerns (1 kHz-Takt in Python). Kandidat: Backlight nur an/aus oder
+      Takt senken, nach Sichtprüfung auf Flackern
 - [ ] Lautsprecher-Routing, Lautstärkeverwaltung
 - [ ] PiSugar-Akkustand als Mood-Eingang
 - [ ] **UPS HAT (C)** (Waveshare, INA219 an I2C 0x43) als zweite

@@ -55,6 +55,11 @@ class Chimera:
     face: Face | None = None
     renderer: object = None
     panel: object = None
+    # Statuszeile und LED: je EIN Exemplar, das der Renderer zeichnet und
+    # das hier befuellt wird (Regel 7b/7c). ``None``, wenn es keinen
+    # Renderer gibt.
+    statusline: object = None
+    led: object = None
     notes: list[str] = field(default_factory=list)
     _painter: threading.Thread | None = field(default=None, repr=False)
     _stop_paint: threading.Event = field(
@@ -112,12 +117,27 @@ class Chimera:
         im Gesicht und gehört ins Protokoll, nicht in ein Schweigen
         (Regel 8a).
         """
-        if self.face is None:
-            return
+        if self.face is not None:
+            try:
+                self.face.show_state(what)
+            except Exception:                         # noqa: BLE001
+                log.exception("Zustand %r konnte nicht angezeigt werden", what)
         try:
-            self.face.show_state(what)
+            zustand_melden(what, statusline=self.statusline, led=self.led)
         except Exception:                             # noqa: BLE001
-            log.exception("Zustand %r konnte nicht angezeigt werden", what)
+            log.exception("Zustand %r: Statuszeile/LED nicht gemeldet", what)
+
+    def _on_taste(self, gedrueckt: bool) -> None:
+        """Seitentaste der Anzeige (Whisplay). Quittiert per LED; was ein
+        Druck BEDEUTET (Wake-Word-Ersatz, DESIGN §3.4), haengt am
+        Audio-Prozess -- der ist noch nicht gebaut (ROADMAP Phase 5).
+        Bis dahin: sichtbar quittieren und protokollieren, nicht schweigen."""
+        if not gedrueckt:
+            return
+        log.info("Taste gedrueckt")
+        if self.led is not None:
+            import time as _t
+            self.led.melden("taste", jetzt_ms=int(_t.monotonic() * 1000), laufzeit_ms=300)
 
     # --- Anzeige ----------------------------------------------------------
 
@@ -188,6 +208,7 @@ def build(*, probe_network: bool = True, home: Path | None = None,
 
     face, renderer, panel = _try_face(notes) if with_face \
         else (None, None, None)
+    statusline, led = _try_zeile_und_led(renderer, panel, notes)
 
     work = root / "arbeit"
     work.mkdir(exist_ok=True)
@@ -203,9 +224,15 @@ def build(*, probe_network: bool = True, home: Path | None = None,
 
     chi = Chimera(home=root, session=session, registry=registry,
                   toolbox=toolbox, memory=memory, skills=skills,
-                  face=face, renderer=renderer, panel=panel, notes=notes)
+                  face=face, renderer=renderer, panel=panel,
+                  statusline=statusline, led=led, notes=notes)
     # Erst jetzt verdrahten: Der Agent meldet seinen Zustand ans Gesicht.
     agent.on_state = chi._on_state
+    # Die Taste, wenn das Panel eine hat (Whisplay). Ein Panel ohne Taste
+    # hat die Methode nicht -- dann gibt es nichts zu verdrahten.
+    if panel is not None and hasattr(panel, "bei_taste"):
+        panel.bei_taste(chi._on_taste)
+        notes.append("Taste: verdrahtet (quittiert per LED)")
     return chi
 
 #: Die mitgelieferte Mood-Bibliothek.
@@ -266,6 +293,81 @@ def _try_face(notes: list[str]) -> tuple[object, object, object]:
         return Face(moods, state), None, panel
 
     return Face(moods, state), renderer, panel
+
+#: Agentenzustand -> (Text der Statuszeile, LED-Quelle oder None). Eine
+#: Tabelle fuer beide Darstellungen, damit Zeile und LED nicht
+#: auseinanderlaufen (Regel 7c). Zustaende ohne Eintrag werden nicht
+#: gemeldet -- dann gilt der Grundzustand.
+ZUSTAENDE: dict[str, tuple[str, str | None]] = {
+    "hoert":    ("hoert zu", "hoert"),
+    "denkt":    ("denkt nach", "agentenstatus"),
+    "arbeitet": ("arbeitet", "agentenstatus"),
+    "spricht":  ("spricht", "spricht"),
+    "verwirrt": ("verwirrt", "agentenstatus"),
+    "fehler":   ("Fehler", "agentenstatus"),
+}
+
+
+def zustand_melden(what: str, *, statusline=None, led=None, jetzt_ms: int | None = None) -> None:
+    """Einen Agentenzustand an Statuszeile und LED geben.
+
+    ``wartet`` nimmt beide Meldungen zurueck (Grundzustand). Laufzeit: 30 s
+    als Netz -- ein Zustand, den niemand zuruecknimmt, verfaellt, statt
+    fuer immer zu leuchten (Regel 7c, "kurze Laufzeit statt Loeschen").
+    """
+    import time as _t
+    jetzt = int(_t.monotonic() * 1000) if jetzt_ms is None else jetzt_ms
+    if what == "wartet":
+        if statusline is not None:
+            statusline.zuruecknehmen("agentenstatus")
+        if led is not None:
+            for q in ("hoert", "agentenstatus", "spricht"):
+                led.zuruecknehmen(q)
+        return
+    eintrag = ZUSTAENDE.get(what)
+    if eintrag is None:
+        return
+    text, led_quelle = eintrag
+    if statusline is not None:
+        statusline.melden("agentenstatus", text, jetzt_ms=jetzt, laufzeit_ms=30_000)
+    if led is not None and led_quelle is not None:
+        # Ein neuer Zustand verdraengt die anderen Agenten-Zustaende der LED;
+        # sonst bliebe "hoert" stehen, waehrend er laengst spricht.
+        for q in ("hoert", "agentenstatus", "spricht"):
+            if q != led_quelle:
+                led.zuruecknehmen(q)
+        led.melden(led_quelle, jetzt_ms=jetzt, laufzeit_ms=30_000)
+
+
+def _try_zeile_und_led(renderer, panel, notes: list[str]):
+    """Statuszeile und LED anlegen und dem Renderer GEBEN (Regel 7b).
+
+    Vorher baute niemand eine Statuszeile: ``renderer.statusline`` blieb
+    ``None``, die 40 Zeilen unten blieben leer -- gebaut, getestet, nie
+    angeschlossen. Die Zeile braucht Platz unter dem Gesicht (Hoehe >
+    Breite); auf einem quadratischen Panel gibt es keine.
+    """
+    if renderer is None:
+        return None, None
+    statusline = None
+    try:
+        from .display.statusline import StatusLine
+        breite = int(getattr(panel, "width", 0) or 0)
+        hoehe = int(getattr(panel, "height", 0) or 0)
+        if hoehe - breite >= 30:
+            statusline = StatusLine(hoehe=hoehe - breite)
+            renderer.statusline = statusline
+    except Exception as exc:                          # noqa: BLE001
+        notes.append(f"Statuszeile: nicht aufsetzbar ({exc})")
+    led = None
+    try:
+        from .display.led import LedVerwalter
+        led = LedVerwalter()
+        renderer.led = led
+    except Exception as exc:                          # noqa: BLE001
+        notes.append(f"LED: nicht aufsetzbar ({exc})")
+    return statusline, led
+
 
 def _try_skills(root: Path, notes: list[str]) -> SkillStore | None:
     """Skills aus der Ablage und aus dem Repo lesen."""

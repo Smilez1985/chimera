@@ -996,6 +996,20 @@ Die Unterschiede zwischen LED und Text liegen in der **Darstellung**
 Darstellung gehört in den jeweiligen Renderer, die Auflösung in den
 gemeinsamen Verwalter.
 
+**Ergänzung (11.10.2026) — angeschlossen.** Die Statuszeile war gebaut
+und getestet, aber **nie an den Renderer gegeben**: `renderer.statusline`
+blieb `None`, die 40 Zeilen unten leer — kein Test sah es, weil keiner
+`build()` mit einem hohen Panel aufrief. Jetzt legt `app.build()` Zeile
+(nur wenn das Panel höher als breit ist) und LED-Verwalter
+(`display/led.py`) an und gibt **dieselben Exemplare** dem Renderer.
+Der Agentenzustand geht über **eine** Tabelle (`app.ZUSTAENDE`) an beide;
+jeder Zustand trägt 30 s Laufzeit als Netz. Die LED zeigt ohne Meldung
+den Glow des Gesichts gedimmt (der Renderer reicht seine aktuelle
+Glow-Farbe weiter — keine zweite Farbquelle) und wird im Renderertakt
+gesetzt, nur bei Änderung. Die Seitentaste ist verdrahtet und quittiert
+per LED; was ein Druck auslöst, hängt am Audio-Prozess (§3.4, noch nicht
+gebaut).
+
 ### Architekturregel 7d — Wer anzeigt, besitzt die Zeit
 
 Muster sind **reine Funktionen** `f(t, wert) -> wert`: Pulsieren, Blinken,
