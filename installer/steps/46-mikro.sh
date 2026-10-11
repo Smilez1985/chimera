@@ -132,15 +132,44 @@ else
 fi
 
 # --- Entscheidung lesen und das Geraet bauen --------------------------------
-_feld() {
-	python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); v=d.get(sys.argv[2]); print("; ".join(v) if isinstance(v, list) else ("" if v is None else v))' \
-		"$MESSUNG" "$1" 2>/dev/null
+# EIN Python-Start fuer alles, was aus der Messung folgt (vorher vier; jeder
+# kostet am Pi Zero 2 W 0,2 bis 0,5 s): je Feld eine Zeile "feld<TAB>wert"
+# -- ein Zeilenumbruch im Wert wird zum Leerzeichen, wie in lib/display.sh
+# --, danach die Zeile "--geraet--" und dahinter das Aufnahmegeraet aus
+# chimera.displays.mikro.alsa_geraet (nur bei beide/links/rechts).
+_plan="$(PYTHONPATH="${CHIMERA_DISPLAY_SRC:-$(display_src)}" PYTHONDONTWRITEBYTECODE=1 python3 -c '
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(1)
+def feld(k):
+    try:
+        v = d.get(k)
+        s = "; ".join(v) if isinstance(v, list) else ("" if v is None else str(v))
+    except Exception:
+        return ""
+    return s.rstrip("\n").replace("\t", " ").replace("\n", " ")
+e = feld("entscheidung")
+for k, w in (("entscheidung", e), ("gruende", feld("gruende")), ("warnungen", feld("warnungen"))):
+    print(k + "\t" + w)
+print("--geraet--")
+if e in ("beide", "links", "rechts"):
+    try:
+        from chimera.displays.mikro import Befund, alsa_geraet
+        b = Befund(d["entscheidung"], d.get("kanal"), d.get("gruende", []), d.get("warnungen", []), {}, d.get("zeit", ""))
+        sys.stdout.write(alsa_geraet(b))
+    except Exception:
+        pass' "$MESSUNG" 2>/dev/null)" || _plan=""
+_kopf="$(printf '%s\n' "$_plan" | sed '/^--geraet--$/,$d')" || _kopf=""
+_plan_feld() {
+	printf '%s\n' "$_kopf" | awk -F'\t' -v k="$1" '$1 == k { print substr($0, length(k) + 2); exit }'
 }
 # Kein stiller Abbruch unter set -e: Ein unlesbares Feld wird leer und dann
 # unten benannt ("ohne gueltige Entscheidung").
-ENTSCHEIDUNG="$(_feld entscheidung)" || ENTSCHEIDUNG=""
-GRUENDE="$(_feld gruende)" || GRUENDE=""
-WARNUNGEN="$(_feld warnungen)" || WARNUNGEN=""
+ENTSCHEIDUNG="$(_plan_feld entscheidung)" || ENTSCHEIDUNG=""
+GRUENDE="$(_plan_feld gruende)" || GRUENDE=""
+WARNUNGEN="$(_plan_feld warnungen)" || WARNUNGEN=""
 case "$ENTSCHEIDUNG" in
 	beide|links|rechts|keins) : ;;
 	*) err "Messung ohne gueltige Entscheidung ($MESSUNG: '$ENTSCHEIDUNG')."
@@ -163,12 +192,10 @@ if [ "$ENTSCHEIDUNG" = keins ]; then
 	log_close 1; exit 1
 fi
 
-_neu="$(PYTHONPATH="${CHIMERA_DISPLAY_SRC:-$(display_src)}" PYTHONDONTWRITEBYTECODE=1 python3 -c '
-import json, sys
-from chimera.displays.mikro import Befund, alsa_geraet
-d = json.load(open(sys.argv[1]))
-b = Befund(d["entscheidung"], d.get("kanal"), d.get("gruende", []), d.get("warnungen", []), {}, d.get("zeit", ""))
-sys.stdout.write(alsa_geraet(b))' "$MESSUNG" 2>/dev/null)" || _neu=""
+# Das Geraet steht hinter der Trennzeile (oben im selben Python-Start
+# erzeugt). Fehlt die Trennzeile, loescht sed alles -- leeres Geraet, Abbruch
+# unten, nie eine halbe Datei.
+_neu="$(printf '%s\n' "$_plan" | sed '1,/^--geraet--$/d')" || _neu=""
 if [ -z "$_neu" ]; then
 	err "Aufnahmegeraet nicht erzeugbar (Messung $MESSUNG)."
 	log_close 1; exit 1
