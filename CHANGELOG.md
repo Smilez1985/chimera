@@ -60,6 +60,8 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   erreichbar; vorher wartete der Lauf zehn Minuten und brach ab.
 - **Installer:** Auf Debian ohne `python3-venv` erkennt Schritt 50 jetzt, dass
   das venv nicht anlegbar ist, und holt das Paket nach.
+- **Installer:** Ein halb angelegtes venv ohne pip (Rest eines abgebrochenen
+  Laufs) wird erkannt und neu angelegt.
 - **Installer:** Modul 50 rechnete mit der Repo-Wurzel, wo
   `dirname($0)/..` (`installer/`) liegt — eine echte Installation
   waere an `requirements.txt fehlt` gescheitert. Der Testbaum trug die

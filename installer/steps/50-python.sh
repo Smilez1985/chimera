@@ -110,8 +110,13 @@ venv_ready() {
 	# Ein venv ist fertig, wenn sein Python es selbst sagt, nicht wenn
 	# das Verzeichnis existiert: pyvenv.cfg kann da sein, der Interpreter
 	# trotzdem kaputt. Der Befehl beweist, dass er laeuft (Regel 10j).
+	#
+	# Und es muss pip haben. `python3 -m venv` ohne ensurepip legt Ordner,
+	# pyvenv.cfg und Interpreter an und scheitert ERST danach -- am
+	# chimera-pi (11.10.2026) blieb so ein venv ohne pip liegen, der
+	# naechste Lauf hielt es fuer fertig, und pip install brach ab.
 	[ -x "$PY" ] && "$PY" -c 'import sys; sys.exit(0 if sys.prefix != sys.base_prefix else 1)' \
-		>/dev/null 2>&1
+		>/dev/null 2>&1 && "$PY" -m pip --version >/dev/null 2>&1
 }
 
 pruef_ok() {
@@ -211,7 +216,10 @@ else
 	else
 		# Das venv wird neu angelegt, wenn es kaputt ist -- es gehoert
 		# ganz uns, dafuer steht der Eintrag im Manifest.
-		if [ -d "$VENV" ] && [ ! -x "$PY" ]; then
+		# Unbrauchbar heisst: venv_ready sagte nein, obwohl ein Ordner da
+		# ist (kein Interpreter, oder kein pip). Nicht nur am fehlenden
+		# Interpreter festmachen -- das halbe venv hat einen.
+		if [ -d "$VENV" ]; then
 			warn "venv vorhanden, aber unbrauchbar -- wird neu angelegt."
 			rm -rf "$VENV"
 		fi

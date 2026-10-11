@@ -162,6 +162,25 @@ else
 	contains "Gegenprobe ensurepip: alte Pruefung sagt 'kein Paket noetig'" "$OUT" "kein Paket noetig"
 fi
 
+# --- Fall 2c: halbes venv ohne pip (Rest eines gescheiterten Laufs) --------
+# Am chimera-pi (11.10.2026): venv mit Interpreter, aber ohne pip -- der
+# naechste Lauf hielt es fuer fertig. Nachgestellt mit --without-pip.
+mkbaum "halbes-venv"
+setze_anforderungen "pip"
+python3 -m venv --without-pip "$WURZEL/opt/chimera/productive/venv" >/dev/null 2>&1
+fahr dry
+contains "halbes venv: wird als nicht fertig erkannt" "$OUT" "[wuerde anlegen]"
+# Gegenprobe: die alte venv_ready (ohne pip-Pruefung) haelt es fuer fertig.
+sed 's/ \&\& "\$PY" -m pip --version >\/dev\/null 2>\&1$//' \
+	"$BAUM/installer/steps/50-python.sh" >"$W/50-alt2.sh"
+if cmp -s "$BAUM/installer/steps/50-python.sh" "$W/50-alt2.sh"; then
+	bad "Gegenprobe halbes venv: Mutation griff nicht"
+else
+	cp "$W/50-alt2.sh" "$BAUM/installer/steps/50-python.sh"
+	fahr dry
+	contains "Gegenprobe halbes venv: alte Pruefung sagt 'vorhanden'" "$OUT" "venv vorhanden"
+fi
+
 # --- Fall 3: Trockenlauf aendert nichts -----------------------------------
 mkbaum "trocken"
 setze_anforderungen "pip"
