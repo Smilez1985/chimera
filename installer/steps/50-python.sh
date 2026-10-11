@@ -163,6 +163,19 @@ sys.exit(0 if importlib.util.find_spec(modul) else 1)
 PYEOF
 }
 
+# site-packages des venv -- EINE Stelle fuer beide .pth-Dateien. Liefert
+# nie einen leeren Pfad (sonst landete die .pth unter "/").
+venv_sitedir() {
+	_vs="$("$PY" -c 'import sysconfig; print(sysconfig.get_path("purelib"))' 2>/dev/null)"
+	# Laeuft in $(...): ein exit hier beendet nur die Subshell. Deshalb
+	# rc 1 liefern; der Aufrufer bricht ab (`|| { ...; exit 2; }`).
+	if [ -z "$_vs" ] || [ ! -d "$_vs" ]; then
+		err "site-packages-Pfad nicht feststellbar im venv."
+		return 1
+	fi
+	printf '%s\n' "$_vs"
+}
+
 pruef_ok() {
 	# Das Modul selbst -- es kennt --pruefen und meldet, was da ist.
 	# Dazu der Anzeigetreiber: Ein Dienst, der mit NullPanel startet,
@@ -350,11 +363,8 @@ if [ -n "$ANZEIGE_LAUFZEIT" ]; then
 			log_close 2; exit 2
 		fi
 
-		_sitedir_a="$("$PY" -c 'import sysconfig; print(sysconfig.get_path("purelib"))')" || {
-			err "site-packages-Pfad nicht feststellbar im venv."
-			log_close 2; exit 2
-		}
-		_pth_a="$_sitedir_a/chimera-anzeige.pth"
+		_sd="$(venv_sitedir)" || { log_close 2; exit 2; }
+		_pth_a="$_sd/chimera-anzeige.pth"
 		printf '%s\n' "$TREIBER_ZIEL" | write_atomic "$_pth_a" || {
 			err "Verdrahtung des Anzeigetreibers nicht anlegbar: $_pth_a"
 			log_close 2; exit 2
@@ -397,11 +407,8 @@ else
 		err "Ohne es ist nichts zu verdrahten -- Abbruch."
 		log_close 2; exit 2
 	fi
-	_sitedir="$("$PY" -c 'import sysconfig; print(sysconfig.get_path("purelib"))')" || {
-		err "site-packages-Pfad nicht feststellbar im venv."
-		log_close 2; exit 2
-	}
-	_pth="$_sitedir/chimera.pth"
+	_sd="$(venv_sitedir)" || { log_close 2; exit 2; }
+	_pth="$_sd/chimera.pth"
 	printf '%s\n' "$_srcdir" | write_atomic "$_pth" || {
 		err "Verdrahtung nicht anlegbar: $_pth"
 		log_close 2; exit 2
