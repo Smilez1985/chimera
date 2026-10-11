@@ -7,6 +7,9 @@
                           Overlays laden, Mixer setzen, ALSA-Karte nachweisen
                           (rc 0 Karte da, 1 nicht, 2 Modul ohne Ton/unbekannt)
     kennung <dc> [rst]    ST7789-Kennung roh lesen (Messwerkzeug)
+    mikro [--json]        Mikrofone messen (Testtoene ueber den Lautsprecher):
+                          beide | links | rechts | keins
+                          (rc 0 mind. eins brauchbar, 1 keins, 2 Messung gescheitert)
 """
 
 from __future__ import annotations
@@ -66,6 +69,9 @@ def main(argv: list[str]) -> int:
             print(f"Ton {b.karte}: {'da' if b.da else 'nicht da'}"
                   f"{' -- ' + b.hinweis if b.hinweis else ''}")
         return 0 if b.da and not b.fehler else 1
+    if cmd == "mikro":
+        from . import mikro
+        return mikro.main(rest)
     if cmd == "kennung":
         from . import st7789
         if not rest:
