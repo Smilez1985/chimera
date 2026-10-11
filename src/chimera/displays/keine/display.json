@@ -1,0 +1,17 @@
+{
+  "typ": "keine",
+  "name": "keine Anzeige",
+  "breite": 240,
+  "hoehe": 280,
+  "farben": "rgb565",
+  "bildrate": 0,
+  "darstellung": "animiert",
+  "hinweis": "Chimera laeuft blind -- das Gesicht wird berechnet, aber nicht gezeigt.",
+  "pins": {},
+  "busse": [],
+  "deps": {"pip": [], "apt": []},
+  "erkennung": [
+    {"klasse": "rueckfall", "art": "immer"}
+  ],
+  "quelle": {"nachgebaut_aus": "eigen", "lizenz": "MIT"}
+}

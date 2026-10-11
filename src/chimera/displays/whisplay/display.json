@@ -1,0 +1,49 @@
+{
+  "typ": "whisplay",
+  "name": "PiSugar Whisplay HAT",
+  "breite": 240,
+  "hoehe": 280,
+  "farben": "rgb565",
+  "bildrate": 15,
+  "darstellung": "animiert",
+  "hinweis": "LCD, LED und Taste laufen ohne Herstellercode. Nur der Ton braucht das Kernelmodul des Herstellers (Overlay whisplay-soundcard), das zur Laufzeit geladen wird.",
+  "pins": {
+    "gpiochip": "/dev/gpiochip0",
+    "spi_bus": 0, "spi_cs": 0,
+    "dc": 27, "rst": 4, "backlight": 22,
+    "led_r": 25, "led_g": 24, "led_b": 23,
+    "taste": 17,
+    "_herkunft": "PiSugar runtime/whisplay.py c73051e6: phys 13/7/15 = BCM 27/4/22, LED 22/18/16 = BCM 25/24/23, Taste 11 = BCM 17. Backlight und LED: LOW = an. Taste: HIGH = gedrueckt, externer Pull-down."
+  },
+  "busse": ["spi", "i2c_arm"],
+  "deps": {
+    "pip": ["Pillow>=10.0", "numpy>=1.26"],
+    "apt": []
+  },
+  "ton": {
+    "dtparam": ["i2s=on"],
+    "dtoverlay": ["whisplay-soundcard"],
+    "alsa_karte": "whisplaysound",
+    "kernelmodul": "snd-soc-whisplay-soundcard",
+    "quelle": {
+      "git": "https://github.com/PiSugar/Whisplay.git",
+      "commit": "c73051e64dc62aced1853d16f33d4614fec5bee4",
+      "installer": "install_driver.sh",
+      "sha256": "0767aba3cbfe59cb1c63a003d49cd0eee6a0a2a8b30b07c2cf2717c637a24078"
+    },
+    "_gemessen": "chimera-pi 11.10.2026: config.txt ohne i2s/Overlay, dann `dtparam i2s=on` + `dtoverlay whisplay-soundcard` -> rc 0, Karte whisplaysound nach 2 s."
+  },
+  "erkennung": [
+    {"klasse": "pflicht", "art": "st7789_kennung", "dc": 27, "rst": 4, "wert": "8181b3",
+     "_gemessen": "11.10.2026: 81 81 B3, zweimal, zwei Befehle (RDDID und RDID1-3)"},
+    {"klasse": "eindeutig", "art": "i2c_chip", "bus": 1, "adressen": ["0x1a", "0x10"],
+     "_gemessen": "WM8960 0x1a antwortet auf i2cdetect auch ohne gebundenen Treiber (unbind-Probe); ES8389-Fassung 0x10 laut Hersteller"},
+    {"klasse": "eingerichtet", "art": "overlay", "wert": "dtoverlay=whisplay-soundcard"},
+    {"klasse": "eingerichtet", "art": "alsa", "wert": "whisplaysound"},
+    {"klasse": "eingerichtet", "art": "kernelmodul", "wert": "snd-soc-whisplay"}
+  ],
+  "quelle": {
+    "nachgebaut_aus": "PiSugar Whisplay runtime/whisplay.py (Apache-2.0), Commit c73051e6",
+    "lizenz": "Apache-2.0"
+  }
+}
