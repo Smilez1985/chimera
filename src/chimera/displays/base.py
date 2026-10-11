@@ -18,10 +18,26 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-try:
-    import numpy as _np
-except ImportError:  # pragma: no cover - auf dem Zielgerät vorhanden
-    _np = None
+# numpy wird beim ERSTEN BILD geladen, nicht beim Import. Jeder
+# Installer-Aufruf von ``python3 -m chimera.displays`` (Profil lesen,
+# Erkennung, Ton, Mikro) importiert dieses Modul, wandelt aber kein Bild --
+# und zahlte ``import numpy`` trotzdem jedes Mal (gemessen 11.10.2026 am
+# chimera-pi: Profil lesen 1,0 s mit, 0,46 s ohne). Der Dienst zahlt es
+# weiter genau einmal, beim ersten Bild.
+_np = None
+_np_versucht = False
+
+def _numpy():
+    """numpy beim ersten Gebrauch laden; ``None``, wenn es fehlt."""
+    global _np, _np_versucht
+    if not _np_versucht:
+        _np_versucht = True
+        try:
+            import numpy as geladen
+        except ImportError:  # pragma: no cover - auf dem Zielgerät vorhanden
+            geladen = None
+        _np = geladen
+    return _np
 
 
 @dataclass(frozen=True)
@@ -71,8 +87,9 @@ def to_rgb565(image) -> bytes:
     und meldet sich, statt stillschweigend langsam zu sein.
     """
     rgb = image.convert("RGB")
-    if _np is not None:
-        a = _np.asarray(rgb, dtype=_np.uint16)
+    np = _numpy()
+    if np is not None:
+        a = np.asarray(rgb, dtype=np.uint16)
         v = (((a[:, :, 0] & 0xF8) << 8) | ((a[:, :, 1] & 0xFC) << 3) | (a[:, :, 2] >> 3))
         return v.astype(">u2").tobytes()
     log.warning("numpy fehlt — RGB565 wird bildpunktweise gerechnet, das ist rund "

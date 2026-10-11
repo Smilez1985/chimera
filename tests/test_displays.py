@@ -271,6 +271,47 @@ with Umgebung():
     for name in ("NullPanel", "Panel", "to_rgb565", "open_panel"):
         check(f"Fassade exportiert {name}", hasattr(m, name), True)
 
+print("== Installer-Aufrufe laden kein numpy ==")
+# Der Installer ruft `python3 -m chimera.displays profil|erkennen|ton|mikro`
+# viele Male auf; keiner davon wandelt ein Bild. `import numpy` kostete am
+# chimera-pi jedes Mal 0,5 s (Profil 1,0 s mit, 0,46 s ohne; gemessen
+# 11.10.2026). Geprueft wird der ECHTE Aufrufweg in einem eigenen Prozess --
+# und dass das erste Bild numpy weiter nutzt (sonst waere der Gewinn ein
+# 25-mal langsamerer Renderer).
+_probe = (
+    "import json, runpy, sys\n"
+    "sys.argv = ['chimera.displays', 'profil', 'whisplay']\n"
+    "try:\n"
+    "    runpy.run_module('chimera.displays', run_name='__main__')\n"
+    "except SystemExit:\n"
+    "    pass\n"
+    "nach_profil = 'numpy' in sys.modules\n"
+    "from PIL import Image\n"
+    "from chimera.displays import to_rgb565\n"
+    "daten = to_rgb565(Image.new('RGB', (2, 1), (255, 0, 0)))\n"
+    "import importlib.util\n"
+    "sys.stderr.write(json.dumps({'nach_profil': nach_profil,\n"
+    "    'nach_bild': 'numpy' in sys.modules, 'daten': daten.hex(),\n"
+    "    'numpy_da': importlib.util.find_spec('numpy') is not None}) + '\\n')\n"
+)
+import subprocess  # noqa: E402
+_r = subprocess.run([sys.executable, "-c", _probe], capture_output=True, text=True,
+                    env=dict(os.environ, PYTHONPATH=str(SRC), PYTHONDONTWRITEBYTECODE="1"))
+try:
+    _w = json.loads(_r.stderr.strip().splitlines()[-1])
+except (ValueError, IndexError):
+    _w = {}
+    bad(f"Probe lief nicht (rc {_r.returncode}): {_r.stderr.strip()[-300:]}")
+if _w:
+    check("Profil lesen laedt kein numpy", _w.get("nach_profil"), False)
+    if _w.get("numpy_da"):
+        check("erstes Bild nutzt numpy", _w.get("nach_bild"), True)
+    else:
+        # Kein stilles Durchwinken: ohne numpy ist die Zusage nicht pruefbar,
+        # und requirements.txt verlangt es.
+        bad("numpy nicht installiert -- 'erstes Bild nutzt numpy' nicht pruefbar")
+    check("erstes Bild richtig gewandelt", _w.get("daten"), "f800f800")
+
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(1 if FAIL else 0)

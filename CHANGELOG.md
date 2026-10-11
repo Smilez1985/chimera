@@ -82,6 +82,8 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   `datei` (mit Pruefsumme) im Manifest, nicht mehr als `verzeich`.
 - **Tests:** Die Testsuite richtet ihr Arbeitsverzeichnis selbst ein und
   haengt nicht mehr an einem bestimmten `TMPDIR`.
+- **Anzeige:** numpy wird erst beim ersten Bild geladen; die Anzeige-Abfragen
+  des Installers (Profil, Erkennung, Ton, Mikrofon) starten schneller.
 
 ### Entfernt
 - **Anzeige:** Herstellertreiber `whisplay.py` samt `spidev`/`gpiod`/

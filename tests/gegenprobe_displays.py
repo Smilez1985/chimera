@@ -114,6 +114,20 @@ mutation("registry-ohne-typpruefung", "chimera/displays/registry.py",
          "if False:",
          "falscher typ: Modul uebersprungen")
 
+# M8: numpy wieder beim Import geladen (Zustand vor dem 11.10.2026) -- jeder
+# Installer-Aufruf zahlte dann 0,5 s am Pi Zero 2 W.
+mutation("numpy-beim-import", "chimera/displays/base.py",
+         "_np = None\n_np_versucht = False\n",
+         "import numpy as _np\n_np_versucht = True\n",
+         "Profil lesen laedt kein numpy")
+
+# M9: Der schnelle Weg geht verloren -- Bilder werden immer bildpunktweise
+# gewandelt. Die Ladezeit waere gewonnen, der Renderer 25-mal langsamer.
+mutation("numpy-nie-geladen", "chimera/displays/base.py",
+         "    np = _numpy()\n",
+         "    np = None\n",
+         "erstes Bild nutzt numpy")
+
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(1 if FAIL else 0)
