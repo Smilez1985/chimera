@@ -34,6 +34,11 @@ from .provider.setup import autoconfigure
 
 log = logging.getLogger(__name__)
 
+#: Wie lange die LED einen Tastendruck quittiert (ms): drei Blitze des
+#: Musters ``blink_schnell`` (240 ms je Blitz). 300 ms -- ein einziger,
+#: kaum sichtbarer Aufheller -- war am Geraet zu kurz (smilez, 11.10.2026).
+TASTE_QUITTUNG_MS = 720
+
 #: Wo Chimera seine Sachen ablegt, wenn nichts anderes gesagt wird.
 def _home() -> Path:
     return Path(os.environ.get("CHIMERA_HOME", Path.home() / ".chimera"))
@@ -127,6 +132,32 @@ class Chimera:
         except Exception:                             # noqa: BLE001
             log.exception("Zustand %r: Statuszeile/LED nicht gemeldet", what)
 
+    def anbieter_melden(self, jetzt_ms: int | None = None) -> bool:
+        """Anbieterausfall an die Statuszeile geben (Quelle ``anbieter_weg``).
+
+        Gerufen vom Dienst in SEINEM Faden, nicht im Renderertakt: Die
+        Pruefung kann ins Netz gehen (Ollama), und ein Netzzeitlimit im
+        Renderer liesse das Gesicht stehen. Gibt zurueck, ob ein Anbieter
+        erreichbar ist.
+
+        Nur die Zeile, nicht die LED: Ein Dauerblinken bei einem Geraet, das
+        bewusst ohne Sprachmodell laeuft, ist eine eigene Entscheidung
+        (ROADMAP), keine Nebenwirkung dieser Meldung.
+        """
+        import time as _t
+        jetzt = int(_t.monotonic() * 1000) if jetzt_ms is None else jetzt_ms
+        try:
+            da = bool(self.registry.available())
+        except Exception:                             # noqa: BLE001
+            log.exception("Anbieterpruefung fehlgeschlagen")
+            da = False
+        if self.statusline is not None:
+            if da:
+                self.statusline.zuruecknehmen("anbieter_weg")
+            else:
+                self.statusline.melden("anbieter_weg", "kein Sprachmodell", jetzt_ms=jetzt)
+        return da
+
     def _on_taste(self, gedrueckt: bool) -> None:
         """Seitentaste der Anzeige (Whisplay). Quittiert per LED; was ein
         Druck BEDEUTET (Wake-Word-Ersatz, DESIGN §3.4), haengt am
@@ -137,7 +168,11 @@ class Chimera:
         log.info("Taste gedrueckt")
         if self.led is not None:
             import time as _t
-            self.led.melden("taste", jetzt_ms=int(_t.monotonic() * 1000), laufzeit_ms=300)
+            # Muster "quittung" (dunkel -> weiss -> dunkel): Ein fester
+            # Weisston hob sich am Geraet nicht vom blauen Grundglow ab --
+            # smilez sah nur "heller, bleibt blau" (11.10.2026).
+            self.led.melden("taste", jetzt_ms=int(_t.monotonic() * 1000),
+                            laufzeit_ms=TASTE_QUITTUNG_MS)
 
     # --- Anzeige ----------------------------------------------------------
 
@@ -355,7 +390,12 @@ def _try_zeile_und_led(renderer, panel, notes: list[str]):
         breite = int(getattr(panel, "width", 0) or 0)
         hoehe = int(getattr(panel, "height", 0) or 0)
         if hoehe - breite >= 30:
-            statusline = StatusLine(hoehe=hoehe - breite)
+            # Grundinhalt = Name des Ausdrucks (DESIGN §5). Gelesen aus dem
+            # Zustand, den der Renderer zeichnet -- keine zweite Quelle.
+            zustand = getattr(renderer, "state", None)
+            statusline = StatusLine(
+                hoehe=hoehe - breite,
+                grundtext=lambda: getattr(zustand, "mood_name", "") or "")
             renderer.statusline = statusline
     except Exception as exc:                          # noqa: BLE001
         notes.append(f"Statuszeile: nicht aufsetzbar ({exc})")

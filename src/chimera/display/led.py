@@ -39,7 +39,7 @@ QUELLEN: dict[str, int] = {
     "anbieter_weg":   80,  # Sprachmodell nicht erreichbar: orange, blinkend
     "spricht":        70,  # Sprachausgabe läuft: Glow, atmend (Pegel kommt später)
     "hoert":          60,  # Mikrofon offen / Wake-Word: blau, fest (DESIGN §3.4)
-    "taste":          50,  # Tastendruck quittiert: weiß, kurz
+    "taste":          50,  # Tastendruck quittiert: weiß, schnell blinkend
     "agentenstatus":  40,  # denkt: Glow, pulsierend
     "akku":           30,  # Akku unter Schwelle: gelb, langsam blinkend
     "mood":           10,  # Grundzustand: Glow des Gesichts, gedimmt
@@ -71,6 +71,15 @@ def blink(t_ms: int, farbe: Farbe, *, periode_ms: int = 800) -> Farbe:
 def blink_langsam(t_ms: int, farbe: Farbe) -> Farbe:
     return blink(t_ms, farbe, periode_ms=2400)
 
+def blink_schnell(t_ms: int, farbe: Farbe) -> Farbe:
+    """Quittung: 120 ms an, 120 ms dunkel.
+
+    Der Kontrast liegt im Wechsel hell/dunkel, nicht in der Farbe. Ein
+    fester Weisston hob sich am Geraet nicht vom blauen Grundglow ab --
+    smilez sah beim Tastendruck nur "heller, bleibt blau" (11.10.2026).
+    """
+    return blink(t_ms, farbe, periode_ms=240)
+
 def atmen(t_ms: int, farbe: Farbe) -> Farbe:
     return puls(t_ms, farbe, periode_ms=2400, min_f=0.3)
 
@@ -80,6 +89,7 @@ MUSTER: dict[str, Callable[[int, Farbe], Farbe]] = {
     "puls": puls,
     "blink": blink,
     "blink_langsam": blink_langsam,
+    "blink_schnell": blink_schnell,
     "atmen": atmen,
 }
 
@@ -90,7 +100,7 @@ DARSTELLUNG: dict[str, tuple[Farbe | None, str]] = {
     "anbieter_weg": ((255, 120, 0), "blink"),
     "spricht":      (None, "atmen"),
     "hoert":        ((0, 90, 255), "fest"),
-    "taste":        ((255, 255, 255), "fest"),
+    "taste":        ((255, 255, 255), "blink_schnell"),
     "agentenstatus": (None, "puls"),
     "akku":         ((255, 200, 0), "blink_langsam"),
     "mood":         (None, "gedimmt"),

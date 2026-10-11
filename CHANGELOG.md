@@ -88,6 +88,11 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 ### Behoben
 - **Anzeige:** Die Statuszeile unter dem Gesicht wird wieder gezeichnet —
   sie war gebaut, aber nicht an den Renderer angeschlossen.
+- **Anzeige:** Die Statuszeile ist sichtbar: Sie zeigt ohne Meldung den
+  Namen des Ausdrucks, in lesbarer Schriftgröße, und nennt einen fehlenden
+  Sprachanbieter.
+- **Anzeige:** Ein Tastendruck lässt die LED deutlich weiß blinken statt
+  sie nur kurz aufzuhellen.
 - **Anzeige:** Backlight und LED belasten bei festem Pegel die CPU nicht
   mehr (vorher rund 7 % eines Kerns im Leerlauf).
 - **Anzeige:** Der Installer holt den Whisplay-Paneltreiber und seine

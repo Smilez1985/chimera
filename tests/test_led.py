@@ -169,7 +169,10 @@ app.zustand_melden("spricht", statusline=sl4, led=ld4, jetzt_ms=2000)
 check("spricht verdraengt hoert auf der LED", ld4.quelle(2001), "spricht")
 check("spricht: Zeile", sl4.text(2001), "spricht")
 app.zustand_melden("wartet", statusline=sl4, led=ld4, jetzt_ms=3000)
-check("wartet: Zeile leer", sl4.text(3001), None)
+# Seit dem Grundinhalt (DESIGN §5) ist die Zeile nach "wartet" nicht leer,
+# sondern zeigt den Namen des Ausdrucks -- entscheidend ist, dass der
+# Agentenzustand weg ist.
+check("wartet: Agentenzustand zurueckgenommen (Grundinhalt)", sl4.quelle(3001), "leerlauf")
 check("wartet: LED im Grundzustand", ld4.quelle(3001), None)
 app.zustand_melden("denkt", statusline=sl4, led=ld4, jetzt_ms=4000)
 check("Netz: Zustand verfaellt nach 30 s", ld4.quelle(4000 + 30_001), None)
@@ -190,8 +193,11 @@ import time as _time
 _t0 = int(_time.monotonic() * 1000)
 app.Chimera._on_taste(chi, True)
 check("Tastendruck: LED-Quelle taste", chi.led.quelle(_t0 + 50), "taste")
-check("Tastendruck: weiss", chi.led.farbe(_t0 + 50, glow=GLOW), (255, 255, 255))
-check("Tastendruck: nach 300 ms vorbei", chi.led.quelle(_t0 + 2000), None)
+# Die Quittung blinkt (blink_schnell); ein einzelner Zeitpunkt waere je nach
+# Phase hell oder dunkel. Darum das ganze Fenster abtasten.
+_fenster = {chi.led.farbe(_t0 + dt, glow=GLOW) for dt in range(0, app.TASTE_QUITTUNG_MS, 20)}
+check("Tastendruck: weiss im Quittungsfenster", (255, 255, 255) in _fenster, True)
+check("Tastendruck: nach der Quittung vorbei", chi.led.quelle(_t0 + 2000), None)
 app.Chimera._on_taste(chi, False)
 ok("Loslassen: kein Fehler")
 

@@ -1010,6 +1010,29 @@ gesetzt, nur bei Änderung. Die Seitentaste ist verdrahtet und quittiert
 per LED; was ein Druck auslöst, hängt am Audio-Prozess (§3.4, noch nicht
 gebaut).
 
+**Ergänzung (11.10.2026, Sichtprüfung am Gerät) — Grundinhalt, Anbieter,
+Quittung.** Angeschlossen war die Zeile, sehen konnte man sie trotzdem
+nicht: Gemeldet haben nur Agentenzustände, und ohne Sprachmodell läuft der
+Agent nie. Dazu kam Pillows eingebaute Schrift (rund 10 px). Deshalb:
+
+- Die Zeile hat einen **Grundinhalt**, den Namen des Ausdrucks (§5,
+  „Mood-Name, Akku, Agent-Zustand"). Er wird aus dem Zustand gelesen, den
+  der Renderer zeichnet, also keine zweite Quelle. Er ist kein Eintrag im
+  Verwalter, sondern der Rückfall, wenn dort niemand steht, und läuft
+  darum nicht ab. Jede Meldung verdrängt ihn. Akku kommt mit der
+  Akkuquelle dazu.
+- Die Schrift ist eine TrueType-Schrift des Systems (DejaVu), deren Größe
+  sich aus der Zeilenhöhe ergibt. Fehlt sie, wird Pillows Schrift in
+  derselben Größe genommen.
+- **Anbieterausfall** (`anbieter_weg`): Der Dienst prüft die Anbieter in
+  seinem eigenen Faden alle 30 s, nicht im Renderertakt, weil die Prüfung
+  ins Netz gehen kann. Gemeldet wird das nur in der Zeile. Ob die LED bei
+  einem Gerät blinken soll, das bewusst ohne Sprachmodell läuft, ist noch
+  offen (ROADMAP).
+- **Quittung der Taste:** Sie blinkt hell/dunkel (`blink_schnell`, drei
+  Blitze in 720 ms). Ein fester Weißton hob sich am Gerät nicht vom blauen
+  Grundglow ab, man sah nur „heller“.
+
 ### Architekturregel 7d — Wer anzeigt, besitzt die Zeit
 
 Muster sind **reine Funktionen** `f(t, wert) -> wert`: Pulsieren, Blinken,

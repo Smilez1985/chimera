@@ -25,6 +25,10 @@ log = logging.getLogger("chimera")
 #: Das Terminal ist eine Tür wie jede andere.
 TERMINAL = Channel("terminal", mode="text")
 
+#: Wie oft der Dienst die Anbieter prueft (Sekunden). Ollama haelt das
+#: Ergebnis selbst 30 s vor (PROBE_TTL); oefter zu fragen braechte nichts.
+ANBIETER_TAKT_S = 30.0
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="chimera", description="Ein Agent, der ein Gesicht macht.")
@@ -158,8 +162,16 @@ def dienst(chi, stop: threading.Event | None = None, env=None) -> int:
         log.info("Telegram nicht eingerichtet (CHIMERA_TELEGRAM_TOKEN leer).")
 
     log.info("Dienst bereit.")
+    # Anbieter regelmaessig pruefen und das Ergebnis an die Statuszeile geben
+    # (Quelle anbieter_weg). Hier und nicht im Renderer: Die Pruefung kann ins
+    # Netz gehen. Ein Geraet ohne anbieter_melden (Testdoppel) wartet nur.
+    melden = getattr(chi, "anbieter_melden", None)
     try:
-        stop.wait()
+        if melden is not None:
+            melden()
+        while not stop.wait(ANBIETER_TAKT_S):
+            if melden is not None:
+                melden()
     finally:
         if bot is not None:
             bot.stop()

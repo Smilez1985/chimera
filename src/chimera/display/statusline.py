@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..arbiter import Arbiter, Slot
+from ..arbiter import Arbiter, Slot  # Slot: Grundinhalt als Rueckfall
 
 __all__ = ["QUELLEN", "REIHENFOLGE", "StatusLine", "Stil"]
 
@@ -70,8 +70,33 @@ STILE: dict[str, Stil] = {
     "abschaltung":  Stil(vordergrund=(255, 120, 120)),
     "hitze":        Stil(vordergrund=(255, 190, 90)),
     "anbieter_weg": Stil(vordergrund=(255, 190, 90)),
-    "leerlauf":     Stil(vordergrund=(120, 120, 120)),
+    # Grau, aber hell genug fuer das Panel: (120, 120, 120) war nach dem
+    # Software-Dimming des Renderers am Geraet kaum vom Schwarz zu trennen.
+    "leerlauf":     Stil(vordergrund=(170, 170, 170)),
 }
+
+# Schriften, die auf dem Zielgeraet liegen (DietPi/Debian: fonts-dejavu-core).
+# Fehlt jede, bleibt Pillows eingebaute Schrift -- in der gewuenschten Groesse,
+# wenn Pillow das kann (ab 10.1), sonst die kleine Bitmapschrift.
+SCHRIFTEN: tuple[str, ...] = (
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+)
+
+def _schrift_laden(groesse: int):
+    try:
+        from PIL import ImageFont
+    except ImportError:
+        return None
+    for pfad in SCHRIFTEN:
+        try:
+            return ImageFont.truetype(pfad, groesse)
+        except OSError:
+            continue
+    try:
+        return ImageFont.load_default(size=groesse)
+    except TypeError:  # Pillow < 10.1 kennt keine Groesse
+        return ImageFont.load_default()
 
 
 class StatusLine:
@@ -84,9 +109,19 @@ class StatusLine:
         sl.zeichnen(bild, jetzt_ms=t)
     """
 
-    def __init__(self, *, hoehe: int = 40, schrift=None) -> None:
+    def __init__(self, *, hoehe: int = 40, schrift=None, grundtext=None) -> None:
         self.hoehe = int(hoehe)
-        self._schrift = schrift
+        # Ohne Vorgabe die Schrift selbst laden, passend zur Zeilenhoehe.
+        # Pillows eingebaute Bitmapschrift ist rund 10 px hoch -- auf dem
+        # Whisplay (1,69", 240 px) am Geraet nicht zu sehen (smilez,
+        # 11.10.2026: "Statusleiste sehe ich nicht").
+        self._schrift = schrift if schrift is not None else _schrift_laden(
+            max(10, int(self.hoehe * 0.45)))
+        # Grundinhalt (DESIGN §5: "Mood-Name, Akku, Agent-Zustand"): eine
+        # Funktion ohne Argument, die den Text liefert. Er steht, wenn keine
+        # Quelle etwas meldet -- vorher blieb die Zeile ohne Meldung leer,
+        # und ohne Sprachmodell meldete nie jemand etwas.
+        self._grundtext = grundtext
         self._arbiter = Arbiter(reihenfolge=REIHENFOLGE)
 
         # Die Abstände werden beim Bauen geprüft, nicht beim Prüflauf: Ein
@@ -140,12 +175,34 @@ class StatusLine:
 
     def text(self, jetzt_ms: int) -> str | None:
         """Was gerade angezeigt werden soll -- oder ``None``."""
-        g = self._arbiter.gewinner(jetzt_ms)
+        g = self._gewinner(jetzt_ms)
         return None if g is None else str(g.inhalt)
 
     def quelle(self, jetzt_ms: int) -> str | None:
-        g = self._arbiter.gewinner(jetzt_ms)
+        g = self._gewinner(jetzt_ms)
         return None if g is None else g.quelle
+
+    def _gewinner(self, jetzt_ms: int):
+        """Gewinner des Verwalters -- oder der Grundinhalt als ``leerlauf``.
+
+        Der Grundinhalt ist kein Eintrag im Verwalter, sondern der Rueckfall,
+        wenn dort niemand steht. Er laeuft so nicht ab und muss nicht erneuert
+        werden; jede Meldung verdraengt ihn, weil sie im Verwalter steht.
+        Eine Meldung der Quelle ``leerlauf`` selbst geht vor (sie steht im
+        Verwalter).
+        """
+        g = self._arbiter.gewinner(jetzt_ms)
+        if g is not None or self._grundtext is None:
+            return g
+        try:
+            text = self._grundtext()
+        except Exception:
+            # Ein kaputter Grundtext darf kein Bild aufhalten (Regel 8a:
+            # sichtbar wird es daran, dass die Zeile leer bleibt).
+            return None
+        if not text:
+            return None
+        return Slot(quelle="leerlauf", prioritaet=QUELLEN["leerlauf"], inhalt=str(text))
 
     # --- Zeichnen ---------------------------------------------------------
 
@@ -168,7 +225,7 @@ class StatusLine:
         `panel.py` schreibt immer das ganze Bild. Steht als offener Punkt in
         der Roadmap, damit es nicht als erledigt gilt (Regel 10h).
         """
-        g = self._arbiter.gewinner(jetzt_ms)
+        g = self._gewinner(jetzt_ms)
         if g is None:
             return bild
 

@@ -517,10 +517,12 @@ Die Antwort des Abgleichs erreicht den Dienst über
 geschrieben, `EnvironmentFile=-` in der Unit): tmpfs, je Boot frisch, und
 der Dienstnutzer braucht kein Leserecht auf `state/`.
 
-Gemessen chimera-pi: Abgleich 31 s (Erkennung 3 s, Profil lesen, Ton
-laden 3 s, Schritt 50 Nachweis 12 s), Dienst startet danach mit
-`Anzeige: whisplay 240x280` und Ton — ohne Zutun. Vor dem Puffer in
-`lib/display.sh` waren es 52 s (ein Python-Start je Profilfeld).
+Gemessen chimera-pi: Abgleich 17,8 s (Schritt 40: Erkennung 3,3 s,
+Profil 1,2 s, Ton laden 2,0 s; Schritt 50: Inhaltsprüfsumme 4,4 s,
+Nachweis 5,1 s), Dienst startet danach mit `Anzeige: whisplay 240x280`
+und Ton — ohne Zutun. Gemessen mit `journalctl -o short-monotonic`: Die
+Wanduhr springt beim Boot mit der Zeitsynchronisation (fake-hwclock), eine
+erste Messung über die Wanduhr ergab deshalb fälschlich 31 s.
 
 Chimera läuft als Dauerdienst `chimera.service`. Die Logik steht in
 `installer/lib/service.sh`, der Schritt ruft nur auf — so ist sie ohne

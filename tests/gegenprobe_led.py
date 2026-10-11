@@ -103,7 +103,8 @@ mutation("led-jedes-bild", "chimera/display/led.py",
 
 # M7: Taste quittiert nicht.
 mutation("taste-stumm", "chimera/app.py",
-         "            self.led.melden(\"taste\", jetzt_ms=int(_t.monotonic() * 1000), laufzeit_ms=300)",
+         "            self.led.melden(\"taste\", jetzt_ms=int(_t.monotonic() * 1000),\n"
+         "                            laufzeit_ms=TASTE_QUITTUNG_MS)",
          "            pass",
          "Tastendruck: LED-Quelle taste")
 

@@ -80,16 +80,21 @@ Hardware ist vorhanden, also nicht blockiert.
       Messung erst beim Kartentausch bzw. am E-Ink-Pi.
 - [x] **Boot-Abgleich:** `chimera-hardware.service` (oneshot, root, vor dem
       Dienst) → `chimera-install --hardware` (40/45/50), Ton laden,
-      `/run/chimera/anzeige.env` an den Dienst. Gemessen: 31 s, Dienst
-      startet mit Panel und Ton ohne Zutun.
+      `/run/chimera/anzeige.env` an den Dienst. Dienst startet mit Panel
+      und Ton ohne Zutun.
 - [ ] **Dienst-Template `chimera@<typ>.service`** (ein Dienst je
       Anzeigeart, E-Paper braucht einen anderen Renderer) und
       `state/hardware.json` (erkannt, Zeit, Quelle; Soll/Ist-Abgleich für
       UPS). Bis dahin: ein `chimera.service`, Anzeige aus der Umgebung.
-- [ ] **Boot-Abgleich beschleunigen:** 31 s auf dem Zero 2 W, davon
-      Python-Starts (Erkennung, Profil, Ton, Schritt-50-Nachweis je ~2–3 s).
-      Ein Aufruf statt vier, oder Schritt 50 beim Boot überspringen, wenn
-      `state/anzeige` unverändert ist.
+- [ ] **Boot-Abgleich beschleunigen:** Schritt 50 beim Boot kürzen
+      (doppelte Inhaltsprüfsumme von source/ und productive/code,
+      Nachweis mit drei Python-Starts); Ziel: Abgleich unter 10 s.
+- [ ] **Anbieterausfall auf der LED?** Entscheiden, ob ein Gerät ohne
+      Sprachmodell auch per LED warnt (`anbieter_weg`) oder nur in der
+      Statuszeile — bei bewusstem Betrieb ohne Modell wäre Dauerblinken
+      störend.
+- [ ] **Akku in der Statuszeile** (DESIGN §5), sobald die Akkuquelle
+      (PiSugar / UPS HAT C) gebaut ist.
 - [ ] **Mikro L der Whisplay klirrt** (ungerade Oberwellen, unabhängig von
       Verstärkung und Lautstärke; Mikro R sauber). Ursache offen (Hardware
       oder Codec-Einstellung). Bis dahin für Spracherkennung Kanal R.
