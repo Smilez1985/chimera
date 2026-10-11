@@ -62,3 +62,25 @@ def chip_da(bus: int, adresse: int, *, root: str = "") -> bool | None:
 def bus_da(bus: int, *, root: str = "") -> bool:
     """Ist der Bus beim Kernel registriert (unabhängig von ``i2c-dev``)?"""
     return Path(f"{root}/sys/bus/i2c/devices/i2c-{bus}").exists()
+
+def dev_bereitstellen(bus: int, *, root: str = "") -> bool:
+    """``/dev/i2c-N`` herstellen, wenn es fehlt und wir dürfen.
+
+    Vor dem Dienst (Boot-Abgleich als root) ist kein Codec-Treiber gebunden
+    -- der Sysfs-Weg schweigt dann, und ohne ``i2c-dev`` fehlt auch das
+    Gerät. Gemessen chimera-pi 11.10.2026: ohne Overlay weder ``1-001a``
+    noch ``/dev/i2c-1``. Als root wird das Modul geladen; sonst bleibt es
+    beim Befund „nicht prüfbar". Rückgabe: Gerät vorhanden.
+    """
+    dev = f"{root}/dev/i2c-{bus}"
+    if os.path.exists(dev):
+        return True
+    if root or os.geteuid() != 0:
+        return False
+    import subprocess
+    try:
+        subprocess.run(["modprobe", "i2c-dev"], check=False, timeout=10,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return os.path.exists(dev)

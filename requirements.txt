@@ -9,3 +9,7 @@
 # Zero (512 MB) ohne grosse Zusatzfaesser laufen; was nur in einer
 # Ausnahme gebraucht wird, waehlt der Installer gezielt dazu, nicht hier.
 Pillow>=10.0.0
+# RGB565-Umrechnung fuers Panel: mit numpy 2,5 ms je Bild statt 63 ms
+# (gemessen, src/chimera/displays/base.py). Ohne numpy haelt kein Pi Zero 2 W
+# 15 Bilder je Sekunde -- der Rueckfall meldet sich, ist aber kein Betrieb.
+numpy>=1.26

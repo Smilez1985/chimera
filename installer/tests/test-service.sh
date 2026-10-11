@@ -136,6 +136,21 @@ _abschnitt="$(awk '/^\[/{s=$0} /^StartLimitBurst=/{print s}' "$U")"
 check "StartLimitBurst steht in [Unit]" "$_abschnitt" "[Unit]"
 _abschnitt="$(awk '/^\[/{s=$0} /^StartLimitIntervalSec=/{print s}' "$U")"
 check "StartLimitIntervalSec steht in [Unit]" "$_abschnitt" "[Unit]"
+
+# Boot-Abgleich (DESIGN 6e): eigene Unit vor dem Dienst, der Dienst wartet.
+HW="$R/etc/systemd/system/chimera-hardware.service"
+if [ -f "$HW" ]; then ok "Boot-Abgleich-Unit geschrieben"; else bad "Boot-Abgleich-Unit fehlt"; fi
+hat "Boot-Abgleich ruft nur die Hardware-Module" "$HW" "ExecStart=/bin/sh /opt/chimera/source/installer/chimera-install --hardware"
+hat "Boot-Abgleich laeuft vor dem Dienst (Before=)" "$HW" "Before=chimera.service"
+hat "Boot-Abgleich: Befund und Neustartwunsch sind kein Fehler" "$HW" "SuccessExitStatus=1 3"
+hat "Boot-Abgleich: kurze Netzgrenze" "$HW" "Environment=CHIMERA_NETWORK_LIMIT=20"
+hat "Dienst wartet auf den Boot-Abgleich (After=)" "$U" "After=network-online.target chimera-hardware.service"
+hat_nicht "Dienst haengt nicht hart am Abgleich (kein Requires)" "$U" "Requires=chimera-hardware.service"
+hat "Dienst liest die Anzeige aus dem RAM (EnvironmentFile=-)" "$U" "EnvironmentFile=-/run/chimera/anzeige.env"
+if grep -q "systemctl enable chimera-hardware.service" "$F/spur"; then ok "Boot-Abgleich aktiviert (enable, nicht --now)"
+else bad "Boot-Abgleich nicht aktiviert"; fi
+if grep -q "systemctl enable --now chimera-hardware.service" "$F/spur"; then bad "Boot-Abgleich wurde mit --now gestartet (laeuft parallel zum Installer)"
+else ok "Boot-Abgleich nicht sofort gestartet"; fi
 hat "Konfigurationsfehler (2) startet nicht neu" "$U" "RestartPreventExitStatus=2"
 hat "ExecStart im Dienstmodus" "$U" "ExecStart=$PY -m chimera --dienst"
 hat "laeuft als eigener Nutzer" "$U" "User=chimera"

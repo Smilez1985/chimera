@@ -174,19 +174,29 @@ if [ -s "$_z" ]; then
 	fi
 fi
 
-echo "== Anzeigen-Registry =="
+echo "== Anzeigen-Registry (display.json ist die Quelle) =="
 
-check "Whisplay braucht drei Busse" "$(display_get whisplay busse)" "spi i2c_arm i2s"
+# Seit 11.10.2026 liest lib/display.sh die Module unter src/chimera/displays/
+# -- dieselbe Datei wie der Python-Treiber. Was hier steht, muss dort stehen.
+check "Module aus den Ordnern" "$(display_list)" "keine whisplay"
+check "Whisplay: Bootkonfiguration NEUTRAL (i2s zur Laufzeit)" "$(display_get whisplay busse)" "spi i2c_arm"
+check "Whisplay: i2s kommt zur Laufzeit" "$(display_get whisplay ton_dtparam)" "i2s=on"
+check "Whisplay: Overlay zur Laufzeit" "$(display_get whisplay ton_dtoverlay)" "whisplay-soundcard"
 check "Whisplay meldet eine ALSA-Karte" "$(display_get whisplay alsa_karte)" "whisplaysound"
 check "Whisplay hat 15 Bilder/s" "$(display_get whisplay fps)" "15"
+check "Whisplay: Tonquelle an Commit gebunden" "$(display_get whisplay commit)" "c73051e64dc62aced1853d16f33d4614fec5bee4"
+case "$(display_get whisplay pip)" in
+	*numpy*) ok "Whisplay: numpy als Abhaengigkeit (RGB565)" ;;
+	*) bad "Whisplay: numpy fehlt in deps.pip" ;;
+esac
+case "$(display_get whisplay pip)$(display_get whisplay apt)" in
+	*spidev*|*gpiod*|*python3-dev*) bad "Whisplay: Herstellerabhaengigkeiten (spidev/gpiod/python3-dev) noch im Profil" ;;
+	*) ok "Whisplay: kein spidev/gpiod/python3-dev mehr (eigener Treiber)" ;;
+esac
 
-# E-Paper ist der Fall, fuer den Regel 7a gebaut wurde.
-check "E-Paper zeichnet nicht von selbst" "$(display_get epaper fps)" "0"
-check "E-Paper braucht nur SPI" "$(display_get epaper busse)" "spi"
-check "E-Paper hat keinen Ton" "$(display_get epaper alsa_karte)" ""
-
-# Ein nacktes Panel braucht keinen Herstellertreiber.
-check "ST7789 ohne Fremdtreiber" "$(display_get st7789 quelle)" ""
+# "keine" ist der Rueckfall: zeichnet nicht von selbst (Regel 7a), kein Ton.
+check "keine: zeichnet nicht von selbst" "$(display_get keine fps)" "0"
+check "keine: kein Ton" "$(display_get keine alsa_karte)" ""
 
 # Gegenprobe: Ein unbekannter Typ liefert nichts und meldet das.
 if display_get gibtesnicht name >/dev/null 2>&1; then
@@ -199,12 +209,20 @@ fi
 # faellt die Luecke erst auf dem Geraet auf.
 for _a in $(display_list); do
 	_fehlt=""
-	for _f in name breite hoehe fps pruefe hinweis; do
+	for _f in name breite hoehe pruefe hinweis; do
 		[ -n "$(display_get "$_a" "$_f")" ] || _fehlt="$_fehlt $_f"
 	done
 	[ -z "$_fehlt" ] && ok "$_a ist vollstaendig beschrieben" \
 		|| bad "$_a fehlen Felder:$_fehlt"
 done
+
+# Shell und Python lesen dieselbe Datei: Breite/Hoehe/Bildrate muessen
+# zeichengleich sein. (Sonst sind es wieder zwei Quellen.)
+_py_sicht="$(PYTHONPATH="$(display_src)" PYTHONDONTWRITEBYTECODE=1 python3 -c '
+from chimera.displays import registry
+p = registry.profil("whisplay"); print(p.breite, p.hoehe, int(p.bildrate))')"
+check "Shell-Sicht == Python-Sicht (whisplay)" \
+	"$(display_get whisplay breite) $(display_get whisplay hoehe) $(display_get whisplay fps)" "$_py_sicht"
 
 echo "== Erkennung =="
 
@@ -238,20 +256,29 @@ else
 	bad "Gegenprobe: Kernel-Bus i2c-1 da, gilt aber als unmoeglich"
 fi
 
-# HAT-EEPROM mit PiSugar-Kennung -> whisplay
-mkdir -p "$_R/proc/device-tree/hat"
-printf 'PiSugar\0' >"$_R/proc/device-tree/hat/vendor"
-printf 'Whisplay HAT\0' >"$_R/proc/device-tree/hat/product"
-check "PiSugar-EEPROM wird erkannt" "$(display_detect || true)" "whisplay"
+# Erkennung laeuft im Treiberpaket; hier nur der Shell-Rand: Attrappen
+# unter <root>/chimera-probe/ (wie tests/test_displays.py), Ergebnis kommt
+# als Typ UND Grund zurueck (ohne Subshell).
+mkdir -p "$_R/chimera-probe"
+printf '8181b3' >"$_R/chimera-probe/st7789-dc27"
+printf '1' >"$_R/chimera-probe/i2c-1-1a"
+display_detect >/dev/null 2>&1 || true
+check "Kennung + Codec -> whisplay" "${DISPLAY_TYP:-}" "whisplay"
+check "Grund wird benannt" "$(display_quelle)" "eindeutiger Treffer"
+case "$(display_belege)" in
+	*"8181b3"*) ok "Belege nennen die Kennung" ;;
+	*) bad "Belege nennen die Kennung nicht" ;;
+esac
 
-# Fremdes EEPROM: nicht raten (Regel 10g).
-printf 'Irgendwer\0' >"$_R/proc/device-tree/hat/vendor"
-printf 'Unbekanntes Ding\0' >"$_R/proc/device-tree/hat/product"
-check "fremdes EEPROM wird nicht geraten" "$(display_detect || true)" "unbekannt"
+# Falsche Kennung: Rueckfall "keine", nicht geraten (Regel 10g).
+printf '000000' >"$_R/chimera-probe/st7789-dc27"
+display_detect >/dev/null 2>&1 || true
+check "falsche Kennung -> Rueckfall keine" "${DISPLAY_TYP:-}" "keine"
 
-# Kein EEPROM.
-rm -rf "$_R/proc/device-tree/hat"
-check "ohne EEPROM: keins" "$(display_detect || true)" "keins"
+# CHIMERA_ANZEIGE sticht -- auch ueber den Shell-Weg.
+CHIMERA_ANZEIGE=whisplay display_detect >/dev/null 2>&1 || true
+check "CHIMERA_ANZEIGE sticht" "${DISPLAY_TYP:-}" "whisplay"
+unset CHIMERA_ANZEIGE
 
 CHIMERA_ROOT=""
 rm -rf "$_R"

@@ -49,6 +49,11 @@ CHIMERA_DATA="$CHIMERA_USER_ROOT/data"
 # Protokolle: geschrieben wird in den Arbeitsspeicher, gesammelt auf den
 # Datentraeger (log_sync).
 CHIMERA_RUNLOG=/run/chimera/logs
+# Uebergabe des Boot-Abgleichs an den Dienst (DESIGN 6e, 11.10.2026):
+# Schritt 40 schreibt CHIMERA_ANZEIGE=<typ> hierher, die Dienst-Unit liest
+# die Datei (EnvironmentFile=-). tmpfs: je Boot frisch, nie veraltet --
+# und der Dienstnutzer braucht dafuer kein Leserecht auf state/.
+CHIMERA_RUN_ANZEIGE=/run/chimera/anzeige.env
 CHIMERA_LOGS_INSTALLER="$CHIMERA_OPT/logs/installer"
 CHIMERA_LOGS_PRODUCTIVE="$CHIMERA_USER_ROOT/logs/productive"
 

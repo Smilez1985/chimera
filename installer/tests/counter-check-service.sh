@@ -101,8 +101,25 @@ ExecStart=\/bin\/sh $SERVICE_ABGLEICH --ruhig/' \
 
 # M9: Timer wird beim Rueckbau nicht abgeschaltet.
 mutation timer-bleibt \
-	's/^\tfor _sr_e in \$SERVICE_TIMER \$CHIMERA_DIENST; do$/\tfor _sr_e in $CHIMERA_DIENST; do/' \
+	's/^\tfor _sr_e in \$SERVICE_TIMER \$SERVICE_HARDWARE \$CHIMERA_DIENST; do$/\tfor _sr_e in $SERVICE_HARDWARE $CHIMERA_DIENST; do/' \
 	"Rueckbau: Timer abgeschaltet"
+
+# M10: Der Dienst wartet nicht mehr auf den Boot-Abgleich -- startet dann
+# mit belegten Leitungen VOR der Erkennung.
+mutation dienst-ohne-abgleich \
+	's/^After=network-online.target \$SERVICE_HARDWARE$/After=network-online.target/' \
+	"Dienst wartet auf den Boot-Abgleich (After=)"
+
+# M12: Der Dienst liest die Anzeige nicht -- liefe blind, obwohl erkannt.
+mutation dienst-ohne-anzeige \
+	's|^EnvironmentFile=-\$CHIMERA_RUN_ANZEIGE$|# ohne|' \
+	"Dienst liest die Anzeige aus dem RAM (EnvironmentFile=-)"
+
+# M11: Boot-Abgleich ruft nicht --hardware, sondern den ganzen Installer
+# (Schritt 00 geht beim Boot ins Netz, Schritt 98 startet den Dienst neu).
+mutation abgleich-ganzer-installer \
+	's|^ExecStart=/bin/sh \$SERVICE_INSTALLER --hardware$|ExecStart=/bin/sh $SERVICE_INSTALLER|' \
+	"Boot-Abgleich ruft nur die Hardware-Module"
 
 printf '\nErgebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

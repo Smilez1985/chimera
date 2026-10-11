@@ -1,17 +1,21 @@
 #!/bin/sh
-# Tests fuer die Anzeigenerkennung ueber mehrere Quellen.
+# Tests fuer den Shell-Rand der Anzeigenerkennung (lib/display.sh).
 #
-# Warum: Vorher sah display_detect NUR in das HAT-EEPROM. Auf dem
-# ausgelieferten Whisplay ist das EEPROM nachweislich NICHT programmiert
-# (docs/HARDWARE-BEFUNDE.md) -- dort findet die Erkennung "keins" und
-# Schritt 40 bricht ab, obwohl die Anzeige angeschlossen ist.
+# Die Entscheidung selbst lebt seit 11.10.2026 im Treiberpaket
+# (src/chimera/displays/erkennen.py) und wird dort geprueft
+# (tests/test_displays.py mit Gegenprobe). Hier geht es um das, was die
+# Shell daraus macht:
 #
-# Die weiteren Quellen sind am Herstellertreiber belegt, nicht geraten:
-# dtoverlay-Eintrag, ALSA-Karte, gebautes Kernelmodul. Hier wird jede
-# Quelle einzeln angeschaltet und einzeln als Treffer gefordert.
+#   * DISPLAY_TYP / DISPLAY_QUELLE / Belege kommen ohne Subshell an
+#   * Spuren einer frueheren Einrichtung (Overlay-Zeile, ALSA-Karte,
+#     gebautes Kernelmodul) WAEHLEN NICHT -- sie belegen nur, dass die
+#     Karte schon einmal in einer Whisplay steckte (smilez, 11.10.2026:
+#     die Karte wandert zwischen Boards; wer nach Spuren waehlt, treibt
+#     ein E-Paper mit dem Whisplay-Treiber an)
+#   * ohne Python/ohne Quellbaum: kein Ergebnis, kein Raten (rc 1)
 #
-# Gegenprobe: display.sh ohne die Kennungen. Sie muss "keins" melden,
-# wo die echte "whisplay" sagt.
+# Gegenprobe: die Erkennung so verfaelscht, dass "eingerichtet" waehlt --
+# der Test muss rot werden.
 
 set -eu
 
@@ -36,24 +40,28 @@ check() {
 	if [ "$2" = "$3" ]; then ok "$1"
 	else bad "$1 -- erwartet '$3', bekam '$2'"; fi
 }
+# Grund-Texte enthalten Umlaute (Python); Shell-Dateien bleiben ASCII.
+# Verglichen wird deshalb "typ|anfang des grundes".
+kopf() { printf '%s' "$1" | cut -c1-"$2"; }
 
-printf '=== Anzeigenerkennung: mehrere Quellen ===\n'
+printf '=== Anzeigenerkennung: Shell-Rand ===\n'
 
 KVER="$(uname -r)"
 R="$W/root"
-mkdir -p "$R/proc/device-tree" "$R/boot" "$R/boot/firmware" "$R/proc/sys/kernel" \
-	"$R/proc/asound" "$R/lib/modules"
+mkdir -p "$R/boot/firmware" "$R/proc/sys/kernel" "$R/proc/asound" "$R/lib/modules" \
+	"$R/sys/bus/i2c/devices/i2c-1" "$R/chimera-probe"
 printf '%s\n' "$KVER" >"$R/proc/sys/kernel/osrelease"
 
-# Aufrufer: laedt die beiden Bibliotheken und gibt Typ und Quelle aus.
-# Ohne Subshell, damit die Quelle die Funktion ueberlebt.
+# Aufrufer: laedt die Bibliotheken und gibt Typ und Grund aus. Ohne
+# Subshell, damit der Grund die Funktion ueberlebt. $1 = Quellbaum.
 cat >"$W/aufruf.sh" <<'EOF'
 #!/bin/sh
 . "$HERE/lib/common.sh"
 . "$HERE/lib/module.sh"
-. "$1"
+. "$HERE/lib/display.sh"
+CHIMERA_DISPLAY_SRC="$1"; export CHIMERA_DISPLAY_SRC
 display_detect >/dev/null 2>&1 || true
-printf '%s|%s\n' "${DISPLAY_TYP:-?}" "${DISPLAY_QUELLE:-}"
+printf '%s|%s\n' "${DISPLAY_TYP:-}" "${DISPLAY_QUELLE:-}"
 EOF
 chmod +x "$W/aufruf.sh"
 
@@ -64,65 +72,84 @@ lauf() {
 	set -e
 }
 
-# --- Ausgangslage: nichts angeschlossen ------------------------------------
-lauf "$HERE/lib/display.sh"
-check "ohne alles -> keins" "$OUT" "keins|"
+SRC="$HERE/../src"
 
-# --- Quelle 1: Overlay-Eintrag in der Bootkonfiguration --------------------
-printf 'dtoverlay=whisplay-soundcard\n' >"$R/boot/config.txt"
-lauf "$HERE/lib/display.sh"
-check "Overlay-Eintrag -> whisplay" "$OUT" "whisplay|overlay:dtoverlay=whisplay-soundcard"
+# --- Ausgangslage: nichts messbar -> Rueckfall "keine", benannt -------------
+printf '' >"$R/chimera-probe/st7789-dc27"
+printf '0' >"$R/chimera-probe/i2c-1-1a"
+printf '0' >"$R/chimera-probe/i2c-1-10"
+lauf "$SRC"
+check "nichts messbar -> Rueckfall keine" "$(kopf "$OUT" 21)" "keine|nichts erkannt "
 
-# Nur ueber /boot/config.txt reicht nicht: die zweite Ablage wird ebenfalls
-# geprueft (andere Distributionen legen sie woanders ab).
-rm -f "$R/boot/config.txt"
+# --- Spuren einer Einrichtung waehlen NICHT ----------------------------------
 printf 'dtoverlay=whisplay-soundcard\n' >"$R/boot/firmware/config.txt"
-lauf "$HERE/lib/display.sh"
-check "Overlay in /boot/firmware reicht auch" "$OUT" "whisplay|overlay:dtoverlay=whisplay-soundcard"
-rm -f "$R/boot/firmware/config.txt"
-
-# --- Quelle 2: ALSA-Karte --------------------------------------------------
 printf ' 0 [whisplaysound  ]: Whisplay - Whisplay Sound\n' >"$R/proc/asound/cards"
-lauf "$HERE/lib/display.sh"
-check "ALSA-Karte -> whisplay" "$OUT" "whisplay|alsa:whisplaysound"
-rm -f "$R/proc/asound/cards"
-
-# --- Quelle 3: gebautes Kernelmodul ----------------------------------------
 mkdir -p "$R/lib/modules/$KVER/kernel/sound/soc/codecs"
 : >"$R/lib/modules/$KVER/kernel/sound/soc/codecs/snd-soc-whisplay-soundcard.ko"
-lauf "$HERE/lib/display.sh"
-check "Kernelmodul -> whisplay" "$OUT" "whisplay|modul:snd-soc-whisplay"
-rm -rf "$R/lib/modules/$KVER/kernel"
+lauf "$SRC"
+check "Overlay+ALSA+Modul ohne Kennung -> trotzdem keine" "$(kopf "$OUT" 21)" "keine|nichts erkannt "
 
-# --- Unbekanntes EEPROM bleibt unbekannt, wenn nichts weiter passt ----------
-mkdir -p "$R/proc/device-tree/hat"
-printf 'Fremdhersteller\0' >"$R/proc/device-tree/hat/vendor"
-printf 'Fremdgeraet\0' >"$R/proc/device-tree/hat/product"
-lauf "$HERE/lib/display.sh"
-check "fremdes EEPROM ohne Kennung -> unbekannt" "$OUT" "unbekannt|"
-rm -rf "$R/proc/device-tree/hat"
+# ... aber sie werden als Belege genannt (Regel 10e: benannt, nicht stumm).
+cat >"$W/belege.sh" <<'EOF'
+#!/bin/sh
+. "$HERE/lib/common.sh"
+. "$HERE/lib/module.sh"
+. "$HERE/lib/display.sh"
+CHIMERA_DISPLAY_SRC="$1"; export CHIMERA_DISPLAY_SRC
+display_detect >/dev/null 2>&1 || true
+display_belege
+EOF
+BELEGE="$(CHIMERA_ROOT="$R" sh "$W/belege.sh" "$SRC" 2>&1)"
+case "$BELEGE" in
+	*"[ja  ] whisplay   eingerichtet"*"whisplay-soundcard vorhanden"*) ok "Overlay-Spur wird als Beleg genannt" ;;
+	*) bad "Overlay-Spur fehlt in den Belegen: $BELEGE" ;;
+esac
+case "$BELEGE" in
+	*"ALSA-Karte whisplaysound vorhanden"*) ok "ALSA-Spur wird als Beleg genannt" ;;
+	*) bad "ALSA-Spur fehlt in den Belegen" ;;
+esac
 
-# --- EEPROM vorhanden, Kennung daneben: trotzdem whisplay -------------------
-# Der wichtige Fall: unprogrammiertes EEPROM und eingerichteter Treiber.
-# Der HAT-Knoten ist leer, die Erkennung darf NICHT aufgeben.
-mkdir -p "$R/proc/device-tree/hat"
-printf 'dtoverlay=whisplay-soundcard\n' >"$R/boot/config.txt"
-lauf "$HERE/lib/display.sh"
-check "leeres EEPROM + Overlay -> whisplay" "$OUT" "whisplay|overlay:dtoverlay=whisplay-soundcard"
-rm -rf "$R/proc/device-tree/hat" "$R/boot/config.txt"
+# --- Kennung da, Codec da -> whisplay, Grund benannt ------------------------
+printf '8181b3' >"$R/chimera-probe/st7789-dc27"
+printf '1' >"$R/chimera-probe/i2c-1-1a"
+lauf "$SRC"
+check "Kennung + Codec -> whisplay" "$OUT" "whisplay|eindeutiger Treffer"
 
-# --- Gegenprobe: ohne Kennungen --------------------------------------------
-sed -e 's/^\(\t*\)echo "\(overlay:[^"]*\)"/\1echo ""/' \
-	-e 's/^\(\t*\)echo "\(alsa:[^"]*\)"/\1echo ""/' \
-	-e 's/^\(\t*\)echo "\(modul:[^"]*\)"/\1echo ""/' \
-	"$HERE/lib/display.sh" >"$W/display-alt.sh"
-if cmp -s "$W/display-alt.sh" "$HERE/lib/display.sh"; then
+# --- Kennung da, kein Codec: einziger Kandidat, aber gesagt -----------------
+printf '0' >"$R/chimera-probe/i2c-1-1a"
+lauf "$SRC"
+check "Kennung ohne Codec -> einziger Kandidat (benannt)" "$(kopf "$OUT" 26)" "whisplay|einziger Kandidat"
+
+# --- Ohne Quellbaum: kein Ergebnis, kein Raten ------------------------------
+lauf "$W/gibtsnicht"
+check "ohne Quellbaum: kein Typ" "$OUT" "|"
+
+# --- display_list / display_get ohne Python: leer und rc 1 -------------------
+cat >"$W/ohnepy.sh" <<'EOF'
+#!/bin/sh
+. "$HERE/lib/common.sh"
+. "$HERE/lib/display.sh"
+CHIMERA_DISPLAY_PYTHON=/nonexistent/python3
+if display_get whisplay name >/dev/null 2>&1; then echo "rc0"; else echo "rc1"; fi
+EOF
+check "display_get ohne Python: rc 1" "$(sh "$W/ohnepy.sh" 2>/dev/null)" "rc1"
+
+# --- Gegenprobe: "eingerichtet" waehlt doch (die alte Haltung) --------------
+MUT="$W/src"
+cp -r "$SRC" "$MUT"
+sed -i 's/elif klasse == "eindeutig" and treffer is True:/elif klasse in ("eindeutig", "eingerichtet") and treffer is True:/' \
+	"$MUT/chimera/displays/erkennen.py"
+if cmp -s "$MUT/chimera/displays/erkennen.py" "$SRC/chimera/displays/erkennen.py"; then
 	bad "Gegenprobe nicht vorbereitet -- Mutation griff nicht"
 else
-	ok "Gegenprobe vorbereitet (Kennungen entfernt)"
+	ok "Gegenprobe vorbereitet (eingerichtet waehlt)"
 fi
-lauf "$W/display-alt.sh"
-check "Gegenprobe: ohne Kennungen -> keins" "$OUT" "keins|"
+printf '' >"$R/chimera-probe/st7789-dc27"
+lauf "$MUT"
+case "$OUT" in
+	whisplay*) ok "Gegenprobe: verfaelschte Erkennung waehlt nach Spuren -- der Test oben faengt das" ;;
+	*) bad "Gegenprobe: Mutation hatte keine Wirkung ($OUT)" ;;
+esac
 
 printf '\nErgebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

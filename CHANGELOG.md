@@ -11,6 +11,21 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 ## [Unreleased]
 
 ### Hinzugefügt
+- **Anzeige:** Eigenes Treiberpaket `chimera.displays` — Whisplay-LCD, LED,
+  Backlight und Taste laufen ohne Herstellercode; ein neues Panel ist ein
+  Ordner mit `display.json` und `panel.py`.
+- **Anzeige:** Erkennung ohne Treiber (`python3 -m chimera.displays
+  erkennen`): Panel-Kennung per SPI, Codec per I2C; Spuren früherer
+  Einrichtung wählen nicht mehr.
+- **Ton:** Overlays werden zur Laufzeit geladen (`python3 -m chimera.displays
+  ton whisplay`); die Bootkonfiguration bleibt neutral, damit dieselbe
+  Karte auch in GamePi13 und E-Paper-Geräten startet.
+- **Installer:** Python-Abhängigkeiten werden mit Versionsprüfung
+  hergestellt — Fehlendes oder Veraltetes wird geholt, Vorhandenes nicht
+  angefasst; numpy gehört jetzt dazu.
+- **Boot:** `chimera-hardware.service` erkennt bei jedem Start die Anzeige,
+  lädt den Ton und übergibt beides an den Dienst — nach einem Kartentausch
+  startet das Gerät ohne Installerlauf richtig (`chimera-install --hardware`).
 - **Protokolle:** Der Dienst schreibt sein Protokoll als Datei und bringt es beim
   Stoppen und in Ruhezeiten (spätestens stündlich) auf die Speicherkarte.
 - **Speicher:** Der Installer richtet zram (75 % des Arbeitsspeichers) und
@@ -44,6 +59,13 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   Erfolg mehr.
 
 ### Geaendert
+- **Anzeige:** `chimera.display.panel` ist nur noch die Fassade; welche
+  Anzeige geöffnet wird, sagt `CHIMERA_ANZEIGE` bzw. `state/anzeige`, der
+  Dienst erkennt nicht mehr selbst. Läuft er blind, steht der Grund in der
+  Statuszeile.
+- **Installer:** `lib/display.sh` liest `display.json` des Anzeigemoduls
+  statt einer eigenen Tabelle; Schritt 40 richtet nur noch den Ton über
+  den Herstellerinstaller ein, das Panel braucht ihn nicht mehr.
 - **Installer:** Zeilen an der Bootkonfiguration werden atomar
   geschrieben statt per `>>` angehaengt.
 - **Installer:** Geprueftes Anlegen von Zwischendateien in Schritt 20;
@@ -54,6 +76,11 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   `datei` (mit Pruefsumme) im Manifest, nicht mehr als `verzeich`.
 - **Tests:** Die Testsuite richtet ihr Arbeitsverzeichnis selbst ein und
   haengt nicht mehr an einem bestimmten `TMPDIR`.
+
+### Entfernt
+- **Anzeige:** Herstellertreiber `whisplay.py` samt `spidev`/`gpiod`/
+  `python3-dev` aus dem venv; die Anzeigetypen `st7789` und `epaper` der
+  alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
 - **Anzeige:** Der Installer holt den Whisplay-Paneltreiber und seine

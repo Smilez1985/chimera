@@ -37,6 +37,12 @@ SERVICE_LOG_RAM=/run/chimera/logs/productive
 SERVICE_ABGLEICH="$CHIMERA_CODE/installer/bin/log-abgleich.sh"
 SERVICE_TIMER=chimera-logabgleich.timer
 SERVICE_TIMER_DIENST=chimera-logabgleich.service
+# Boot-Abgleich (DESIGN 6e-Ergaenzung 11.10.2026): VOR dem Dienst, als
+# root, laeuft `chimera-install --hardware` -- erkennt die Anzeige (freie
+# Leitungen!), zieht bei Abweichung die Hardware-Module nach, laedt den
+# Ton zur Laufzeit. Der Dienst wartet darauf (After/Wants).
+SERVICE_HARDWARE=chimera-hardware.service
+SERVICE_INSTALLER="$CHIMERA_SOURCE/installer/chimera-install"
 
 service_unit_pfad()  { rootpath "/etc/systemd/system/$CHIMERA_DIENST"; }
 service_stand_pfad() { rootpath "$CHIMERA_STATE/dienst-stand"; }
@@ -70,8 +76,13 @@ service_unit_text() {
 #   systemctl edit $CHIMERA_DIENST
 [Unit]
 Description=Chimera -- ein Agent, der ein Gesicht macht
-After=network-online.target
+After=network-online.target $SERVICE_HARDWARE
 Wants=network-online.target
+# Erst der Boot-Abgleich (Erkennung, Ton), dann das Gesicht. Scheitert der
+# Abgleich, startet der Dienst trotzdem (Wants, nicht Requires): blind mit
+# benanntem Grund ist besser als gar nicht (Regel 8a) -- und der Abgleich
+# selbst endet bei fehlendem Netz mit 0 und einem Befund, nicht mit Fehler.
+Wants=$SERVICE_HARDWARE
 # Regel 10p, Punkt 4: hoechstens 5 Starts in 300 s, dann bleibt er aus.
 StartLimitIntervalSec=300
 StartLimitBurst=5
@@ -84,6 +95,9 @@ EOF
 	[ -n "$_su_gr" ] && printf 'SupplementaryGroups=%s\n' "$_su_gr"
 	cat <<EOF
 EnvironmentFile=$CHIMERA_CONFIG/.env
+# Welche Anzeige steckt: vom Boot-Abgleich (Schritt 40) je Boot frisch
+# geschrieben. Fehlt die Datei, laeuft der Dienst blind und sagt es.
+EnvironmentFile=-$CHIMERA_RUN_ANZEIGE
 Environment=CHIMERA_HOME=$CHIMERA_DATA
 Environment=HOME=$CHIMERA_HOME_DIR
 Environment=LANG=C.UTF-8
@@ -107,6 +121,38 @@ ProtectHome=read-only
 # Schreiben nur im eigenen Bereich (ProtectHome=read-only sperrt /home).
 ReadWritePaths=$CHIMERA_USER_ROOT
 PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+# Boot-Abgleich. Oneshot als root, RemainAfterExit, damit After= des
+# Dienstes wirkt. Netzgrenze kurz: Ohne Netz startet der Dienst mit dem,
+# was da ist; Nachholen beim naechsten Boot mit Netz (DESIGN 6e).
+# CHIMERA_ANZEIGE aus der Dienstumgebung gilt auch hier (EnvironmentFile):
+# wer eine Anzeige vorgibt, bekommt sie auch beim Boot-Abgleich.
+service_hardware_text() {
+	cat <<EOF
+# Von chimera-install angelegt (Schritt 98). Boot-Abgleich der Hardware.
+[Unit]
+Description=Chimera -- Hardware erkennen und nachziehen (vor dem Dienst)
+After=local-fs.target sysinit.target
+Before=$CHIMERA_DIENST
+ConditionPathExists=$SERVICE_INSTALLER
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=-$CHIMERA_CONFIG/.env
+Environment=CHIMERA_NETWORK_LIMIT=20
+Environment=CHIMERA_LOG_DIR=$CHIMERA_RUNLOG/installer
+Environment=LANG=C.UTF-8
+ExecStart=/bin/sh $SERVICE_INSTALLER --hardware
+# rc 1 = Befund (z. B. nichts erkannt), rc 3 = Neustart gewuenscht: beides
+# kein Grund, den Dienst zu verhindern. Erst ab 2 ist etwas kaputt.
+SuccessExitStatus=1 3
+TimeoutStartSec=300
 
 [Install]
 WantedBy=multi-user.target
@@ -294,6 +340,7 @@ service_einrichten() {
 	_sd_neu=0
 	service_datei "$(dirname "$_se_unit")/$SERVICE_TIMER_DIENST" "$(service_timer_dienst_text)" || return 2
 	service_datei "$(dirname "$_se_unit")/$SERVICE_TIMER" "$(service_timer_text)" || return 2
+	service_datei "$(dirname "$_se_unit")/$SERVICE_HARDWARE" "$(service_hardware_text)" || return 2
 	_se_timer_neu=$_sd_neu
 
 	_se_code="$(service_code_stand "$_se_repo")"
@@ -311,6 +358,13 @@ service_einrichten() {
 		systemctl enable --now "$SERVICE_TIMER" >/dev/null 2>&1 || {
 			err "systemctl enable --now $SERVICE_TIMER schlug fehl."; return 2; }
 		manifest_record dienst "$SERVICE_TIMER" aktiviert
+	fi
+	# Boot-Abgleich: nur enable, nicht --now -- der Installer laeuft gerade
+	# selbst (Schritt 40 hat eben erkannt und geladen).
+	if ! manifest_has dienst "$SERVICE_HARDWARE"; then
+		systemctl enable "$SERVICE_HARDWARE" >/dev/null 2>&1 || {
+			err "systemctl enable $SERVICE_HARDWARE schlug fehl."; return 2; }
+		manifest_record dienst "$SERVICE_HARDWARE" aktiviert
 	fi
 
 	if ! manifest_has dienst "$CHIMERA_DIENST"; then
@@ -388,7 +442,7 @@ service_einrichten() {
 service_rueckbau() {
 	_sr_befund=0
 	# Timer zuerst: er soll nicht mitten im Rueckbau einen Abgleich starten.
-	for _sr_e in $SERVICE_TIMER $CHIMERA_DIENST; do
+	for _sr_e in $SERVICE_TIMER $SERVICE_HARDWARE $CHIMERA_DIENST; do
 		manifest_has dienst "$_sr_e" || continue
 		if is_dry_run; then
 			info "[wuerde] systemctl disable --now $_sr_e"

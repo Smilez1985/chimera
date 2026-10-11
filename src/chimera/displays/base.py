@@ -94,6 +94,9 @@ class Panel:
     #: „nur auf Anstoß" — dann zeichnet der Renderer nicht von selbst.
     fps: int = 15
     profil: Profil | None = None
+    #: Warum dieses Panel so ist, wie es ist — gefüllt, wenn etwas nicht
+    #: ging (Regel 8a: „läuft blind" und „ist kaputt" muss ablesbar sein).
+    hinweis: str = ""
 
     def pruefe_groesse(self, image) -> None:
         if image.size != (self.width, self.height):

@@ -115,8 +115,8 @@ schlägt den Neustartwunsch.
 | 20 | `install-packages` | Systempakete |
 | 25 | `speicher` | zram (75 %) und Auslagerungsdatei, gestaffelt nach Kartengröße (§4b) |
 | 30 | `install-headers` | Header beschaffen — **der schwierige Teil** (§3) |
-| 40 | `install-display` | WM8960-Codec, Whisplay-Soundkarte, Bootkonfiguration (§4) |
-| 50 | `python` | Umgebung und Abhängigkeiten |
+| 40 | `install-display` | Anzeige erkennen und festhalten, neutrale Busse, Ton zur Laufzeit (§4) |
+| 50 | `python` | venv, Abhängigkeiten **mit Versionsprüfung** (requirements + Anzeigemodul), Nachweis (§4b) |
 | 60 | `overlay` *(geplant)* | Gerätebaum-Overlay, kollidierende abschalten (§5) |
 | 70 | `alsa` *(geplant)* | Audio-Konfiguration |
 | 80 | `models` *(geplant)* | sherpa-onnx-Modelle laden und prüfen |
@@ -370,6 +370,36 @@ Ablauf:
 Die Quelle ist GPL-2.0 (Linux). Wird sie mitgeliefert statt geladen,
 gehört der Lizenzhinweis dazu und ein Vermerk in `THIRD_PARTY.md`.
 
+**Stand 11.10.2026 — was Modul 40 heute tut** (`docs/DISPLAYS.md` §4/§6,
+DESIGN 6e-Ergänzung):
+
+1. **Erkennen** über das Treiberpaket (`python3 -m chimera.displays
+   erkennen --json`): Panel-Kennung per SPI (Pflicht), Codec per I2C
+   (eindeutig), Spuren früherer Einrichtung (nur Beleg). Braucht freie
+   Leitungen → läuft vor dem Dienst, als root. `CHIMERA_ANZEIGE` sticht.
+   Ergebnis nach `state/anzeige`, Belege ins Protokoll.
+2. **Busse** in der Bootkonfiguration: nur `spi` und `i2c_arm` aus
+   `display.json` (`busse`). Sicherung nur, wenn wirklich eine Zeile
+   fehlt. **Nie `i2s`** — der kollidiert auf den anderen Boards.
+3. **Ton** (nur Profile mit `ton.alsa_karte`): Systempakete aus
+   `ton.apt`; fehlt Kernelmodul oder Overlay-Datei, holt `network_git`
+   die Herstellerquelle am festgelegten Commit und ruft `install_driver.sh`
+   nach Prüfsummenvergleich (I4). Danach `boot_neutral()`: entfernt
+   `dtparam=i2s=on` und `dtoverlay=<overlay>` wieder aus der
+   Bootkonfiguration (Sicherung, Sidecar + `mv`, Zeilen mit
+   `vorher_da` bleiben; `write_atomic` verweigert eine leere Datei), und
+   schaltet die Hersteller-Unit `whisplay-soundcard-warmup` ab (Chimera
+   setzt den Mixer selbst). `/etc/asound.conf` kommt aus der
+   Herstellervorlage, nur wenn keine da ist. Dann **zur Laufzeit laden**:
+   `python3 -m chimera.displays ton <typ>` (dtparam/dtoverlay aus
+   `ton.*`, Mixer aus `ton.mixer`, wartet bis zu 5 s auf die Karte).
+4. **Nachweis** = `pruefe` (SPI-Gerät) **und** ALSA-Karte vorhanden.
+   rc 3 nur, wenn eine Bus-Zeile neu in die Bootkonfiguration kam.
+
+Gemessen chimera-pi 11.10.2026: nach Reboot ohne Karte → Schritt 40 lädt
+`dtparam i2s=on` + `dtoverlay whisplay-soundcard`, Karte nach ~2 s,
+Mixer 80/80, rc 0 in 23 s; zweiter Lauf „bereits eingerichtet", rc 0.
+
 ### 4a. Modul 25 — Speicher (zram und Auslagerungsdatei)
 
 Die Logik steht in `installer/lib/speicher.sh`, geprueft in
@@ -437,6 +467,20 @@ Statt einer Kopie verdrahtet Schritt 50 den Quellpfad als
 meldet Erfolg auch dann, wenn das Modul selbst nicht lauffähig ist
 (Regel 10j).
 
+**Abhängigkeiten mit Versionsprüfung (11.10.2026).** `lib/python.sh`
+misst im venv (`importlib.metadata`), was von `requirements.txt` **und**
+`deps.pip` des festgehaltenen Anzeigemoduls (`display.json`) fehlt oder
+zu alt ist, holt **nur das** (`pip install --upgrade`), und misst nach —
+das Ergebnis zählt, nicht pips Exitcode. Ein `pip install -r` bei jedem
+Lauf hätte offline versagt, obwohl alles da war, und ein vorhandenes,
+zu altes numpy als erfüllt durchgehen lassen. numpy steht seit heute in
+`requirements.txt`: ohne es rechnet die RGB565-Umrechnung 25-mal
+langsamer, und ein Pi Zero 2 W hält keine 15 Bilder je Sekunde.
+
+Nachweis des Anzeigemoduls: `registry.panel_klasse(<typ>)` im venv —
+lädt das Modul, **öffnet das Panel nicht** (das belegte die Leitungen des
+laufenden Dienstes). Kein Herstellerbaum, keine zweite `.pth` mehr.
+
 **Umgebungskonfiguration.** Die Vorlage `.env.example` liegt im
 Repo-Wurzelverzeichnis — nur mit Platzhaltern, nie mit echten Werten
 (Regel 12). Schritt 50 legt sie als `/opt/chimera/config/.env` ab, **nur wenn
@@ -456,6 +500,27 @@ falschen Stelle, der echte Lauf wäre an `requirements.txt fehlt`
 gescheitert, unentdeckt weil der Test grün war.
 
 ### 4c. Modul 98 — Dienst (Dienstnutzer und systemd-Unit)
+
+**Boot-Abgleich (11.10.2026, DESIGN 6e-Ergänzung).** Schritt 98 legt
+neben der Dienst-Unit `chimera-hardware.service` an: `Type=oneshot`,
+root, `RemainAfterExit`, `Before=chimera.service`, `ExecStart=
+chimera-install --hardware` aus `source/` (nur Module 40/45/50 — kein
+Netzabgleich 00, kein 98). `SuccessExitStatus=1 3`: ein Befund („nichts
+erkannt") oder ein Neustartwunsch verhindert den Dienst nicht, erst ein
+Abbruch (≥ 2). `CHIMERA_NETWORK_LIMIT=20`: ohne Netz wird 20 s gewartet,
+dann läuft der Dienst mit dem, was da ist; nachgeholt wird beim nächsten
+Boot mit Netz. Die Dienst-Unit hat `After=`/`Wants=chimera-hardware`
+(kein `Requires`: blind mit Grund ist besser als gar nicht).
+
+Die Antwort des Abgleichs erreicht den Dienst über
+`/run/chimera/anzeige.env` (`CHIMERA_ANZEIGE=<typ>`, von Schritt 40
+geschrieben, `EnvironmentFile=-` in der Unit): tmpfs, je Boot frisch, und
+der Dienstnutzer braucht kein Leserecht auf `state/`.
+
+Gemessen chimera-pi: Abgleich 31 s (Erkennung 3 s, Profil lesen, Ton
+laden 3 s, Schritt 50 Nachweis 12 s), Dienst startet danach mit
+`Anzeige: whisplay 240x280` und Ton — ohne Zutun. Vor dem Puffer in
+`lib/display.sh` waren es 52 s (ein Python-Start je Profilfeld).
 
 Chimera läuft als Dauerdienst `chimera.service`. Die Logik steht in
 `installer/lib/service.sh`, der Schritt ruft nur auf — so ist sie ohne

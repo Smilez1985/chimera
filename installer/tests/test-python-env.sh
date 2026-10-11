@@ -277,27 +277,25 @@ set -e
 check "Gegenprobe: ohne Verdrahtung -> rc 2" "$RC" "2"
 contains "Fehlursache benannt" "$OUT" "pruefen"
 
-# --- Fall 6: Anzeigetreiber (Whisplay) ins venv ---------------------------
-# Schritt 40 hat "whisplay" festgehalten. Schritt 50 muss die Treiber-
-# pakete ins venv holen und den Herstellerbaum (runtime/) verdrahten. Am
-# chimera-pi (11.10.2026) fehlte genau das: der Dienst lief mit NullPanel.
+# --- Fall 6: Abhaengigkeiten der Anzeige, mit Versionspruefung -------------
+# Schritt 40 hat "whisplay" festgehalten. Schritt 50 muss die Pakete aus
+# display.json (deps.pip: Pillow, numpy) ins venv bringen -- und zwar nach
+# VERSION: ein zu altes numpy gilt nicht als erfuellt (smilez, 11.10.2026).
+# Nachweis: das Anzeigemodul ist ueber die Registry ladbar (ohne das Panel
+# zu oeffnen). Kein Herstellerbaum mehr, keine zweite .pth.
 #
-# Ohne Netz und ohne Quellbau: spidev und gpiod kommen als Attrappen-Wheels
-# (PIP_FIND_LINKS, --no-index), whisplay.py als Attrappe mit der Pruefsumme,
-# die der Test im Profil einsetzt. apt wird nicht gebraucht: python3-dev
-# gilt hier als vorhanden (manifest_package_present ueber eine Huelle).
+# Ohne Netz: numpy und Pillow kommen als Attrappen-Wheels (PIP_FIND_LINKS,
+# --no-index) -- einmal zu alt, einmal passend. Die Versionspruefung misst
+# die Metadaten, nicht den Inhalt; genau das reicht hier.
 mkbaum "anzeige"
 setze_anforderungen "pip"
 _wh="$W/wheels"
-python3 "$HERE/tests/fake-wheel.py" "$_wh" spidev 3.8 >/dev/null
-python3 "$HERE/tests/fake-wheel.py" "$_wh" gpiod 2.5.0 >/dev/null
-_rt="$WURZEL/opt/chimera/quellen/whisplay/runtime"
-mkdir -p "$_rt" "$WURZEL/opt/chimera/state"
-printf 'import spidev, gpiod\nclass WhisplayBoard: pass\n' >"$_rt/whisplay.py"
-_sha="$(sha256sum "$_rt/whisplay.py" | cut -d' ' -f1)"
-_echt_sha="$(sh -c ". '$HERE/lib/common.sh'; . '$HERE/lib/display.sh'; display_get whisplay py_sha256")"
-sed "s/$_echt_sha/$_sha/" "$BAUM/installer/lib/display.sh" >"$W/display.sh.t" &&
-	cp "$W/display.sh.t" "$BAUM/installer/lib/display.sh"
+python3 "$HERE/tests/fake-wheel.py" "$_wh" numpy 1.25.0 >/dev/null
+python3 "$HERE/tests/fake-wheel.py" "$_wh" Pillow 10.0.0 >/dev/null
+# Profil-Deps der Attrappe: die echte display.json verlangt numpy>=1.26 --
+# fuer den Test eine Kopie des Quellbaums mit abgesenkter Grenze, damit
+# ein 1.25-Wheel zuerst "zu alt" ist und nach dem Anheben des Wheels passt.
+mkdir -p "$WURZEL/opt/chimera/state"
 printf 'whisplay\n' >"$WURZEL/opt/chimera/state/anzeige"
 mkdir -p "$W/bin-dpkg"
 printf '#!/bin/sh\n# Huelle: jedes Paket gilt als installiert\nprintf installed\n' \
@@ -312,50 +310,58 @@ fahr_anzeige() {
 	RC=$?
 	set -e
 }
+# Erster Lauf: numpy 1.25 ist das einzige Angebot -> zu alt -> rc 2, benannt.
 fahr_anzeige "$BAUM/installer/steps/50-python.sh"
-check "Anzeigetreiber: Lauf rc 0" "$RC" "0"
+check "zu altes numpy im Angebot -> rc 2" "$RC" "2"
+contains "zu alt wird benannt" "$OUT" "numpy>=1.26"
+# Jetzt liegt ein passendes Wheel daneben -> Lauf erfuellt, numpy erneuert.
+python3 "$HERE/tests/fake-wheel.py" "$_wh" numpy 1.26.4 >/dev/null
+fahr_anzeige "$BAUM/installer/steps/50-python.sh"
+check "passendes numpy -> rc 0" "$RC" "0"
 _vpy="$WURZEL/opt/chimera/productive/venv/bin/python"
-if "$_vpy" -c 'import whisplay, spidev, gpiod' 2>/dev/null; then
-	ok "whisplay, spidev, gpiod im venv importierbar"
-else bad "Treiber im venv nicht importierbar"; printf '%s\n' "$OUT" | tail -8; fi
+check "numpy im venv ist die neue Fassung" \
+	"$("$_vpy" -c 'from importlib import metadata; print(metadata.version("numpy"))' 2>/dev/null)" "1.26.4"
+if "$_vpy" -c 'from chimera.displays import registry; registry.panel_klasse("whisplay")' 2>/dev/null; then
+	ok "Anzeigemodul whisplay ueber die Registry ladbar (ohne Panel zu oeffnen)"
+else bad "Anzeigemodul im venv nicht ladbar"; printf '%s\n' "$OUT" | tail -8; fi
 if grep -q 'chimera-anzeige.pth' "$MANIFEST"; then
-	ok "chimera-anzeige.pth steht im Manifest (Rueckbau)"
-else bad "chimera-anzeige.pth fehlt im Manifest"; fi
+	bad "chimera-anzeige.pth (Herstellerbaum) wird noch verdrahtet"
+else ok "keine zweite .pth mehr (kein Herstellerbaum)"; fi
 fahr_anzeige "$BAUM/installer/steps/50-python.sh"
-check "Anzeigetreiber: zweiter Lauf rc 0" "$RC" "0"
+check "zweiter Lauf rc 0" "$RC" "0"
 contains "zweiter Lauf: nichts mehr zu tun" "$OUT" "bereit und nachweisbar"
 
-# Fremdcode geaendert -> Pruefsumme greift, Treiber wird nicht verdrahtet.
-mkbaum "anzeige-sha"
+# Unbekannte Anzeige in state/anzeige: benannt, Lauf geht ohne Profil-Deps weiter.
+mkbaum "anzeige-unbekannt"
 setze_anforderungen "pip"
-_rt="$WURZEL/opt/chimera/quellen/whisplay/runtime"
-mkdir -p "$_rt" "$WURZEL/opt/chimera/state"
-printf 'import spidev, gpiod\nclass WhisplayBoard: pass  # veraendert\n' >"$_rt/whisplay.py"
-printf 'whisplay\n' >"$WURZEL/opt/chimera/state/anzeige"
+mkdir -p "$WURZEL/opt/chimera/state"
+printf 'gibtsnicht\n' >"$WURZEL/opt/chimera/state/anzeige"
 fahr_anzeige "$BAUM/installer/steps/50-python.sh"
-check "veraenderter Fremdtreiber -> rc 2" "$RC" "2"
-contains "Abweichung wird benannt" "$OUT" "Fremdstand weicht ab"
+contains "unbekannte Anzeige wird benannt" "$OUT" "hat kein Modul unter src/chimera/displays/"
 
-# Gegenprobe: alter Schritt ohne Treiberblock (Stand vor dem Fix) kommt
-# auf demselben Baum durch, OHNE dass whisplay im venv ladbar ist -- genau
-# der stille Erfolg vom Geraet.
+# Gegenprobe: Versionspruefung entfernt (pydep_fehlend sagt immer "erfuellt")
+# -> das zu alte numpy geht als fertig durch. Genau der stille Erfolg, den
+# die Regel verhindern soll.
 mkbaum "anzeige-gegenprobe"
 setze_anforderungen "pip"
-_rt="$WURZEL/opt/chimera/quellen/whisplay/runtime"
-mkdir -p "$_rt" "$WURZEL/opt/chimera/state"
-cp "$W/anzeige/opt/chimera/quellen/whisplay/runtime/whisplay.py" "$_rt/whisplay.py"
+mkdir -p "$WURZEL/opt/chimera/state"
 printf 'whisplay\n' >"$WURZEL/opt/chimera/state/anzeige"
-git -C "$HERE/.." show c88f6c7:installer/steps/50-python.sh \
-	>"$BAUM/installer/steps/50-python-alt.sh" 2>/dev/null || true
-if [ -s "$BAUM/installer/steps/50-python-alt.sh" ]; then
-	fahr_anzeige "$BAUM/installer/steps/50-python-alt.sh"
-	if "$WURZEL/opt/chimera/productive/venv/bin/python" -c 'import whisplay' 2>/dev/null; then
-		bad "Gegenprobe: alter Schritt verdrahtet den Treiber doch"
-	else
-		ok "Gegenprobe: alter Schritt laesst whisplay im venv fehlen (rc $RC)"
-	fi
+_wh_alt="$W/wheels-alt"
+python3 "$HERE/tests/fake-wheel.py" "$_wh_alt" numpy 1.25.0 >/dev/null
+python3 "$HERE/tests/fake-wheel.py" "$_wh_alt" Pillow 10.0.0 >/dev/null
+sed 's/^pydep_fehlend() {$/pydep_fehlend() { return 0; }\npydep_fehlend_alt() {/' \
+	"$HERE/lib/python.sh" >"$BAUM/installer/lib/python.sh"
+if cmp -s "$HERE/lib/python.sh" "$BAUM/installer/lib/python.sh"; then
+	bad "Gegenprobe: Mutation griff nicht"
 else
-	ok "Gegenprobe uebersprungen: kein git-Stand (nur im Repo messbar)"
+	_wh_save="$_wh"; _wh="$_wh_alt"
+	fahr_anzeige "$BAUM/installer/steps/50-python.sh"
+	_wh="$_wh_save"
+	if [ "$RC" = 0 ]; then
+		ok "Gegenprobe: ohne Versionspruefung geht zu altes numpy als fertig durch (rc 0)"
+	else
+		bad "Gegenprobe: Mutation hatte keine Wirkung (rc $RC)"
+	fi
 fi
 
 printf '\nErgebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"

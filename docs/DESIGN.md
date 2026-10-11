@@ -877,6 +877,35 @@ damit ein Fehlschluss nachvollziehbar bleibt und nicht als stiller Treffer
 durchgeht (Regel 10e). Widersprechen sich zwei Quellen, wird gefragt
 statt gewählt.
 
+**Ergänzung (11.10.2026) — Boot-Abgleich, eine Karte für drei Boards.**
+Dieselbe SD-Karte wandert zwischen Whisplay-Pi, GamePi13-Pi und
+E-Paper-Pi; alle Treiber liegen auf ihr. Daraus folgt:
+
+- **Beim Start lädt kein Anzeigetreiber vorab.** Erst die Erkennung (als
+  root, Leitungen frei), dann gezielt der passende Dienst — **ein Dienst
+  je Anzeigeart** (`chimera@<typ>.service`), weil ein E-Paper nicht
+  darstellen kann, was Whisplay und GamePi13 zeigen.
+- **Die Bootkonfiguration bleibt neutral** (`spi`, `i2c_arm`). `i2s=on`
+  gehört nicht hinein: Mit I2S sind GPIO18–21 PCM-Leitungen — dort hängen
+  beim GamePi13 das Backlight (19) und beim E-Paper die Versorgung (18).
+  Der Ton der Whisplay wird **zur Laufzeit** geladen (`dtparam i2s=on`,
+  `dtoverlay whisplay-soundcard`; gemessen chimera-pi: rc 0, ALSA-Karte
+  nach 2 s). Was der Herstellerinstaller in die Bootkonfiguration
+  schreibt, nimmt Schritt 40 wieder heraus — mit Sicherung, nie eine
+  Zeile, die vor Chimera dort stand.
+- **Die Erkennung hat drei Klassen:** *Pflicht* (ST7789-Kennung mit der
+  DC-Leitung des Boards), *eindeutig* (Codec am I2C — nur die Whisplay
+  hat einen), *eingerichtet* (Overlay-Zeile, ALSA-Karte, gebautes
+  Kernelmodul). **Eingerichtet wählt nicht.** Es belegt nur, dass die
+  Karte schon einmal in einer Whisplay steckte; wer danach wählt, treibt
+  ein E-Paper mit dem Whisplay-Treiber an. Gemessen: die ST7789-Kennung
+  (`81 81 B3`) ist auf Whisplay **und** GamePi13 identisch — sie trennt
+  nur „ein ST7789 hängt dran" von „keiner", nicht die Boards.
+- **Das gilt für die Stromversorgung genauso.** Nach einem Kartentausch
+  in ein Gerät mit UPS HAT (C) (INA219 an 0x43) ist der Akku die neue
+  Quelle; der Boot-Abgleich zieht auch dafür das passende Installermodul
+  nach. Bisher nannte diese Tabelle nur den PiSugar.
+
 ### Architekturregel 7 — Ein Prozess, ein Framebuffer
 
 openclawgotchis Display-Layer startet pro Update einen `sudo`-Subprozess
@@ -891,23 +920,39 @@ dokumentierten `resource_tracker`-Workarounds: Python 3.13+ `track=False`,
 Display-Anbindung: ein Adapter nimmt ein fertiges `PIL.Image`, wandelt
 nach RGB565 und ruft `board.draw_image()`.
 
-**Ergänzung (11.10.2026) — woher der Panel-Treiber kommt.** Der
-Hersteller liefert kein pip-Paket `whisplay`; seine eigenen Beispiele und
-sein Daemon hängen `runtime/` per `sys.path` an (Befund
-`WHISPLAY-HERSTELLER.md`, Frage 3). Chimera verdrahtet dasselbe
-Verzeichnis aus dem auf Commit und Prüfsumme festgelegten Herstellerbaum
-(Regel 5f) per zweiter `.pth` ins venv, und holt dessen Abhängigkeiten
-(`spidev`, `gpiod`) per pip **ins venv**, nicht über das System-Python.
-`spidev` baut dort aus Quelltext; die nötigen Header (`python3-dev`) sind
-eine Abhängigkeit der Anzeige und stehen im Anzeigeprofil, nicht in einer
-zweiten Liste. Welche Anzeige es ist, entscheidet Schritt 40 und hält es
-fest; Schritt 50 liest das, statt erneut zu erkennen (Regel 10g). Am
-chimera-pi lief der Dienst ohne diese Verdrahtung mit `NullPanel`, obwohl
-Panel und Treiber funktionierten — der Nachweis von Schritt 50 prüft
-deshalb, dass der Treiber im venv ladbar ist, ohne ihn zu importieren
-(ein `WhisplayBoard()` belegte GPIO-Leitungen des laufenden Dienstes).
-Den `whisplay-daemon` des Herstellers nutzt Chimera nicht: Er beansprucht
+**Ergänzung (11.10.2026, ersetzt die Fassung vom Vormittag) — der
+Paneltreiber ist eigener Code.** Chimera spricht LCD, LED, Backlight und
+Taste der Whisplay **selbst**: `src/chimera/displays/` enthält den
+ST7789-Kern, GPIO (Kernel-ABI v2) und SPI als `ctypes`-Aufrufe auf die
+Gerätedateien, Software-PWM und je Anzeige ein Modul mit `display.json`
+und `panel.py`. Die Einschaltwerte sind aus dem Herstellercode
+nachgebaut (PiSugar `runtime/whisplay.py`, Apache-2.0, Commit `c73051e6`),
+die Mechanik ist unsere. Gründe, in dieser Reihenfolge:
+
+1. **Keine Quellbau-Abhängigkeiten.** `spidev` baute im venv aus Quelltext
+   (python3-dev, gcc); `gpiod` kam als Wheel. Beides entfällt — die
+   Python-Umgebung braucht nur noch Pillow und numpy.
+2. **Herauslösbar.** Der Ordner importiert nichts aus dem übrigen Chimera
+   und lässt sich unverändert in ein eigenes Repo heben.
+3. **Messbar schneller.** `show` 29–33 ms je Bild gegen 39 ms mit dem
+   Herstellertreiber (chimera-pi, 11.10.2026).
+4. **Erkennung ohne Treiber.** Dieselben Bausteine lesen die Panel-Kennung
+   und fragen den Codec am I2C ab — ohne Herstellerpaket, vor dem Dienst.
+
+Fremdcode bleibt nur dort, wo ein Kernelmodul nötig ist: der **Ton**
+(Regel 5f, I4 — `install_driver.sh` an Commit und Prüfsumme gebunden). Der
+Herstellerinstaller wird dafür aufgerufen, seine Einträge in der
+Bootkonfiguration nimmt Chimera wieder heraus (siehe 6e). Den
+`whisplay-daemon` des Herstellers nutzt Chimera nicht: Er beansprucht
 LCD, LED und Taste exklusiv und verträgt sich nicht mit Regel 7.
+
+Welche Anzeige es ist, entscheidet Schritt 40 und hält es fest
+(`state/anzeige`); Schritt 50 liest das und weist über die Registry nach,
+dass das Modul ladbar ist — ohne das Panel zu öffnen (das belegte die
+Leitungen des laufenden Dienstes). Der Dienst selbst erkennt nicht: Er
+öffnet, was `CHIMERA_ANZEIGE` oder `state/anzeige` sagt, und läuft sonst
+blind — mit benanntem Grund in der Statuszeile („keine eingestellt" ist
+etwas anderes als „eingestellte nicht zu öffnen", Regel 8a).
 
 ### Architekturregel 7c — Konkurrierende Anzeigequellen werden zentral aufgelöst
 

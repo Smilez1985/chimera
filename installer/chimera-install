@@ -7,6 +7,9 @@
 # Aufruf:
 #   chimera-install                  alle Module
 #   chimera-install --only 10        nur Modul 10 (Praefix genuegt)
+#   chimera-install --hardware       nur die Hardware-Module (40 45 50):
+#                                    der Boot-Abgleich (chimera-hardware.service)
+#                                    nach einem Kartentausch (DESIGN 6e)
 #   chimera-install --list           Module auflisten
 #   chimera-install --dry-run        nur berichten, nichts aendern
 #   chimera-install --check          Zustand pruefen, Exitcode sprechend
@@ -24,6 +27,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 
 MODE=run
 ONLY=""
+HARDWARE=0
 VERSION="$(cat "$HERE/../VERSION" 2>/dev/null || echo '?')"
 
 usage() {
@@ -31,6 +35,7 @@ usage() {
 chimera-install $VERSION
 
   --only <praefix>   nur das passende Modul (z. B. 10, oder 10-check-system)
+  --hardware         nur Hardware-Module (40 45 50) -- Boot-Abgleich
   --list             verfuegbare Module anzeigen
   --dry-run          nichts aendern, nur berichten
   --check            nur pruefen, Exitcode sagt den Zustand
@@ -44,6 +49,7 @@ EOF
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--only)    ONLY="${2:?--only braucht einen Wert}"; shift 2 ;;
+		--hardware) HARDWARE=1; shift ;;
 		--dry-run) MODE=dry;   shift ;;
 		--check)   MODE=check; shift ;;
 		--list)    MODE=list;  shift ;;
@@ -69,6 +75,7 @@ ARGS_NEU=""
 [ "$MODE" = dry ] && ARGS_NEU="$ARGS_NEU --dry-run"
 [ "$MODE" = check ] && ARGS_NEU="$ARGS_NEU --check"
 [ -n "$ONLY" ] && ARGS_NEU="$ARGS_NEU --only $ONLY"
+[ "$HARDWARE" = 1 ] && ARGS_NEU="$ARGS_NEU --hardware"
 
 steps_list() {
 	# Nummerisch sortiert, damit 10 vor 90 kommt.
@@ -89,6 +96,7 @@ case "$MODE" in
 	check) info "Pruefung -- es wird nichts geaendert." ;;
 esac
 [ -n "$ONLY" ] && info "Nur Modul: $ONLY"
+[ "$HARDWARE" = 1 ] && info "Boot-Abgleich: nur Hardware-Module (40 45 50)"
 log ""
 
 FAILED=0
@@ -109,6 +117,15 @@ for mod in $(steps_list); do
 	if [ -n "$ONLY" ]; then
 		case "$name" in
 			"$ONLY"|"$ONLY"-*) : ;;
+			*) continue ;;
+		esac
+	fi
+	# Boot-Abgleich: nur, was von der angeschlossenen Hardware abhaengt.
+	# Kein Schritt 00 (kein Netzabgleich beim Start), kein 98 (der Dienst
+	# startet danach ohnehin -- die Unit haengt an dieser).
+	if [ "$HARDWARE" = 1 ]; then
+		case "$name" in
+			40-*|45-*|50-*) : ;;
 			*) continue ;;
 		esac
 	fi

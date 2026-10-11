@@ -69,6 +69,30 @@ Hardware ist vorhanden, also nicht blockiert.
       angeschlossen in `NoisyRenderer.show()`. 25 + 7 Prüfungen.
       Offen geblieben (siehe unten): gesichtsabhängige Einstellungen,
       Teilübertragung, eigene Schriftart.
+- [x] **Eigenes Treiberpaket `chimera.displays`** (11.10.2026): ST7789-Kern,
+      GPIO v2/SPI per ctypes, Whisplay-Modul (LCD, LED, Backlight, Taste),
+      Registry über Ordner, Erkennung in drei Klassen, Ton zur Laufzeit.
+      Gemessen: `show` 29,4 ms je Bild (statt 39,3 mit Herstellertreiber),
+      keine Quellbau-Abhängigkeiten mehr. Tests 42 + Gegenprobe 7 Mutationen.
+- [ ] **Module `gamepi13/`** (DC25 RST27 BL19, 240×240, MADCTL 0x70,
+      Pimoroni-Einschaltfolge, invertiert) und **`epd2in13b/`** (Treiber aus
+      dem Gotchi-Fork, BUSY-Prüfung, Mindestabstand 120 s, reduziert+Akzent).
+      Messung erst beim Kartentausch bzw. am E-Ink-Pi.
+- [x] **Boot-Abgleich:** `chimera-hardware.service` (oneshot, root, vor dem
+      Dienst) → `chimera-install --hardware` (40/45/50), Ton laden,
+      `/run/chimera/anzeige.env` an den Dienst. Gemessen: 31 s, Dienst
+      startet mit Panel und Ton ohne Zutun.
+- [ ] **Dienst-Template `chimera@<typ>.service`** (ein Dienst je
+      Anzeigeart, E-Paper braucht einen anderen Renderer) und
+      `state/hardware.json` (erkannt, Zeit, Quelle; Soll/Ist-Abgleich für
+      UPS). Bis dahin: ein `chimera.service`, Anzeige aus der Umgebung.
+- [ ] **Boot-Abgleich beschleunigen:** 31 s auf dem Zero 2 W, davon
+      Python-Starts (Erkennung, Profil, Ton, Schritt-50-Nachweis je ~2–3 s).
+      Ein Aufruf statt vier, oder Schritt 50 beim Boot überspringen, wenn
+      `state/anzeige` unverändert ist.
+- [ ] **Mikro L der Whisplay klirrt** (ungerade Oberwellen, unabhängig von
+      Verstärkung und Lautstärke; Mikro R sauber). Ursache offen (Hardware
+      oder Codec-Einstellung). Bis dahin für Spracherkennung Kanal R.
 - [ ] **Teilübertragung des unteren Rands.** `panel.py` schreibt immer
       das ganze Bild. Wer nur die unteren 40 von 280 Zeilen überträgt,
       spart rund 14 % der teuersten Größe — SPI kostet 28,1 von 39,3 ms.
@@ -376,6 +400,12 @@ Offen bleibt:
 - [ ] Button: Gesten (kurz / lang / mehrfach)
 - [ ] Lautsprecher-Routing, Lautstärkeverwaltung
 - [ ] PiSugar-Akkustand als Mood-Eingang
+- [ ] **UPS HAT (C)** (Waveshare, INA219 an I2C 0x43) als zweite
+      Akkuquelle: `src/chimera/power/`, Erkennung im Boot-Abgleich,
+      Installer-Modul 45. Vorlage: Gotchi-Fork `src/hardware/battery.py`.
+- [ ] HAT-EEPROM der Whisplay (nur ES8389-Fassung) als Opt-in-Quelle
+- [ ] Testton nach dem Laufzeit-Laden des Tons (automatische Abnahme:
+      Lautsprecher → Mikro R, Spitze bei 1 kHz)
 - [ ] Thermal-Hack neu kalibrieren (Agent-Grundlast einrechnen)
 
 ## Phase 8 — Installer

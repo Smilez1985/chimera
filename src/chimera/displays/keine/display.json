@@ -9,9 +9,19 @@
   "hinweis": "Chimera laeuft blind -- das Gesicht wird berechnet, aber nicht gezeigt.",
   "pins": {},
   "busse": [],
-  "deps": {"pip": [], "apt": []},
+  "deps": {
+    "pip": [],
+    "apt": []
+  },
   "erkennung": [
-    {"klasse": "rueckfall", "art": "immer"}
+    {
+      "klasse": "rueckfall",
+      "art": "immer"
+    }
   ],
-  "quelle": {"nachgebaut_aus": "eigen", "lizenz": "MIT"}
+  "quelle": {
+    "nachgebaut_aus": "eigen",
+    "lizenz": "MIT"
+  },
+  "pruefe": "true"
 }

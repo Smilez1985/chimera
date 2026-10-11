@@ -107,6 +107,9 @@ def pruefe_i2c_chip(pr: dict) -> tuple[bool | None, str]:
     adressen = [int(a, 0) if isinstance(a, str) else int(a) for a in pr["adressen"]]
     if not i2c.bus_da(bus, root=_root()):
         return None, f"I2C-Bus {bus} nicht aktiv (dtparam=i2c_arm=on fehlt?)"
+    # Vor dem Dienst haelt kein Treiber den Codec -- dann entscheidet der
+    # Quick-Write ueber /dev/i2c-N, und das Geraet gibt es nur mit i2c-dev.
+    i2c.dev_bereitstellen(bus, root=_root())
     for a in adressen:
         att = _attrappe("i2c", f"{bus}-{a:02x}")
         if att is not None:

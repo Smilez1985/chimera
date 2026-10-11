@@ -243,10 +243,16 @@ def _try_face(notes: list[str]) -> tuple[object, object, object]:
         return None, None, None
 
     panel = open_panel()
-    notes.append("Anzeige: keine gefunden — Gesicht läuft blind"
-                 if isinstance(panel, NullPanel) else
-                 f"Anzeige: {type(panel).__name__} "
-                 f"{panel.width}x{panel.height}, {panel.fps} Bilder/s")
+    if isinstance(panel, NullPanel):
+        # Der Unterschied zwischen „keine eingestellt" und „eingestellte
+        # ließ sich nicht öffnen" muss in der Statuszeile stehen, sonst
+        # sieht ein Defekt wie Absicht aus (Regel 8a).
+        notes.append(f"Anzeige: blind — {panel.hinweis}" if panel.hinweis
+                     else "Anzeige: keine eingestellt — Gesicht läuft blind")
+    else:
+        typ = panel.profil.typ if panel.profil is not None else type(panel).__name__
+        notes.append(f"Anzeige: {typ} {panel.width}x{panel.height}, "
+                     f"{panel.fps} Bilder/s")
 
     # Ein Zustand für beide: Das Gesicht setzt Ausdrücke, der Renderer
     # liest sie. Zwei Zustände wären zwei Gesichter, von denen das falsche
