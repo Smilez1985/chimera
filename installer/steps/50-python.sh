@@ -165,7 +165,13 @@ fi
 # wo `python3 -m venv` schon funktioniert, ist kein Paket zu holen --
 # genau dieselbe Lehre wie bei `have_cmd` (I4). Erst pruefen, was geht,
 # dann fehlendes nachholen.
-if python3 -c 'import venv' >/dev/null 2>&1; then
+#
+# Gepruefte Faehigkeit ist `ensurepip`, nicht `import venv`: Auf Debian
+# trixie liegt das Modul venv in libpython3.13-stdlib, ensurepip aber erst
+# in python3.13-venv. `import venv` gelingt dann, `python3 -m venv` scheitert
+# -- am chimera-pi (DietPi 10.7.2) am 11.10.2026 genau so gelaufen: der
+# Schritt meldete "vorhanden", und der Lauf brach beim Anlegen ab.
+if python3 -c 'import venv, ensurepip' >/dev/null 2>&1; then
 	info "python3 -m venv vorhanden -- kein Paket noetig."
 else
 	log "Voraussetzungen"

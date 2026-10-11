@@ -110,6 +110,58 @@ fahr dry
 check "nur Kommentare -> rc 2" "$RC" "2"
 contains "leere Liste wird benannt" "$OUT" "nur Kommentare"
 
+# --- Fall 2b: venv importierbar, ensurepip fehlt (Debian ohne python3-venv) -
+# Am chimera-pi (11.10.2026) gemessen: `import venv` gelingt, `python3 -m
+# venv` scheitert. Der Schritt muss das als FEHLEND erkennen. Nachgestellt
+# mit einer python3-Huelle, die ensurepip sperrt (echtes Python dahinter).
+mkbaum "ohne-ensurepip"
+setze_anforderungen "pip"
+mkdir -p "$W/bin-ohne-ensurepip"
+_echt="$(command -v python3)"
+cat >"$W/bin-ohne-ensurepip/python3" <<EOF
+#!/bin/sh
+exec "$_echt" -c 'import sys
+class _Sperre:
+    def find_spec(self, name, path=None, target=None):
+        if name == "ensurepip" or name.startswith("ensurepip."):
+            raise ModuleNotFoundError("No module named %r" % name)
+        return None
+sys.meta_path.insert(0, _Sperre())
+import runpy
+sys.argv = sys.argv[1:]
+if sys.argv and sys.argv[0] == "-c":
+    exec(sys.argv[1], {"__name__": "__main__"})
+elif len(sys.argv) > 1 and sys.argv[0] == "-m":
+    sys.argv = sys.argv[1:]
+    runpy.run_module(sys.argv[0], run_name="__main__", alter_sys=True)
+else:
+    runpy.run_path(sys.argv[0], run_name="__main__")
+' "\$@"
+EOF
+chmod +x "$W/bin-ohne-ensurepip/python3"
+if "$W/bin-ohne-ensurepip/python3" -c 'import venv' 2>/dev/null &&
+   ! "$W/bin-ohne-ensurepip/python3" -c 'import ensurepip' 2>/dev/null; then
+	ok "Huelle: venv da, ensurepip gesperrt (Messaufbau stimmt)"
+else
+	bad "Huelle bildet den Geraetezustand nicht nach"
+fi
+_alt_path="$PATH"; PATH="$W/bin-ohne-ensurepip:$PATH"
+fahr dry
+PATH="$_alt_path"
+lacks "ohne ensurepip: NICHT 'kein Paket noetig'" "$OUT" "kein Paket noetig"
+contains "ohne ensurepip: python3-venv wird geholt" "$OUT" "wuerde holen"
+
+# Gegenprobe: die alte Pruefung (`import venv`) haelt das Geraet fuer fertig.
+sed "s/if python3 -c 'import venv, ensurepip' >\/dev\/null 2>&1; then/if python3 -c 'import venv' >\/dev\/null 2>\&1; then/" \
+	"$BAUM/installer/steps/50-python.sh" >"$W/50-alt.sh"
+if cmp -s "$BAUM/installer/steps/50-python.sh" "$W/50-alt.sh"; then
+	bad "Gegenprobe ensurepip: Mutation griff nicht"
+else
+	cp "$W/50-alt.sh" "$BAUM/installer/steps/50-python.sh"
+	PATH="$W/bin-ohne-ensurepip:$PATH"; fahr dry; PATH="$_alt_path"
+	contains "Gegenprobe ensurepip: alte Pruefung sagt 'kein Paket noetig'" "$OUT" "kein Paket noetig"
+fi
+
 # --- Fall 3: Trockenlauf aendert nichts -----------------------------------
 mkbaum "trocken"
 setze_anforderungen "pip"

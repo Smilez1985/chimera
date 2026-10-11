@@ -56,6 +56,8 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   haengt nicht mehr an einem bestimmten `TMPDIR`.
 
 ### Behoben
+- **Installer:** Auf Debian ohne `python3-venv` erkennt Schritt 50 jetzt, dass
+  das venv nicht anlegbar ist, und holt das Paket nach.
 - **Installer:** Modul 50 rechnete mit der Repo-Wurzel, wo
   `dirname($0)/..` (`installer/`) liegt — eine echte Installation
   waere an `requirements.txt fehlt` gescheitert. Der Testbaum trug die
