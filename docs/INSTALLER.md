@@ -435,6 +435,33 @@ uebernommen, nicht nachgebaut:
   der Sicherung, `zramswap` neu. Das Paket nimmt Rueckbau 20 (`neu`, nur
   auf Wunsch).
 
+### 4a-m. Modul 46 — Mikrofone messen
+
+Welche Mikrofone einer Anzeige brauchbar sind, wird **gemessen, nicht
+festgelegt**: Ein Defekt an einem Board darf nicht zur Einstellung für alle
+werden, die das Repo ziehen.
+
+- **Messung** (`python3 -m chimera.displays mikro`): Der eigene Lautsprecher
+  spielt 1, 2 und 3 kHz, beide Kanäle nehmen gleichzeitig auf. Je Kanal und
+  Ton: Grundton, Oberwellen 2–5, Rauschen im selben Band.
+- **Entscheidung:** `beide`, `links`, `rechts` oder `keins`. Ein Kanal ist
+  untauglich, wenn er den Ton nicht hört, mehr als 20 dB leiser ist als der
+  andere oder bei der Mehrheit der Töne klirrt (Oberwellen über −10 dB).
+  Nur leiser ist kein Defekt. Bei Zweifel bleibt es bei `beide`, mit Warnung.
+- **Ergebnis:** `state/mikro.json` (Messwerte, Anzeige, Zeit) und
+  `/etc/alsa/conf.d/50-chimera-mikro.conf` mit dem Gerät `chimera_mikro`.
+  Bei einem guten Mikro bekommt man es mono, bei zweien beide Kanäle. Andere
+  Programme behalten die Geräte des Herstellers.
+- **Wann:** Nur im vollen Lauf, nicht beim Boot-Abgleich, weil die Messung
+  Töne spielt. Neu gemessen wird, wenn sich die Anzeige geändert hat
+  (Kartentausch), oder mit `CHIMERA_MIKRO_NEU=1 chimera-install --only 46`.
+- Eine gescheiterte Messung ist kein Befund über die Mikrofone: Die alte
+  Messung bleibt stehen. Eine fremde Datei am Zielort wird nicht angefasst.
+
+Gemessen am chimera-pi: `rechts` mit dem Grund „links: klirrt“ (Oberwellen
+links +2 bis −3 dB, rechts −23 bis −47 dB). Ein zweiter Lauf misst nicht
+neu, und `arecord -D chimera_mikro` nimmt auf.
+
 ### 4b. Modul 50 — Python-Umgebung (venv)
 
 Chimera ist ein Python-Dauerprozess. Debian hält `/usr/lib/python3` von

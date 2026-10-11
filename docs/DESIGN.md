@@ -743,6 +743,18 @@ Kniff um den `resource_tracker` — diese Erfahrung wird übernommen.
     └─ Anzeige   ──── Text ─────► └─ Synthese, Wiedergabe
                      (Queue)
 
+**Ergänzung (11.10.2026) — Welches Mikrofon, wird gemessen.** Der
+Audio-Prozess nimmt über das ALSA-Gerät `chimera_mikro` auf, nicht über
+einen festen Kanal. Welche Mikrofone dahinter stehen, entscheidet der
+Installer (Modul 46) **durch Messung am Gerät**: Testtöne über den eigenen
+Lautsprecher, je Kanal Pegel und Klirren, Ergebnis `beide`, `links`,
+`rechts` oder `keins`. Anlass war das linke Mikro am chimera-pi, das klirrt.
+„Nur rechts“ fest einzubauen hätte den Defekt eines Boards jedem
+aufgezwungen, der das Repo zieht. Grundsatz: Eine Eigenart der eigenen
+Hardware wird gemessen und belegt, nie als Einstellung für alle
+festgeschrieben. Im Zweifel bleiben beide Mikrofone an, mit Warnung. Ein
+fälschlich abgeschaltetes gutes Mikrofon fiele niemandem auf.
+
 ---
 
 ## 4b. Schnittstellen zum Nutzer

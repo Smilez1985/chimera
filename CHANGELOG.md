@@ -26,6 +26,9 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 - **Anzeige:** Die RGB-LED zeigt den Zustand (hört zu, denkt, spricht,
   Warnungen) und sonst gedimmt die Farbe des Gesichts; die Seitentaste
   quittiert per LED.
+- **Installer:** Modul 46 misst die Mikrofone der Anzeige und wählt die
+  brauchbaren (beide, links, rechts); Spracheingabe nimmt über das Gerät
+  `chimera_mikro` auf.
 - **Boot:** `chimera-hardware.service` erkennt bei jedem Start die Anzeige,
   lädt den Ton und übergibt beides an den Dienst — nach einem Kartentausch
   startet das Gerät ohne Installerlauf richtig (`chimera-install --hardware`).

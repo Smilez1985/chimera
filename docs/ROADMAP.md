@@ -95,9 +95,10 @@ Hardware ist vorhanden, also nicht blockiert.
       störend.
 - [ ] **Akku in der Statuszeile** (DESIGN §5), sobald die Akkuquelle
       (PiSugar / UPS HAT C) gebaut ist.
-- [ ] **Mikro L der Whisplay klirrt** (ungerade Oberwellen, unabhängig von
-      Verstärkung und Lautstärke; Mikro R sauber). Ursache offen (Hardware
-      oder Codec-Einstellung). Bis dahin für Spracherkennung Kanal R.
+- [x] **Mikrofonwahl durch Messung** (Modul 46): Jede Installation misst
+      ihre Mikrofone und wählt die brauchbaren; Aufnahmegerät `chimera_mikro`.
+- [ ] **Audio-Prozess nutzt `chimera_mikro`** (DESIGN 5g), sobald er gebaut
+      ist; bis dahin nimmt noch niemand darüber auf.
 - [ ] **Teilübertragung des unteren Rands.** `panel.py` schreibt immer
       das ganze Bild. Wer nur die unteren 40 von 280 Zeilen überträgt,
       spart rund 14 % der teuersten Größe — SPI kostet 28,1 von 39,3 ms.
