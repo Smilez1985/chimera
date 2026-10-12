@@ -84,6 +84,10 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   haengt nicht mehr an einem bestimmten `TMPDIR`.
 - **Anzeige:** numpy wird erst beim ersten Bild geladen; die Anzeige-Abfragen
   des Installers (Profil, Erkennung, Ton, Mikrofon) starten schneller.
+- **Installer:** Der Abgleich beim Start ist rund doppelt so schnell; der
+  Dienst startet entsprechend früher.
+- **Installer:** Der Nachweis der Python-Umgebung sucht nicht mehr im Netz
+  nach Anbietern und öffnet das Panel nicht mehr.
 
 ### Entfernt
 - **Anzeige:** Herstellertreiber `whisplay.py` samt `spidev`/`gpiod`/
@@ -121,6 +125,8 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   scheiterte am fehlenden `common.sh`, nicht an der Verdrahtung.
 - **Tests:** Der Bashism-Detektor schlug bei POSIX-Zeichenklassen
   (`[[:space:]]`) an — Fehlalarm.
+- **Installer:** Eine Datei mit Zeilenumbruch im Namen fiel still aus der
+  Prüfsumme heraus; jetzt bricht die Prüfung benannt ab.
 
 ## [0.1.0] — unveröffentlicht
 

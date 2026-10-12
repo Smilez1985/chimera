@@ -106,11 +106,17 @@ if [ "$_aus_source" = 1 ] && [ "$KAND" = "$START" ]; then
 	log "Laeuft aus source/ ($KAND_V) -- nichts zu tun."
 	log_close 0; exit 0
 fi
-KAND_H="$(source_hash "$KAND")"
+# source_hash liefert rc 1, wenn ein Baum nicht eindeutig pruefbar ist --
+# ohne `||` beendete set -e den Schritt hier still mit rc 1 ("Befund").
+KAND_H="$(source_hash "$KAND")" || KAND_H=""
 [ -n "$KAND_H" ] || { err "Pruefsumme des Startbaums leer -- Abbruch."; log_close 2; exit 2; }
 IST_H=""; IST_V=""
 if [ -d "$ZIEL" ]; then
-	IST_H="$(source_hash "$ZIEL")"
+	# Nicht pruefbar heisst: Inhalt unbekannt, also anders als der
+	# Kandidat. Ueber das Ersetzen entscheidet dann wie sonst die VERSION.
+	IST_H="$(source_hash "$ZIEL")" || {
+		warn "source/ nicht eindeutig pruefbar -- gilt als abweichend."
+		IST_H="nicht-pruefbar"; }
 	IST_V="$(source_version "$ZIEL")"
 fi
 info "Kandidat: $KAND_V  ${KAND_H%"${KAND_H#????????????}"}"

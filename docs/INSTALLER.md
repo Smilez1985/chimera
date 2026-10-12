@@ -494,6 +494,13 @@ Statt einer Kopie verdrahtet Schritt 50 den Quellpfad als
 meldet Erfolg auch dann, wenn das Modul selbst nicht lauffähig ist
 (Regel 10j).
 
+Er läuft ohne Netz und ohne Panel (`CHIMERA_ANZEIGE=keine … --pruefen
+--offline`, seit 12.10.2026). Die Anbietersuche und das Öffnen des Panels
+machen `--pruefen` nie rot, kosteten beim Boot-Abgleich aber Zeit — die
+Suche wartet auf ein Netz, das oft noch nicht steht, und das Panel braucht
+gleich danach der Dienst (läuft er schon, scheitert das Öffnen an belegten
+Leitungen). Ob das Anzeigemodul ladbar ist, prüft die Registry (unten).
+
 **Abhängigkeiten mit Versionsprüfung (11.10.2026).** `lib/python.sh`
 misst im venv (`importlib.metadata`), was von `requirements.txt` **und**
 `deps.pip` des festgehaltenen Anzeigemoduls (`display.json`) fehlt oder
@@ -544,12 +551,15 @@ Die Antwort des Abgleichs erreicht den Dienst über
 geschrieben, `EnvironmentFile=-` in der Unit): tmpfs, je Boot frisch, und
 der Dienstnutzer braucht kein Leserecht auf `state/`.
 
-Gemessen chimera-pi: Abgleich 17,8 s (Schritt 40: Erkennung 3,3 s,
-Profil 1,2 s, Ton laden 2,0 s; Schritt 50: Inhaltsprüfsumme 4,4 s,
-Nachweis 5,1 s), Dienst startet danach mit `Anzeige: whisplay 240x280`
-und Ton — ohne Zutun. Gemessen mit `journalctl -o short-monotonic`: Die
-Wanduhr springt beim Boot mit der Zeitsynchronisation (fake-hwclock), eine
-erste Messung über die Wanduhr ergab deshalb fälschlich 31 s.
+Gemessen chimera-pi (12.10.2026, `systemd-analyze blame`): Abgleich
+10,7 s, vorher 20,2 s. Schritt 40: Erkennung 2,4 s, Profil 0,7 s, Ton
+laden 1,5 s; Schritt 50: Inhaltsprüfsumme beider Bäume 0,45 s (vorher
+4,6 s — ein `sha256sum` für alle Dateien statt Prozessen je Datei),
+Nachweis 4,6 s (vorher 10,0 s — ohne Netzsuche und ohne Panel). Der Dienst
+startet danach mit `Anzeige: whisplay 240x280` und Ton — ohne Zutun.
+Gemessen mit `journalctl -o short-monotonic`: Die Wanduhr springt beim
+Boot mit der Zeitsynchronisation (fake-hwclock), eine erste Messung über
+die Wanduhr ergab deshalb fälschlich 31 s.
 
 Chimera läuft als Dauerdienst `chimera.service`. Die Logik steht in
 `installer/lib/service.sh`, der Schritt ruft nur auf — so ist sie ohne

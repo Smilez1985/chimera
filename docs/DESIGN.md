@@ -1922,6 +1922,12 @@ Zwei Vergleiche, mit getrennter Aufgabe:
 - **Welcher Stand der neuere ist:** die Datei `VERSION`, verglichen mit
   `sort -V`. Eine Prüfsumme sagt nur „anders", nicht „neuer".
 
+**Ergänzung (12.10.2026) — Grenze der Prüfsumme.** Ein Dateiname mit
+Zeilenumbruch macht einen Baum nicht prüfbar, die Prüfung bricht benannt
+ab: So ein Name ergibt keine eindeutige Zeile, und eine still ausgelassene
+Datei wäre eine, deren Änderung niemand bemerkt. Die Summe hängt nicht vom
+Werkzeug ab — GNU und BusyBox liefern für denselben Baum dieselbe.
+
 **Der Hash wiegt schwerer als die Version.** Die Reihenfolge der
 Entscheidung:
 

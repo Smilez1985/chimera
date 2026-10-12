@@ -21,8 +21,27 @@ _SRC_AUSSCHLUSS='.git .testtmp __pycache__ logs'
 
 # Inhaltspruefsumme eines Baums. Relative Pfade und Inhalte gehen ein,
 # sortiert unter LC_ALL=C (common.sh) -- gleiche Baeume ergeben ueberall
-# dieselbe Summe. Gibt nichts aus, wenn der Baum fehlt (Pruefung beim
-# Aufrufer: leer ist ein Verdachtsfall).
+# dieselbe Summe. Gibt nichts aus und liefert rc 1, wenn der Baum fehlt
+# oder nicht vollstaendig lesbar ist (Pruefung beim Aufrufer: leer ist ein
+# Verdachtsfall).
+#
+# Je Datei eine Zeile "<sha256>  ./<pfad>", nach Pfad sortiert, darueber
+# die Summe. Die Inhalte rechnet EIN sha256sum-Aufruf fuer alle Dateien
+# (find -exec ... {} +). Vorher startete jede Datei eigene Prozesse --
+# am chimera-pi 2,5 s fuer 160 Dateien, beim Boot zweimal (Schritt 50).
+#
+# Drei Arten Dateinamen:
+# - gewoehnlich: sha256sum gibt genau diese Zeile aus, GNU wie BusyBox.
+# - mit Backslash oder Wagenruecklauf: GNU sha256sum maskiert solche
+#   Namen ("\<summe>  ./a\\b"), BusyBox nicht. Damit die Summe nicht vom
+#   Werkzeug abhaengt, rechnen sie einzeln, der Name geht unveraendert ein.
+# - mit Zeilenumbruch: keine eindeutige Zeile moeglich -> rc 1, benannt.
+#   Bis 0.1.0-pre zerfiel so ein Name still in zwei Zeilen, und der Inhalt
+#   der Datei fehlte in der Summe.
+#
+# Am Ergebnis geprueft, nicht nur am Exitcode: jede Zeile im erwarteten
+# Format, und so viele Zeilen wie Dateien -- eine Summe ohne Abgleich
+# gegen die Gesamtzahl waere eine Teilsumme.
 source_hash() {
 	[ -d "$1" ] || return 1
 	( cd "$1" || exit 1
@@ -30,11 +49,58 @@ source_hash() {
 	  for _sh_x in $_SRC_AUSSCHLUSS; do
 		_sh_find="$_sh_find -name $_sh_x -prune -o"
 	  done
+	  _sh_nl='
+'
+	  _sh_cr="$(printf '\r')"
 	  # shellcheck disable=SC2086
-	  find . $_sh_find -type f ! -name '*.pyc' -print | sort |
-	  while IFS= read -r _sh_f; do
-		printf '%s  %s\n' "$(sha256sum <"$_sh_f" | cut -d' ' -f1)" "$_sh_f"
-	  done | sha256sum | cut -d' ' -f1 )
+	  _sh_lf="$(find . $_sh_find -type f ! -name '*.pyc' -path "*$_sh_nl*" -print)" || exit 1
+	  if [ -n "$_sh_lf" ]; then
+		printf 'Pruefsumme nicht eindeutig: Dateiname mit Zeilenumbruch: %s\n' "$_sh_lf" >&2
+		exit 1
+	  fi
+	  # Gewoehnliche Namen: ein Aufruf (find teilt nur bei sehr langen
+	  # Listen auf). Scheitert einer, meldet find rc != 0.
+	  # shellcheck disable=SC2086
+	  _sh_l="$(find . $_sh_find -type f ! -name '*.pyc' ! -path '*\\*' ! -path "*$_sh_cr*" \
+		-exec sha256sum {} +)" || exit 1
+	  # Backslash/Wagenruecklauf: einzeln, wie bis 0.1.0-pre.
+	  # shellcheck disable=SC2086
+	  _sh_s="$(find . $_sh_find -type f ! -name '*.pyc' \( -path '*\\*' -o -path "*$_sh_cr*" \) -print |
+		while IFS= read -r _sh_f; do
+			_sh_h="$(sha256sum <"$_sh_f")" || exit 1
+			printf '%s  %s\n' "${_sh_h%% *}" "$_sh_f"
+		done)" || exit 1
+	  if [ -n "$_sh_l" ] && [ -n "$_sh_s" ]; then
+		_sh_l="$_sh_l$_sh_nl$_sh_s"
+	  elif [ -n "$_sh_s" ]; then
+		_sh_l="$_sh_s"
+	  fi
+	  # shellcheck disable=SC2086
+	  _sh_n="$(find . $_sh_find -type f ! -name '*.pyc' -print | wc -l)"
+	  source_hash_zeilen_ok "$_sh_l" "$_sh_n" || exit 1
+	  # Sortiert nach dem Pfad (Feld 2 bis Zeilenende). Alle Zeilen haben
+	  # vorne gleich viele Zeichen -- die Reihenfolge ist die der Pfade.
+	  { [ -z "$_sh_l" ] || printf '%s\n' "$_sh_l"; } | sort -k 2 | sha256sum | cut -d' ' -f1 )
+}
+
+# Die Zeilen fuer source_hash pruefen, bevor sie in die Summe gehen.
+# $1 Zeilen, $2 Anzahl Dateien. rc 0 passt, 1 Befund (auf stderr benannt).
+#   - so viele Zeilen wie Dateien (sonst waere die Summe eine Teilsumme)
+#   - jede Zeile "<64 hex>  ./<pfad>" (eine maskierte Zeile von GNU
+#     sha256sum beginnt mit "\" und faellt hier auf, statt still eine
+#     andere Summe zu ergeben)
+source_hash_zeilen_ok() {
+	_hz_z=0
+	[ -z "$1" ] || _hz_z="$(printf '%s\n' "$1" | wc -l)"
+	if [ "$_hz_z" -ne "$2" ]; then
+		printf 'Pruefsumme unvollstaendig: %s Zeilen fuer %s Dateien.\n' "$_hz_z" "$2" >&2
+		return 1
+	fi
+	if [ "$_hz_z" -gt 0 ] && printf '%s\n' "$1" | grep -v '^[0-9a-f]\{64\}  \./' >/dev/null; then
+		printf 'Pruefsumme: unerwartete Zeile von sha256sum.\n' >&2
+		return 1
+	fi
+	return 0
 }
 
 source_version() { tr -d ' \t\r\n' <"$1/VERSION" 2>/dev/null; }

@@ -167,12 +167,23 @@ venv_sitedir() {
 	printf '%s\n' "$_vs"
 }
 
+# Der Nachweis des Moduls: ohne Netz, ohne Hardware. Beides macht --pruefen
+# nie rot -- kein Anbieter und ein Panel, das nicht aufgeht, sind Auskunft,
+# kein Fehler. Gekostet hat es trotzdem: Beim Boot suchte --pruefen Ollama
+# im Netz, bevor es stand, und oeffnete das Panel, das gleich der Dienst
+# braucht (laeuft er schon, scheiterte das Oeffnen an belegten Leitungen).
+# Gemessen chimera-pi, Dienst gestoppt: 3,9 s mit beidem, 1,6 s ohne.
+# Ob das Anzeigemodul ladbar ist, prueft treiber_ok -- ohne es zu oeffnen.
+nachweis_modul() {
+	CHIMERA_ANZEIGE=keine "$PY" -m chimera --pruefen --offline
+}
+
 pruef_ok() {
 	# Das Modul selbst -- es kennt --pruefen und meldet, was da ist.
 	# Dazu die Abhaengigkeiten MIT Version (pydep_fehlend): --pruefen laeuft
 	# auch mit altem numpy durch. Und das Anzeigemodul: Ein Dienst, der
 	# mit NullPanel startet, besteht --pruefen, zeigt aber nichts.
-	[ -x "$PY" ] && "$PY" -m chimera --pruefen >/dev/null 2>&1 \
+	[ -x "$PY" ] && nachweis_modul >/dev/null 2>&1 \
 		&& pydep_fehlend "$PY" $(pydep_liste "$REQUIREMENTS") $ANZEIGE_PIP >/dev/null 2>&1 \
 		&& treiber_ok
 }
@@ -182,7 +193,9 @@ pruef_ok() {
 # hier -- ueber die Version hat Schritt 00 schon entschieden; was in
 # source/ steht, ist der gewollte Stand.
 log "Code"
-_soll="$(source_hash "$REPO")"
+# rc 1 = nicht eindeutig pruefbar; ohne `||` beendete set -e den Schritt
+# hier still mit rc 1 statt mit der Meldung darunter.
+_soll="$(source_hash "$REPO")" || _soll=""
 [ -n "$_soll" ] || { err "Pruefsumme von $REPO leer -- Abbruch."; log_close 2; exit 2; }
 _ist="$(source_hash "$CODE" 2>/dev/null || true)"
 if [ "$_soll" = "$_ist" ]; then
@@ -382,16 +395,16 @@ log ""
 if pruef_ok; then
 	log "Ergebnis: Python-Umgebung bereit und nachweisbar."
 	info "venv: $VENV"
-	info "Nachweis: $PY -m chimera --pruefen"
+	info "Nachweis: CHIMERA_ANZEIGE=keine $PY -m chimera --pruefen --offline"
 	log_close 0; exit 0
 fi
 
 if is_dry_run; then
-	info "[wuerde pruefen] $PY -m chimera --pruefen"
+	info "[wuerde pruefen] CHIMERA_ANZEIGE=keine $PY -m chimera --pruefen --offline"
 	log_close 0; exit 0
 fi
 
 err "Das Modul laeuft im venv nicht durch (--pruefen)."
 err "Grund: fehlende Python-Pakete oder ein Fehler im Modul selbst."
-"$PY" -m chimera --pruefen 2>&1 | tail -5 >&2 || true
+nachweis_modul 2>&1 | tail -5 >&2 || true
 log_close 2; exit 2

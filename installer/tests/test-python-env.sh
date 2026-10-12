@@ -364,5 +364,35 @@ else
 	fi
 fi
 
+# --- Fall 7: Nachweis ohne Netz und ohne Panel ------------------------------
+# Beim Boot laeuft der Nachweis vor dem Dienst, oft bevor das Netz steht.
+# --pruefen suchte dort Ollama im Netz und oeffnete das Panel, das gleich der
+# Dienst braucht (laeuft er schon: Leitungen belegt). Beides macht --pruefen
+# nie rot, kostete am chimera-pi aber 2,3 s. Gemessen wird am Aufruf: eine
+# Huelle vor dem venv-Python schreibt Argumente und CHIMERA_ANZEIGE mit.
+mkbaum "nachweis"
+setze_anforderungen ""
+fahr run
+check "Nachweis-Fall: Grundlauf rc 0" "$RC" "0"
+_vpy="$WURZEL/opt/chimera/productive/venv/bin/python"
+_spur="$W/nachweis-spur"
+if [ -x "$_vpy" ] && [ ! -L "$_vpy.echt" ]; then
+	mv "$_vpy" "$_vpy.echt"
+	printf '#!/bin/sh\ncase " $* " in *" -m chimera "*) printf "%%s|%%s\\n" "${CHIMERA_ANZEIGE:-}" "$*" >>"%s";; esac\nexec "%s" "$@"\n' \
+		"$_spur" "$_vpy.echt" >"$_vpy"
+	chmod +x "$_vpy"
+fi
+: >"$_spur"
+fahr run
+check "Nachweis-Fall: zweiter Lauf rc 0" "$RC" "0"
+if grep -q -- '--pruefen' "$_spur"; then ok "Nachweis ruft --pruefen auf"
+else bad "Nachweis ruft --pruefen nicht auf: $(cat "$_spur")"; fi
+if grep -- '--pruefen' "$_spur" | grep -qv -- '--offline'; then
+	bad "Nachweis sucht im Netz (ohne --offline): $(grep -- '--pruefen' "$_spur" | head -1)"
+else ok "Nachweis ohne Netzsuche (--offline)"; fi
+if grep -- '--pruefen' "$_spur" | grep -qv '^keine|'; then
+	bad "Nachweis oeffnet das Panel (CHIMERA_ANZEIGE nicht 'keine'): $(grep -- '--pruefen' "$_spur" | head -1)"
+else ok "Nachweis ohne Panel (CHIMERA_ANZEIGE=keine)"; fi
+
 printf '\nErgebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
