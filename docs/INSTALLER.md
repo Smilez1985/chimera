@@ -501,6 +501,13 @@ Suche wartet auf ein Netz, das oft noch nicht steht, und das Panel braucht
 gleich danach der Dienst (läuft er schon, scheitert das Öffnen an belegten
 Leitungen). Ob das Anzeigemodul ladbar ist, prüft die Registry (unten).
 
+Alle drei Prüfungen — Abhängigkeiten mit Version, Anzeigemodul, das Modul
+selbst — laufen in **einem** Python-Start (`installer/lib/py/nachweis.py`).
+Jeder Start lädt Interpreter und Chimera erneut; drei getrennte kosteten
+am Pi Zero 2 W 2,6 s (warm), einer 1,7 s. Die Versionsmessung liegt in
+`installer/lib/py/pydep.py`, an einer Stelle für `pydep_fehlend` (Shell)
+und den Nachweis.
+
 **Abhängigkeiten mit Versionsprüfung (11.10.2026).** `lib/python.sh`
 misst im venv (`importlib.metadata`), was von `requirements.txt` **und**
 `deps.pip` des festgehaltenen Anzeigemoduls (`display.json`) fehlt oder
@@ -551,12 +558,13 @@ Die Antwort des Abgleichs erreicht den Dienst über
 geschrieben, `EnvironmentFile=-` in der Unit): tmpfs, je Boot frisch, und
 der Dienstnutzer braucht kein Leserecht auf `state/`.
 
-Gemessen chimera-pi (12.10.2026, `systemd-analyze blame`): Abgleich
-10,7 s, vorher 20,2 s. Schritt 40: Erkennung 2,4 s, Profil 0,7 s, Ton
-laden 1,5 s; Schritt 50: Inhaltsprüfsumme beider Bäume 0,45 s (vorher
+Gemessen chimera-pi (12.10.2026, `systemd-analyze blame`, zwei Starts):
+Abgleich 9,6 s, vorher 20,2 s. Schritt 40: Erkennung 2,4 s, Profil 0,7 s,
+Ton laden 1,5 s; Schritt 50: Inhaltsprüfsumme beider Bäume 0,45 s (vorher
 4,6 s — ein `sha256sum` für alle Dateien statt Prozessen je Datei),
-Nachweis 4,6 s (vorher 10,0 s — ohne Netzsuche und ohne Panel). Der Dienst
-startet danach mit `Anzeige: whisplay 240x280` und Ton — ohne Zutun.
+Nachweis 3,5 s (vorher 10,0 s — ohne Netzsuche, ohne Panel, ein
+Python-Start statt drei). Der Dienst startet danach mit `Anzeige: whisplay
+240x280` und Ton — ohne Zutun.
 Gemessen mit `journalctl -o short-monotonic`: Die Wanduhr springt beim
 Boot mit der Zeitsynchronisation (fake-hwclock), eine erste Messung über
 die Wanduhr ergab deshalb fälschlich 31 s.

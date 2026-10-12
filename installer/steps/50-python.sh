@@ -144,16 +144,6 @@ if [ -n "$ANZEIGE" ]; then
 	fi
 fi
 
-# Ist das Anzeigemodul im venv ladbar? Ueber die Registry, OHNE das Panel
-# zu oeffnen: Oeffnen belegte GPIO-Leitungen, die der laufende Dienst haelt.
-# Ohne festgehaltene Anzeige ist nichts nachzuweisen.
-treiber_ok() {
-	[ -n "$ANZEIGE" ] || return 0
-	[ -x "$PY" ] || return 1
-	"$PY" -c 'import sys; from chimera.displays import registry; registry.panel_klasse(sys.argv[1])' \
-		"$ANZEIGE" >/dev/null 2>&1
-}
-
 # site-packages des venv -- EINE Stelle fuer beide .pth-Dateien. Liefert
 # nie einen leeren Pfad (sonst landete die .pth unter "/").
 venv_sitedir() {
@@ -167,25 +157,26 @@ venv_sitedir() {
 	printf '%s\n' "$_vs"
 }
 
-# Der Nachweis des Moduls: ohne Netz, ohne Hardware. Beides macht --pruefen
-# nie rot -- kein Anbieter und ein Panel, das nicht aufgeht, sind Auskunft,
-# kein Fehler. Gekostet hat es trotzdem: Beim Boot suchte --pruefen Ollama
-# im Netz, bevor es stand, und oeffnete das Panel, das gleich der Dienst
-# braucht (laeuft er schon, scheiterte das Oeffnen an belegten Leitungen).
-# Gemessen chimera-pi, Dienst gestoppt: 3,9 s mit beidem, 1,6 s ohne.
-# Ob das Anzeigemodul ladbar ist, prueft treiber_ok -- ohne es zu oeffnen.
-nachweis_modul() {
-	CHIMERA_ANZEIGE=keine "$PY" -m chimera --pruefen --offline
+# Der Nachweis (lib/py/nachweis.py), in EINEM Python-Start:
+#   - die Abhaengigkeiten MIT Version (dieselbe Messung wie pydep_fehlend):
+#     --pruefen laeuft auch mit altem numpy durch;
+#   - das Anzeigemodul ueber die Registry, OHNE das Panel zu oeffnen
+#     (Oeffnen belegte die Leitungen, die der laufende Dienst haelt) -- ein
+#     Dienst, der mit NullPanel startet, besteht --pruefen, zeigt aber nichts;
+#   - das Modul selbst: --pruefen --offline mit CHIMERA_ANZEIGE=keine. Kein
+#     Anbieter und ein Panel, das nicht aufgeht, machen --pruefen nie rot;
+#     die Suche im Netz und das Oeffnen kosteten beim Boot aber Zeit.
+# Gemessen chimera-pi, Dienst gestoppt: drei Starts 2,6 s warm / 4,7 s kalt,
+# einer 1,7 s / 3,8 s.
+NACHWEIS_PY="$_HERE/lib/py/nachweis.py"
+nachweis() {
+	# shellcheck disable=SC2046,SC2086
+	"$PY" "$NACHWEIS_PY" ${ANZEIGE:+--anzeige "$ANZEIGE"} -- \
+		$(pydep_liste "$REQUIREMENTS") $ANZEIGE_PIP
 }
 
 pruef_ok() {
-	# Das Modul selbst -- es kennt --pruefen und meldet, was da ist.
-	# Dazu die Abhaengigkeiten MIT Version (pydep_fehlend): --pruefen laeuft
-	# auch mit altem numpy durch. Und das Anzeigemodul: Ein Dienst, der
-	# mit NullPanel startet, besteht --pruefen, zeigt aber nichts.
-	[ -x "$PY" ] && nachweis_modul >/dev/null 2>&1 \
-		&& pydep_fehlend "$PY" $(pydep_liste "$REQUIREMENTS") $ANZEIGE_PIP >/dev/null 2>&1 \
-		&& treiber_ok
+	[ -x "$PY" ] && [ -f "$NACHWEIS_PY" ] && nachweis >/dev/null 2>&1
 }
 
 # --- Code nach productive/ ------------------------------------------------
@@ -395,16 +386,15 @@ log ""
 if pruef_ok; then
 	log "Ergebnis: Python-Umgebung bereit und nachweisbar."
 	info "venv: $VENV"
-	info "Nachweis: CHIMERA_ANZEIGE=keine $PY -m chimera --pruefen --offline"
+	info "Nachweis: $PY $NACHWEIS_PY (Abhaengigkeiten, Anzeigemodul, --pruefen --offline)"
 	log_close 0; exit 0
 fi
 
 if is_dry_run; then
-	info "[wuerde pruefen] CHIMERA_ANZEIGE=keine $PY -m chimera --pruefen --offline"
+	info "[wuerde pruefen] $PY $NACHWEIS_PY"
 	log_close 0; exit 0
 fi
 
-err "Das Modul laeuft im venv nicht durch (--pruefen)."
-err "Grund: fehlende Python-Pakete oder ein Fehler im Modul selbst."
-nachweis_modul 2>&1 | tail -5 >&2 || true
+err "Nachweis im venv gescheitert:"
+nachweis 2>&1 | grep -v '^ok ' | tail -8 >&2 || true
 log_close 2; exit 2

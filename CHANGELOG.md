@@ -84,8 +84,8 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   haengt nicht mehr an einem bestimmten `TMPDIR`.
 - **Anzeige:** numpy wird erst beim ersten Bild geladen; die Anzeige-Abfragen
   des Installers (Profil, Erkennung, Ton, Mikrofon) starten schneller.
-- **Installer:** Der Abgleich beim Start ist rund doppelt so schnell; der
-  Dienst startet entsprechend früher.
+- **Installer:** Der Abgleich beim Start dauert weniger als halb so lange;
+  der Dienst startet entsprechend früher.
 - **Installer:** Der Nachweis der Python-Umgebung sucht nicht mehr im Netz
   nach Anbietern und öffnet das Panel nicht mehr.
 

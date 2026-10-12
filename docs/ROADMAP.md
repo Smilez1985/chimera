@@ -86,9 +86,9 @@ Hardware ist vorhanden, also nicht blockiert.
       Anzeigeart, E-Paper braucht einen anderen Renderer) und
       `state/hardware.json` (erkannt, Zeit, Quelle; Soll/Ist-Abgleich für
       UPS). Bis dahin: ein `chimera.service`, Anzeige aus der Umgebung.
-- [ ] **Boot-Abgleich unter 10 s:** Prüfsumme und Nachweis sind
-      schneller; offen bleiben die Python-Starts im Nachweis (drei, sollen
-      einer werden) und in Schritt 40 (Erkennung, Profil, Ton).
+- [x] **Boot-Abgleich unter 10 s** (9,6 s, vorher 20,2 s).
+- [ ] **Boot-Abgleich weiter kürzen:** Schritt 40 startet Python für
+      Erkennung, Profil und Ton getrennt (zusammen 4,5 s).
 - [ ] **Anbieterausfall auf der LED?** Entscheiden, ob ein Gerät ohne
       Sprachmodell auch per LED warnt (`anbieter_weg`) oder nur in der
       Statuszeile — bei bewusstem Betrieb ohne Modell wäre Dauerblinken

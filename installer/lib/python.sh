@@ -17,6 +17,12 @@
 # Zahlenvergleich (reicht fuer >= und == auf X.Y.Z; Vorab-Fassungen gelten
 # als kleiner).
 
+# Die Messung selbst steht in lib/py/pydep.py (bis 12.10.2026 als Heredoc
+# hier). Der Pfad kommt von der Bibliothek, nicht vom Aufrufer: Schritte
+# sourcen sie aus <installer>/lib, und dort liegt py/ daneben. _HERE setzen
+# alle Schritte vor dem Sourcen (installer/), HERE die Tests.
+_PYDEP_PY="${_HERE:-${HERE:-.}}/lib/py/pydep.py"
+
 # Welche Anforderungen sind im venv NICHT erfuellt? $1 Python des venv,
 # $2.. Anforderungen (eine je Argument). Ausgabe: je Zeile
 #   <anforderung>\t<ist-version oder "fehlt">
@@ -24,63 +30,9 @@
 pydep_fehlend() {
 	_pf_py="$1"; shift
 	[ -x "$_pf_py" ] || return 2
-	"$_pf_py" - "$@" <<'PYEOF'
-import re, sys
-from importlib import metadata
-
-def norm(name):
-    return re.sub(r"[-_.]+", "-", name).lower()
-
-def teile(v):
-    # "2.5.4" -> (2,5,4); "1.26.0rc1" -> (1,26,0,-1): Vorabfassung < Freigabe
-    out = []
-    for t in re.split(r"[.]", v):
-        m = re.match(r"(\d+)(.*)", t)
-        if not m:
-            break
-        out.append(int(m.group(1)))
-        if m.group(2):
-            out.append(-1)
-            break
-    return tuple(out)
-
-def erfuellt(ist, op, soll):
-    try:
-        from packaging.version import Version
-        from packaging.specifiers import SpecifierSet
-        return Version(ist) in SpecifierSet(f"{op}{soll}", prereleases=True)
-    except Exception:
-        a, b = teile(ist), teile(soll)
-        n = max(len(a), len(b)); a += (0,) * (n - len(a)); b += (0,) * (n - len(b))
-        return {">=": a >= b, ">": a > b, "<=": a <= b, "<": a < b,
-                "==": a == b, "!=": a != b, "~=": a >= b}.get(op, False)
-
-rc = 0
-for anf in sys.argv[1:]:
-    m = re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(.*)$", anf)
-    if not m:
-        continue
-    name, rest = m.group(1), m.group(2).strip()
-    try:
-        ist = metadata.version(name)
-    except metadata.PackageNotFoundError:
-        # Verteilungsname und Importname koennen abweichen (Pillow/PIL);
-        # metadata kennt den Verteilungsnamen, der steht in requirements.
-        ist = None
-        for d in metadata.distributions():
-            if norm(d.metadata["Name"] or "") == norm(name):
-                ist = d.version
-                break
-    if ist is None:
-        print(f"{anf}\tfehlt"); rc = 1; continue
-    ok = True
-    for op, soll in re.findall(r"(>=|<=|==|!=|~=|>|<)\s*([A-Za-z0-9.*+!-]+)", rest):
-        if not erfuellt(ist, op, soll.rstrip(".*")):
-            ok = False
-    if not ok:
-        print(f"{anf}\t{ist}"); rc = 1
-sys.exit(rc)
-PYEOF
+	# Ohne die Messdatei ist nichts pruefbar -- benannt, nicht geraten.
+	[ -f "$_PYDEP_PY" ] || { err "Versionspruefung fehlt: $_PYDEP_PY"; return 2; }
+	"$_pf_py" "$_PYDEP_PY" "$@"
 }
 
 # Anforderungen aus einer requirements-Datei lesen (ohne Kommentare/Leerzeilen).

@@ -339,7 +339,7 @@ printf 'gibtsnicht\n' >"$WURZEL/opt/chimera/state/anzeige"
 fahr_anzeige "$BAUM/installer/steps/50-python.sh"
 contains "unbekannte Anzeige wird benannt" "$OUT" "hat kein Modul unter src/chimera/displays/"
 
-# Gegenprobe: Versionspruefung entfernt (pydep_fehlend sagt immer "erfuellt")
+# Gegenprobe: Versionspruefung entfernt (pydep.fehlend sagt immer "erfuellt")
 # -> das zu alte numpy geht als fertig durch. Genau der stille Erfolg, den
 # die Regel verhindern soll.
 mkbaum "anzeige-gegenprobe"
@@ -349,9 +349,12 @@ printf 'whisplay\n' >"$WURZEL/opt/chimera/state/anzeige"
 _wh_alt="$W/wheels-alt"
 python3 "$HERE/tests/fake-wheel.py" "$_wh_alt" numpy 1.25.0 >/dev/null
 python3 "$HERE/tests/fake-wheel.py" "$_wh_alt" Pillow 10.0.0 >/dev/null
-sed 's/^pydep_fehlend() {$/pydep_fehlend() { return 0; }\npydep_fehlend_alt() {/' \
-	"$HERE/lib/python.sh" >"$BAUM/installer/lib/python.sh"
-if cmp -s "$HERE/lib/python.sh" "$BAUM/installer/lib/python.sh"; then
+# Die Messung steht an EINER Stelle (lib/py/pydep.py); pydep_fehlend und
+# der Nachweis (lib/py/nachweis.py) rufen beide sie auf. Die Mutation setzt
+# dort an: fehlend() meldet nie etwas.
+sed 's/^def fehlend(anforderungen):$/def fehlend(anforderungen):\n    return []\ndef fehlend_alt(anforderungen):/' \
+	"$HERE/lib/py/pydep.py" >"$BAUM/installer/lib/py/pydep.py"
+if cmp -s "$HERE/lib/py/pydep.py" "$BAUM/installer/lib/py/pydep.py"; then
 	bad "Gegenprobe: Mutation griff nicht"
 else
 	_wh_save="$_wh"; _wh="$_wh_alt"
@@ -364,27 +367,66 @@ else
 	fi
 fi
 
-# --- Fall 7: Nachweis ohne Netz und ohne Panel ------------------------------
+# --- Fall 7: Nachweis ohne Netz und ohne Panel, in einem Start ------------
 # Beim Boot laeuft der Nachweis vor dem Dienst, oft bevor das Netz steht.
 # --pruefen suchte dort Ollama im Netz und oeffnete das Panel, das gleich der
 # Dienst braucht (laeuft er schon: Leitungen belegt). Beides macht --pruefen
-# nie rot, kostete am chimera-pi aber 2,3 s. Gemessen wird am Aufruf: eine
-# Huelle vor dem venv-Python schreibt Argumente und CHIMERA_ANZEIGE mit.
+# nie rot, kostete am chimera-pi aber 2,3 s. Dazu kamen drei Python-Starts
+# (pruefen, Versionen, Anzeigemodul) -- jetzt einer (lib/py/nachweis.py).
+#
+# Gemessen wird, was chimera.__main__.main bekommt: ein sitecustomize im
+# Quellbaum der Kopie umschliesst main und schreibt Argumente und
+# CHIMERA_ANZEIGE mit -- egal, ob der Nachweis -m chimera startet oder main
+# im selben Interpreter ruft. Die Python-Starts zaehlt eine Huelle vor dem
+# venv-Python (nur Starts mit chimera-Bezug: Modul, Nachweis, Registry).
 mkbaum "nachweis"
 setze_anforderungen ""
-fahr run
+mkdir -p "$WURZEL/opt/chimera/state"
+printf 'whisplay\n' >"$WURZEL/opt/chimera/state/anzeige"
+mkdir -p "$W/bin-dpkg"
+printf '#!/bin/sh\nprintf installed\n' >"$W/bin-dpkg/dpkg-query"; chmod +x "$W/bin-dpkg/dpkg-query"
+_spur="$W/nachweis-spur"
+# Der Haken haengt sich in den Import von chimera.__main__ (meta_path) und
+# ersetzt main durch eine Mitschrift. sitecustomize laedt Python beim Start
+# von selbst, wenn es auf dem Pfad liegt -- die .pth macht src/ dazu.
+cat >"$BAUM/src/sitecustomize.py" <<EOF
+import os
+import sys as _s
+class _Nach:
+    def find_spec(self, name, path=None, target=None):
+        if name == "chimera.__main__":
+            _s.meta_path.remove(self)
+            import importlib.util
+            spec = importlib.util.find_spec(name)
+            if spec is not None and spec.loader is not None:
+                _exec = spec.loader.exec_module
+                def exec_module(mod, _exec=_exec):
+                    _exec(mod)
+                    _echt = mod.main
+                    def main(argv=None):
+                        with open("$_spur", "a") as f:
+                            f.write("%s|%s\n" % (os.environ.get("CHIMERA_ANZEIGE", ""), " ".join(argv if argv is not None else _s.argv[1:])))
+                        return _echt(argv)
+                    mod.main = main
+                spec.loader.exec_module = exec_module
+            return spec
+        return None
+_s.meta_path.insert(0, _Nach())
+EOF
+PATH="$W/bin-dpkg:$PATH" fahr run
 check "Nachweis-Fall: Grundlauf rc 0" "$RC" "0"
 _vpy="$WURZEL/opt/chimera/productive/venv/bin/python"
-_spur="$W/nachweis-spur"
-if [ -x "$_vpy" ] && [ ! -L "$_vpy.echt" ]; then
+_starts="$W/nachweis-starts"
+if [ -x "$_vpy" ] && [ ! -e "$_vpy.echt" ]; then
 	mv "$_vpy" "$_vpy.echt"
-	printf '#!/bin/sh\ncase " $* " in *" -m chimera "*) printf "%%s|%%s\\n" "${CHIMERA_ANZEIGE:-}" "$*" >>"%s";; esac\nexec "%s" "$@"\n' \
-		"$_spur" "$_vpy.echt" >"$_vpy"
+	printf '#!/bin/sh\ncase " $* " in *chimera*|*nachweis.py*) echo x >>"%s";; esac\nexec "%s" "$@"\n' \
+		"$_starts" "$_vpy.echt" >"$_vpy"
 	chmod +x "$_vpy"
 fi
-: >"$_spur"
-fahr run
+: >"$_spur"; : >"$_starts"
+PATH="$W/bin-dpkg:$PATH" fahr run
 check "Nachweis-Fall: zweiter Lauf rc 0" "$RC" "0"
+contains "Nachweis-Fall: nachweisbar" "$OUT" "bereit und nachweisbar"
 if grep -q -- '--pruefen' "$_spur"; then ok "Nachweis ruft --pruefen auf"
 else bad "Nachweis ruft --pruefen nicht auf: $(cat "$_spur")"; fi
 if grep -- '--pruefen' "$_spur" | grep -qv -- '--offline'; then
@@ -393,6 +435,22 @@ else ok "Nachweis ohne Netzsuche (--offline)"; fi
 if grep -- '--pruefen' "$_spur" | grep -qv '^keine|'; then
 	bad "Nachweis oeffnet das Panel (CHIMERA_ANZEIGE nicht 'keine'): $(grep -- '--pruefen' "$_spur" | head -1)"
 else ok "Nachweis ohne Panel (CHIMERA_ANZEIGE=keine)"; fi
+check "Nachweis in einem Python-Start" "$(wc -l <"$_starts" | tr -d ' ')" "1"
+
+# Der Nachweis bleibt ein Nachweis: Ist das Anzeigemodul nicht ladbar, oder
+# fehlt eine Abhaengigkeit, wird er rot (rc 2, benannt) -- in EINEM Start
+# darf keine der drei Pruefungen untergehen.
+mv "$BAUM/src/chimera/displays/whisplay/panel.py" "$W/panel.py.weg"
+rm -rf "$WURZEL/opt/chimera/productive/code"
+PATH="$W/bin-dpkg:$PATH" fahr run
+mv "$W/panel.py.weg" "$BAUM/src/chimera/displays/whisplay/panel.py"
+check "Anzeigemodul nicht ladbar -> rc 2" "$RC" "2"
+contains "Anzeigemodul nicht ladbar: benannt" "$OUT" "FEHLT Anzeigemodul whisplay"
+rm -rf "$WURZEL/opt/chimera/productive/code"
+printf 'gibtsnicht-paket>=1\n' >>"$BAUM/requirements.txt"
+PATH="$W/bin-dpkg:$PATH" PIP_NO_INDEX=1 fahr run
+check "Abhaengigkeit fehlt -> rc 2" "$RC" "2"
+contains "Abhaengigkeit fehlt: benannt" "$OUT" "gibtsnicht-paket"
 
 printf '\nErgebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
