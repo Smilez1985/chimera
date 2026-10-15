@@ -8,6 +8,13 @@ Stand: 2026-09-29. Entwurf.
 
 ---
 
+> **Ab 16.10.2026:** Die Anbieterschicht zieht in das Gateway (Rust) um,
+> siehe `DESIGN.md` §4c (Regeln 5k–5n, 5b in der Fassung für das Gateway)
+> und §14. Was hier steht, bleibt das Verhalten. Was sich ändert, ist der
+> Prozess, der es ausführt: Der Dienst selbst hat danach kein Netz und keine
+> Schlüssel mehr. Die Automatik „größtes Modell fürs Gespräch“ entfällt und
+> wird durch die vom Nutzer festgelegte Reihenfolge ersetzt (5h, Ergänzung).
+
 ## 1. Warum ein Hybrid
 
 Die beiden Quellen sind an verschiedenen Enden stark:
@@ -118,8 +125,9 @@ Zwei Strategien genügen:
 
 Beim ersten Lauf sucht der Installer, was erreichbar ist:
 
-1. **Ollama im eigenen Netz** — bekannte Adressen und Port 11434 abfragen;
-   antwortet etwas, werden die vorhandenen Modelle aufgelistet
+1. **Ollama im eigenen Netz** — das eigene Subnetz auf Port 11434
+   absuchen, Treffer per `/api/tags` bestätigen (Regel 5k); antwortet
+   etwas, werden die vorhandenen Modelle samt Fähigkeiten aufgelistet
 2. **Zugangsdaten in der Umgebung** — gesetzte Schlüssel erkennen
 3. **Bestehende Abo-Anmeldung**
 

@@ -455,6 +455,9 @@ keine Änderung am Router.
 
 ### Architekturregel 5b — Anthropic-Anmeldung wie im OpenMinis-PR
 
+> Ausführung für das Gateway, Punkt für Punkt nach PR #407: §4c,
+> „Architekturregel 5b, Fassung für das Gateway“.
+
 Anthropic wird auf demselben Weg eingebunden wie in
 [OpenMinis PR #407](https://github.com/OpenMinis/OpenMinis/pull/407) —
 **dem eigenen Beitrag dort, der hier mit übernommen wird**:
@@ -788,6 +791,230 @@ Dritten. Wo eine Fehlkonfiguration Fremden Zugang gibt, wird nicht
 gefragt, sondern verweigert.
 
 Die Liste steht in der Umgebung, nicht im Repo (§13).
+
+## 4c. Gateway: der eine Weg nach draußen
+
+Entschieden am 16.10.2026. Ersetzt den Ansatz, dass jeder Anbieter und
+Telegram im Dienst selbst eine Verbindung öffnen. Vorbild ist der
+Pförtner aus rag4ll (§27): ein Eingang, geprüft am Tor, intern
+weitergereicht. Ausführung der Anbieterseite in `docs/PROVIDER.md`.
+
+### Architekturregel 5n — Chimera spricht nur über sein Gateway mit der Welt
+
+Auf dem Gerät gibt es **genau einen Prozess mit Netzzugang: das Gateway**.
+Es ist Pförtner und Orchestrator zugleich, nach dem Vorbild von rag4ll §27.
+
+    Welt ── Telegram, Ollama, Anthropic, Web-Oberfläche, MCP, Update
+              │
+         ┌────▼─────────────────────────────┐
+         │ Gateway  (Nutzer chimera-tor)    │  liest .env, hält die Schlüssel
+         │  · Anbieter-Ketten, Rückfall     │  Netzsuche, Zeitgrenzen
+         │  · Telegram ein/aus              │  Positivliste (5j)
+         │  · Web-Oberfläche                │  Passwort (5m)
+         └────┬─────────────────────────────┘
+              │ Unix-Socket /run/chimera/tor.sock
+         ┌────▼─────────────────────────────┐
+         │ Dienst (Nutzer chimera)          │  Agent, Werkzeuge, Anzeige, Ton
+         │  IPAddressDeny=any               │  kein Netz, keine Schlüssel
+         └──────────────────────────────────┘
+
+**Was das Gateway tut:**
+- **Ausgehend:** Der Dienst schickt „Aufgabe X, Verlauf, Werkzeuge“. Das
+  Gateway wählt anhand der Kette den Anbieter, ruft ihn auf, fällt bei
+  Bedarf auf den nächsten zurück und liefert die Antwort samt Herkunft
+  (`Reply.access`, `Reply.cost`). Die Registry (5a), die Ketten (5h) und
+  die Zeitgrenzen wandern dorthin.
+- **Eingehend:** Telegram und die Web-Oberfläche kommen am Gateway an.
+  Es prüft die Positivliste bzw. das Passwort und reicht die Anfrage über
+  den Socket an den Dienst weiter. Dort bleibt es bei **einer** Sitzung
+  (5d/5i).
+- **Netzsuche** (5k) und **Selbstübernahme** der Adresse laufen im
+  Gateway.
+
+**Was der Dienst nicht mehr kann, und zwar durch den Kernel, nicht durch
+eine Absprache:** Verbindungen ins Netz aufbauen (`IPAddressDeny=any`,
+nur localhost erlaubt) und Schlüssel lesen (`.env` gehört nicht seiner
+Gruppe). Ein Agent, der über ein Werkzeug Unsinn macht, kann weder
+Schlüssel abziehen noch selbst ins Netz. Er kann nur das Gateway bitten,
+und das Gateway führt nur Anbieteraufrufe aus, keine beliebigen URLs.
+
+**Steuerkanal:** Die CLI (`chimera -f`, `chimera status`) ist ein Client
+desselben Sockets. Sie öffnet nie selbst eine Anzeige (Anlass: der
+Display-Vorfall vom 16.10.). Läuft der Dienst nicht, sagt sie das.
+Regel 7 (ein Prozess, ein Framebuffer) wird damit durchsetzbar.
+
+**Ausfall des Gateways:** Der Dienst läuft weiter. Gesicht und
+Mood-Stufen 1 und 2 brauchen kein Netz (5c). In der Statuszeile steht
+`anbieter_weg` mit dem Grund „Gateway nicht erreichbar“. systemd startet
+das Gateway neu; der Dienst hängt **nicht** per `Requires=` daran, damit
+ein abstürzendes Gateway nicht das Gesicht mitnimmt.
+
+**Speicher: Obergrenze 10 MB RSS, in Rust (Regel 14).** In Python geht
+das nicht: Allein die Importe (`urllib.request`, `ssl`, `http.server`)
+kosten am Pi 21,8 MB, bevor eine Zeile Logik läuft. Eine Rust-Probe
+mit HTTPS-Client (ureq + rustls), Webserver (tiny_http), JSON und
+Unix-Socket in einem statischen Binary läuft am Pi mit **1,6–1,7 MB RSS**
+(Binary 1,6 MB). Die Grenze wird in der Unit mit `MemoryMax=` gesetzt und
+im Test am Gerät nachgemessen (10q).
+
+**Bewusst nicht im Gateway:** Selbstaktualisierung und
+Paketinstallationen (smilez). Sie laufen als root im Installer,
+außerhalb des Betriebs. 5n regelt den **laufenden** Betrieb.
+
+**Bewusst nicht im Gateway:** Audio und Anzeige. Die sind lokal und
+brauchen kein Netz.
+
+### Architekturregel 5k — Ollama wird im Netz gesucht, nie auf dem Gerät betrieben
+
+Chimera installiert und startet **nie** ein eigenes Ollama.
+
+1. Gesucht wird im **eigenen Subnetz** der aktiven Schnittstelle, mit
+   dem Präfix der Schnittstelle. Netze größer als /22 werden nicht
+   abgesucht, dann heißt es: „Netz zu groß, Adresse bitte auf der
+   Web-Oberfläche eintragen.“
+2. Erste Stufe: TCP 11434, parallel, 0,3 s je Adresse.
+3. Zweite Stufe: Nur wer auf `/api/tags` gültiges JSON mit `models`
+   liefert, gilt als Ollama.
+4. Zu jedem Fund gehören die Modellliste und die Fähigkeiten aus
+   `/api/show` (`tools`, `vision`, `embedding`). Das ist der Baustein aus
+   openclawgotchi.
+
+**Gesucht wird:** im Installer (Schritt 50), auf Anforderung (Telegram
+`/suche`, Web-Oberfläche) und wenn die eingetragene Adresse beim Start
+oder nach Ausfällen nicht antwortet.
+
+**Selbstübernahme (smilez: ja):** Antwortet die eingetragene Adresse
+nicht mehr, übernimmt das Gateway eine neue nur, wenn **genau ein**
+Server gefunden wird **und** dieser **alle Ollama-Modelle der Ketten**
+hat. Dann wird sie in `.env` geschrieben (Sidecar-Datei, danach `mv`),
+und die Übernahme wird gemeldet: Statuszeile, Telegram, Protokoll mit
+alter und neuer Adresse. Bei mehreren Funden oder fehlenden Modellen
+wird nur gemeldet.
+
+Die Adresse steht **nur** in `/opt/chimera/config/.env`. `.env.example`
+behält den Platzhalter (§13).
+
+### Architekturregel 5l — Wer Schlüssel hat, hat kein Werkzeug; wer Werkzeuge hat, hat keine Schlüssel
+
+Folgt aus 5n und ersetzt die Fassung 1 (zwei Schreiber).
+
+| | Inhalt | liest | schreibt | Ort |
+|---|---|---|---|---|
+| **Anbieter** | Adressen, Schlüssel, Anmeldung, Telegram-Token, Web-Passwort (Hash) | Gateway | Gateway (Web-Oberfläche, Selbstübernahme), Installer | `/opt/chimera/config/.env`, **root:chimera-tor 660** |
+| **Wahl** | Reihenfolge, Ketten, Sprache, Zeitgrenzen | Gateway | Gateway (Telegram `/model`, Web) | `/opt/chimera/config/wahl.json`, root:chimera-tor 660 |
+
+Der Agentennutzer `chimera` kann **keine** der beiden Dateien lesen.
+Was er von der Wahl wissen muss (z. B. die Sprache), bekommt er über den
+Socket.
+
+**Telegram `/model`** bleibt, wie in openclawgotchi: Liste,
+Fähigkeiten, Auswahl, Reihenfolge. **„Set Ollama IP“ im Chat entfällt**
+(smilez). Adressen werden auf der Web-Oberfläche eingetragen oder durch
+die Netzsuche gefunden.
+
+### Architekturregel 5h, Ergänzung — Die Reihenfolge bestimmt der Nutzer
+
+- Es gibt eine **bevorzugte Liste** aus Anbieter/Modell-Paaren in frei
+  gewählter Reihenfolge, Anbieter gemischt, z. B.
+  `anthropic-abo/opus` → `ollama/qwen3.8:27b` → `anthropic-api/sonnet`.
+- Jede Aufgabe nimmt diese Liste, **außer** sie hat eine eigene Kette.
+- `suggest()` läuft nur bei der Ersteinrichtung oder auf Anforderung und
+  schreibt einen **Vorschlag** in `wahl.json`, den es danach nie mehr
+  überschreibt. Die Regel „Größtes Modell fürs Gespräch“ fällt weg.
+  Stattdessen gilt: das erste Modell mit `tools`.
+- Ein Modell ohne `tools` wird für Aufgaben, die Werkzeuge brauchen,
+  **übersprungen und benannt**.
+- **Leere Kette: melden, nicht ausweichen.** Den stillen Rückfall von
+  OpenMinis auf „neuestes sichtbares Modell“ übernehmen wir nicht.
+- Weitere Anbieter (LiteLLM, ROADMAP) werden auf der Web-Oberfläche
+  angelegt: Typ, Adresse oder Schlüssel, dann die Modellliste. Der
+  Ablauf ist der von OpenMinis.
+
+### Architekturregel 5m — Die Web-Oberfläche ist Teil des Gateways und braucht kein Framework
+
+- **Kein Framework.** Die Seite besteht aus ein paar Formularen und
+  wird im Gateway mit `tiny_http` ausgeliefert (Rust, in der Probe
+  enthalten). HTML und CSS liegen als Dateien im Repo und kommen per
+  `include_str!` ins Binary, ohne JavaScript-Build. Flask ist damit
+  hinfällig. Zum Vergleich: Python `http.server` allein kostet am Pi 18 MB.
+- Sie läuft **im Gateway**, nicht als eigener Prozess. Das Gateway läuft
+  ohnehin, hat ohnehin die Schreibrechte auf `.env`, und ein zweiter
+  Nutzer `chimera-web` (Fassung 1) wird damit überflüssig.
+- **Ohne Passwort startet sie nicht** (sinngemäß 5j). Der Installer
+  erzeugt das Passwort, zeigt es einmal an und speichert nur den Hash
+  (Argon2id oder PBKDF2, in Rust).
+- **HTTP mit Passwort** ist die Voreinstellung, gebunden ans LAN.
+  **HTTPS ist Opt-in.** Wer einen Reverse-Proxy hat (z. B. Caddy mit
+  DuckDNS), bindet das Gateway an 127.0.0.1 und lässt den Proxy davor.
+  Wer keinen hat, bekommt später ein selbstsigniertes Zertifikat
+  (ROADMAP). Die Web-Oberfläche weist bei HTTP sichtbar darauf hin, dass
+  Schlüssel im Klartext durchs Heimnetz gehen.
+- Einstellbar: Anbieter anlegen, prüfen, entfernen; Netzsuche starten und
+  Fund übernehmen; bevorzugte Liste und Ketten; Sprache; Passwort ändern.
+- Änderungen wirken **ohne Neustart**: Das Gateway lädt neu, der Dienst
+  merkt davon nichts.
+
+### Architekturregel 5b, Fassung für das Gateway — PR #407 ist die Vorlage, Punkt für Punkt
+
+Vorgabe smilez (16.10.): Die Abo-Anmeldung im Gateway hält sich an den
+eigenen OpenMinis-PR #407 (`Smilez1985:fix/dynamic-claude-cli-version`,
+Diff gesichert unter `shared/notes-chimera/quellen/pr407/pr407.diff`).
+Der PR ist Kotlin und Swift, also wird er **nachgebaut**, nicht kopiert
+(Regel 1, OpenMinis ist GPL-3). Übernommen wird das Verhalten:
+
+1. **Quelle der Version:** `GET https://registry.npmjs.org/-/package/@anthropic-ai/claude-code/dist-tags`.
+   Gewählt wird die **höchste plausible Version über alle Tags**, nicht
+   `stable`, weil die Sperre eine Mindestversion prüft und `stable`
+   hinter einem Modellstart herhinken kann.
+2. **Plausibel** heißt: genau `^\d+\.\d+\.\d+$`, numerisch verglichen
+   (2.1.280 > 2.1.99).
+3. **Nur vorwärts** (`accept()`): Ein Wert gleich oder kleiner dem
+   bekannten wird verworfen. Ein Ausrutscher der Registry kann die
+   Kennung nicht hinter eine erfüllte Sperre zurückschieben.
+4. **Reihenfolge der Auflösung:** Wert dieses Laufs, dann gespeicherter
+   Wert (überlebt Neustart und Offline-Start), dann einkompilierte
+   Untergrenze. Der schlechteste Fall ist damit der feste Wert von
+   früher.
+5. **Nie im Anfragepfad:** Eine Anfrage liest nur den Zwischenspeicher.
+   Abgerufen wird beim Start des Gateways und danach höchstens einmal in
+   24 h, in einem eigenen Thread mit 10 s Zeitgrenze. Ein Fehler lässt den
+   alten Wert stehen. Läuft schon ein Abruf, startet kein zweiter
+   (atomarer Schalter).
+6. **Eine Untergrenze, nicht zwei:** Der Rückfallwert wird aus dem
+   User-Agent-Literal des Header-Satzes gelesen, nicht als zweite
+   Konstante geführt.
+7. **Ein Header-Satz für beide Wege (#360):** Token-Weg und Chat-Weg lesen
+   dieselbe Liste `current()`. Getauscht wird **nur die Version im
+   User-Agent** (`claude-cli/<v> (external, cli)`). `X-Stainless-*`,
+   `X-App: cli` und `Anthropic-Dangerous-Direct-Browser-Access` bleiben
+   genau wie in der Vorlage, weil das Backend sie als Satz prüft.
+   `anthropic-beta` gehört nur auf den Chat-Weg.
+8. **Token-Endpunkt** `https://claude.ai/v1/oauth/token` (nicht mehr
+   `console.anthropic.com`). Das Auffrischen erfolgt vor Ablauf und über
+   einen Koordinator (PROVIDER.md).
+
+**Tests wie in der Vorlage, gegen den echten Code:** `accept()` lehnt
+ältere und unplausible Versionen ab; `parse_dist_tags` wählt die höchste;
+eine Version zur Laufzeit erreicht **beide** Wege; nie unter der
+Untergrenze; der Chat-Weg führt keine eigene Kopie der Header. Jeder Test
+mit Gegenprobe.
+
+**Wo der Satz an Werten gepflegt wird:** Die Werte (Untergrenze,
+`X-Stainless-*`, Beta-Liste) folgen OpenMinis `main`. Ändern sie sich
+dort, wird hier nachgezogen. Das ist ein bekannter Pflegepunkt, keine
+Automatik.
+
+**Befund am heutigen Code (`provider/anthropic.py`), weicht von der
+Vorlage ab und wird beim Umzug ersetzt:**
+- Die Version kommt aus `claude --version` (Unterprozess), nicht aus der
+  Registry. Ohne installierte CLI bleibt sie dauerhaft beim Rückfallwert
+  2.1.284.
+- Es gibt keine Regel „nur vorwärts“, keinen gespeicherten Wert und keine
+  24-h-Auffrischung.
+- Die `X-Stainless-*`-Header, `X-App` und der Token-Weg fehlen ganz.
+  Gesendet wird nur `anthropic-beta: oauth-2025-04-20`.
+
+---
 
 ## 5. Renderer
 
@@ -2065,6 +2292,76 @@ die Historie umgeschrieben.
 
 ---
 
+## 14. Zwei Sprachen
+
+### Architekturregel 14 — Was dauernd läuft und nicht auf das Modell wartet, ist Rust
+
+Chimera ist künftig zweisprachig, mit einer klaren Grenze:
+
+| Teil | Sprache | Grund |
+|---|---|---|
+| **Gateway** (5n) | Rust | läuft dauernd, Obergrenze 10 MB, hält Schlüssel |
+| **Renderer + Paneltreiber** (Regel 7) | Rust, Stufe 2 | 15 Bilder/s, heute der Großteil von 27 % CPU |
+| Agent, Werkzeuge, Moods, Gesichter als Pakete (8b) | Python | wartet 60–200 s auf das Modell; die Werkzeuge und die vom Modell angelegten Pakete leben davon, dass es Python ist |
+| Installer, Selbstupdate | Shell (wie heute) | läuft als root, selten |
+
+**Warum nicht alles in Rust (oder Go):** Gemessen am Pi braucht der
+Dienst 48 MB und 27 % CPU, fast nur durch den Renderer. Die
+Agentenschleife verbringt ihre Zeit im Warten auf das Modell. Ob sie
+2 ms oder 0,2 ms rechnet, merkt man nicht. Ein Umbau des gesamten
+Agenten (rund 1.800 Zeilen, dazu Moods mit 1.300) kostet viel und bringt
+an der spürbaren Stelle nichts. **Go** bringt gegenüber Rust keinen
+Vorteil, sondern eine zweite Toolchain. Es bleibt bei einer.
+
+**Grenzen zwischen den Sprachen:**
+- Python ↔ Gateway: der Unix-Socket aus 5n, eine JSON-Zeile hin, eine
+  zurück.
+- Python ↔ Renderer: Shared Memory für den Zustand (Muster aus Noisy,
+  Regel 7). Den Framebuffer besitzt allein der Renderer-Prozess.
+- Kein FFI (PyO3 o. ä.). Prozessgrenzen sind messbar (RSS je Prozess,
+  10q), abstürzende Teile reißen den anderen nicht mit (10p), und jede
+  Seite lässt sich allein testen.
+
+**Gebaut wird nie auf dem Gerät.**
+- Ziel: `aarch64-unknown-linux-musl`, **statisch** gelinkt. Damit gibt
+  es keine glibc-Abhängigkeit, und dasselbe Binary läuft auf DietPi,
+  Debian und Armbian (10a, Board und Betriebssystem bleiben getrennte
+  Achsen). Später kommt `armv7` dazu, falls ein 32-Bit-Board in die
+  Profiltabelle (10c) aufgenommen wird.
+- Gebaut wird in der **CI** (GitHub Actions). Das Binary hängt am
+  Release mit **SHA-256** daneben. Der Installer lädt das Binary zum
+  Tag, prüft die Prüfsumme und bricht bei Abweichung benannt ab (I4).
+  Für Pre-Alpha ohne Tag (GLOBAL: ungetaggt) gibt es ein CI-Artefakt
+  zum Commit.
+- Lokale Entwicklung: rustup stable (gemessen 1.99.1) in der Sandbox,
+  1:29 min für den Release-Build der Probe. **Nicht** Alpines `cargo`
+  (1.83): Das kann `edition2024` nicht, das aktuelle Crates verlangen.
+- Release-Profil: `opt-level = "s"`, `lto = true`,
+  `codegen-units = 1`, `panic = "abort"`, `strip = true`.
+
+**Abhängigkeiten werden genannt, nicht gesammelt.** Für das Gateway
+reichen: `ureq` mit rustls (kein OpenSSL, keine Systembibliothek),
+`tiny_http`, `serde`/`serde_json`. Kein async-Laufzeitsystem (tokio).
+Bei wenigen gleichzeitigen Verbindungen auf einem Zero kosten Threads
+weniger als ein Executor. Ein neues Crate kommt mit Begründung in diese
+Liste. `Cargo.lock` wird eingecheckt, und die CI prüft mit
+`cargo deny` Lizenzen (Regel 1: nichts GPL-Inkompatibles im MIT-Binary)
+und bekannte Schwachstellen.
+
+**Tests:** `cargo test` in der CI neben den Python-Tests. Regeln 8a und 9
+gelten unverändert. Ein Test, der eine Python-Formel in Rust
+nachrechnet, prüft nichts. Beim Umzug des Renderers wird **Bild gegen
+Bild** verglichen (gleicher Zustand, gleiche Pixel innerhalb einer
+Toleranz), nicht Code gegen Code.
+
+**Umzug in Stufen, jede für sich lauffähig:**
+1. Gateway (neu, ersetzt `provider/` und `bot/` im Dienst).
+2. Paneltreiber und Renderer. Der Python-Renderer bleibt, bis der
+   Bildvergleich grün ist, und wird erst danach entfernt (10h, nichts
+   Halbes liegen lassen).
+
+---
+
 ## Verzeichnis der Architekturregeln
 
 - **1** — Die GPL-Grenze ist hart
@@ -2083,6 +2380,10 @@ die Historie umgeschrieben.
 - **5d** — Ein Gespräch, zwei Türen
 - **5i** — Ein Kanal hat keinen eigenen Zustand
 - **5j** — Eine Tür von außen ohne Positivliste startet nicht
+- **5k** — Ollama wird im Netz gesucht, nie auf dem Gerät betrieben
+- **5l** — Wer Schlüssel hat, hat kein Werkzeug; wer Werkzeuge hat, hat keine Schlüssel
+- **5m** — Die Web-Oberfläche ist Teil des Gateways und braucht kein Framework
+- **5n** — Chimera spricht nur über sein Gateway mit der Welt
 - **5e** — zram und Auslagerungsdatei gehören zum Aufbau
 - **5f** — Fremde Werkzeuge sind nicht vertrauenswürdig
 - **5g** — Audio läuft getrennt, aber schlank
@@ -2120,3 +2421,4 @@ die Historie umgeschrieben.
 - **10q** — Speicher wird am Prozess gemessen und vom Prozess begrenzt
 - **10r** — Der Agent ist ein eigener Nutzer, und was root ausführt, kann er nicht ändern
 - **13a** — Vor jedem Push wird geprüft, und die Prüfung beweist ihre Sehfähigkeit
+- **14** — Was dauernd läuft und nicht auf das Modell wartet, ist Rust

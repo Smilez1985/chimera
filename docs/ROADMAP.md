@@ -267,7 +267,8 @@ Kann parallel zu Phase 4 laufen; berührt den Renderer nicht.
       `supports_streaming`, `cost_class`, `access` erweitert
 - [x] **Ollama-Connector** mit Platzhalter-Erkennung und Netzsuche
 - [x] **Claude getrennt nach Abo und Schlüssel**, Herkunft in der Antwort
-- [x] Client-Kennung zur Laufzeit (PR #407), mit Rückfallwert
+- [x] Client-Kennung zur Laufzeit (aus `claude --version`), mit
+      Rückfallwert. Weicht von PR #407 ab und wird in Phase 4d ersetzt.
 - [x] Ersteinrichtung: suchen, vorschlagen, übernehmen — änderbar
 - [ ] Auffrischen der Abo-Marke vor Ablauf, mit Koordinator
 - [ ] Werkzeugschleife aus openclawgotchi anschließen
@@ -289,6 +290,35 @@ Kann parallel zu Phase 4 laufen; berührt den Renderer nicht.
 - [ ] Fehlender Schlüssel ⇒ Connector meldet sich als nicht verfügbar,
       kein Startabbruch
 - [ ] `.env.example` mit Platzhaltern für alle Anbieter
+
+## Phase 4d — Gateway in Rust (DESIGN §4c, Regel 14)
+
+Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
+
+- [ ] **Rust-Grundlage:** `gateway/` als Cargo-Projekt, CI-Job mit
+      `cargo test`, `cargo deny`, Build aarch64-musl und SHA-256 am
+      Artefakt. Der Installer holt und prüft das Binary.
+- [ ] **Gerüst:** Socket `/run/chimera/tor.sock`, Unit mit Nutzer
+      `chimera-tor` und `MemoryMax`, Dienst-Unit mit `IPAddressDeny=any`.
+      Test mit Gegenprobe: Der Dienst kommt nicht ins LAN.
+- [ ] **Anbieter im Gateway:** Ollama, Anthropic-Schlüssel, Anthropic-Abo
+      nach PR #407 (Regel 5b, Fassung für das Gateway: Registry-Version,
+      nur vorwärts, ein Header-Satz für Token- und Chat-Weg). Dazu
+      Ketten, Zeitgrenzen (5 s Verbindung / 300 s Aufruf) und Anzeige
+      „ollama @ Host“.
+- [ ] **Netzsuche** (5k) mit Selbstübernahme der Adresse, Installer
+      Schritt 50.
+- [ ] **`wahl.json`** mit bevorzugter Liste (5h). Telegram im Gateway mit
+      `/model` und `/suche`.
+- [ ] **CLI** als Socket-Client, ohne eigene Anzeige.
+- [ ] **Web-Oberfläche** (5m): HTTP mit Passwort.
+- [ ] HTTPS als Opt-in: Reverse-Proxy dokumentieren, selbstsigniertes
+      Zertifikat für alle ohne Proxy.
+- [ ] Rückbau-Gegenstücke (10l) und `migrate_from()` (`.env` von
+      root:chimera auf root:chimera-tor).
+- [ ] Danach `provider/` und `bot/telegram.py` aus dem Dienst entfernen.
+- [ ] Später, eigener Entwurf: Renderer und Paneltreiber in Rust (Regel 14,
+      Stufe 2).
 
 ## Phase 4c — Telegram erhalten ✓
 
