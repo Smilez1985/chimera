@@ -63,6 +63,7 @@ python3-numpy	python3 -c "import numpy"	Umrechnung nach RGB565
 i2c-tools	command -v i2cdetect	Busse von Hand pruefen
 curl	command -v curl	Downloads mit Fortsetzen
 sox	command -v sox	Toene pruefen
+zstd	command -v zstd	Sitzungsarchive von Hand oeffnen (tar --zstd)
 EOF
 }
 
