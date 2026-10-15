@@ -1014,6 +1014,72 @@ Vorlage ab und wird beim Umzug ersetzt:**
 - Die `X-Stainless-*`-Header, `X-App` und der Token-Weg fehlen ganz.
   Gesendet wird nur `anthropic-beta: oauth-2025-04-20`.
 
+
+### Architekturregel 5o — Der Briefkasten ist ein eigener Prozess hinter dem Gateway, mit eigenem Port
+
+andere Agenten ──► Gateway :<briefkasten-port>  (Token-Prüfung A19)
+                          │ Unix-Socket /run/chimera/post.sock
+                       Briefkasten (Nutzer chimera-post, kein Netz)
+                          │ ablegen, halten bis quittiert (A5)
+                          │ Reiz → Steuerkanal des Dienstes
+                       Dienst: Turn im Kanal „briefkasten“ (5i)
+
+- **Eigener Prozess, eigener Nutzer** `chimera-post`, eigene Ablage
+  (`/var/lib/chimera/post/`, nur für ihn). Wie der Dienst ohne Netz
+  (`IPAddressDeny=any`). Ein Absturz trifft weder Gesicht noch Gateway.
+- **Eigener Port am Gateway**, getrennt von der Web-Oberfläche. Grund:
+  zwei verschiedene Arten von Zugang (Agent-Token und Nutzerpasswort)
+  sollen sich keinen Eingang teilen. Damit lässt sich jeder für sich
+  in der Firewall öffnen, schließen oder abschalten. Das Gateway prüft
+  das Token am Tor und reicht nur durch, was bestanden hat. Ohne
+  Teilnehmerliste bleibt der Port zu (5j).
+- **Eigenständig** (entschieden 16.10.2026): Chimeras Briefkasten ist ein
+  vollwertiger Briefkasten, bei dem sich andere Agenten anmelden. Er ist
+  nicht Teilnehmer eines fremden. Rückfall-Adressen tragen die Clients
+  selbst (woa-l `BRIEFKASTEN_URLS`, der Reihe nach probiert).
+  Standortspezifische Ergänzungen (etwa das Abholen von einem
+  vorherigen Briefkasten) gehören nicht ins Repo, sondern nach `lokal/`
+  (gitignoriert).
+- **Das Protokoll ist das von woa-l**, also MCP über HTTP mit denselben
+  Werkzeugnamen und Feldern (`briefkasten_senden`, `klingel_wach`,
+  `uebergabe_ablegen`, `datei_ablegen` …). Damit erreichen bestehende
+  woa-l-Teilnehmer Chimera, ohne dass sich auf ihrer Seite etwas ändert.
+  **Nachgebaut** wird nach den Regeln von woa-l, nicht der Code
+  übernommen. Begründung: Regel 14, weil der Prozess dauernd läuft und
+  nicht auf das Modell wartet. Er ist damit **Rust**, im selben Cargo-
+  Workspace wie das Gateway.
+- **Wecken heißt hier: ein Turn in der einen Sitzung.** Der Briefkasten
+  meldet über den Steuerkanal „Nachricht Nr. n von X“. Der Dienst stellt
+  sie als Turn im Kanal `briefkasten` zu. Läuft schon ein Turn, wartet
+  die Nachricht in der Reihe, wie heute bei Telegram (`Session.busy`).
+  Quittiert wird **erst nach dem Turn** (A5). Ein Absturz mitten im Turn
+  führt also zu einer erneuten Zustellung, nicht zu einer verlorenen
+  Nachricht.
+- **Was aus den Skills wird** (Verhalten, nicht Text):
+
+  | woa-l / Skill | in Chimera |
+  |---|---|
+  | Klingel, Wächter, Totmann | entfallen. Der Briefkasten ist ein systemd-Dienst mit `Restart=`, und die Zustellung ist ein Socket-Aufruf, kein Weckruf über eine App. |
+  | `sitzungsstart` | Start des Dienstes: Sitzung laden, Post nachliefern, Gedächtnis einspeisen (8c) |
+  | `uebergabe`, `sitzungswechsel` | Regel 8d (Wechsel bei Gewicht) |
+  | MCP-Werkzeuge senden/lesen/Datei | eingebaute Werkzeuge des Agenten, die über den Socket mit dem eigenen Briefkasten reden. Fremde Briefkästen erreicht er über das Gateway (5n). |
+  | Arbeitssitzung ermitteln (A2) | entfällt. Es gibt genau eine aktive Sitzung. |
+
+### Architekturregel 5p — Was ein anderer Agent schreibt, ist Eingabe, kein Befehl
+
+Eine Nachricht von außen kann einen Turn auslösen, aber sie bekommt
+**nicht** die Rechte des Nutzers.
+
+- Im Kanal `briefkasten` sind Root (10s), das Ändern von Anbietern oder
+  Wahl und das Anlegen neuer Teilnehmer **gesperrt**. Diese Dinge gehen
+  nur über Telegram (Positivliste) oder die Web-Oberfläche (Passwort).
+- Der Agent bekommt die Nachricht mit Absender und dem Hinweis, dass es
+  sich um eine Nachricht eines anderen Agenten handelt (wie 5f bei
+  fremden Werkzeugen).
+- Grund: Ein Token kann erbeutet werden, und ein Agent kann
+  fehlgesteuert sein. Ohne diese Regel wäre der Briefkasten ein zweiter,
+  schwächer geschützter Weg zu allem, was der Nutzer darf.
+
 ---
 
 ## 5. Renderer
@@ -1506,6 +1572,86 @@ Alle vier sind unabhängig voneinander und einzeln testbar.
    Beide werden mit der Ansage injiziert, dass es Hintergrundkontext ist
    und die letzte Nutzernachricht Vorrang hat — sonst nimmt das Modell
    abgeschlossene Aufgaben wieder auf.
+
+---
+
+## 8b. Gedächtnis und Sitzungen
+
+Entschieden am 16.10.2026. Ersetzt das Verdichten in `agent/loop.py` (`_compact()`), das kürzt, wenn die Zusammenfassung scheitert, und den Verlauf nur im Speicher hält.
+
+### Architekturregel 8c — Das Gedächtnis verdichtet sich nach oben, und nichts fällt dabei heraus
+
+data/gedaechtnis/
+      GRUNDLAGEN.md          vom Nutzer, für den Agenten nur lesbar (wie heute)
+      tage/JJJJ-MM-TT.md     Tagesprotokoll, am Tagesende verdichtet
+      monate/JJJJ-MM.md      aus den Tagen des Monats
+      jahre/JJJJ.md          aus den Monaten des Jahres
+      memory.md              laufendes Jahr = Vorjahr + Monate bisher
+
+- **Tag:** Während des Tages schreibt der Agent Einträge (wie heute).
+  Beim ersten Turn nach Mitternacht, oder spätestens beim Wechsel, wird
+  daraus eine **Tageszusammenfassung** am Kopf derselben Datei. Die
+  Einträge bleiben darunter stehen.
+- **Monat:** Am Monatsende werden die Tageszusammenfassungen zu
+  `monate/JJJJ-MM.md` verdichtet. Danach wird `memory.md` neu geschrieben,
+  aus der Zusammenfassung des Vorjahres plus den Monaten des laufenden
+  Jahres.
+- **Jahr:** Am Jahresende wird `memory.md` zu `jahre/JJJJ.md`. Die neue
+  `memory.md` beginnt mit dieser Jahreszusammenfassung. So fließt das
+  Jahr in das neue ein, wie vorgegeben.
+- **Eingespeist wird:** `GRUNDLAGEN.md`, `memory.md` und die Zusammen-
+  fassungen der letzten Tage, mit dem Hinweistext aus 8 (Hintergrund,
+  keine Aufgabenliste).
+- **Nichts fällt heraus:** Die Quellen werden **nie gelöscht**.
+  Verdichtet wird nach oben, die unteren Stufen bleiben auf der Platte
+  und über das Werkzeug `erinnern` durchsuchbar. Die Zusammenfassung
+  führt die **Fundstellen** (welcher Tag), damit der Agent gezielt
+  nachlesen kann. Das ist der Unterschied zu `_compact()` heute.
+- **Gegen stilles Verdünnen:** Eine Verdichtung ist nur gültig, wenn sie
+  die **offenen Punkte** und **Entscheidungen** der Quelle vollständig
+  enthält. Geprüft wird das gegen eine Liste, die beim Schreiben mit
+  Markern geführt wird (`- [ ]`, `Entscheidung:`), Zahl gegen Zahl
+  (GLOBAL: Summe gegen Gesamtzahl). Fehlt etwas, wird die Verdichtung
+  verworfen und erneut versucht, und das wird gemeldet.
+- Modell: Aufgabe `zusammenfassen` aus 5h. Ist kein Modell erreichbar,
+  wird die Verdichtung **verschoben, nicht ersetzt**. Ein gekürzter
+  Ersatz entfällt.
+- Platz auf der Platte: Ein Tag ergibt einige KB. Zehn Jahre liegen im
+  einstelligen MB-Bereich (Schätzung, ungemessen).
+
+### Architekturregel 8d — Eine aktive Sitzung, eine alte, der Rest im Archiv
+
+- **Die Sitzung liegt auf der Platte** (`data/sitzungen/<id>/verlauf.jsonl`,
+  Zeile für Zeile angehängt) und übersteht damit Neustarts. Heute geht
+  sie verloren.
+- **Verdichten im Lauf** (ersetzt `_compact()`): Gelöscht wird nichts,
+  die verdichteten Nachrichten bleiben in `verlauf.jsonl`. Ins Fenster
+  kommen die Zusammenfassung **mit Verweis** auf die Zeilennummern, die
+  offenen Punkte wörtlich und die letzten Turns wörtlich. Das Werkzeug
+  `nachlesen` holt alte Abschnitte zurück.
+- **Der Wächter ist eingebaut, kein eigener Dienst.** Er misst nach
+  jedem Turn das Gewicht: Token des Fensters nach dem Verdichten gegen
+  das Fenster des Modells, das gerade bedient (context.py, Regel 5a).
+  **Schwer** heißt: Auch nach dem Verdichten liegt die Nutzung über einer
+  Schwelle (wird gemessen, sobald die Ablage läuft; bis dahin steht hier
+  bewusst kein Wert), oder
+  `Action.EXHAUSTED`. Dazu kommen
+  Plattengröße und Ladezeit von `verlauf.jsonl` als zweites Maß, die
+  Schwellen stehen in `wahl.json`.
+- **Wechsel:** Die alte Sitzung schreibt eine **Übergabe**: was läuft,
+  was offen ist, was als Nächstes kommt. Die neue Sitzung beginnt mit
+  dieser Übergabe, `memory.md` und den letzten Tagen. Läuft gerade ein
+  Turn, wird erst danach gewechselt (wie woa-l A21).
+- **Ein Satz an Sitzungen:** `aktiv` und `alt`. Beim Wechsel wird
+  `alt` zu `archiv/<id>.tar.zst` (oder `.tar.gz`, falls zstd fehlt),
+  `aktiv` wird zu `alt`, die neue wird `aktiv`. Archive, die älter als
+  **3 Tage** sind, löscht der Dienst bei jedem Wechsel und einmal am Tag.
+- **Prüfung vor dem Löschen:** Archiviert ist erst, was sich wieder
+  auspacken lässt (`tar -t` gelingt, Zahl der Dateien stimmt). Erst
+  danach wird das Verzeichnis entfernt (GLOBAL: Ergebnis prüfen, nicht
+  nur den Exitcode).
+- Das Tagesgedächtnis (8c) hängt **nicht** an der Sitzung. Ein Wechsel
+  verliert keinen Tag.
 
 ---
 
@@ -2209,6 +2355,38 @@ zweite darf nicht kopieren. (b) Als `chimera` versuchen, in `source/`,
 muss scheitern. (c) Eine Datei im Startbaum ändern. `source/` muss neu
 befüllt werden, `productive/` erst im Installerlauf.
 
+### Architekturregel 10s — Root gibt es nur auf Rückfrage, auf Zeit, und nicht für den Agenten selbst
+
+10r bleibt: Der Dienstnutzer `chimera` hat **kein** sudo. Root kommt
+über einen eigenen Helfer:
+
+- **`chimera-hand`**, ein kleiner Root-Dienst mit Socket
+  (`/run/chimera/hand.sock`, nur Gruppe `chimera`). Er führt Befehle
+  **nur** aus, solange eine gültige Freigabe besteht.
+- **Freigabe:**
+  1. Der Agent fragt: Was will er tun, warum, und wie lange (Vorschlag
+     in Minuten).
+  2. Gefragt wird **der Nutzer**, über Telegram (Positivliste, Bestätigung
+     per Knopf) oder die Web-Oberfläche. Nie über den Briefkasten (5p), nie über die CLI
+     ohne Nutzer.
+  3. Der Nutzer bestätigt **mit der Dauer**. Das Gateway schreibt die
+     Freigabe an `chimera-hand` (Ablaufzeitpunkt, Grund, wer bestätigt
+     hat). Der Agent selbst kann keine Freigabe anlegen.
+- **Ablauf erzwingt der Helfer**, nicht der Agent: Nach Ablauf wird jeder
+  Befehl abgewiesen. Höchstdauer 60 min (Vorschlag), Verlängern nur über
+  eine neue Rückfrage. „Sofort beenden“ gibt es über Telegram und Web.
+- **Alles wird protokolliert:** jeder Befehl, Exitcode, Dauer, unter
+  `/opt/chimera/logs/root/` (root-only, für den Agenten nicht änderbar).
+  Am Ende eine Bilanz an den Nutzer: „N Befehle, M fehlgeschlagen“.
+- **Ein Ehrlichkeitspunkt:** Während einer Freigabe gilt der Schutz aus
+  10r **nicht**. Root kann `/opt/chimera`, das Manifest und den Helfer
+  selbst ändern. Die Absicherung besteht dann aus deiner Bestätigung,
+  der Zeitgrenze und dem Protokoll. Eine strengere Betriebsart, bei der
+  jeder einzelne Befehl bestätigt wird, wird als Option angeboten.
+  Vorgabe ist die Zeitfreigabe.
+
+---
+
 ## 11. Headless
 
 Chimera hat **keine grafische Oberfläche.** Es gibt den 240×280-Bildschirm
@@ -2360,6 +2538,34 @@ Toleranz), nicht Code gegen Code.
    Bildvergleich grün ist, und wird erst danach entfernt (10h, nichts
    Halbes liegen lassen).
 
+
+### Zuordnung für Briefkasten, Sitzung, Gedächtnis und Root
+
+Maßstab ist
+Regel 14: Was dauernd läuft, Rechte hält oder Daten verwaltet und dabei
+nicht auf das Modell wartet, wird Rust.
+
+| Teil | Sprache | Begründung |
+|---|---|---|
+| Briefkasten (5o) | **Rust** | läuft dauernd, hält fremde Post, prüft Token |
+| Wächter: Gewicht messen (8d) | **Rust**, im Briefkasten-/Sitzungsdienst | reine Zählung von Token und Bytes, läuft nach jedem Turn |
+| Sitzungsablage: `verlauf.jsonl` anhängen, `nachlesen`, Wechsel, Tarball, Löschen nach 3 Tagen (8d) | **Rust**, eigenes Binary `chimera-sitzung` | Dateiverwaltung mit Prüfungen. `tar` und `zstd`/`gzip` als Crates, damit kein externes Programm fehlen kann. |
+| Root-Helfer `chimera-hand` (10s) | **Rust** | läuft als root; kleiner Code mit klaren Typen ist hier ein Sicherheitsgewinn |
+| Gedächtnis: Marker zählen, Vollständigkeit prüfen, Dateien rollen (8c) | **Rust**, im Sitzungsdienst | deterministisch, prüfbar ohne Modell |
+| Gedächtnis: der Text der Zusammenfassung (8c) | **Python** (Agent) | ist ein Modellaufruf; der Agent fragt, Rust prüft das Ergebnis |
+| Übergabe schreiben (8d) | **Python** (Agent) | Inhalt kommt vom Modell |
+| Agentenschleife, Werkzeuge, Moods, Gesichter (8b) | **Python** | wartet auf das Modell, lebt von Python (Regel 14) |
+
+Folge: Neben Gateway und Renderer entstehen in Rust der Briefkasten,
+`chimera-hand` und die Sitzungsablage. Alle liegen in **einem**
+Cargo-Workspace (`rust/` im Repo), mit gemeinsamen Crates für Socket-
+Protokoll und Protokollierung. Gebaut wird in einem einzigen CI-Lauf.
+
+Die Sitzungsablage ist ein eigener Dienst `chimera-sitzung`.
+Der Briefkasten hält **fremde** Daten (`chimera-post`), die Sitzung
+**eigene**. Getrennte Nutzer bedeuten, dass ein Fehler im Briefkasten
+nicht an den Verlauf kommt.
+
 ---
 
 ## Verzeichnis der Architekturregeln
@@ -2384,6 +2590,8 @@ Toleranz), nicht Code gegen Code.
 - **5l** — Wer Schlüssel hat, hat kein Werkzeug; wer Werkzeuge hat, hat keine Schlüssel
 - **5m** — Die Web-Oberfläche ist Teil des Gateways und braucht kein Framework
 - **5n** — Chimera spricht nur über sein Gateway mit der Welt
+- **5o** — Der Briefkasten ist ein eigener Prozess hinter dem Gateway, mit eigenem Port
+- **5p** — Was ein anderer Agent schreibt, ist Eingabe, kein Befehl
 - **5e** — zram und Auslagerungsdatei gehören zum Aufbau
 - **5f** — Fremde Werkzeuge sind nicht vertrauenswürdig
 - **5g** — Audio läuft getrennt, aber schlank
@@ -2399,6 +2607,8 @@ Toleranz), nicht Code gegen Code.
 - **7d** — Wer anzeigt, besitzt die Zeit
 - **8** — Die Mood-Steuerung ist ein Skill, kein Sonderweg
 - **8b** — Ein Gesicht ist ein Paket, das das Modell anlegen darf
+- **8c** — Das Gedächtnis verdichtet sich nach oben, und nichts fällt dabei heraus
+- **8d** — Eine aktive Sitzung, eine alte, der Rest im Archiv
 - **8a** — Stiller Erfolg ist die gefährlichste Fehlerart
 - **9** — Kein Test, der eine Formel nachrechnet
 - **10** — Ein Versionssprung bricht keine Installation
@@ -2420,5 +2630,6 @@ Toleranz), nicht Code gegen Code.
 - **10p** — Was beim Laden abstürzt, wird beim nächsten Start nicht wieder geladen
 - **10q** — Speicher wird am Prozess gemessen und vom Prozess begrenzt
 - **10r** — Der Agent ist ein eigener Nutzer, und was root ausführt, kann er nicht ändern
+- **10s** — Root gibt es nur auf Rückfrage, auf Zeit, und nicht für den Agenten selbst
 - **13a** — Vor jedem Push wird geprüft, und die Prüfung beweist ihre Sehfähigkeit
 - **14** — Was dauernd läuft und nicht auf das Modell wartet, ist Rust

@@ -320,6 +320,27 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
 - [ ] Später, eigener Entwurf: Renderer und Paneltreiber in Rust (Regel 14,
       Stufe 2).
 
+## Phase 4e — Briefkasten, Sitzung, Gedächtnis, Root (DESIGN 5o, 5p, 8c, 8d, 10s)
+
+Rust-Teile im selben Cargo-Workspace wie das Gateway (Regel 14).
+
+- [ ] **Briefkasten** `chimera-post` (Rust): woa-l-Protokoll (MCP über
+      HTTP), eigener Port am Gateway, Token als sha256, Quittung erst nach
+      dem Turn. Kanal `briefkasten` im Dienst, gesperrt für Root und
+      Konfiguration (5p).
+- [ ] **Sitzungsablage** `chimera-sitzung` (Rust): `verlauf.jsonl`,
+      `nachlesen`, Wechsel aktiv/alt, Tarball, Löschen nach 3 Tagen erst
+      nach geprüftem Auspacken.
+- [ ] Wächter im Sitzungsdienst. **Schwelle „schwer“ messen** und ins
+      Design eintragen.
+- [ ] Verdichten neu: Zusammenfassung mit Verweis, offene Punkte
+      wörtlich. `_compact()` in `agent/loop.py` entfällt.
+- [ ] **Gedächtnis** Tag → Monat → Jahr → `memory.md`, Quellen bleiben,
+      Vollständigkeitsprüfung (Rust) gegen Marker.
+- [ ] **`chimera-hand`** (Rust, root): Freigabe nur durch den Nutzer per
+      Telegram-Knopf oder Web, mit Dauer, Protokoll, Bilanz.
+- [ ] Rückbau-Gegenstücke (10l) für Nutzer `chimera-post`, Units, Sockets.
+
 ## Phase 4c — Telegram erhalten ✓
 
 Erledigt, siehe `CHANGELOG.md` unter `[Unreleased]`. Telegram wurde nicht

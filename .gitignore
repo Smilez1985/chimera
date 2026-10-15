@@ -30,3 +30,6 @@ tools/check-pii*
 
 # Sessionübergaben: Arbeitsstand, kein Projektinhalt.
 uebergaben/
+
+# Standortspezifisches (DESIGN 5o): nur dieses Setup, nie ins Repo.
+lokal/
