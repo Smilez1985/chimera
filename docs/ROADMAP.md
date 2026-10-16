@@ -341,6 +341,22 @@ Rust-Teile im selben Cargo-Workspace wie das Gateway (Regel 14).
       Telegram-Knopf oder Web, mit Dauer, Protokoll, Bilanz.
 - [ ] Rückbau-Gegenstücke (10l) für Nutzer `chimera-post`, Units, Sockets.
 
+## Phase 4f — Persönlichkeit und Selbstentwicklung (DESIGN 8e–8h)
+
+- [ ] `data/ich/` mit SOUL, IDENTITY, RULES, USER, TRAITS, BOOTSTRAP als
+      `*.example`-Vorlagen. `SYSTEM_TEMPLATE` schrumpft auf den
+      Sicherheitskern.
+- [ ] `migrate_from()`: `GRUNDLAGEN.md` → `RULES.md`.
+- [ ] Budgets je Datei, Überlänge = nicht laden und melden. Budgets am Pi
+      messen.
+- [ ] Rechte nach 8f, Git-Commit je Änderung, Scanner vor dem Schreiben.
+- [ ] Freigabe für SOUL/IDENTITY per Telegram-Knopf und Web.
+- [ ] Merk-Hinweis alle 10 Turns, Sichern vor dem Verdichten, Traum im
+      Leerlauf, TRAITS höchstens 1 je 7 Tage, Wochenbilanz.
+- [ ] Eigene Skills (Text frei, Code mit Freigabe), Curator archiviert.
+- [ ] Index `rusqlite` bundled FTS5 in `chimera-sitzung`, `--index-neu`,
+      RSS am Pi messen.
+
 ## Phase 4c — Telegram erhalten ✓
 
 Erledigt, siehe `CHANGELOG.md` unter `[Unreleased]`. Telegram wurde nicht

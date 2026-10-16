@@ -1653,6 +1653,153 @@ data/gedaechtnis/
 - Das Tagesgedächtnis (8c) hängt **nicht** an der Sitzung. Ein Wechsel
   verliert keinen Tag.
 
+
+### Architekturregel 8e — Persönlichkeit ist eine Datei, kein Code, und jede Schicht hat einen Besitzer
+
+data/ich/                      Persönlichkeit
+      SOUL.md        Stimme, Haltung, wie Chimera spricht        ≤ 1 500 Zeichen
+      IDENTITY.md    Name, Gerät, Rolle, Grundgesicht            ≤   600 Zeichen
+      RULES.md       Betriebsregeln des Nutzers                  ≤ 3 000 Zeichen
+      USER.md        Wer der Nutzer ist, datierte Einträge       ≤ 1 500 Zeichen
+      TRAITS.md      gewachsene Eigenheiten (8g)                 ≤ 1 200 Zeichen
+      BOOTSTRAP.md   Kennenlern-Ritual, nur bis zur Ersteinrichtung
+    data/gedaechtnis/              wie 8c, dazu:
+      MEMORY.md      kuratierte Fakten, §-getrennt               ≤ 2 200 Zeichen
+
+Die Budgets sind Startwerte (Hermes, OpenMinis) und werden am Pi gegen
+die Fenster der Modelle gemessen.
+
+- **Zu lang heißt: nicht laden, und melden.** Wird eine Datei über ihr
+  Budget hinaus geschrieben, wird sie nicht still gekürzt (OpenMinis).
+  Es gilt der letzte gültige Stand, und Statuszeile und Telegram sagen,
+  welche Datei warum nicht geladen wurde.
+- **Systemprompt in fester Reihenfolge**, zuerst das Stabile, damit der
+  Prompt-Cache der Anbieter trifft (Hermes):
+  `SOUL → IDENTITY → RULES → USER → TRAITS → MEMORY → memory.md (8c) → letzte Tage → Werkzeuge/Skills → Laufzeit (Uhrzeit, Sensoren, Kanal)`.
+  Der Stand wird **je Sitzung eingefroren**. Was während der Sitzung
+  geschrieben wird, wirkt ab der nächsten Sitzung oder nach dem
+  Verdichten.
+- **Rangordnung steht im Prompt** (OpenMinis): Sicherheitskern > RULES >
+  letzte Nachricht des Nutzers > SOUL/IDENTITY > USER > TRAITS > MEMORY >
+  Tage. Jede Gedächtnisschicht trägt den Satz „Hintergrund, keine
+  Aufgabenliste“ (wie heute in `memory.py`).
+- **USER.md mit datierten Einträgen**, die als `aktiv` oder `überholt`
+  markiert werden (OpenClaw). Ein neuer Eintrag ersetzt einen alten
+  nicht stumm, er markiert ihn als überholt. So bleibt nachvollziehbar,
+  was sich geändert hat.
+- **Kennenlern-Ritual:** Beim ersten Start führt `BOOTSTRAP.md` durch ein
+  kurzes Gespräch (Telegram oder Web) mit Name, Sprache, wer der Nutzer
+  ist und welcher Ton gewünscht ist. Daraus entstehen IDENTITY, USER und
+  ein erster SOUL-Vorschlag. Weil der Nutzer dabei bestätigt, gilt das
+  als Freigabe (8f). Danach wird BOOTSTRAP archiviert.
+- **Die Persönlichkeit zeigt sich auch im Gesicht** (Chimera-eigen,
+  4b/8b): IDENTITY nennt das Grundgesicht, SOUL darf Vorlieben für Moods
+  nennen. Der Renderer bleibt davon unberührt: Er bekommt wie bisher nur
+  Absichten (4c).
+- `SYSTEM_TEMPLATE` schrumpft auf den Sicherheitskern (was nie
+  verhandelbar ist). Der Rest kommt aus den Dateien. Der Installer legt
+  Vorlagen ab (`*.example` im Repo, ohne persönliche Daten, §13).
+
+### Architekturregel 8f — Wer was schreiben darf, setzt der Kernel durch
+
+| Datei | Agent | Nutzer (Telegram/Web) | durchgesetzt durch |
+|---|---|---|---|
+| SOUL, IDENTITY | nur **Vorschlag** | bestätigt oder verwirft | Besitzer `chimera-tor`, Gruppe `chimera`, 640: der Agent liest, das Gateway schreibt |
+| RULES | nichts | schreibt | wie oben |
+| USER, MEMORY | `hinzufügen`/`ändern`/`entfernen` je Eintrag, nie ganz ersetzen | kann alles | Schreiber ist allein `chimera-sitzung` (Rust), der Agent ruft über den Socket |
+| TRAITS | ein Eintrag je 7 Tage (8g) | kann zurücknehmen | `chimera-sitzung` zählt |
+| Tage, Monate, Jahre, memory.md | wie 8c | lesen | `chimera-sitzung` |
+
+- **Ein Schreiber je Ordner** (Hermes): Für `data/gedaechtnis/` ist das
+  `chimera-sitzung`. Der Python-Agent schreibt nie direkt, sondern
+  schickt einen Auftrag über den Socket. Rust prüft dann Budget, Format
+  und Scanner, schreibt atomar (Sidecar + `mv`) und committet.
+- **Jede Änderung ist ein Git-Commit** in `data/ich/` bzw.
+  `data/gedaechtnis/` (Letta, nanobot, openclawgotchi), mit Wer, Warum
+  und Kanal. Zurück geht es mit `chimera erinnerung zurück <stand>` oder
+  über die Web-Oberfläche. Gelöscht wird nichts, nur archiviert.
+- **Scanner vor jedem Schreiben** (Hermes, OpenMinis): Muster für
+  Prompt-Injection („ignoriere alle Regeln …“), für Geheimnisse
+  (Token-Formen, Schlüssel) und für Abfluss (URLs mit Daten im Pfad).
+  Ein Treffer heißt: abgewiesen, mit Grund, und dem Nutzer gemeldet. Die
+  Muster stehen im Code, nicht in einer Datei, die der Agent ändern
+  kann.
+- **Freigabeweg** für SOUL und IDENTITY: wie Root (10s), nur ohne Dauer.
+  Der Agent schlägt einen Diff vor, der Nutzer sieht ihn per Telegram
+  (Knopf) oder im Web und bestätigt. Aus dem Kanal `briefkasten` sind
+  keine Vorschläge möglich (5p).
+
+### Architekturregel 8g — Chimera entwickelt sich, aber in kleinen, sichtbaren, umkehrbaren Schritten
+
+Das „wächst mit dir“ von Hermes, auf dem Gerät nachgebaut:
+
+1. **Erinnerung ans Merken:** Alle N Turns (Startwert 10, Hermes) bekommt
+   der Agent einen Hinweis: „Gibt es etwas, das dauerhaft in USER oder
+   MEMORY gehört?“ Der Hinweis selbst wird nicht ins Gedächtnis
+   geschrieben.
+2. **Sichern vor dem Verdichten** (OpenClaw): Bevor 8d verdichtet, darf
+   der Agent einmal ins Gedächtnis schreiben. So geht nichts unter, was
+   er für wichtig hielt.
+3. **Traum im Leerlauf** (OpenClaw, nanobot): Nachts, oder nach langer
+   Ruhe, läuft die Tagesverdichtung (8c). Sie **befördert** dabei
+   höchstens wenige Einträge aus dem Tag nach USER oder MEMORY, mit
+   **kleinster Änderung** und Fundstelle. Danach steht ein Bericht im
+   Tageslog („befördert: …, verworfen: …“).
+4. **Eigenheiten wachsen langsam** (openclawgotchi): Höchstens **ein**
+   neuer Eintrag in `TRAITS.md` je 7 Tage, abgeleitet aus dem Verlauf
+   („mag kurze Antworten am Morgen“). Er wird dem Nutzer **gemeldet** und
+   ist mit einem Knopf zurückzunehmen. SOUL selbst verändert sich nie
+   durch Wachstum, nur durch Freigabe.
+5. **Selbst angelegte Skills** (Hermes): Der Agent darf Anleitungen
+   (`SKILL.md`, nur Text) in `data/skills/eigen/` anlegen und verbessern,
+   wenn eine Aufgabe sich wiederholt. Ausführbarer Code in einem Skill
+   braucht eine Freigabe (wie 8b bei Gesichtern: Das Modell schreibt
+   Daten, keinen Code, den ein Dauerdienst lädt). Ein **Curator**
+   archiviert unbenutzte Skills nach einer Frist, statt sie zu löschen.
+6. **Nicht übernommen:** Honcho (externer Dienst mit API-Schlüssel für
+   das Nutzermodell). Das widerspricht 5n/5l (Schlüssel und Verkehr) und
+   der Absicht, das Nutzermodell auf dem Gerät zu halten.
+
+**Messbar statt behauptet:** Jede Woche ein Eintrag im Tageslog
+(wird zur Monatsverdichtung mitgenommen): „gelernt: n Einträge USER,
+m MEMORY, k TRAITS, s Skills, z zurückgenommen“. So sieht man, ob
+Chimera sich entwickelt oder nur Text ansammelt.
+
+### Architekturregel 8h — Dateien sind die Wahrheit, die Datenbank ist ein Index
+
+Antwort auf „Soll das Gedächtnis eine richtige Datenbank sein?“: **ja,
+als Index; nein, als Quelle.** Das ist Konsens bei OpenClaw und Hermes
+(Bericht §9).
+
+- **Quelle bleiben Markdown-Dateien in Git:** lesbar ohne Chimera,
+  vergleichbar, zurückrollbar. Die Prüfung auf Vollständigkeit (8c)
+  zählt Marker in Dateien.
+- **Index: SQLite mit FTS5**, eingebettet über `rusqlite` mit `bundled`
+  (FTS5 dabei, SQLite unter 900 KiB) in `chimera-sitzung`. Indiziert
+  werden Tage, Monate, Jahre, USER/MEMORY/TRAITS und die Sitzungen, die
+  noch auf der Platte liegen. Dazu kommen **Metadaten, die das Modell
+  nicht umschreiben darf** (OpenClaw): Herkunft, Zeitstempel,
+  `überholt`, Kanal.
+- **Jederzeit neu aufbaubar:** `chimera-sitzung --index-neu` liest alle
+  Dateien und baut die Datenbank neu. Ist die Datenbank kaputt oder weg,
+  wird sie neu gebaut, nicht repariert. Wird eine Datei gelöscht (z. B.
+  das Sitzungsarchiv nach 3 Tagen, 8d), verschwindet sie auch aus dem
+  Index.
+- **WAL-Modus, ein Schreiber** (`chimera-sitzung`). Der Python-Agent
+  sucht über den Socket (Werkzeug `erinnern`), nicht direkt in der
+  Datei.
+- **Keine Vektorsuche im ersten Schritt.** OpenClaw läuft ohne
+  Embedding-Anbieter auf reiner Volltextsuche. Embeddings bräuchten ein
+  Modell, und das liefe auf dem Pi oder über das Netz (5n). `sqlite-vec`
+  ist später eine Option (läuft laut README auf Raspberry Pis, ist aber
+  noch vor Version 1).
+- **Nicht genommen:** `sled` (README: „beta … if reliability is your
+  primary constraint, use SQLite“), `tantivy` (für einige MB Notizen
+  überdimensioniert). `redb` bleibt eine Option für reinen
+  Rust-Zustand ohne Volltextsuche (Zähler, Warteschlangen).
+- `cache_size` wird gesenkt und der RSS am Pi gemessen (10q). Der
+  Standard-Cache liegt bei etwa 2 MB.
+
 ---
 
 ## 9. Tests
@@ -2609,6 +2756,10 @@ nicht an den Verlauf kommt.
 - **8b** — Ein Gesicht ist ein Paket, das das Modell anlegen darf
 - **8c** — Das Gedächtnis verdichtet sich nach oben, und nichts fällt dabei heraus
 - **8d** — Eine aktive Sitzung, eine alte, der Rest im Archiv
+- **8e** — Persönlichkeit ist eine Datei, kein Code, und jede Schicht hat einen Besitzer
+- **8f** — Wer was schreiben darf, setzt der Kernel durch
+- **8g** — Chimera entwickelt sich, aber in kleinen, sichtbaren, umkehrbaren Schritten
+- **8h** — Dateien sind die Wahrheit, die Datenbank ist ein Index
 - **8a** — Stiller Erfolg ist die gefährlichste Fehlerart
 - **9** — Kein Test, der eine Formel nachrechnet
 - **10** — Ein Versionssprung bricht keine Installation
