@@ -1,0 +1,28 @@
+# cargo deny -- Lizenzen und Schwachstellen (DESIGN Regel 14, Regel 1).
+#
+# Chimera ist MIT. Ins Binary darf nur, was das nicht bricht: keine GPL,
+# keine LGPL im statischen Link. Die Liste ist eine Positivliste -- eine
+# neue Lizenz kommt nur mit Begruendung hinzu, wie ein neues Crate.
+
+[graph]
+targets = ["aarch64-unknown-linux-musl", "x86_64-unknown-linux-gnu"]
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+]
+confidence-threshold = 0.9
+
+[advisories]
+# Bekannte Schwachstellen (RustSec) brechen den Lauf.
+yanked = "deny"
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

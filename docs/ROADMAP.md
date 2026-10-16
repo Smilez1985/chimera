@@ -295,7 +295,7 @@ Kann parallel zu Phase 4 laufen; berührt den Renderer nicht.
 
 Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
 
-- [ ] **Rust-Grundlage:** `gateway/` als Cargo-Projekt, CI-Job mit
+- [ ] **Rust-Grundlage:** `rust/` als Cargo-Workspace (`gemein`, `chimera-tor`), CI-Job mit
       `cargo test`, `cargo deny`, Build aarch64-musl und SHA-256 am
       Artefakt. Der Installer holt und prüft das Binary.
 - [ ] **Gerüst:** Socket `/run/chimera/tor.sock`, Unit mit Nutzer

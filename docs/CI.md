@@ -20,6 +20,7 @@ laufen.
 |---|---|
 | `python` | Alle `tests/test_*.py` einzeln, auf Python 3.11 und 3.13. Dazu `tools/check-globals.py` über `src/`, `tests/`, `tools/`. |
 | `installer` | Alle `installer/tests/test-*.sh` unter **dash** und **BusyBox**, dazu Syntaxprüfung jedes Skripts. |
+| `rust` | Auf einem arm64-Runner: `cargo test`, `cargo deny` (Lizenzen nach Positivliste, RustSec), Release-Build für `aarch64-unknown-linux-musl`. Das Binary muss statisch sein, laufen und die Version aus `VERSION` nennen. Ergebnis mit SHA-256 als Artefakt `chimera-rust-aarch64-<commit>`. |
 | `trockenlauf` | Preflight und Modul 40 gegen ein erfundenes Wurzelverzeichnis (Regel 10d) — und die Prüfung, dass der Trockenlauf wirklich nichts anfasst. |
 
 Die Tests werden **einzeln** aufgerufen, nicht über einen Sammelbefehl:
@@ -85,6 +86,9 @@ ausführt, lässt sich vorher ausführen:
 # Python
 for t in tests/test_*.py; do PYTHONPATH=src python3 "$t" || echo "ROT: $t"; done
 python3 tools/check-globals.py src/ tests/ tools/
+
+# Rust
+(cd rust && cargo test && cargo deny check)
 
 # Installer
 cd installer && sh run-tests.sh

@@ -119,6 +119,75 @@ jobs:
             $SH -n "$f" || { printf 'Syntaxfehler: %s\n' "$f"; exit 1; }
           done
 
+  rust:
+    name: Rust (aarch64-musl)
+    # Nativer arm64-Runner: Tests laufen auf der Architektur des Ziels,
+    # und das gebaute Binary wird hier auch ausgefuehrt -- ein Artefakt,
+    # das nie gestartet wurde, ist eine Behauptung (DESIGN Regel 14).
+    runs-on: ubuntu-24.04-arm
+    defaults:
+      run:
+        working-directory: rust
+    env:
+      ZIEL: aarch64-unknown-linux-musl
+      # cargo-deny als Release-Binary, an Version UND Pruefsumme gebunden
+      # (GLOBAL: Pruefsumme vor dem Ausfuehren).
+      DENY_V: "0.20.2"
+      DENY_SHA: 995c82be0defc7a025cae49a2aa2644ce8245c9a3318fc4103907c6a285e8c7d
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Werkzeugkette
+        run: |
+          set -eu
+          rustup toolchain install stable --profile minimal
+          rustup target add "$ZIEL"
+          # musl-gcc fuer Crates mit C-Anteil (spaeter ring ueber rustls).
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq musl-tools
+          rustc --version; cargo --version
+
+      - name: Tests
+        run: cargo test --locked --target "$ZIEL"
+
+      - name: Lizenzen und Schwachstellen (cargo deny)
+        run: |
+          set -eu
+          d="cargo-deny-${DENY_V}-aarch64-unknown-linux-musl"
+          curl -fsSL -o /tmp/deny.tgz \
+            "https://github.com/EmbarkStudios/cargo-deny/releases/download/${DENY_V}/${d}.tar.gz"
+          echo "${DENY_SHA}  /tmp/deny.tgz" | sha256sum -c -
+          tar -xzf /tmp/deny.tgz -C /tmp
+          /tmp/"$d"/cargo-deny --version
+          /tmp/"$d"/cargo-deny check
+
+      - name: Release-Build
+        run: cargo build --release --locked --target "$ZIEL"
+
+      - name: Binary pruefen und Pruefsumme
+        # Statisch heisst: kein Interpreter-Eintrag. Und das Binary muss
+        # laufen und die Version aus VERSION nennen, nicht irgendeine.
+        run: |
+          set -eu
+          b="target/$ZIEL/release/chimera-tor"
+          file "$b"
+          file "$b" | grep -q 'statically linked' || { echo "nicht statisch gelinkt"; exit 1; }
+          soll="$(tr -d ' \t\r\n' < ../VERSION)"
+          ist="$("$b" --version)"
+          [ "$ist" = "chimera-tor $soll" ] || { echo "Version: '$ist' statt '$soll'"; exit 1; }
+          "$b" --pruefen
+          mkdir -p ../ausgabe
+          cp "$b" ../ausgabe/chimera-tor-aarch64
+          cd ../ausgabe && sha256sum chimera-tor-aarch64 > chimera-tor-aarch64.sha256
+          cat chimera-tor-aarch64.sha256
+          ls -l
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chimera-rust-aarch64-${{ github.sha }}
+          path: ausgabe/
+          if-no-files-found: error
+
   trockenlauf:
     name: Trockenlauf ohne Hardware
     runs-on: ubuntu-latest

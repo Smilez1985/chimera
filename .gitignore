@@ -33,3 +33,6 @@ uebergaben/
 
 # Standortspezifisches (DESIGN 5o): nur dieses Setup, nie ins Repo.
 lokal/
+
+# Rust-Build (rust/target, Regel 14). Cargo.lock bleibt eingecheckt.
+rust/target/
