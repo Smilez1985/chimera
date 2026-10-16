@@ -108,14 +108,27 @@ source_version() { tr -d ' \t\r\n' <"$1/VERSION" 2>/dev/null; }
 # Versionsvergleich. Ausgabe: lt | eq | gt (erste gegen zweite).
 #
 # `sort -V` ordnet "0.1.0-pre" HINTER "0.1.0" -- eine Vorabfassung galte
-# als neuer als das Release (gemessen, GNU coreutils). Mit "~" statt "-"
-# ordnet es richtig davor. Darum wird vor dem Vergleich umgeschrieben.
+# als neuer als das Release (gemessen, GNU coreutils). Der fruehere Ausweg
+# "~" statt "-" hilft nur bei GNU: BusyBox `sort -V` ordnet "0.1.0~pre"
+# ebenfalls hinter "0.1.0" (gemessen, BusyBox 1.37, CI-Lauf 38830059482).
+# Darum wird die Vorabkennung abgetrennt und selbst verglichen; `sort -V`
+# sieht nur noch reine Zahlenfolgen, die beide Fassungen gleich ordnen.
+_version_min() { printf '%s\n%s\n' "$1" "$2" | sort -V | head -1; }
 version_cmp() {
 	[ "$1" = "$2" ] && { echo eq; return 0; }
-	_vc_a="$(printf '%s' "$1" | tr '-' '~')"
-	_vc_b="$(printf '%s' "$2" | tr '-' '~')"
-	_vc_min="$(printf '%s\n%s\n' "$_vc_a" "$_vc_b" | sort -V | head -1)"
-	if [ "$_vc_min" = "$_vc_a" ]; then echo lt; else echo gt; fi
+	_vc_a="${1%%-*}"; _vc_b="${2%%-*}"
+	_vc_pa=""; _vc_pb=""
+	[ "$_vc_a" = "$1" ] || _vc_pa="${1#*-}"
+	[ "$_vc_b" = "$2" ] || _vc_pb="${2#*-}"
+	if [ "$_vc_a" != "$_vc_b" ]; then
+		if [ "$(_version_min "$_vc_a" "$_vc_b")" = "$_vc_a" ]; then echo lt; else echo gt; fi
+		return 0
+	fi
+	# Gleicher Kern: ohne Vorabkennung ist neuer als mit (SemVer 11.3).
+	if [ -z "$_vc_pa" ]; then echo gt; return 0; fi
+	if [ -z "$_vc_pb" ]; then echo lt; return 0; fi
+	if [ "$_vc_pa" = "$_vc_pb" ]; then echo eq; return 0; fi
+	if [ "$(_version_min "$_vc_pa" "$_vc_pb")" = "$_vc_pa" ]; then echo lt; else echo gt; fi
 }
 
 # Hoechster veroeffentlichter Stand: vX.Y.Z-Tags der Quelle, nie eine
@@ -162,11 +175,19 @@ source_kopieren() {
 	mkdir -p "$(dirname "$_sk_nach")" || return 1
 	rm -rf "$_sk_neu"
 	mkdir -p "$_sk_neu" || return 1
-	_sk_ex=""
-	for _sk_x in $_SRC_AUSSCHLUSS; do _sk_ex="$_sk_ex --exclude=$_sk_x"; done
+	# Kein `tar --exclude`: BusyBox ohne FEATURE_TAR_LONG_OPTIONS kennt es
+	# nicht (Ubuntu busybox-static 1.36.1, CI-Lauf 38830059482: "tar:
+	# unrecognized option '--exclude=.git'"). Dieselbe Auswahl wie
+	# source_hash (find mit -prune), die Namen gehen als Argumente an cp --
+	# kein Zerlegen an Leerzeichen oder Zeilenenden.
+	_sk_find=""
+	for _sk_x in $_SRC_AUSSCHLUSS; do _sk_find="$_sk_find -name $_sk_x -prune -o"; done
 	# shellcheck disable=SC2086
-	( cd "$_sk_von" && tar -cf - $_sk_ex --exclude='*.pyc' . ) |
-		( cd "$_sk_neu" && tar -xf - ) || { rm -rf "$_sk_neu"; return 1; }
+	( cd "$_sk_von" && find . $_sk_find ! -type d ! -name '*.pyc' -exec sh -c '
+		ziel="$1"; shift
+		for f; do
+			mkdir -p "$ziel/${f%/*}" && cp -Pp "$f" "$ziel/$f" || exit 1
+		done' sh "$_sk_neu" {} + ) || { rm -rf "$_sk_neu"; return 1; }
 	# Fuer den Dienstnutzer lesbar, fuer niemanden ausser root schreibbar --
 	# egal mit welcher umask der Startbaum entstand.
 	chmod -R u+rwX,go+rX,go-w "$_sk_neu" 2>/dev/null

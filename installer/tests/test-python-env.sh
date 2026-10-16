@@ -387,9 +387,12 @@ mkdir -p "$W/bin-dpkg"
 printf '#!/bin/sh\nprintf installed\n' >"$W/bin-dpkg/dpkg-query"; chmod +x "$W/bin-dpkg/dpkg-query"
 _spur="$W/nachweis-spur"
 # Der Haken haengt sich in den Import von chimera.__main__ (meta_path) und
-# ersetzt main durch eine Mitschrift. sitecustomize laedt Python beim Start
-# von selbst, wenn es auf dem Pfad liegt -- die .pth macht src/ dazu.
-cat >"$BAUM/src/sitecustomize.py" <<EOF
+# ersetzt main durch eine Mitschrift. Geladen wird er ueber eine eigene .pth
+# mit `import`-Zeile, nicht als sitecustomize: Debian und Ubuntu bringen ein
+# eigenes /usr/lib/python3.X/sitecustomize.py mit, das vor src/ gefunden
+# wird (gemessen am chimera-pi, Python 3.13; CI-Lauf 38830059482 -- dort
+# blieb die Spur leer). Die .pth kommt nach dem Grundlauf ins venv.
+cat >"$BAUM/src/chimera_testhaken.py" <<EOF
 import os
 import sys as _s
 class _Nach:
@@ -415,6 +418,9 @@ _s.meta_path.insert(0, _Nach())
 EOF
 PATH="$W/bin-dpkg:$PATH" fahr run
 check "Nachweis-Fall: Grundlauf rc 0" "$RC" "0"
+# Nach chimera.pth (alphabetisch), damit src/ schon auf dem Pfad liegt.
+_sp="$(dirname "$(find "$WURZEL/opt/chimera/productive/venv" -name 'chimera.pth' | head -1)")"
+printf 'import chimera_testhaken\n' >"$_sp/zz-chimera-testhaken.pth"
 _vpy="$WURZEL/opt/chimera/productive/venv/bin/python"
 _starts="$W/nachweis-starts"
 if [ -x "$_vpy" ] && [ ! -e "$_vpy.echt" ]; then

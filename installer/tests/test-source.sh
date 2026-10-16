@@ -56,6 +56,10 @@ check "0.10.0 > 0.9.1"          "$(bib version_cmp 0.10.0 0.9.1)" gt
 check "0.1.0-pre < 0.1.0"       "$(bib version_cmp 0.1.0-pre 0.1.0)" lt
 check "0.1.0 > 0.1.0-pre"       "$(bib version_cmp 0.1.0 0.1.0-pre)" gt
 check "gleich"                  "$(bib version_cmp 1.2.3 1.2.3)" eq
+check "0.1.0-pre < 0.1.1"       "$(bib version_cmp 0.1.0-pre 0.1.1)" lt
+check "0.2.0-pre > 0.1.0"       "$(bib version_cmp 0.2.0-pre 0.1.0)" gt
+check "0.1.0-alpha < 0.1.0-beta" "$(bib version_cmp 0.1.0-alpha 0.1.0-beta)" lt
+check "0.1.0-rc2 > 0.1.0-rc1"   "$(bib version_cmp 0.1.0-rc2 0.1.0-rc1)" gt
 
 # --- 3. Hash: Inhalt, nicht Ort und nicht .git ----------------------------
 baum() {   # $1 Pfad, $2 VERSION
