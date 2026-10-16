@@ -36,7 +36,9 @@ R="$W/root"
 S="$R/opt/chimera/source"
 V="$R/opt/chimera/productive/venv"
 mkdir -p "$R/opt/chimera/state" "$S" "$V/bin"
-( cd "$REPO" && tar -cf - --exclude=.git . ) | ( cd "$S" && tar -xf - )
+# Kein `tar --exclude`: Ubuntus busybox-static kennt es nicht (CI-Lauf
+# 38833796558). Kopieren, dann .git entfernen.
+cp -a "$REPO/." "$S/" && rm -rf "$S/.git"
 [ -n "${CHIMERA_RM50:-}" ] && cp "$CHIMERA_RM50" "$S/uninstaller/steps/50-remove-python.sh"
 printf '#\n' >"$V/bin/python"
 M="$R/opt/chimera/state/manifest.tsv"
