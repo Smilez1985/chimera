@@ -89,12 +89,15 @@ jobs:
           sudo apt-get install -y -qq dash busybox-static
 
       - name: Tests
+        # Als root, wie der Installer am Geraet und die Entwicklung lokal.
+        # Mehrere Schritte verlangen `id -u` = 0. Als Nutzer `runner`
+        # brachen sie mit "nur als Verwalter" ab (Lauf 38828905149).
         run: |
           set -eu
           cd installer
           case "${{ matrix.shell }}" in
-            dash)    SH="dash" ;;
-            busybox) SH="busybox sh" ;;
+            dash)    SH="sudo -E dash" ;;
+            busybox) SH="sudo -E busybox sh" ;;
           esac
           fehl=0
           for t in tests/test-*.sh; do
