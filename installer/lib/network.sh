@@ -157,6 +157,13 @@ network_fetch() {
 		http://*)  _nl_port=80 ;;
 		*)         _nl_port=443 ;;
 	esac
+	# Ein Port in der Adresse (Spiegel, Test) gilt vor dem Schema: sonst
+	# wuerde "http://127.0.0.1:8080/x" auf Port 80 geprueft und als "Netz
+	# weg" gemeldet, obwohl die Gegenstelle antwortet.
+	_nl_hostport="$(printf '%s' "$_nl_url" | sed -e 's|^[a-z]*://||' -e 's|/.*||')"
+	case "$_nl_hostport" in
+		*:[0-9]*) _nl_port="${_nl_hostport##*:}" ;;
+	esac
 
 	if is_dry_run; then
 		info "[wuerde laden] $_nl_url -> $_nl_ziel"

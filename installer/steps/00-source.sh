@@ -123,8 +123,27 @@ info "Kandidat: $KAND_V  ${KAND_H%"${KAND_H#????????????}"}"
 info "source/:  ${IST_V:-fehlt}  ${IST_H:+${IST_H%"${IST_H#????????????}"}}"
 
 ENTSCHEID="$(source_entscheiden "$KAND_H" "$IST_H" "$KAND_V" "$IST_V" "$CHIMERA_DOWNGRADE")"
+
+# Commit der Quelle festhalten, solange .git noch da ist (Schritt 55 braucht
+# ihn). Nicht im Trockenlauf; nicht, wenn source/ abgelehnt wird -- dann
+# bleibt der bisherige Stand und mit ihm sein Commit.
+quelle_commit() {
+	is_dry_run && return 0
+	_qc_f="$(rootpath "$CHIMERA_STATE")/quelle-commit"
+	if _qc="$(source_commit_festhalten "$KAND" "$_qc_f")"; then
+		if [ -n "$_qc" ]; then
+			info "Commit der Quelle: $_qc"
+			manifest_record datei "$_qc_f" ""
+		else
+			info "Quelle ohne Commit (kein .git oder rust/ geaendert) -- Schritt 55 kann kein Binary waehlen."
+		fi
+	else
+		warn "Commit der Quelle nicht festgehalten ($_qc_f)."
+	fi
+}
 case "$ENTSCHEID" in
 	gleich)
+		quelle_commit
 		log "source/ ist bereits dieser Stand -- nichts zu tun."
 		log_close 0; exit 0 ;;
 	abgelehnt)
@@ -151,5 +170,6 @@ if ! source_kopieren "$KAND" "$ZIEL" "$KAND_H"; then
 	log_close 2; exit 2
 fi
 manifest_has verzeich "$ZIEL" || manifest_record verzeich "$ZIEL" ""
+quelle_commit
 log "source/ = $KAND_V (${KAND_H%"${KAND_H#????????????}"})"
 log_close 4; exit 4

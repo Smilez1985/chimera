@@ -227,3 +227,43 @@ source_entscheiden() {
 		lt) if [ "$5" = true ]; then echo downgrade; else echo abgelehnt; fi ;;
 	esac
 }
+
+# --- Commit der Quelle festhalten (DESIGN Regel 14, Binary zum Commit) -----
+#
+# Das Rust-Binary (Schritt 55) wird zum Commit der Quelle geladen, nie "das
+# neueste". Darum merkt sich Schritt 00 den Commit, solange .git noch da ist
+# (source/ hat keins). Ausgabe auf stdout: die 7 Zeichen, oder nichts.
+#
+# Leer ist ein benannter Befund, kein Fehler: Zip und Paket haben keinen
+# Commit. Leer ist es auch, wenn rust/ oder VERSION gegenueber dem Commit
+# geaendert sind -- das Binary zum Commit passte dann nicht zum Inhalt, und
+# ein passendes zu raten waere genau das, was Regel "Nie raten" verbietet.
+# $1 Baum
+source_commit_lesen() {
+	[ -d "$1/.git" ] || return 0
+	have_cmd git || return 0
+	_sc_c="$(git -C "$1" rev-parse --short=7 HEAD 2>/dev/null)" || return 0
+	case "$_sc_c" in ''|*[!0-9a-f]*) return 0 ;; esac
+	# status schweigt bei einem Fehler genauso wie bei "sauber": den
+	# Exitcode pruefen, nicht nur die Ausgabe.
+	_sc_s="$(git -C "$1" status --porcelain -- rust VERSION 2>/dev/null)" || return 0
+	[ -z "$_sc_s" ] || return 0
+	printf '%s' "$_sc_c"
+}
+
+# Festhalten: schreibt state/quelle-commit (atomar, Sidecar + mv) oder
+# entfernt eine alte Datei, wenn der neue Stand keinen Commit hat -- ein
+# veralteter Commit waere schlimmer als keiner.
+# $1 Baum, $2 Datei. Ausgabe: der Commit oder nichts. rc 1 bei Schreibfehler.
+source_commit_festhalten() {
+	_sf_c="$(source_commit_lesen "$1")"
+	if [ -z "$_sf_c" ]; then
+		rm -f "$2"
+		return 0
+	fi
+	mkdir -p "$(dirname "$2")" || return 1
+	printf '%s\n' "$_sf_c" >"$2.neu" || { rm -f "$2.neu"; return 1; }
+	mv "$2.neu" "$2" || { rm -f "$2.neu"; return 1; }
+	[ "$(cat "$2" 2>/dev/null)" = "$_sf_c" ] || return 1
+	printf '%s' "$_sf_c"
+}

@@ -2661,6 +2661,17 @@ Vorteil, sondern eine zweite Toolchain. Es bleibt bei einer.
   Binary und SHA-256. Grund: CI-Artefakte sind ohne Token nicht ladbar
   (gemessen HTTP 401), ein Prerelease-Asset anonym. Es ist kein
   `vX.Y.Z`-Tag; die Release-Kanäle (höchstes `vX.Y.Z`) ignorieren es.
+- **Welches Binary:** Der Installer lädt immer **genau das Binary zum
+  Commit der Quelle**, nie „das neueste“. Schritt 00 hält den Commit
+  beim Klonen in `state/quelle-commit` fest (kurze Form, 7 Zeichen); ein
+  Startbaum ohne `.git` (Zip, Paket) hat keinen Commit, dann bleibt die
+  Datei leer und der Schritt sagt das benannt, statt zu raten. Gibt es
+  zum Commit kein Prerelease, bricht Schritt 55 benannt ab (ohne Rückfall
+  auf einen anderen Stand): Binary und Quelle müssen zusammenpassen.
+- **Ablage:** `/opt/chimera/bin/chimera-tor`, Besitzer root, Modus 755,
+  Manifest-Art `datei` mit der Prüfsumme als Angabe. Rückbau 55 entfernt
+  die Datei, `bin/` nur, wenn sie leer ist. Der Schritt startet nichts;
+  Nutzer, Unit und Socket kommen mit dem Gerüst (Phase 4d, Schritt 2).
 - Lokale Entwicklung: rustup stable (gemessen 1.99.1) in der Sandbox,
   1:29 min für den Release-Build der Probe. **Nicht** Alpines `cargo`
   (1.83): Das kann `edition2024` nicht, das aktuelle Crates verlangen.

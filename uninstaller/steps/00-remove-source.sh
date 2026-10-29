@@ -40,5 +40,16 @@ for _p in "$ZIEL" "$ZIEL.neu" "$ZIEL.alt"; do
 	else info "entfernt: $_p"; fi
 done
 
+# Der Commit der Quelle (Schritt 00) steht im Manifest als datei.
+manifest_list_von datei 00-source | cut -f1 | while IFS= read -r _q; do
+	case "$_q" in
+		*/state/quelle-commit)
+			is_dry_run && { info "[wuerde entfernen] $_q"; continue; }
+			rm -f "$_q"
+			[ -e "$_q" ] && warn "blieb stehen: $_q" || info "entfernt: $_q" ;;
+	esac
+done
+[ ! -e "$(rootpath "$CHIMERA_STATE")/quelle-commit" ] || BEFUND=1
+
 log_close "$BEFUND"
 exit "$BEFUND"

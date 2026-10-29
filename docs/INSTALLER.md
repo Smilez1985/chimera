@@ -462,6 +462,26 @@ Gemessen am chimera-pi: `rechts` mit dem Grund „links: klirrt“ (Oberwellen
 links +2 bis −3 dB, rechts −23 bis −47 dB). Ein zweiter Lauf misst nicht
 neu, und `arecord -D chimera_mikro` nimmt auf.
 
+### 4a-r. Modul 55 — Rust-Binary (`chimera-tor`)
+
+Holt das Gateway-Binary (DESIGN Regel 14) und legt es nach
+`/opt/chimera/bin/chimera-tor` (root, 755). Er startet nichts.
+
+- **Commit:** aus `state/quelle-commit` (von Schritt 00 beim Klonen
+  geschrieben, 7 Zeichen). Leer oder fehlend ⇒ Befund (rc 1) mit Hinweis,
+  kein Raten, kein „neuestes Prerelease“.
+- **Quelle:** `https://github.com/Smilez1985/chimera/releases/download/rust-<commit>/`
+  mit `chimera-tor-aarch64` und `chimera-tor-aarch64.sha256`.
+  `CHIMERA_RUST_URL` ersetzt die Basis (Tests, Spiegel).
+- **Prüfung:** SHA-256 aus der `.sha256`-Datei; Abweichung ⇒ nichts
+  abgelegt, benannter Abbruch (I4). Danach `chimera-tor --version` gegen
+  `VERSION` der Quelle (rc 2, wenn das Binary nicht läuft).
+- **Architektur:** nur `aarch64`. Anderes ⇒ Befund, nichts geladen.
+- **Idempotent:** Liegt schon ein Binary mit gleicher Prüfsumme, passiert
+  nichts. Eine fremde Datei am Zielort wird nie überschrieben.
+- **Rückbau:** `uninstaller/steps/55-remove-rust.sh` entfernt, was im
+  Manifest steht (Modul `55-rust`).
+
 ### 4b. Modul 50 — Python-Umgebung (venv)
 
 Chimera ist ein Python-Dauerprozess. Debian hält `/usr/lib/python3` von
