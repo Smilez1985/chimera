@@ -128,6 +128,10 @@ jobs:
     # und das gebaute Binary wird hier auch ausgefuehrt -- ein Artefakt,
     # das nie gestartet wurde, ist eine Behauptung (DESIGN Regel 14).
     runs-on: ubuntu-24.04-arm
+    # Nur dieser Job darf schreiben: er veroeffentlicht das Pre-Alpha-
+    # Binary als Prerelease (anonym ladbar, Artefakte sind es nicht).
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: rust
@@ -190,6 +194,26 @@ jobs:
           name: chimera-rust-aarch64-${{ github.sha }}
           path: ausgabe/
           if-no-files-found: error
+
+      - name: Prerelease rust-<commit> (nur entwicklung, kein Versions-Tag)
+        # Der Installer holt das Binary ohne Anmeldung (DESIGN 14). Das Tag
+        # heisst rust-<kurzer commit>, nie vX.Y.Z: Pre-Alpha bleibt ungetaggt
+        # im Sinne der Release-Kanaele. Gleicher Commit = gleicher Name,
+        # ein erneuter Lauf ersetzt die Dateien, nicht das Tag.
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/entwicklung'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          tag="rust-$(echo "$GITHUB_SHA" | cut -c1-7)"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" ../ausgabe/* --clobber
+          else
+            gh release create "$tag" ../ausgabe/* --prerelease \
+              --target "$GITHUB_SHA" --title "$tag" \
+              --notes "Pre-Alpha-Build von $GITHUB_SHA (aarch64-musl, statisch). Pruefsumme in chimera-tor-aarch64.sha256."
+          fi
+          gh release view "$tag" --json assets --jq '.assets[].name'
 
   trockenlauf:
     name: Trockenlauf ohne Hardware

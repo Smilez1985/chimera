@@ -11,7 +11,7 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 ## [Unreleased]
 
 ### Hinzugefügt
-- **Gateway:** Rust-Grundlage `rust/` mit dem Programm `chimera-tor`; die CI baut es statisch für aarch64 und legt es mit SHA-256 als Artefakt ab (noch ohne Dienstbetrieb).
+- **Gateway:** Rust-Grundlage `rust/` mit dem Programm `chimera-tor`; die CI baut es statisch für aarch64 und legt es mit SHA-256 als Artefakt und auf `entwicklung` als Prerelease `rust-<commit>` ab (noch ohne Dienstbetrieb).
 - **Anzeige:** Eigenes Treiberpaket `chimera.displays` — Whisplay-LCD, LED,
   Backlight und Taste laufen ohne Herstellercode; ein neues Panel ist ein
   Ordner mit `display.json` und `panel.py`.

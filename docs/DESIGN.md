@@ -2656,8 +2656,11 @@ Vorteil, sondern eine zweite Toolchain. Es bleibt bei einer.
 - Gebaut wird in der **CI** (GitHub Actions). Das Binary hängt am
   Release mit **SHA-256** daneben. Der Installer lädt das Binary zum
   Tag, prüft die Prüfsumme und bricht bei Abweichung benannt ab (I4).
-  Für Pre-Alpha ohne Tag (GLOBAL: ungetaggt) gibt es ein CI-Artefakt
-  zum Commit.
+  Für Pre-Alpha ohne Versions-Tag (GLOBAL: ungetaggt) veröffentlicht die
+  CI auf `entwicklung` ein **Prerelease `rust-<kurzer commit>`** mit
+  Binary und SHA-256. Grund: CI-Artefakte sind ohne Token nicht ladbar
+  (gemessen HTTP 401), ein Prerelease-Asset anonym. Es ist kein
+  `vX.Y.Z`-Tag; die Release-Kanäle (höchstes `vX.Y.Z`) ignorieren es.
 - Lokale Entwicklung: rustup stable (gemessen 1.99.1) in der Sandbox,
   1:29 min für den Release-Build der Probe. **Nicht** Alpines `cargo`
   (1.83): Das kann `edition2024` nicht, das aktuelle Crates verlangen.
