@@ -43,6 +43,21 @@ mutation() {
 	fi
 }
 
+# M-S1: Sitzungs-Socket fuer alle offen.
+mutation sitzung-offen \
+	'/^gateway_sitzung_socket_text/,/^}/ s|SocketMode=0660|SocketMode=0666|' \
+	"Sitzungs-Socket: Modus 0660"
+
+# M-S2: Sitzungs-Socket mit dem falschen Besitzer (das Gateway bedient ihn).
+mutation sitzung-besitzer \
+	'/^gateway_sitzung_socket_text/,/^}/ s|SocketUser=\$CHIMERA_DIENSTNUTZER|SocketUser=$CHIMERA_TOR_NUTZER|' \
+	"Sitzungs-Socket: gehoert dem Agent-Dienst"
+
+# M-S3: Sitzungs-Socket ohne Weiterreichen an den Dienst.
+mutation sitzung-dienst \
+	'/^gateway_sitzung_socket_text/,/^}/ s|^Service=.*$||' \
+	"Sitzungs-Socket: reicht an den Agent-Dienst weiter"
+
 # M1: Socket fuer alle offen.
 mutation socket-offen \
 	's|SocketMode=0660|SocketMode=0666|' \

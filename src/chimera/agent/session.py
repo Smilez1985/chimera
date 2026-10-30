@@ -129,6 +129,61 @@ class Session:
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _turns: list[Turn] = field(default_factory=list, repr=False)
     _busy_channel: str | None = field(default=None, repr=False)
+    #: Ereignisstrom (Regel 5s): laufende Nummer, Ringpuffer, Abonnenten.
+    strom_size: int = 500
+    _strom: list[dict] = field(default_factory=list, repr=False)
+    _nr: int = field(default=0, repr=False)
+    _subs: list = field(default_factory=list, repr=False)
+    _strom_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    # --- Ereignisstrom (Regel 5s) -----------------------------------------
+
+    def emit(self, art: str, tuer: str, text: str = "", ref: str = "") -> dict:
+        """Ein Ereignis mit laufender Nummer an alle Abonnenten verteilen.
+
+        Ein Abonnent ist eine Funktion ``f(ereignis) -> bool``; gibt sie
+        False zurück (oder wirft), wird er abgemeldet — ein langsamer Leser
+        darf die Sitzung nie aufhalten, er holt sich den Rest mit ``seit``.
+        """
+        import time as _t
+        with self._strom_lock:
+            self._nr += 1
+            ev = {"nr": self._nr, "art": art, "tuer": tuer, "text": text,
+                  "ref": ref, "zeit": round(_t.time(), 3)}
+            self._strom.append(ev)
+            if len(self._strom) > self.strom_size:
+                del self._strom[: len(self._strom) - self.strom_size]
+            subs = list(self._subs)
+        for f in subs:
+            try:
+                alive = f(ev)
+            except Exception:                         # noqa: BLE001
+                log.exception("Abonnent des Stroms wirft — abgemeldet")
+                alive = False
+            if not alive:
+                self.unsubscribe(f)
+        return ev
+
+    def subscribe(self, f, seit: int = 0) -> list[dict]:
+        """Anmelden und den Rest nach Nummer ``seit`` zurückbekommen.
+
+        Anmelden und Nachlieferung geschehen unter derselben Sperre: Was
+        zwischen beidem entsteht, geht weder verloren noch doppelt raus.
+        """
+        with self._strom_lock:
+            rest = [e for e in self._strom if e["nr"] > seit]
+            self._subs.append(f)
+        return rest
+
+    def unsubscribe(self, f) -> None:
+        with self._strom_lock:
+            if f in self._subs:
+                self._subs.remove(f)
+
+    @property
+    def nr(self) -> int:
+        """Nummer des jüngsten Ereignisses (0 = noch keines)."""
+        return self._nr
 
     # --- Zustand ----------------------------------------------------------
 
@@ -149,7 +204,8 @@ class Session:
 
     # --- der Weg hinein ---------------------------------------------------
 
-    def ask(self, prompt: str, channel: Channel = DIRECT) -> Turn:
+    def ask(self, prompt: str, channel: Channel = DIRECT,
+            ref: str = "") -> Turn:
         """Eine Frage stellen — egal durch welche Tür.
 
         Der Kanalhinweis wird dem Auftrag vorangestellt, nicht in den
@@ -164,8 +220,11 @@ class Session:
         if not text:
             raise ValueError("Leerer Auftrag")
 
+        # Eingabe sofort sichtbar machen, auch wenn sie noch warten muss.
+        self.emit("eingabe", channel.name, text, ref)
         with self._lock:
             self._busy_channel = channel.name
+            self.emit("zustand", channel.name, "denkt", ref)
             try:
                 result = self.agent.run(f"{channel.hint()}\n\n{text}")
                 turn = Turn(
@@ -188,6 +247,8 @@ class Session:
             finally:
                 self._busy_channel = None
 
+            self.emit("fehler" if turn.error else "antwort",
+                      channel.name, turn.text, ref)
             self._turns.append(turn)
             if len(self._turns) > self.log_size:
                 del self._turns[: len(self._turns) - self.log_size]

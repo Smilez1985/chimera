@@ -45,6 +45,8 @@ class Geraet:
         self.bot = Bot()
         self.fehler = telegram_fehler
         self.notes = []
+        from chimera.agent.session import Session
+        self.session = Session(object())
     def start_display(self): return False
     def paint_once(self): pass
     def stop_display(self): pass
@@ -90,6 +92,31 @@ check("Telegram-Bot gestartet", g.bot.lief.wait(2), True)
 stop.set(); t.join(2)
 check("Telegram-Bot beim Ende gestoppt", g.bot.gestoppt, True)
 check("rc 0", erg, [0])
+
+# 3b. Sitzungs-Socket (Regel 5s): konfiguriert -> gebunden, beim Ende weg.
+import os as _os, socket as _so, tempfile as _tf
+_pfad = _os.path.join(_tf.mkdtemp(), "sitzung.sock")
+g = Geraet()
+stop = threading.Event()
+t, erg = im_faden(lambda: cm.dienst(g, stop=stop,
+                                    env={"CHIMERA_SITZUNG_SOCKET": _pfad}))
+for _ in range(20):
+    if _os.path.exists(_pfad): break
+    time.sleep(0.1)
+check("Sitzungs-Socket gebunden", _os.path.exists(_pfad), True)
+try:
+    _c = _so.socket(_so.AF_UNIX); _c.settimeout(3); _c.connect(_pfad)
+    _c.sendall(b'{"op":"ping"}\n')
+    _antwort = b'"ok": true' in _c.recv(200)
+    _c.close()
+except OSError:
+    _antwort = False
+check("Sitzungs-Socket antwortet", _antwort, True)
+stop.set(); t.join(3)
+check("Sitzungs-Socket beim Ende entfernt", _os.path.exists(_pfad), False)
+check("Ende rc 0", erg, [0])
+stop = threading.Event(); stop.set()
+check("ohne Konfiguration kein Socket, rc 0", cm.dienst(Geraet(), stop=stop, env={}), 0)
 
 # 4. Ohne Token wird Telegram nicht versucht (kein Fehler, kein Bot).
 g = Geraet(telegram_fehler="darf nicht gerufen werden")

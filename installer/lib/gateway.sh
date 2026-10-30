@@ -25,8 +25,35 @@
 : "${CHIMERA_TOR_SOCKETUNIT:=chimera-tor.socket}"
 : "${CHIMERA_TOR_DIENSTUNIT:=chimera-tor.service}"
 : "${CHIMERA_TOR_SOCKET:=/run/chimera/tor.sock}"
+: "${CHIMERA_SITZUNG_SOCKETUNIT:=chimera-sitzung.socket}"
+: "${CHIMERA_SITZUNG_SOCKET:=/run/chimera/sitzung.sock}"
 : "${CHIMERA_TOR_SPEICHER:=10M}"
 : "${CHIMERA_TOR_WARTEN:=5}"
+
+# Der Sitzungs-Socket (Regel 5s): der eine Weg in die Hauptsitzung. Er gehoert
+# dem AGENT-Dienst (der bedient ihn), das Gateway ist Mitglied der Gruppe
+# und der einzige Client. systemd haelt ihn und reicht ihn an chimera.service
+# weiter (LISTEN_FDS), er ueberlebt also einen Neustart des Dienstes.
+gateway_sitzung_socket_text() {
+	cat <<EOF
+# Von chimera-install angelegt (Schritt 99). Regel 5s.
+[Unit]
+Description=Chimera -- Sitzungs-Socket, der eine Weg in die Hauptsitzung (Regel 5s)
+
+[Socket]
+ListenStream=$CHIMERA_SITZUNG_SOCKET
+Service=$CHIMERA_DIENST
+SocketUser=$CHIMERA_DIENSTNUTZER
+SocketGroup=$CHIMERA_TOR_NUTZER
+SocketMode=0660
+DirectoryMode=0755
+RemoveOnStop=yes
+Backlog=16
+
+[Install]
+WantedBy=sockets.target
+EOF
+}
 
 gateway_programm() { printf '%s\n' "$CHIMERA_OPT/bin/chimera-tor"; }
 
@@ -144,20 +171,34 @@ gateway_einrichten() {
 	_sd_neu=0
 	service_datei "$_ge_dir/$CHIMERA_TOR_SOCKETUNIT" "$(gateway_socket_text)" || return 2
 	service_datei "$_ge_dir/$CHIMERA_TOR_DIENSTUNIT" "$(gateway_dienst_text)" || return 2
+	service_datei "$_ge_dir/$CHIMERA_SITZUNG_SOCKETUNIT" "$(gateway_sitzung_socket_text)" || return 2
 	_ge_neu=$_sd_neu
 
 	if is_dry_run; then
 		info "[wuerde] systemctl daemon-reload"
 		info "[wuerde] systemctl enable --now $CHIMERA_TOR_SOCKETUNIT"
+		info "[wuerde] systemctl enable --now $CHIMERA_SITZUNG_SOCKETUNIT"
 		return 0
 	fi
 	[ "$_ge_neu" = 1 ] && systemctl daemon-reload
 
+	_ge_tor_neu=0
 	if ! manifest_has dienst "$CHIMERA_TOR_SOCKETUNIT"; then
 		systemctl enable --now "$CHIMERA_TOR_SOCKETUNIT" >/dev/null 2>&1 || {
 			err "systemctl enable --now $CHIMERA_TOR_SOCKETUNIT schlug fehl."; return 2; }
 		manifest_record dienst "$CHIMERA_TOR_SOCKETUNIT" aktiviert
+		_ge_tor_neu=1
+	fi
+	# Der Sitzungs-Socket hat einen eigenen Manifesteintrag: Er kam spaeter
+	# dazu, gilt also auch fuer Geraete, die das Gateway schon haben.
+	if ! manifest_has dienst "$CHIMERA_SITZUNG_SOCKETUNIT"; then
+		systemctl enable --now "$CHIMERA_SITZUNG_SOCKETUNIT" >/dev/null 2>&1 || {
+			err "systemctl enable --now $CHIMERA_SITZUNG_SOCKETUNIT schlug fehl."; return 2; }
+		manifest_record dienst "$CHIMERA_SITZUNG_SOCKETUNIT" aktiviert
 	elif [ "$_ge_neu" = 1 ]; then
+		systemctl restart "$CHIMERA_SITZUNG_SOCKETUNIT" >/dev/null 2>&1 || true
+	fi
+	if [ "$_ge_neu" = 1 ] && [ "$_ge_tor_neu" = 0 ]; then
 		# Neue Unit-Fassung: Socket und Dienst neu laden. Der Socket-Neustart
 		# schliesst Verbindungen -- das Gateway hat noch keine Sitzungen.
 		systemctl reset-failed "$CHIMERA_TOR_DIENSTUNIT" >/dev/null 2>&1 || true
@@ -199,7 +240,7 @@ gateway_einrichten() {
 # Reihenfolge: Socket und Dienst anhalten, Units weg, daemon-reload, Nutzer.
 gateway_rueckbau() {
 	_gr_befund=0
-	for _gr_e in "$CHIMERA_TOR_SOCKETUNIT" "$CHIMERA_TOR_DIENSTUNIT"; do
+	for _gr_e in "$CHIMERA_SITZUNG_SOCKETUNIT" "$CHIMERA_TOR_SOCKETUNIT" "$CHIMERA_TOR_DIENSTUNIT"; do
 		# Den Dienst gibt es nie im Manifest (er startet per Socket); beide
 		# immer anhalten, wenn der Socket unser ist.
 		manifest_has dienst "$CHIMERA_TOR_SOCKETUNIT" || continue

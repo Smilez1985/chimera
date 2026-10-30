@@ -161,6 +161,16 @@ def dienst(chi, stop: threading.Event | None = None, env=None) -> int:
     else:
         log.info("Telegram nicht eingerichtet (CHIMERA_TELEGRAM_TOKEN leer).")
 
+    # Der eine Weg in die Hauptsitzung (Regel 5s): das Gateway ist der Client.
+    from .sitzung_socket import aus_umgebung
+    sitzung_srv = aus_umgebung(chi.session, env)
+    if sitzung_srv is not None:
+        sitzung_srv.start()
+        log.info("Sitzungs-Socket bereit.")
+    else:
+        log.info("Kein Sitzungs-Socket (weder LISTEN_FDS noch "
+                 "CHIMERA_SITZUNG_SOCKET).")
+
     log.info("Dienst bereit.")
     # Anbieter regelmaessig pruefen und das Ergebnis an die Statuszeile geben
     # (Quelle anbieter_weg). Hier und nicht im Renderer: Die Pruefung kann ins
@@ -175,6 +185,8 @@ def dienst(chi, stop: threading.Event | None = None, env=None) -> int:
     finally:
         if bot is not None:
             bot.stop()
+        if sitzung_srv is not None:
+            sitzung_srv.stop()
     return 0
 
 

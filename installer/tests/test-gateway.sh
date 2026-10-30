@@ -153,6 +153,23 @@ else
 	bad "Agent-Dienst-Unit bleibt unberuehrt -- wurde veraendert"
 fi
 
+# --- 3b. Sitzungs-Socket (Regel 5s) ---------------------------------------
+SS="$R/etc/systemd/system/chimera-sitzung.socket"
+feld erst-ss
+lauf gateway_einrichten
+SS="$R/etc/systemd/system/chimera-sitzung.socket"
+hat "Sitzungs-Socket: Pfad" "$SS" "ListenStream=/run/chimera/sitzung.sock"
+if grep -qxF "SocketUser=chimera" "$SS"; then ok "Sitzungs-Socket: gehoert dem Agent-Dienst"
+else bad "Sitzungs-Socket: gehoert dem Agent-Dienst -- Zeile SocketUser=chimera fehlt"; fi
+hat "Sitzungs-Socket: Gruppe des Gateways (einziger Client)" "$SS" "SocketGroup=chimera-tor"
+hat "Sitzungs-Socket: Modus 0660" "$SS" "SocketMode=0660"
+hat_nicht "Sitzungs-Socket: nicht offen" "$SS" "SocketMode=0666"
+hat "Sitzungs-Socket: reicht an den Agent-Dienst weiter" "$SS" "Service=chimera.service"
+hat "Sitzungs-Socket: Datei verschwindet beim Stoppen" "$SS" "RemoveOnStop=yes"
+hat "Sitzungs-Socket: eingeschaltet" "$F/spur" "systemctl enable --now chimera-sitzung.socket"
+hat "Sitzungs-Socket im Manifest" "$R/opt/chimera/state/manifest.tsv" "dienst	chimera-sitzung.socket	aktiviert"
+hat_nicht "Erstlauf startet den Gateway-Socket nicht zusaetzlich neu" "$F/spur" "restart chimera-tor.socket"
+
 # --- 4. Nachweis am Ergebnis ----------------------------------------------
 hat "Nachweis: echter Aufruf des Sockets" "$F/ping-spur" "--ping $R/run/chimera/tor.sock"
 feld stumm
@@ -226,6 +243,8 @@ lauf gateway_einrichten
 lauf gateway_rueckbau
 check "Rueckbau rc 0" "$(cat "$F/rc")" 0
 hat "Rueckbau: Socket abgeschaltet" "$F/spur" "systemctl disable --now chimera-tor.socket"
+hat "Rueckbau: Sitzungs-Socket abgeschaltet" "$F/spur" "systemctl disable --now chimera-sitzung.socket"
+[ ! -e "$R/etc/systemd/system/chimera-sitzung.socket" ] && ok "Rueckbau: Sitzungs-Socket-Unit weg" || bad "Rueckbau: Sitzungs-Socket-Unit blieb"
 [ ! -e "$R/$SOCK" ] && ok "Rueckbau: Socket-Unit weg" || bad "Rueckbau: Socket-Unit blieb"
 [ ! -e "$R/$DIENST" ] && ok "Rueckbau: Dienst-Unit weg" || bad "Rueckbau: Dienst-Unit blieb"
 hat "Rueckbau: Nutzer entfernt" "$F/spur" "userdel chimera-tor"

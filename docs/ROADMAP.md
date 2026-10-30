@@ -304,6 +304,22 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       Python-Connector `provider/gateway.py` (Name bleibt `ollama`, Anzeige
       „ollama @ Host“); der Dienst nutzt das Gateway, wenn es antwortet,
       sonst den direkten Weg.
+- [ ] **Ein Kanal, eine Hauptsitzung** (DESIGN 5s) — Stand: Sitzungs-Socket und Ereignisstrom im Dienst fertig (Modul 99 legt `chimera-sitzung.socket` an); offen: Telegram und Web als Türen im Gateway, Umleitung/Wechsel (8d): Sitzungs-Socket des
+      Dienstes, Ereignisstrom mit laufender Nummer, Telegram und Web als
+      Türen im Gateway, `haupt` statt Sitzungs-ID, Umleitung auf die
+      Hauptsitzung, nach dem Wechsel alte Sitzung nur lesbar. Test mit
+      Gegenprobe.
+      Die Klingel (Briefkasten, 5o) nutzt denselben Socket mit `ref`,
+      quittiert erst nach `antwort` und wechselt mit `haupt`.
+- [ ] **Web-Oberfläche als Modul-Plattform** (5m), **vor** den weiteren
+      Anbietern, damit alles per Oberfläche einstellbar ist:
+      1. Rahmen: Anmeldung (Passwort), Menü, Router, Modul-Erkennung
+         (`module/*/manifest.json`), Designvorgaben.
+      2. Module in dieser Reihenfolge: Anbieter und Modelle (zum Testen
+         Ollama), Chat, Einstellungen (Sprache, Updates), Anzeigespiegel
+         (Waveshare), Status.
+      3. Ein Zusatzmodul muss ohne Änderung an Rahmen oder Gateway
+         erscheinen (Test mit Gegenprobe).
 - [ ] **Weitere Anbieter im Gateway:** Anthropic-Schlüssel, Anthropic-Abo
       nach PR #407 (Regel 5b, Fassung für das Gateway: Registry-Version,
       nur vorwärts, ein Header-Satz für Token- und Chat-Weg). Zeitgrenzen
@@ -323,7 +339,6 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
 - [ ] **`wahl.json`** mit bevorzugter Liste (5h). Telegram im Gateway mit
       `/model` und `/suche`.
 - [ ] **CLI** als Socket-Client, ohne eigene Anzeige.
-- [ ] **Web-Oberfläche** (5m): HTTP mit Passwort.
 - [ ] HTTPS als Opt-in: Reverse-Proxy dokumentieren, selbstsigniertes
       Zertifikat für alle ohne Proxy.
 - [ ] Rückbau-Gegenstücke (10l) und `migrate_from()` (`.env` von
@@ -674,7 +689,7 @@ Entwurf in `docs/SELBSTUPDATE.md`, Vorlage ist die PiHole-Routine.
 
 ## Offen / zu entscheiden
 
-- **Web-Oberfläche für Einstellungen** — gewünscht, aber nachrangig.
+- **Web-Oberfläche** — jetzt Phase 4d (Modul-Plattform, 5m).
   Schlank, lokaler Port, kein Framework. Chimera muss ohne sie vollständig
   einsatzfähig bleiben (`docs/DESIGN.md` §11a). Gehört in eine eigene Phase
   nach dem ersten Release.

@@ -17,6 +17,8 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 - **Gateway:** Ollama läuft über das Gateway (`chat`, `modelle`); der Dienst nutzt es, sobald es antwortet, und zeigt „ollama @ Host“. Ohne Gateway bleibt der direkte Weg.
 - **Installer:** Neues Modul 99 legt den Nutzer `chimera-tor` und die Units `chimera-tor.socket`/`.service` an (Socket-Aktivierung, `MemoryMax=10M`); Rückbau 99 entfernt sie.
 - **Installer:** Modul 00 hält den Commit der Quelle in `state/quelle-commit` fest.
+- **Sitzung:** Alle Eingaben und Antworten laufen als nummerierter Ereignisstrom; der Dienst bedient dafür den Socket `/run/chimera/sitzung.sock` (`anmelden`, `frage`, `status`, `ping`). Mit Bezugsnummer `ref` und Umleitung fremder Sitzungs-Kennungen auf die Hauptsitzung.
+- **Installer:** Modul 99 legt zusätzlich `chimera-sitzung.socket` an (Besitzer `chimera`, Gruppe `chimera-tor`, Modus 0660); Rückbau 99 entfernt es.
 - **Anzeige:** Eigenes Treiberpaket `chimera.displays` — Whisplay-LCD, LED,
   Backlight und Taste laufen ohne Herstellercode; ein neues Panel ist ein
   Ordner mit `display.json` und `panel.py`.

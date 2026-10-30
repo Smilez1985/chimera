@@ -601,6 +601,52 @@ verhalten als der erste. Wenn er es tut, hängt irgendwo Zustand am Kanal.
 
 ---
 
+### Architekturregel 5s — Ein Kanal, eine Hauptsitzung, alles läuft über denselben Strom
+
+Vorgabe smilez (30.10.): Telegram, Web-Oberfläche (und später Sprache)
+sind **ein** Kanal. Jede Ein- und Ausgabe landet in der Hauptsitzung und
+erscheint überall, ohne zusätzliche Modellkosten.
+
+- **Ein Sitzungs-Socket.** Der Dienst bietet genau einen Socket an
+  (`/run/chimera/sitzung.sock`, Besitzer `chimera`, Gruppe `chimera-tor`,
+  660). Das Gateway ist dessen **einziger Client**; Telegram und
+  Web-Oberfläche sind beide Türen *im Gateway* (5n) und sprechen über
+  denselben Socket. Es gibt keinen zweiten Weg in die Sitzung.
+- **Der Strom.** Jedes Ereignis der Hauptsitzung (Eingabe, Antwort, Fehler,
+  Zustand wie „denkt“) bekommt eine laufende Nummer und wird an alle
+  angemeldeten Türen verteilt. Wer sich anmeldet, nennt die letzte Nummer,
+  die er kennt, und bekommt den Rest nachgeliefert.
+- **Spiegeln kostet nichts.** Eine Nachricht aus Telegram erscheint in der
+  Web-Oberfläche und umgekehrt als bloßes Ereignis; das Modell wird **einmal**
+  gerufen, für die Eingabe selbst. Die Antwort geht an alle Türen, nicht nur
+  an die, aus der gefragt wurde. Jedes Ereignis trägt die Tür, aus der es
+  kam (`telegram`, `web`, …), damit man es erkennen kann (5i bleibt: die Tür
+  hält keinen Zustand).
+- **Adressiert wird „haupt“, nicht eine Sitzungs-ID.** Türen kennen nur den
+  Namen `haupt`. Welche Sitzung dahinter liegt, entscheidet der Dienst.
+  Schreibt jemand an eine andere (ältere) Sitzung, wird die Eingabe in die
+  Hauptsitzung **umgeleitet** und der Absender erfährt es.
+- **Wechsel bei Gewicht (8d), mit Bindung.** Beim Wechsel zeigt `haupt`
+  atomar auf die neue Sitzung: Strom, Nummernzählung für die Türen,
+  Telegram-Zuordnung und Anzeige hängen an `haupt`, nicht an der alten ID.
+  Ein Turn, der gerade läuft, wird zu Ende geführt, dann wird gewechselt.
+  Die alte Sitzung wird archiviert und ist danach **nur noch lesbar**
+  (`nachlesen`, Chat-Modul „Ältere Sitzungen“). Schreiben darauf ist
+  nicht möglich, es wird umgeleitet.
+- **Die Klingel (Briefkasten, 5o) ist eine Tür wie die anderen.** Sie hängt
+  immer an der Hauptsitzung, nie an einer Sitzungs-ID. Der Briefkasten
+  meldet Post über den Sitzungs-Socket als `frage` mit `tuer: briefkasten`
+  und `ref: <Briefnummer>`. Alle Ereignisse dieses Umlaufs tragen die `ref`;
+  erst wenn `antwort` oder `fehler` mit dieser `ref` eintrifft, quittiert der
+  Briefkasten (A5). Der Strom macht die Post in Telegram und Web sichtbar,
+  ohne ein zweites Mal das Modell zu rufen. Läuft beim Sitzungswechsel gerade
+  ein Briefturn, wird er zu Ende geführt; Post, die danach ankommt, geht in
+  die neue Hauptsitzung. Wird ein Turn durch den Wechsel unterbrochen, bleibt
+  die Post unquittiert und wird erneut in die neue Hauptsitzung zugestellt.
+  Der Briefkasten bleibt bei seinem Verhalten nach 5p (Eingabe, kein Befehl).
+- **Eine Gegenprobe gehört dazu:** Test, dass nach dem Wechsel eine Eingabe
+  an die alte ID in der neuen Sitzung landet und die alte unverändert bleibt.
+
 ### Architekturregel 5e — zram und Auslagerungsdatei gehören zum Aufbau
 
 Auf dem Pi Zero 2 W ist der Speicher der Engpass, nicht die Rechenleistung.
@@ -951,29 +997,59 @@ die Netzsuche gefunden.
   angelegt: Typ, Adresse oder Schlüssel, dann die Modellliste. Der
   Ablauf ist der von OpenMinis.
 
-### Architekturregel 5m — Die Web-Oberfläche ist Teil des Gateways und braucht kein Framework
+### Architekturregel 5m — Die Web-Oberfläche ist eine Plattform aus Modulen
 
-- **Kein Framework.** Die Seite besteht aus ein paar Formularen und
-  wird im Gateway mit `tiny_http` ausgeliefert (Rust, in der Probe
-  enthalten). HTML und CSS liegen als Dateien im Repo und kommen per
-  `include_str!` ins Binary, ohne JavaScript-Build. Flask ist damit
-  hinfällig. Zum Vergleich: Python `http.server` allein kostet am Pi 18 MB.
-- Sie läuft **im Gateway**, nicht als eigener Prozess. Das Gateway läuft
-  ohnehin, hat ohnehin die Schreibrechte auf `.env`, und ein zweiter
-  Nutzer `chimera-web` (Fassung 1) wird damit überflüssig.
-- **Ohne Passwort startet sie nicht** (sinngemäß 5j). Der Installer
-  erzeugt das Passwort, zeigt es einmal an und speichert nur den Hash
-  (Argon2id oder PBKDF2, in Rust).
-- **HTTP mit Passwort** ist die Voreinstellung, gebunden ans LAN.
-  **HTTPS ist Opt-in.** Wer einen Reverse-Proxy hat (z. B. Caddy mit
-  DuckDNS), bindet das Gateway an 127.0.0.1 und lässt den Proxy davor.
-  Wer keinen hat, bekommt später ein selbstsigniertes Zertifikat
-  (ROADMAP). Die Web-Oberfläche weist bei HTTP sichtbar darauf hin, dass
-  Schlüssel im Klartext durchs Heimnetz gehen.
-- Einstellbar: Anbieter anlegen, prüfen, entfernen; Netzsuche starten und
-  Fund übernehmen; bevorzugte Liste und Ketten; Sprache; Passwort ändern.
-- Änderungen wirken **ohne Neustart**: Das Gateway lädt neu, der Dienst
-  merkt davon nichts.
+Fassung 2 (smilez, 30.10.): Die Oberfläche ist kein Konfigurationsformular,
+sondern der **eine Zugang zu allem**. Nichts davon darf das Bearbeiten von
+Dateien verlangen. Sie wächst nach und nach, deshalb ist sie von Anfang an
+modular.
+
+**Umfang (wächst Modul für Modul):**
+
+| Modul | Inhalt |
+|---|---|
+| Chat | Chatfenster mit der einen Sitzung; Verlauf, ältere Sitzungen (8d) durchsuchbar |
+| Anbieter | Ollama, Anthropic-Schlüssel, Claude-Anmeldung (5b) als gleichrangige Wege; Netzsuche, Test-Knopf, Modellliste |
+| Modelle | Reihenfolge per Hoch/Runter, gemischt über Anbieter (5h); zum Testen steht Ollama vorn |
+| Anzeige | Fenster im Fenster: spiegelt die Ausgabe des Waveshare-Displays live |
+| Einstellungen | Optionsmenü: Sprache, Updates, Passwort, Telegram, Netz |
+| Status | Dienste, Speicher, Temperatur, Protokolle |
+
+**Aufbau:**
+
+- **Rahmen und Module getrennt.** Der Rahmen (Anmeldung, Menü, Router,
+  Designvorgaben) kennt kein einzelnes Modul. Ein Modul ist ein Verzeichnis
+  `module/<name>/` mit `manifest.json` (Name, Titel je Sprache, Symbol,
+  Reihenfolge, Einstiegsseite, nötige Rechte, optional Schnittstelle) und
+  seinen Dateien.
+- **Selbst erkennend.** Das Gateway liest `module/*/manifest.json` beim Start
+  und auf Anforderung neu; ein neues Verzeichnis taucht im Menü auf, ohne dass
+  Rahmen oder Gateway geändert werden. Ein kaputtes Manifest verwirft nur
+  dieses Modul und wird gemeldet (Verdachtsfall, kein Stillschweigen).
+- **Eingebaute und nachgelegte Module.** Die Grundmodule liegen im Binary
+  (`include_str!`), Zusatzmodule als Dateien unter `/opt/chimera/web/module/`.
+  Dasselbe Manifest gilt für beide.
+- **Schnittstelle je Modul:** `/api/<modul>/…`. Eingebaut beantwortet sie das
+  Gateway; ein Zusatzmodul nennt im Manifest einen Unix-Socket, an den das
+  Gateway weiterreicht (Regel 14, keine Fremdbibliothek im Gateway).
+- **Rechte:** Das Manifest nennt, was ein Modul darf (z. B. `chat`,
+  `anbieter-lesen`, `anbieter-schreiben`, `anzeige`). Das Gateway reicht nur
+  durch, was eingetragen ist.
+- **Anzeigespiegel:** Der Renderer (Regel 7, ein Prozess, ein Framebuffer)
+  legt das fertige Bild lesbar im Shared Memory ab; das Gateway liest nur
+  und liefert es als Bildfolge an die Seite. Das Gateway schreibt nie ins
+  Panel.
+- **Frontend:** Leichtes JavaScript ohne Build-Schritt und ohne Fremdpaket;
+  Web Components, ein Modul = ein Element. Handytauglich.
+- **Sitzungen:** Es bleibt bei **einer** Hauptsitzung für alle Türen
+  (Regel 5s, 8d). Das Chat-Modul hängt am selben Strom wie Telegram;
+  „Alle Chats“ heißt: die Hauptsitzung plus die abgelegten, diese nur lesbar.
+
+**Unverändert aus Fassung 1:** läuft im Gateway, nicht als eigener Prozess;
+ohne Passwort startet sie nicht (5j); HTTP mit Passwort im LAN als
+Voreinstellung, HTTPS Opt-in, sichtbarer Hinweis bei HTTP; Änderungen wirken
+ohne Neustart; Schlüssel werden nur geschrieben, nie wieder angezeigt
+(zurück kommt „gesetzt“).
 
 ### Architekturregel 5b, Fassung für das Gateway — PR #407 ist die Vorlage, Punkt für Punkt
 
@@ -1069,7 +1145,7 @@ andere Agenten ──► Gateway :<briefkasten-port>  (Token-Prüfung A19)
   übernommen. Begründung: Regel 14, weil der Prozess dauernd läuft und
   nicht auf das Modell wartet. Er ist damit **Rust**, im selben Cargo-
   Workspace wie das Gateway.
-- **Wecken heißt hier: ein Turn in der einen Sitzung.** Der Briefkasten
+- **Wecken heißt hier: ein Turn in der Hauptsitzung (5s).** Der Briefkasten
   meldet über den Steuerkanal „Nachricht Nr. n von X“. Der Dienst stellt
   sie als Turn im Kanal `briefkasten` zu. Läuft schon ein Turn, wartet
   die Nachricht in der Reihe, wie heute bei Telegram (`Session.busy`).
