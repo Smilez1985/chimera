@@ -11,8 +11,10 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 ## [Unreleased]
 
 ### Hinzugefügt
-- **Gateway:** Rust-Grundlage `rust/` mit dem Programm `chimera-tor`; die CI baut es statisch für aarch64 und legt es mit SHA-256 als Artefakt und auf `entwicklung` als Prerelease `rust-<commit>` ab (noch ohne Dienstbetrieb).
+- **Gateway:** Rust-Grundlage `rust/` mit dem Programm `chimera-tor`; die CI baut es statisch für aarch64 und legt es mit SHA-256 als Artefakt und auf `entwicklung` als Prerelease `rust-<commit>` ab.
 - **Installer:** Neues Modul 55 lädt das Gateway-Binary `chimera-tor` zum Commit der Quelle (`rust-<commit>`), prüft SHA-256 und Version und legt es nach `/opt/chimera/bin`; Rückbau 55 entfernt es.
+- **Gateway:** `chimera-tor --dienst` bedient einen Unix-Socket (`ping`, `status`); `--ping` fragt ein laufendes Gateway ab.
+- **Installer:** Neues Modul 99 legt den Nutzer `chimera-tor` und die Units `chimera-tor.socket`/`.service` an (Socket-Aktivierung, `MemoryMax=10M`); Rückbau 99 entfernt sie.
 - **Installer:** Modul 00 hält den Commit der Quelle in `state/quelle-commit` fest.
 - **Anzeige:** Eigenes Treiberpaket `chimera.displays` — Whisplay-LCD, LED,
   Backlight und Taste laufen ohne Herstellercode; ein neues Panel ist ein

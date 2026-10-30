@@ -298,14 +298,21 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
 - [x] **Rust-Grundlage:** `rust/` als Cargo-Workspace (`gemein`, `chimera-tor`), CI-Job mit
       `cargo test`, `cargo deny`, Build aarch64-musl und SHA-256 am
       Prerelease `rust-<commit>`. Installer-Modul 55 holt und prüft das Binary.
-- [ ] **Gerüst:** Socket `/run/chimera/tor.sock`, Unit mit Nutzer
-      `chimera-tor` und `MemoryMax`, Dienst-Unit mit `IPAddressDeny=any`.
-      Test mit Gegenprobe: Der Dienst kommt nicht ins LAN.
+- [x] **Gerüst:** Socket `/run/chimera/tor.sock`, Unit mit Nutzer
+      `chimera-tor` und `MemoryMax` (Modul 99).
+- [ ] **`IPAddressDeny=any` für den Agent-Dienst** mit Test „Dienst kommt
+      nicht ins LAN, Gateway-Socket bleibt erreichbar“. Erst wenn die
+      Anbieter im Gateway laufen (nächster Punkt), sonst verliert der
+      Python-Dienst seinen Ollama-Server.
 - [ ] **Anbieter im Gateway:** Ollama, Anthropic-Schlüssel, Anthropic-Abo
       nach PR #407 (Regel 5b, Fassung für das Gateway: Registry-Version,
       nur vorwärts, ein Header-Satz für Token- und Chat-Weg). Dazu
       Ketten, Zeitgrenzen (5 s Verbindung / 300 s Aufruf) und Anzeige
-      „ollama @ Host“.
+      „ollama @ Host“. Dazu 5q: Cache-Marken je Adapter, `Reply.cache`,
+      Byte-Test mit Gegenprobe; Anthropic-TTL am Gerät nachmessen.
+- [ ] **Websuche** (5r): zuerst Anthropic serverseitig, dann OpenRouter,
+      dann Suchquellen mit Nutzer-Schlüssel (Ollama Cloud, Tavily, Exa,
+      SearXNG; Brave ohne Platten-Cache; ddgs nur Opt-in).
 - [ ] **Netzsuche** (5k) mit Selbstübernahme der Adresse, Installer
       Schritt 50.
 - [ ] **`wahl.json`** mit bevorzugter Liste (5h). Telegram im Gateway mit

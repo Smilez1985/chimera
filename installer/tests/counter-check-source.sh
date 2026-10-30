@@ -53,10 +53,11 @@ mutation downgrade-frei \
 	's|if \[ "$5" = true \]; then echo downgrade|if true; then echo downgrade|' \
 	"aeltere VERSION -> abgelehnt"
 
-# M3: sort -V ohne Umschreiben -- 0.1.0-pre galte als neuer als 0.1.0.
+# M3: Vorabkennung nicht abgetrennt -- "0.1.0-pre" galte als neuer als 0.1.0
+# (sort -V ordnet sie dahinter). Mutation: Fassung ohne Kennung gilt als aelter.
 mutation pre-ungeordnet \
-	"s|tr '-' '~'|cat|g" \
-	"0.1.0-pre < 0.1.0"
+	's|if \[ -z "$_vc_pa" \]; then echo gt; return 0; fi|if [ -z "$_vc_pa" ]; then echo lt; return 0; fi|' \
+	"0.1.0 > 0.1.0-pre"
 
 # M4: .git zaehlt mit -- jeder Klon saehe anders aus als ein Zip.
 mutation git-im-hash \

@@ -482,6 +482,31 @@ Holt das Gateway-Binary (DESIGN Regel 14) und legt es nach
 - **Rückbau:** `uninstaller/steps/55-remove-rust.sh` entfernt, was im
   Manifest steht (Modul `55-rust`).
 
+### 4a-s. Modul 99 — Gateway (Nutzer, Socket, Dienst)
+
+Richtet `chimera-tor` als Dienst ein (DESIGN Regel 5n). Läuft **nach** 98,
+weil der Socket der Gruppe des Agent-Dienstes gehört. Die Logik steht in
+`lib/gateway.sh`, der Schritt ruft nur auf.
+
+- **Nutzer:** `chimera-tor`, Systemnutzer ohne Home und ohne Anmeldung.
+  Gab es ihn schon, wird er übernommen (`vorher_da`) und beim Rückbau nie
+  entfernt.
+- **Socket-Aktivierung:** `chimera-tor.socket` hält
+  `/run/chimera/tor.sock` (Besitzer `chimera-tor`, Gruppe `chimera`,
+  Modus 0660, `RemoveOnStop`). Das Gateway startet beim ersten Aufruf; stürzt es ab, wartet der Aufrufer.
+- **Dienst:** `chimera-tor.service` mit `MemoryMax=10M`,
+  `RestartPreventExitStatus=2`, `StartLimit*` in `[Unit]` und gehärteter
+  Umgebung. Der Agent-Dienst (`chimera.service`) hängt **nicht** per
+  `Requires=` daran und wird von diesem Schritt nicht angefasst.
+- **Nachweis am Ergebnis:** ein echter Aufruf (`chimera-tor --ping`
+  am Socket), danach `is-active` und `NRestarts=0`. Antwortet es nicht, ist
+  das rc 1 und kein Erfolg.
+- **Ohne Binary** (Schritt 55 fand keins): rc 1, nichts wird eingerichtet.
+- **Noch nicht in diesem Schritt:** `IPAddressDeny=any` für den
+  Agent-Dienst. Der Python-Dienst hält bis Phase 4d Schritt 3 die
+  Anbieter selbst; die Sperre jetzt trennte ihn vom Ollama-Server.
+- **Rückbau:** `uninstaller/steps/99-remove-gateway.sh` (Modul `99-gateway`).
+
 ### 4b. Modul 50 — Python-Umgebung (venv)
 
 Chimera ist ein Python-Dauerprozess. Debian hält `/usr/lib/python3` von

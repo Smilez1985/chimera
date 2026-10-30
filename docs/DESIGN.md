@@ -849,6 +849,15 @@ Mood-Stufen 1 und 2 brauchen kein Netz (5c). In der Statuszeile steht
 das Gateway neu; der Dienst hängt **nicht** per `Requires=` daran, damit
 ein abstürzendes Gateway nicht das Gesicht mitnimmt.
 
+**Socket-Aktivierung (Gerüst, Phase 4d Schritt 2):** systemd hält
+`/run/chimera/tor.sock` (`chimera-tor.socket`, Besitzer `chimera-tor`,
+Gruppe `chimera`, 0660) und startet das Gateway beim ersten Aufruf. Ein
+abgestürztes Gateway lässt den Aufrufer warten, statt ihn abzuweisen. Die
+Sperre `IPAddressDeny=any` für den Agent-Dienst kommt erst, wenn die
+Anbieter im Gateway laufen (ROADMAP); gemessen ist, dass ein Prozess mit
+diesem Profil den Socket erreicht, das LAN aber nicht (`connect_ex` 11
+gegen 0 ohne Sperre).
+
 **Speicher: Obergrenze 10 MB RSS, in Rust (Regel 14).** In Python geht
 das nicht: Allein die Importe (`urllib.request`, `ssl`, `http.server`)
 kosten am Pi 21,8 MB, bevor eine Zeile Logik läuft. Eine Rust-Probe
@@ -1079,6 +1088,137 @@ Eine Nachricht von außen kann einen Turn auslösen, aber sie bekommt
 - Grund: Ein Token kann erbeutet werden, und ein Agent kann
   fehlgesteuert sein. Ohne diese Regel wäre der Briefkasten ein zweiter,
   schwächer geschützter Weg zu allem, was der Nutzer darf.
+
+---
+
+### Architekturregel 5q — Der Prompt wird so gebaut, dass der Cache trifft, und das wird gemessen
+
+Alle Anbieter cachen nur einen **exakt gleichen Anfang** der Anfrage. Ein
+einziges abweichendes Zeichen macht den Cache ungültig (DeepInfra, Groq,
+OpenAI). „Lokal“ heißt deshalb: **Chimera selbst** sorgt dafür, dass dieser
+Anfang Byte für Byte gleich bleibt. Es setzt die Cache-Marken selbst und
+misst die Treffer. Auf den Anbieter verlassen wir uns nicht.
+
+**1. Feste Reihenfolge, das Stabile zuerst** (ergänzt 8e):
+`Werkzeuge → SOUL … memory.md → letzte Tage → Verlauf → neue Nachricht → Laufzeit`.
+- **Laufzeit** (Uhrzeit, Sensoren, Kanal) steht nie im Systemprompt. Sie
+  geht als letzter Block an die neue Nachricht. Begründung: Ein Zeitstempel
+  vorn macht jeden Cache ungültig (Anthropic, Groq: „Common mistake“).
+- Die Werkzeugliste ist **je Sitzung eingefroren**: gleiche Werkzeuge in
+  gleicher Reihenfolge (sortiert nach Name), dazu dieselbe `tool_choice` und
+  dieselbe Denkstufe. Neue Werkzeuge oder Skills wirken erst ab der nächsten
+  Sitzung, wie bei 8e.
+- **Der Verlauf wird nur angehängt.** Innerhalb einer Sitzung wird nie
+  umgeschrieben. Verdichten (8g) bricht den Cache bewusst einmal, darum
+  kommt es selten.
+
+**2. Gleiche Bytes:** Das Gateway serialisiert deterministisch (serde_json,
+Schlüssel sortiert). Die Werkzeugschemas werden einmal je Sitzung zu Bytes
+gemacht und danach unverändert wiederverwendet. Blöcke, die der Anbieter
+liefert (z. B. `encrypted_content` der Websuche), kommen **unverändert**
+zurück, auch in der Sitzungsablage (8d).
+
+**3. Cache-Marken je Anbieter, nach deren Beispielcode** (Adapter im Gateway):
+
+| Anbieter | Was das Gateway setzt |
+|---|---|
+| Anthropic | `cache_control: {type: "ephemeral"}` an bis zu 3 Stellen: Ende Werkzeuge, Ende des stabilen Systemteils, Ende des Verlaufs vor der neuen Nachricht (erlaubt sind 4). Kein Beta-Header. TTL 5 min als Vorgabe, `1h` als Wahl in `wahl.json` (Schreiben kostet dann 2× statt 1,25×). |
+| OpenRouter | Bei Anthropic-, Gemini- und Alibaba-Modellen `cache_control` in den content-parts, bei den übrigen automatisch. `session_id` = Sitzungs-ID, damit Folgeanfragen beim selben Anbieter landen (Sticky Routing). `provider.order` wird **nicht** gesetzt, weil das Sticky Routing abschaltet. Rückfall regelt Chimeras eigene Kette. |
+| DeepInfra, OpenAI, Mistral | automatisch, dazu `prompt_cache_key` = Hash der Sitzungs-ID |
+| DeepSeek, Groq, Gemini (implizit) | automatisch, nichts zu setzen |
+| Ollama (LAN) | keine API-Steuerung. `keep_alive` aus `wahl.json` (Vorgabe 30 min), `num_ctx` je Modell fest, kein Modellwechsel innerhalb einer Sitzung ohne Not. Gemessen wird `prompt_eval_cached_count`. |
+
+**4. Messen statt glauben:** Jede Antwort trägt `Reply.cache` mit
+`gelesen`, `geschrieben`, `neu` (Tokens). Das Gateway liest dafür die Felder
+des jeweiligen Anbieters (`cache_read_input_tokens`, `cached_tokens`,
+`prompt_cache_hit_tokens`, `prompt_eval_cached_count` …). Die Trefferquote
+je Sitzung steht im Protokoll und in `chimera status`. Liegt sie ab dem
+zweiten Turn bei 0, gibt es eine Warnung: Dann bricht etwas den Anfang
+(Regel „stiller Erfolg“). Eine Mindestlänge unter der Grenze des Modells
+(Anthropic 512–4.096 Tokens) gilt nicht als Fehler, wird aber benannt.
+
+**5. Kein Antwort-Cache.** Keine Anbieterdoku empfiehlt ihn, und OpenAI
+betont, dass Caching die Ausgabe nicht deterministisch macht. Gleiche Frage
+heißt bei Chimera nicht gleiche Lage.
+
+**Test (Regel 9, mit Gegenprobe):** Zwei Turns derselben Sitzung werden
+gebaut. Der Anfang bis zur letzten Cache-Marke muss byte-gleich sein.
+Gegenprobe: Die Uhrzeit wird in den Systemprompt verschoben, der Test muss
+rot werden. Am Gerät: Ab dem zweiten Turn ist `gelesen > 0` bei Anthropic
+und bei Ollama.
+
+---
+
+### Architekturregel 5r — Websuche ist ein Werkzeug des Gateways, kein freier Netzzugang
+
+**Für den Agenten gibt es genau ein Werkzeug:** `web_suche` (Anfrage,
+höchstens n Treffer) und optional `web_abruf` (URL). Wie gesucht wird,
+entscheidet das Gateway je Anbieter:
+
+| Anbieter | Weg (nach Anbieterdoku) |
+|---|---|
+| Anthropic | Server-Tool `web_search_20250305` (`max_uses`, optional `allowed_domains`/`blocked_domains`, `user_location`), dazu `web_fetch_20250910`. $10 je 1.000 Suchen. Neuere Versionen nur mit `allowed_callers: ["direct"]`, sonst kommt 400. |
+| OpenRouter | `tools: [{type: "openrouter:web_search"}]`. Nicht `plugins: web` und nicht `:online` (beide deprecated). Quellen kommen als `annotations` `url_citation`. |
+| Gemini, Groq (gpt-oss) | `google_search` bzw. `browser_search` |
+| DeepInfra, DeepSeek, Mistral-Chat, Ollama | **Keine eingebaute Suche.** Das Gateway führt `web_suche` selbst aus, über eine **Suchquelle** (Tabelle unten), die der Nutzer mit **eigenem Schlüssel** einträgt. |
+
+**Suchquellen** (Prüfung der AGB am 29.10.2026, nicht juristisch; Beleg:
+`recherche/2026-10-29-websuche-anbieter-agb.md`). Grundsatz: Der Nutzer
+schließt den Vertrag selbst. Chimera liefert **nie einen eigenen Schlüssel
+mit** und betreibt **keinen Proxy** (Weiterverkauf, bei Brave, Tavily und Exa
+verboten).
+
+| Quelle | Stand | Einschränkung |
+|---|---|---|
+| Ollama Cloud (`ollama.com/api/web_search`, `/api/web_fetch`) | erste Quelle | Free-Konto, `OLLAMA_API_KEY`; Limits nicht dokumentiert, 429 sauber melden; Ergebnisse auf 8.000 Zeichen kürzen |
+| Tavily | einbaubar | 1.000 Credits/Monat; Eingaben darf Tavily zum Training nutzen, Hinweis an den Nutzer |
+| Exa | einbaubar | $10/Monat Guthaben |
+| SearXNG (selbst betrieben) | einbaubar | Adresse in `wahl.json`, **keine** fremde öffentliche Instanz als Vorgabe |
+| Brave | nur mit Einschränkung | AGB verbieten Speichern der Ergebnisse und KI-Training: **kein Such-Cache auf Platte**, Ergebnisse nie in Trainingsdaten; Kreditkarte nötig |
+| ddgs (DuckDuckGo-Scraper) | nur Opt-in | kein Vertrag, bricht oft; Warnhinweis |
+| Serper, Google Custom Search | **nicht eingebaut** | Serper scrapt Google; Custom Search für Neukunden geschlossen |
+
+Ergebnisse der Websuche leben **nur im Arbeitsspeicher und im Verlauf**,
+nie in einem eigenen Such-Cache (gilt für alle Quellen, wegen Brave).
+Quellen sind Einträge der Registry; die Preise und Limits werden vor jedem
+Release neu geprüft.
+
+**Grenzen:**
+- **5n bleibt hart:** Das Gateway verbindet sich **nie mit einer beliebigen
+  URL**. `web_abruf` läuft entweder beim Anbieter (Anthropic web_fetch) oder
+  über den festen Endpunkt der Suchquelle (ollama.com). Das Gateway ruft
+  feste Anbieter-Hosts an, keine Ziele, die das Modell vorgibt.
+- **Suchtreffer sind Eingabe, kein Befehl** (wie 5p). Sie werden im Prompt
+  als fremder Inhalt markiert.
+- **Kosten:** `max_uses` je Turn (Vorgabe 3) und ein Tageslimit in
+  `wahl.json`. Wird es erreicht, wird das gemeldet und nicht still weiter
+  bezahlt.
+- **Fest je Sitzung:** Websuche an oder aus wird nicht pro Anfrage
+  umgeschaltet. Bei Anthropic macht das den System- und Verlaufscache
+  ungültig (5q).
+- **Rückfall über Anbietergrenzen (5h):** Serverseitige Suchblöcke von
+  Anthropic versteht kein anderer Anbieter. Fällt die Kette auf einen anderen
+  Anbieter zurück, macht das Gateway daraus Text (Titel, URL, Auszug). Die
+  Rohblöcke bleiben in der Ablage für den Weg zurück zu Anthropic.
+- **Quellen werden gezeigt:** Telegram und Web hängen die URLs an die
+  Antwort.
+
+### Architekturregel 5b, Ergänzung — Die Abo-Anmeldung ist Opt-in mit Hinweis
+
+Anthropics Policy erlaubt Abo-OAuth „exclusively“ für Claude Code und eigene
+native Apps; Chimera darf Abo-Zugangsdaten nach deren Wortlaut nicht
+„sammeln, speichern oder weiterleiten“. Technisch geht der Weg (OpenMinis
+tut es), das Risiko ist eine Kontosperre. Darum:
+- Der **Schlüsselweg** (API-Schlüssel) ist der empfohlene Anthropic-Weg.
+- Die Abo-Anmeldung (5b) ist **aus**, bis der Nutzer sie ausdrücklich
+  einschaltet, mit Hinweis auf das Risiko.
+- Der Anmeldepfad folgt PR #407 (Header und Version aktuell halten); der
+  Systemprompt-Anfang für Abo-Zugänge ist Teil der Anmelde-Schicht, nicht
+  des Prompts nach 5q.
+- Die Cache-TTL (5 min, Wahl 1 h) wird am Gerät **nachgemessen**, bevor sie
+  als Vorgabe feststeht. Wie das Abo-Caching abgerechnet wird, ist nicht
+  dokumentiert.
+
 
 ---
 
