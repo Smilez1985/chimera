@@ -300,16 +300,21 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       Prerelease `rust-<commit>`. Installer-Modul 55 holt und prüft das Binary.
 - [x] **Gerüst:** Socket `/run/chimera/tor.sock`, Unit mit Nutzer
       `chimera-tor` und `MemoryMax` (Modul 99).
-- [ ] **`IPAddressDeny=any` für den Agent-Dienst** mit Test „Dienst kommt
-      nicht ins LAN, Gateway-Socket bleibt erreichbar“. Erst wenn die
-      Anbieter im Gateway laufen (nächster Punkt), sonst verliert der
-      Python-Dienst seinen Ollama-Server.
-- [ ] **Anbieter im Gateway:** Ollama, Anthropic-Schlüssel, Anthropic-Abo
+- [x] **Ollama im Gateway:** `op: chat`/`modelle` mit `anbieter: ollama`,
+      Python-Connector `provider/gateway.py` (Name bleibt `ollama`, Anzeige
+      „ollama @ Host“); der Dienst nutzt das Gateway, wenn es antwortet,
+      sonst den direkten Weg.
+- [ ] **Weitere Anbieter im Gateway:** Anthropic-Schlüssel, Anthropic-Abo
       nach PR #407 (Regel 5b, Fassung für das Gateway: Registry-Version,
-      nur vorwärts, ein Header-Satz für Token- und Chat-Weg). Dazu
-      Ketten, Zeitgrenzen (5 s Verbindung / 300 s Aufruf) und Anzeige
-      „ollama @ Host“. Dazu 5q: Cache-Marken je Adapter, `Reply.cache`,
+      nur vorwärts, ein Header-Satz für Token- und Chat-Weg). Zeitgrenzen
+      (5 s Verbindung / 300 s Aufruf) gelten schon für Ollama. Dazu 5q: Cache-Marken je Adapter, `Reply.cache`,
       Byte-Test mit Gegenprobe; Anthropic-TTL am Gerät nachmessen.
+- [ ] **Sperre fuer den Agent-Dienst:** `.env` für ihn unlesbar (Regel 5l,
+      `root:chimera-tor 640`) und `IPAddressDeny=any`, mit Test „Dienst
+      kommt nicht ins LAN, Gateway-Socket bleibt erreichbar“. Erst wenn
+      auch die Claude-Zugänge im Gateway laufen, sonst verliert der
+      Python-Dienst seine Anbieter. (Am Pi gemessen: mit dem Profil
+      erreicht der Dienst Ollama über den Socket, das LAN nicht.)
 - [ ] **Websuche** (5r): zuerst Anthropic serverseitig, dann OpenRouter,
       dann Suchquellen mit Nutzer-Schlüssel (Ollama Cloud, Tavily, Exa,
       SearXNG; Brave ohne Platten-Cache; ddgs nur Opt-in).

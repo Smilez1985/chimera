@@ -18,6 +18,7 @@ import logging
 
 from .anthropic import ClaudeApiConnector, ClaudeSubscriptionConnector
 from .base import CostClass
+from . import gateway
 from .ollama import OllamaConnector, discover
 from .registry import Registry, Strategy, Target
 
@@ -47,7 +48,23 @@ def build_registry(*, probe_network: bool = True) -> tuple[Registry, list[str]]:
     reg = Registry()
     notes: list[str] = []
 
-    # --- Ollama -----------------------------------------------------------
+    # --- Gateway (Regel 5n) -----------------------------------------------
+    # Antwortet das Gateway, laeuft Ollama ueber ihn: der Dienst braucht dann
+    # weder Adresse noch Netz. Ohne Gateway bleibt der direkte Weg -- bis
+    # IPAddressDeny=any fuer den Dienst gesetzt wird (docs/ROADMAP.md).
+    if gateway.erreichbar():
+        tor = gateway.GatewayOllama()
+        reg.register(tor)
+        grund = tor.why_unavailable()
+        notes.append("Gateway: erreichbar ✓")
+        notes.append("Ollama (ueber das Gateway): "
+                     + (f"{tor.host} ✓" if not grund else grund))
+        if not grund and tor.models():
+            ms = tor.models()
+            notes.append(f"  Modelle: {', '.join(ms[:6])}" + (" …" if len(ms) > 6 else ""))
+        return _claude(reg, notes)
+
+    # --- Ollama direkt (ohne Gateway) -------------------------------------
     ollama = OllamaConnector()
     if not ollama.configured and probe_network:
         found = discover()
@@ -72,7 +89,10 @@ def build_registry(*, probe_network: bool = True) -> tuple[Registry, list[str]]:
                 notes.append(f"  Modelle: {', '.join(models[:6])}"
                              + (" …" if len(models) > 6 else ""))
 
-    # --- Claude, getrennt nach Zugang -------------------------------------
+    return _claude(reg, notes)
+
+def _claude(reg: Registry, notes: list[str]) -> tuple[Registry, list[str]]:
+    """Claude, getrennt nach Zugang."""
     abo = ClaudeSubscriptionConnector()
     if abo.is_available():
         reg.register(abo)

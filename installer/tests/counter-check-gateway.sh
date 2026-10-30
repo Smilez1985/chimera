@@ -53,6 +53,11 @@ mutation socket-bleibt-liegen \
 	's|^RemoveOnStop=yes$|RemoveOnStop=no|' \
 	"Socket: Datei verschwindet beim Stoppen"
 
+# M1c: Gateway bekommt die Anbieteradressen nicht.
+mutation ohne-umgebung \
+	's|^EnvironmentFile=-\$CHIMERA_CONFIG/.env$|# keine Umgebung|' \
+	"Dienst: Umgebung aus der .env"
+
 # M2: Speichergrenze weg.
 mutation ohne-speichergrenze \
 	's|^MemoryMax=\$CHIMERA_TOR_SPEICHER$|# MemoryMax entfallen|' \

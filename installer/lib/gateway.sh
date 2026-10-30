@@ -72,6 +72,9 @@ StartLimitBurst=5
 Type=simple
 User=$CHIMERA_TOR_NUTZER
 Group=$CHIMERA_TOR_NUTZER
+# Die .env liest systemd als root; der Prozess bekommt nur die Werte.
+# So braucht chimera-tor kein Leserecht auf die Datei (Regel 5l).
+EnvironmentFile=-$CHIMERA_CONFIG/.env
 ExecStart=$(gateway_programm) --dienst
 Restart=on-failure
 RestartSec=5

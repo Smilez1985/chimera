@@ -858,6 +858,18 @@ Anbieter im Gateway laufen (ROADMAP); gemessen ist, dass ein Prozess mit
 diesem Profil den Socket erreicht, das LAN aber nicht (`connect_ex` 11
 gegen 0 ohne Sperre).
 
+**Anbieter im Gateway (Stand: Ollama):** Der Dienst schickt
+`{"op":"chat","anbieter":"ollama","modell","system","verlauf","prompt"}` und
+bekommt `{"ok":true,"text","modell","host","verbrauch"}` oder
+`{"ok":false,"fehler":{"code","text"}}`. Fehlercodes: `nicht_eingerichtet`,
+`nicht_erreichbar`, `ausgelastet` (für den Dienst „nicht verfügbar“, die
+Kette fällt zurück), `anbieter_fehler`, `leer`, `anbieter_unbekannt`. Die
+Adresse kommt aus der `.env` über `EnvironmentFile=` der Unit (systemd
+liest sie als root); der Dienst sieht nur den Host in der Antwort.
+Gemessen am Pi: 696 kB RSS, Chat mit einem 27B-Modell über das Gateway,
+und unter `IPAddressDeny=any` erreicht der Dienst Ollama nur noch über den
+Socket.
+
 **Speicher: Obergrenze 10 MB RSS, in Rust (Regel 14).** In Python geht
 das nicht: Allein die Importe (`urllib.request`, `ssl`, `http.server`)
 kosten am Pi 21,8 MB, bevor eine Zeile Logik läuft. Eine Rust-Probe

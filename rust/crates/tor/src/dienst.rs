@@ -13,6 +13,7 @@
 //! - **selbst binden** (`--socket PFAD`): fuer Tests und den Betrieb ohne
 //!   systemd.
 
+use crate::ollama;
 use gemein::protokoll::{melden, Stufe};
 use gemein::zeile;
 use serde_json::{json, Value};
@@ -37,11 +38,22 @@ pub struct Stand {
     start: Instant,
     anfragen: AtomicU64,
     offen: AtomicUsize,
+    /// Adresse des Ollama-Servers, einmal beim Start aus der Umgebung.
+    ollama: Option<String>,
 }
 
 impl Stand {
     pub fn neu() -> Self {
-        Stand { start: Instant::now(), anfragen: AtomicU64::new(0), offen: AtomicUsize::new(0) }
+        Self::mit_ollama(ollama::adresse())
+    }
+
+    pub fn mit_ollama(ollama: Option<String>) -> Self {
+        Stand {
+            start: Instant::now(),
+            anfragen: AtomicU64::new(0),
+            offen: AtomicUsize::new(0),
+            ollama,
+        }
     }
 }
 
@@ -57,7 +69,18 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
             "laufzeit_s": stand.start.elapsed().as_secs(),
             "anfragen": stand.anfragen.load(Ordering::Relaxed),
             "offen": stand.offen.load(Ordering::Relaxed),
+            "ollama": stand.ollama.as_deref().map(ollama::host_von),
         }),
+        "chat" => match anfrage.get("anbieter").and_then(Value::as_str) {
+            Some("ollama") => ollama::op_chat(stand.ollama.as_deref(), anfrage),
+            Some(a) => zeile::fehlerantwort("anbieter_unbekannt", &format!("Unbekannter Anbieter: {a}")),
+            None => zeile::fehlerantwort("anbieter_fehlt", "Der Chat braucht ein Feld \"anbieter\"."),
+        },
+        "modelle" => match anfrage.get("anbieter").and_then(Value::as_str) {
+            Some("ollama") => ollama::op_modelle(stand.ollama.as_deref()),
+            Some(a) => zeile::fehlerantwort("anbieter_unbekannt", &format!("Unbekannter Anbieter: {a}")),
+            None => zeile::fehlerantwort("anbieter_fehlt", "Die Abfrage braucht ein Feld \"anbieter\"."),
+        },
         "" => zeile::fehlerantwort("op_fehlt", "Die Anfrage braucht ein Feld \"op\"."),
         andere => zeile::fehlerantwort("op_unbekannt", &format!("Unbekannte Operation: {andere}")),
     }
@@ -122,7 +145,7 @@ pub fn lauschen(listener: UnixListener) -> ! {
         let stand2 = Arc::clone(&stand);
         let r = std::thread::Builder::new()
             .name("verbindung".into())
-            .stack_size(128 * 1024)
+            .stack_size(512 * 1024)
             .spawn(move || {
                 bedienen(strom, &stand2);
                 stand2.offen.fetch_sub(1, Ordering::SeqCst);
@@ -270,5 +293,36 @@ mod tests {
         assert!(von_systemd().is_none());
         std::env::remove_var("LISTEN_PID");
         std::env::remove_var("LISTEN_FDS");
+    }
+}
+
+#[cfg(test)]
+mod tests_anbieter {
+    use super::*;
+
+    #[test]
+    fn chat_ohne_anbieter_wird_abgelehnt() {
+        let a = antworten(&json!({"op": "chat", "prompt": "x"}), &Stand::mit_ollama(None));
+        assert_eq!(a["fehler"]["code"], "anbieter_fehlt");
+    }
+
+    #[test]
+    fn unbekannter_anbieter_wird_benannt_nicht_geraten() {
+        let a = antworten(&json!({"op": "chat", "anbieter": "irgendwer"}), &Stand::mit_ollama(None));
+        assert_eq!(a["fehler"]["code"], "anbieter_unbekannt");
+    }
+
+    #[test]
+    fn ollama_ohne_adresse_ist_nicht_eingerichtet() {
+        let a = antworten(&json!({"op": "chat", "anbieter": "ollama"}), &Stand::mit_ollama(None));
+        assert_eq!(a["fehler"]["code"], "nicht_eingerichtet");
+        let b = antworten(&json!({"op": "modelle", "anbieter": "ollama"}), &Stand::mit_ollama(None));
+        assert_eq!(b["fehler"]["code"], "nicht_eingerichtet");
+    }
+
+    #[test]
+    fn status_zeigt_nur_den_host_nie_die_ganze_adresse() {
+        let s = Stand::mit_ollama(Some("http://ollama.example:11434".into()));
+        assert_eq!(antworten(&json!({"op": "status"}), &s)["ollama"], "ollama.example:11434");
     }
 }

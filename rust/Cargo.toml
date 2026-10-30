@@ -20,6 +20,8 @@ publish = false
 
 [workspace.dependencies]
 serde_json = "1"
+# Nur Klartext-HTTP (Ollama im LAN). TLS kommt mit den Cloud-Anbietern.
+ureq = { version = "3", default-features = false, features = ["json"] }
 gemein = { path = "crates/gemein" }
 
 # Regel 14: klein und ohne Abwickeln. `panic = "abort"` heisst, ein Panik

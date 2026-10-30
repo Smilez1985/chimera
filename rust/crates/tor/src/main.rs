@@ -4,6 +4,7 @@
 //! Anbieter, Telegram und Web folgen (docs/ROADMAP.md, Phase 4d).
 
 mod dienst;
+mod ollama;
 
 use gemein::protokoll::{melden, Stufe};
 use std::path::PathBuf;
