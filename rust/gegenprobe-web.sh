@@ -70,6 +70,9 @@ mutiere "LAN: alles gilt als LAN" \
 mutiere "LAN-Sperre nicht Vorgabe" \
   '            nur_lan: true,' '            nur_lan: false,'
 
+mutiere "Unbekanntes Recht wird angenommen" \
+  'if let Some(r) = rechte.iter().find(|r| !RECHTE.contains(&r.as_str())) {' 'if let Some(r) = rechte.iter().find(|_| false) {'
+
 cp "$SICH" "$F"
 if cmp -s "$SICH" "$F"; then echo "Quelle zurueckgelegt (cmp ok)"; else echo "QUELLE NICHT ZURUECK"; exit 2; fi
 echo "rot: $ROT  gruen (schlecht): $GRUEN"

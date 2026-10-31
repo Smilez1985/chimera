@@ -29,6 +29,7 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 - **Installer:** `CHIMERA_RUST_LOKAL=<Pfad>` legt ein selbst gebautes `chimera-tor` ab (ohne CI, ohne Commit); Versions- und Laufprobe gelten unverändert.
 - **Gateway:** Die Web-Oberfläche bedient nur Anfragen aus dem eigenen Netz (Loopback, private, Link-Local, IPv6-ULA); alles andere bekommt 403. `CHIMERA_WEB_LAN_NUR=0` schaltet das ab.
 - **Gateway:** Web-Modul „Status“ zeigt CPU-Auslastung in % (gesamt und je Kern), Takt in MHz, Temperatur, Last, Arbeitsspeicher und Platte in MB/GB und %, Laufzeit und den Zustand der Chimera-Dienste, je mit Balken und Warnstufe; ein nicht lesbarer Wert erscheint als „nicht lesbar“, nie als 0.
+- **Gateway:** `chimera-tor --module-neu NAME --titel-de …` legt ein Web-Modul aus der Vorlage an (Manifest und JavaScript, nur Variablen auszufüllen) und prüft es mit demselben Code wie das Laden; `--module-pruefen VERZ` prüft ein vorhandenes Modul und nennt seine SHA-256-Prüfsumme; `--module-vorlage` gibt die Variablen aus.
 - **Gateway:** Ein Web-Modul darf nur Rechte aus einer festen Liste verlangen; ein unbekanntes Recht verwirft das Modul mit Meldung.
 - **Gateway:** Neue Status-Messungen sind Sonden (`impl Sonde` plus eine Zeile in `sonden()`); die Oberfläche zeigt nur die gelieferten Zeilen.
 - **Installer:** Modul 99 hält den laufenden Dienst kurz an, wenn es den Sitzungs-Socket erstmals einschaltet (systemd verweigert sonst den Start), und prüft den Zustand der Sockets statt nur das Manifest.

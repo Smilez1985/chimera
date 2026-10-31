@@ -4,6 +4,7 @@
 //! Anbieter, Telegram und Web folgen (docs/ROADMAP.md, Phase 4d).
 
 mod dienst;
+mod modul_vorlage;
 mod ollama;
 mod sitzung;
 mod status;
@@ -26,7 +27,11 @@ chimera-tor -- Gateway von Chimera
   chimera-tor --dienst    Dienstbetrieb: den von systemd uebergebenen Socket
                           bedienen, ohne systemd mit --socket PFAD selbst binden
   chimera-tor --passwort-hash  Passwort von stdin lesen, Hash fuer CHIMERA_WEB_PASSWORT_HASH ausgeben
-  chimera-tor --ping [PFAD]  Gateway fragen (Vorgabe /run/chimera/tor.sock), rc 0 = antwortet";
+  chimera-tor --ping [PFAD]  Gateway fragen (Vorgabe /run/chimera/tor.sock), rc 0 = antwortet
+  chimera-tor --module-neu NAME --titel-de TEXT [--titel-en TEXT] [--symbol Z] [--reihenfolge N]
+                          [--recht R]... [--ziel VERZ]   Web-Modul aus der Vorlage anlegen (Regel 5v)
+  chimera-tor --module-pruefen VERZ   Web-Modul pruefen, Pruefsumme nennen (JSON)
+  chimera-tor --module-vorlage   die Variablen der Vorlage (VARIABLEN.md) ausgeben";
 
 fn pruefen() -> serde_json::Value {
     serde_json::json!({
@@ -36,6 +41,28 @@ fn pruefen() -> serde_json::Value {
         "ziel": format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS),
         "dienst": "geruest",
     })
+}
+
+/// Argumente von `--module-neu` lesen und das Modul anlegen.
+fn modul_neu(a: &[String]) -> Result<PathBuf, String> {
+    let name = a.first().filter(|n| !n.starts_with("--")).ok_or("--module-neu braucht einen Namen")?;
+    let mut e = modul_vorlage::Eingabe::neu(name);
+    let mut ziel = PathBuf::from(".");
+    let mut i = 1;
+    while i < a.len() {
+        let wert = |i: usize| a.get(i + 1).cloned().ok_or_else(|| format!("{} braucht einen Wert", a[i]));
+        match a[i].as_str() {
+            "--titel-de" => e.titel_de = wert(i)?,
+            "--titel-en" => e.titel_en = Some(wert(i)?),
+            "--symbol" => e.symbol = wert(i)?,
+            "--reihenfolge" => e.reihenfolge = wert(i)?.parse().map_err(|_| "--reihenfolge ist keine ganze Zahl".to_string())?,
+            "--recht" => e.rechte.push(wert(i)?),
+            "--ziel" => ziel = PathBuf::from(wert(i)?),
+            x => return Err(format!("--module-neu kennt {x} nicht")),
+        }
+        i += 2;
+    }
+    modul_vorlage::anlegen(&e, &ziel)
 }
 
 fn main() -> ExitCode {
@@ -138,6 +165,36 @@ fn main() -> ExitCode {
                 }
             }
         }
+        Some("--module-vorlage") => {
+            print!("{}", modul_vorlage::VARIABLEN_MD);
+            ExitCode::SUCCESS
+        }
+        Some("--module-pruefen") => match args.get(1) {
+            None => {
+                melden(Stufe::Fehler, "--module-pruefen braucht ein Verzeichnis.");
+                ExitCode::from(2)
+            }
+            Some(p) => match modul_vorlage::pruefen(&PathBuf::from(p)) {
+                Ok(j) => {
+                    println!("{j}");
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    melden(Stufe::Fehler, &format!("Modul unzulaessig: {e}"));
+                    ExitCode::from(1)
+                }
+            },
+        },
+        Some("--module-neu") => match modul_neu(&args[1..]) {
+            Ok(d) => {
+                println!("{}", d.display());
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                melden(Stufe::Fehler, &e);
+                ExitCode::from(2)
+            }
+        },
         Some("--ping") => {
             let pfad = PathBuf::from(args.get(1).map(String::as_str).unwrap_or(SOCKET));
             match dienst::anfragen(&pfad, &serde_json::json!({"op": "ping"})) {

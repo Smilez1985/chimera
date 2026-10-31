@@ -1210,8 +1210,11 @@ sind Freigabe mit Prüfsumme und der Rahmenhinweis „Dieses Modul stammt nicht
 vom Projekt“. Ein Modul-Dienst (Punkt 4) ist ein Prozess mit Rechten seines
 Nutzers; der Installer legt ihn unter einem eigenen Nutzer an.
 
-**Stand:** Beschlossen, noch nicht gebaut. Eingebaut sind `chat` und `status`;
-das Status-Modul folgt Punkt 6 schon (`status.rs`).
+**Stand:** Gebaut sind Punkt 1 (Rechteliste `RECHTE`), Punkt 5 (Vorlage,
+`--module-neu`, `--module-pruefen` mit Prüfsumme über alle Dateien, Dateinamen
+und -grenzen, ohne symbolische Verweise) und Punkt 6 für Sonden (`status.rs`).
+Offen sind Punkt 2 (Freigabe), 3 (Sandbox-iframe) und 4 (Modul-Socket).
+Eingebaut sind `chat` und `status`.
 
 ### Architekturregel 5b, Fassung für das Gateway — PR #407 ist die Vorlage, Punkt für Punkt
 

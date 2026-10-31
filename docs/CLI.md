@@ -134,6 +134,14 @@ only process with network access.
 | `--dienst --socket PFAD` | Ohne systemd selbst binden. / Bind yourself, without systemd. |
 | `--passwort-hash` | Passwort von stdin lesen, Hash für `CHIMERA_WEB_PASSWORT_HASH` ausgeben (mind. 8 Zeichen). / Read a password from stdin, print the hash for `CHIMERA_WEB_PASSWORT_HASH` (min. 8 chars). |
 | `--ping [PFAD]` | Gateway fragen (Vorgabe `/run/chimera/tor.sock`), rc 0 = antwortet. / Ask the gateway, rc 0 = answers. |
+| `--module-neu NAME --titel-de TEXT` | Web-Modul aus der Vorlage anlegen (Regel 5v). Prüft mit demselben Code wie das Laden, überschreibt nie. / Create a web module from the template; checks with the same code as loading, never overwrites. |
+| `--titel-en TEXT` | (bei `--module-neu`) Titel englisch; Vorgabe = deutscher Titel. / English title; default = German title. |
+| `--symbol ZEICHEN` | (bei `--module-neu`) Zeichen vor dem Titel im Menü. / Character before the menu title. |
+| `--reihenfolge N` | (bei `--module-neu`) Position im Menü, Vorgabe 100. / Menu position, default 100. |
+| `--recht NAME` | (bei `--module-neu`, mehrfach) Recht, das das Modul verlangt; nur Rechte aus der Liste des Gateways. / Right the module asks for (repeatable); only rights known to the gateway. |
+| `--ziel VERZ` | (bei `--module-neu`) Zielverzeichnis, Vorgabe `.`. / Target directory, default `.`. |
+| `--module-pruefen VERZ` | Web-Modul prüfen und die SHA-256-Prüfsumme nennen (JSON). / Check a web module and print its SHA-256 checksum. |
+| `--module-vorlage` | Die Variablen der Vorlage ausgeben. / Print the template variables. |
 | `-h`, `--help` | Hilfe. / Help. |
 
 Das Passwort nie als Argument übergeben (Prozessliste). / Never pass the
@@ -185,6 +193,8 @@ Braucht `CHIMERA_LOG_RAM` und `CHIMERA_LOG_KARTE`. / Needs both variables.
 | `python3 tests/test_<name>.py [--gegenprobe]` | Ein Python-Test, optional mit Gegenprobe. / One Python test. |
 | `sh rust/gegenprobe-web.sh` | Gegenprobe der Web-Oberfläche. / Web UI counter-check. |
 | `sh rust/gegenprobe-telegram.sh` | Gegenprobe der Telegram-Tür. / Telegram counter-check. |
+| `sh rust/gegenprobe-status.sh` | Gegenprobe der Status-Sonden. / Status probes counter-check. |
+| `sh rust/gegenprobe-vorlage.sh` | Gegenprobe der Modul-Vorlage und Prüfsumme. / Module template and checksum counter-check. |
 | `cd rust && cargo test --locked` | Rust-Tests. / Rust tests. |
 | `python3 tools/check-globals.py` | Namen finden, die gelesen, aber nie definiert werden. / Find names read as globals but never defined. |
 | `python3 tools/contact-sheet.py [ZIEL.png]` | Moods nebeneinander zeichnen. / Draw moods side by side. |

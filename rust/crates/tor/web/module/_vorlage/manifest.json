@@ -1,0 +1,9 @@
+{
+  "name": "{{NAME}}",
+  "titel": {"de": "{{TITEL_DE}}", "en": "{{TITEL_EN}}"},
+  "symbol": "{{SYMBOL}}",
+  "reihenfolge": {{REIHENFOLGE}},
+  "einstieg": "{{NAME}}.js",
+  "element": "chimera-{{NAME}}",
+  "rechte": [{{RECHTE}}]
+}
