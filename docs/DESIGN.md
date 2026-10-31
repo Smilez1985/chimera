@@ -838,6 +838,8 @@ gefragt, sondern verweigert.
 
 Die Liste steht in der Umgebung, nicht im Repo (§13).
 
+Für die Web-Oberfläche gilt die Ausnahme „Ersteinrichtung“ in Regel 5u.
+
 ## 4c. Gateway: der eine Weg nach draußen
 
 Entschieden am 16.10.2026. Ersetzt den Ansatz, dass jeder Anbieter und
@@ -1071,6 +1073,93 @@ ohne Passwort startet sie nicht (5j); HTTP mit Passwort im LAN als
 Voreinstellung, HTTPS Opt-in, sichtbarer Hinweis bei HTTP; Änderungen wirken
 ohne Neustart; Schlüssel werden nur geschrieben, nie wieder angezeigt
 (zurück kommt „gesetzt“).
+
+### Architekturregel 5t — Anbieter, Schlüssel, Katalog und Wahl sind vier Ablagen mit je einem Schreiber
+
+Vorgabe smilez (31.10.): Jeder Anbieter ist ein eigenes Modul, die Modelle
+des Anbieters liegen darin. Mehrere Anbieter können dasselbe Modell mit
+verschiedenen Optionen anbieten. Das Gateway schreibt nur, was es für
+seine Aufgabe muss. Die Vorlagen (OpenMinis: Room-Tabellen mit
+`instanzId/modellId`, openclawgotchi: eine Datei `active_model.json`) sind
+Beispiele, keine Vorgabe.
+
+| Ablage | Aussage | Ort | Schreiber | Neu aufbaubar |
+|---|---|---|---|---|
+| **Anbieter** | Was der Nutzer eingerichtet hat: Typ, Bezeichnung, Adresse, Anmeldeart, an/aus, Optionen je Modell | `config/anbieter/<id>.json` | Gateway | nein |
+| **Schlüssel** | Geheimnis zur Anmeldung beim Anbieter | `config/geheim/<id>`, Modus 0600 | Gateway | nein |
+| **Katalog** | Was der Anbieter zuletzt gemeldet hat: Modelle, Kontext, `tools`, Zeitpunkt, `fehlt_seit` | `state/katalog/<id>.json` | Gateway | **ja** |
+| **Wahl** | Reihenfolge und Ketten als Verweise `<anbieter-id>/<modell>` | `config/wahl/wahl.json` | Gateway | nein |
+
+- **Eintragsschlüssel ist `<anbieter-id>/<modell>`**, nie der Modellname
+  allein. „Sonnet über Abo“ und „Sonnet über OpenRouter“ sind zwei
+  Einträge mit eigenen Optionen. Die Optionen stehen in der Anbieterdatei
+  unter `modelle.<modell>` (`sichtbar`, `anzeigename`, `kontext`,
+  `temperatur`, `extra_kopf`, `extra_koerper`); fehlt ein Feld, gilt der
+  Katalogwert.
+- **Beobachtung und Nutzerwille bleiben getrennt.** Der Katalog
+  überschreibt nie Anbieteroptionen und umgekehrt.
+- **Fähigkeiten werden gemessen** (`/api/show` → `tools`), nicht aus dem
+  Modellnamen geraten. Nicht Messbares steht als „unbekannt“.
+- **Verweise werden beim Laden geprüft.** Ein Verweis in der Wahl auf einen
+  fehlenden Eintrag wird gemeldet und übersprungen, nie still gelöscht
+  (5h: leere Kette melden).
+- **Frist statt Löschen:** Fehlt ein Modell in der Abfrage, setzt der
+  Katalog `fehlt_seit`; nach 7 Tagen verschwindet der Katalogeintrag, die
+  Nutzeroptionen bleiben.
+- **Atomar schreiben:** Sidecar neben dem Ziel, dann `mv`.
+- **Format JSON-Dateien**, kein SQLite: kleiner Bestand, von Hand lesbar.
+  SQLite bleibt dem Gedächtnisindex (8h).
+- **Kleinste Schreibrechte:** `ReadWritePaths` nennt nur
+  `config/anbieter`, `config/geheim`, `config/wahl` und `state/katalog`,
+  nie `config/` als Ganzes. Telegram-Token und Passwort-Hash ziehen aus der
+  `.env` nach `config/geheim/`; die `.env` bleibt für Adressen und Schalter
+  und wird vom Gateway nur gelesen. Der Installer übernimmt den Umzug in
+  `migrate_from()`.
+- **Nach einer Schlüsseländerung startet sich das Gateway neu**; der Socket
+  fängt Anfragen in der Zwischenzeit auf.
+- **Menü:** Je Anbieter ein Modul, das Gateway liefert dafür ein virtuelles
+  Manifest. Ein Frontend-Element je Anbietertyp, je Instanz neu aufgerufen
+  (zwei Ollama-Server = zwei Menüpunkte). Dazu „Anbieter hinzufügen“ und ein
+  Modul „Reihenfolge“, das nur Verweise der Wahl führt.
+
+### Architekturregel 5u — Passwort ändern braucht das alte; Werksreset braucht das Gerät
+
+**Ändern:** Das alte Passwort wird geprüft (die Bremse aus 5m gilt),
+danach enden alle Anmeldungen.
+
+**Werksreset (Passwort verloren)** in zwei Absichten, jede mit einem
+eigenen Satz, der **nur am Display** steht, nie in der Antwort an den
+Browser:
+
+1. „Reset beginnen“ erzeugt Satz 1; der Nutzer tippt ihn ab.
+2. Stimmt er, erzeugt das Gateway Satz 2 (Bestätigung der Folgen); der
+   Nutzer tippt auch ihn ab. Erst dann wird zurückgesetzt, und die Seite
+   „Neues Passwort vergeben“ erscheint.
+
+- **Satz:** in der am Gerät eingestellten Sprache (nicht der des Browsers;
+  fehlt sie, Englisch), aus einem Pool von mindestens 8 Vorlagen je
+  Sprache, dazu ein Zufallscode aus 6 Zeichen eines eindeutigen Alphabets
+  (ohne 0/O, 1/I/l), Zufall vom Betriebssystem. Er wechselt bei jedem
+  Aufruf. Beim Vergleich zählen Groß-/Kleinschreibung und überzählige
+  Leerzeichen nicht; der Vergleich läuft in konstanter Zeit. Er gilt
+  3 Minuten und genau einmal.
+- **Begrenzung:** 3 Versuche je Satz. Gesperrt wird die **Funktion**, nicht
+  die Adresse; nach jedem Fehlschlag steigt die Sperre 1 min → 5 min →
+  15 min → 1 h → 24 h, Erfolg setzt zurück. Höchstens 5 neue Sätze je
+  Stunde. **Der Zähler steht auf der Platte**; ein Neustart setzt ihn nicht
+  zurück. Jeder Vorgang geht ins Protokoll, ab dem zweiten Fehlschlag in
+  Folge als Warnung.
+- **Nur aus dem LAN**, auch mit `CHIMERA_WEB_LAN_NUR=0`.
+- **Anzeige:** Das Gateway schreibt nie ins Panel (5m). Es schickt den Satz
+  als Ereignis an den Dienst, der ihn für die Geltungsdauer anzeigt. Der Satz
+  liegt nur im Speicher. Ein Gerät ohne Display zeigt ihn im Journal.
+- **Umfang:** Der Reset löscht nur, was das Gateway besitzt — Anbieter,
+  Schlüssel, Wahl, Passwort-Hash, Telegram-Token. Sitzungen, Gedächtnis und
+  Moods gehören dem Agenten und bleiben dem Uninstaller mit Ebenen
+  vorbehalten.
+- **Ausnahme zu 5j:** Der Zustand „Ersteinrichtung“ (kein Passwort-Hash
+  vorhanden) bedient nur die Seite „Passwort vergeben“, nur aus dem LAN
+  und nur, solange der Hash fehlt.
 
 ### Architekturregel 5b, Fassung für das Gateway — PR #407 ist die Vorlage, Punkt für Punkt
 
@@ -3025,6 +3114,8 @@ Test muss rot werden.
 - **5l** — Wer Schlüssel hat, hat kein Werkzeug; wer Werkzeuge hat, hat keine Schlüssel
 - **5m** — Die Web-Oberfläche ist Teil des Gateways und braucht kein Framework
 - **5n** — Chimera spricht nur über sein Gateway mit der Welt
+- **5t** — Anbieter, Schlüssel, Katalog und Wahl sind vier Ablagen mit je einem Schreiber
+- **5u** — Passwort ändern braucht das alte; Werksreset braucht das Gerät
 - **5o** — Der Briefkasten ist ein eigener Prozess hinter dem Gateway, mit eigenem Port
 - **5p** — Was ein anderer Agent schreibt, ist Eingabe, kein Befehl
 - **5e** — zram und Auslagerungsdatei gehören zum Aufbau
