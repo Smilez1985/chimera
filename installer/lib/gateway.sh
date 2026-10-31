@@ -238,19 +238,40 @@ gateway_einrichten() {
 	fi
 	[ "$_ge_neu" = 1 ] && systemctl daemon-reload
 
+	# Das Manifest sagt, was der Installer einmal tat, nicht was jetzt gilt:
+	# Ein von Hand abgeschalteter Socket stuende dort weiter als "aktiviert".
+	# Darum zaehlt der Zustand (is-enabled UND is-active), nicht der Eintrag.
 	_ge_tor_neu=0
-	if ! manifest_has dienst "$CHIMERA_TOR_SOCKETUNIT"; then
+	if ! manifest_has dienst "$CHIMERA_TOR_SOCKETUNIT" || \
+	   ! systemctl is-enabled --quiet "$CHIMERA_TOR_SOCKETUNIT" 2>/dev/null || \
+	   ! systemctl is-active --quiet "$CHIMERA_TOR_SOCKETUNIT" 2>/dev/null; then
 		systemctl enable --now "$CHIMERA_TOR_SOCKETUNIT" >/dev/null 2>&1 || {
 			err "systemctl enable --now $CHIMERA_TOR_SOCKETUNIT schlug fehl."; return 2; }
-		manifest_record dienst "$CHIMERA_TOR_SOCKETUNIT" aktiviert
+		manifest_has dienst "$CHIMERA_TOR_SOCKETUNIT" || manifest_record dienst "$CHIMERA_TOR_SOCKETUNIT" aktiviert
 		_ge_tor_neu=1
 	fi
 	# Der Sitzungs-Socket hat einen eigenen Manifesteintrag: Er kam spaeter
 	# dazu, gilt also auch fuer Geraete, die das Gateway schon haben.
 	if ! manifest_has dienst "$CHIMERA_SITZUNG_SOCKETUNIT"; then
+		# systemd weigert sich, einen Socket zu starten, dessen Dienst schon
+		# laeuft ("already active, refusing"; am Pi gefunden). Der Dienst muss
+		# kurz aus und danach wieder an -- diesmal mit dem Socket von systemd.
+		_ge_dienst_lief=0
+		if systemctl is-active --quiet "$CHIMERA_DIENST" 2>/dev/null; then
+			_ge_dienst_lief=1
+			info "Dienst wird kurz angehalten, damit systemd den Sitzungs-Socket halten kann."
+			systemctl stop "$CHIMERA_DIENST" >/dev/null 2>&1 || {
+				err "systemctl stop $CHIMERA_DIENST schlug fehl."; return 2; }
+		fi
 		systemctl enable --now "$CHIMERA_SITZUNG_SOCKETUNIT" >/dev/null 2>&1 || {
-			err "systemctl enable --now $CHIMERA_SITZUNG_SOCKETUNIT schlug fehl."; return 2; }
+			err "systemctl enable --now $CHIMERA_SITZUNG_SOCKETUNIT schlug fehl."
+			[ "$_ge_dienst_lief" = 1 ] && systemctl start "$CHIMERA_DIENST" >/dev/null 2>&1
+			return 2; }
 		manifest_record dienst "$CHIMERA_SITZUNG_SOCKETUNIT" aktiviert
+		if [ "$_ge_dienst_lief" = 1 ]; then
+			systemctl start "$CHIMERA_DIENST" >/dev/null 2>&1 || {
+				err "systemctl start $CHIMERA_DIENST schlug fehl."; return 2; }
+		fi
 	elif [ "$_ge_neu" = 1 ]; then
 		systemctl restart "$CHIMERA_SITZUNG_SOCKETUNIT" >/dev/null 2>&1 || true
 	fi

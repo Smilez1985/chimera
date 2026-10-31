@@ -88,6 +88,21 @@ mutation web-ohne-neustart \
 	's|if \[ "$CHIMERA_WEB_NEU" = 1 \] \&\& |if false \&\& |' \
 	"Web: neuer Hash -> Gateway wird neu gestartet"
 
+# M-D1: Der laufende Dienst wird nicht angehalten (systemd weigert sich am Pi).
+mutation dienst-nicht-anhalten \
+	's|systemctl stop "$CHIMERA_DIENST" >/dev/null 2>&1 \|\| {|true \|\| {|' \
+	"Dienst lief: erst stop, dann enable, dann start"
+
+# M-D2: Der Dienst bleibt nach dem Socket aus.
+mutation dienst-bleibt-aus \
+	's|systemctl start "$CHIMERA_DIENST" >/dev/null 2>&1 \|\| {|true \|\| {|' \
+	"Dienst lief: erst stop, dann enable, dann start"
+
+# M-D3: Nur das Manifest entscheidet, ob der Socket eingeschaltet wird.
+mutation nur-manifest \
+	's|   ! systemctl is-enabled --quiet "\$CHIMERA_TOR_SOCKETUNIT" 2>/dev/null \|\| \\|   false \|\| \\|;s|   ! systemctl is-active --quiet "\$CHIMERA_TOR_SOCKETUNIT" 2>/dev/null; then|   false; then|' \
+	"Socket aus trotz Manifest: wird neu eingeschaltet"
+
 # M1: Socket fuer alle offen.
 mutation socket-offen \
 	's|SocketMode=0660|SocketMode=0666|' \
@@ -135,7 +150,7 @@ mutation fremden-nutzer-loeschen \
 
 # M8: Zweitlauf schaltet den Socket erneut ein.
 mutation nicht-idempotent \
-	's|if ! manifest_has dienst "\$CHIMERA_TOR_SOCKETUNIT"; then|if true; then|' \
+	's|if ! manifest_has dienst "\$CHIMERA_TOR_SOCKETUNIT" \|\| \\|if true \|\| \\|' \
 	"Zweitlauf schaltet nicht erneut ein"
 
 # M9: Trockenlauf schreibt trotzdem.

@@ -86,7 +86,12 @@ lauf() {
 		systemctl() {
 			printf 'systemctl %s\n' "$*" >>"$F/spur"
 			case "$1" in
-				is-active) cat "$F/aktiv"; [ "$(cat "$F/aktiv")" = active ] ;;
+				is-enabled) [ ! -e "$F/aus-${3:-$2}" ] ;;
+				is-active)
+					case "${2:-}" in
+						--quiet) [ ! -e "$F/aus-$3" ] && [ "$(cat "$F/aktiv")" = active ] ;;
+						*) cat "$F/aktiv"; [ "$(cat "$F/aktiv")" = active ] ;;
+					esac ;;
 				show)      cat "$F/nrestarts" ;;
 				disable)   [ "${2:-}" = --now ] && [ ! -e "$F/haelt" ] && \
 				               printf 'inactive\n' >"$F/aktiv"; return 0 ;;
@@ -216,7 +221,7 @@ lauf gateway_einrichten
 lauf gateway_einrichten
 check "Zweitlauf rc 0" "$(cat "$F/rc")" 0
 hat_nicht "Zweitlauf legt keinen Nutzer neu an" "$F/spur" "useradd"
-hat_nicht "Zweitlauf schaltet nicht erneut ein" "$F/spur" "enable"
+hat_nicht "Zweitlauf schaltet nicht erneut ein" "$F/spur" "enable --now"
 hat_nicht "Zweitlauf startet den Socket nicht neu" "$F/spur" "restart"
 check "Manifest: Socket genau einmal" \
 	"$(grep -c 'dienst	chimera-tor.socket' "$R/opt/chimera/state/manifest.tsv")" 1
@@ -329,6 +334,36 @@ lauf gateway_einrichten
 : >"$F/spur"
 CHIMERA_WEB_PASSWORT='Neustart-Pw-4' lauf gateway_einrichten
 hat "Web: neuer Hash -> Gateway wird neu gestartet (stop)" "$F/spur" "systemctl stop chimera-tor.service"
+
+# --- 8. Laeuft der Dienst schon, wird er fuer den Sitzungs-Socket kurz angehalten
+feld dienst-laeuft
+lauf gateway_einrichten
+_z="$(grep -n 'systemctl stop chimera.service' "$F/spur" | head -1 | cut -d: -f1)"
+_e="$(grep -n 'systemctl enable --now chimera-sitzung.socket' "$F/spur" | head -1 | cut -d: -f1)"
+_s="$(grep -n 'systemctl start chimera.service' "$F/spur" | head -1 | cut -d: -f1)"
+check "Dienst lief: rc 0" "$(cat "$F/rc")" 0
+check "Dienst lief: erst stop, dann enable, dann start" \
+	"$([ -n "$_z" ] && [ -n "$_e" ] && [ -n "$_s" ] && [ "$_z" -lt "$_e" ] && [ "$_e" -lt "$_s" ] && echo ja || echo nein)" ja
+
+feld dienst-aus
+printf 'inactive\n' >"$F/aktiv"
+lauf gateway_einrichten
+hat_nicht "Dienst aus: wird nicht angehalten" "$F/spur" "systemctl stop chimera.service"
+hat_nicht "Dienst aus: wird nicht gestartet" "$F/spur" "systemctl start chimera.service"
+
+# --- 9. Manifest sagt "aktiviert", der Socket ist aber aus (am Pi gefunden) --
+feld tor-aus
+lauf gateway_einrichten
+: >"$F/spur"
+: >"$F/aus-chimera-tor.socket"
+lauf gateway_einrichten
+hat "Socket aus trotz Manifest: wird neu eingeschaltet" "$F/spur" "systemctl enable --now chimera-tor.socket"
+check "Socket aus trotz Manifest: Manifest nicht doppelt" \
+	"$(grep -c 'dienst	chimera-tor.socket' "$R/opt/chimera/state/manifest.tsv")" 1
+rm -f "$F/aus-chimera-tor.socket"
+: >"$F/spur"
+lauf gateway_einrichten
+hat_nicht "Socket an: zweiter Lauf schaltet nichts neu ein" "$F/spur" "enable --now"
 
 printf '\nErgebnis: %s ok, %s fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
