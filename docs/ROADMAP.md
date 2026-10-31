@@ -312,6 +312,9 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       2. Module, in dieser Reihenfolge (DESIGN 5t, 5u):
          [x] Chat (Strom, Senden, ältere Sitzungen lesen);
          [x] Status (Dienste, Speicher, Temperatur);
+         [ ] Modul-Registrierung (5v): Rechteliste, Freigabe mit Prüfsumme und
+         Passwort, Sandbox-iframe mit Brücke, Weitergabe an Modul-Socket,
+         Vorlage `_vorlage/` mit `--module-neu`/`--module-pruefen`;
          [ ] Datenschicht im Gateway (Anbieter, Schlüssel, Katalog, Wahl,
          Rechte der Unit, Umzug von Token und Hash aus der `.env`,
          `migrate_from`);
@@ -328,6 +331,7 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       4. [x] Installer trägt den Hash ein (`CHIMERA_WEB_PASSWORT`);
          [x] Port nur im LAN begrenzen (Prüfung der Quelladresse im Gateway, 5m).
       5. [ ] Am Pi laufen lassen (Anmeldung, Chat gegen die echte Sitzung).
+- [ ] **Status-Sonden ergänzen:** CPU-Zeit und Speicher je Dienst (`cpu.stat` je Cgroup, RSS aus `/proc/<pid>`), Netz (Durchsatz), Verlauf der Werte.
 - [ ] **Weitere Anbieter im Gateway:** Anthropic-Schlüssel, Anthropic-Abo
       nach PR #407 (Regel 5b, Fassung für das Gateway: Registry-Version,
       nur vorwärts, ein Header-Satz für Token- und Chat-Weg). Zeitgrenzen

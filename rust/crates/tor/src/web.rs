@@ -57,8 +57,7 @@ const EINGEBAUT: &[Eingebaut] = &[
     },
 ];
 
-/// Units, deren Zustand das Status-Modul zeigt.
-const STATUS_DIENSTE: &[&str] = &["chimera", "chimera-tor", "chimera-tor.socket", "chimera-sitzung.socket"];
+
 
 const RAHMEN_HTML: &str = include_str!("../web/rahmen.html");
 
@@ -482,7 +481,7 @@ fn status_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
         return fehler(403, "Modul status hat das Recht 'status' nicht");
     }
     match (a.methode, was) {
-        ("GET", "messwerte") => json_antwort(200, crate::status::messen(Path::new("/"), STATUS_DIENSTE, true)),
+        ("GET", "messwerte") => json_antwort(200, crate::status::messen(&crate::status::Kontext { wurzel: Path::new("/"), mit_befehlen: true })),
         _ => fehler(404, "nicht gefunden"),
     }
 }

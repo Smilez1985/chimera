@@ -7,6 +7,8 @@
 <style>
   :root { --bg:#12141a; --fl:#1c1f28; --rd:#2b2f3b; --tx:#e6e8ee; --ak:#7aa2ff; --gedimmt:#8a90a2; --fehler:#ff7a7a; }
   * { box-sizing: border-box; }
+  /* Ohne diese Zeile überstimmt `display:flex` das hidden-Attribut (Kopfzeile vor der Anmeldung sichtbar). */
+  [hidden] { display: none !important; }
   html, body { height: 100%; margin: 0; background: var(--bg); color: var(--tx);
                font: 16px/1.4 system-ui, sans-serif; }
   #app { display: flex; flex-direction: column; height: 100%; }

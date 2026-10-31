@@ -480,8 +480,11 @@ fn status_braucht_anmeldung_und_liefert_messwerte() {
     let r = behandle(&z, &a("GET", "/api/status/messwerte", &c, b""));
     assert_eq!(r.status, 200);
     let v: Value = serde_json::from_slice(&r.body).unwrap();
-    assert!(v["speicher_mib"]["gesamt"].as_u64().unwrap() > 0);
-    assert!(v["dienste"].as_array().unwrap().len() == STATUS_DIENSTE.len());
+    let zeilen = v["zeilen"].as_array().unwrap();
+    assert!(zeilen.iter().any(|z| z["id"] == "speicher" && z["wert"].is_number()));
+    for d in crate::status::DIENSTE {
+        assert!(zeilen.iter().any(|z| z["id"] == format!("dienst-{d}")), "{d}");
+    }
 }
 
 #[test]
@@ -496,4 +499,10 @@ fn status_ohne_recht_im_manifest_ist_403() {
     assert!(!hat_recht(&leer, "status", "status"));
     assert_eq!(behandle(&z, &a("GET", "/api/status/unbekannt", &c, b"")).status, 404);
     let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn der_rahmen_versteckt_hidden_auch_gegen_display_regeln() {
+    // Die Kopfzeile hat `display:flex`; ohne diese Regel bliebe sie vor der Anmeldung sichtbar.
+    assert!(RAHMEN_HTML.contains("[hidden] { display: none !important; }"));
 }

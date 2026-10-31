@@ -1161,6 +1161,58 @@ Browser:
   vorhanden) bedient nur die Seite „Passwort vergeben“, nur aus dem LAN
   und nur, solange der Hash fehlt.
 
+### Architekturregel 5v — Module melden sich einfach und sicher am Gateway an
+
+Vorgabe smilez (31.10.): Neue Module müssen sich einfach, aber sicher
+registrieren lassen; für die nötigen Dateien gibt es eine Vorlage, in der der
+Entwickler nur Variablen ausfüllt. Wo möglich und sinnvoll wird in Rust
+gebaut, und alles ist für Entwickler erweiterbar.
+
+**Befund, der die Regel begründet:** Das Recht im Manifest schützt heute nur
+eingebaute Module, deren API fest im Gateway steht. Ein nachgelegtes Modul
+liefe im selben Ursprung wie der Rahmen und hätte das Cookie des Nutzers; sein
+JavaScript könnte jede Schreibroute aufrufen. Ein Manifest-Recht allein hilft
+dagegen nicht.
+
+1. **Rechte stammen aus einer festen Liste im Gateway.** Ein unbekanntes
+   Recht verwirft das Modul mit Meldung.
+2. **Neu gefunden heißt nicht aktiv.** Ein nachgelegtes Modul wartet auf
+   Freigabe, immer, auch mit leerer Rechteliste. Der Nutzer sieht Name, Rechte,
+   Herkunft und SHA-256 über alle Dateien und gibt frei oder lehnt ab; für die
+   Freigabe wird das **Passwort erneut** verlangt. Die Freigabe (mit Prüfsumme)
+   steht in `config/module/freigaben.json` (5t). **Ändert sich eine Datei,
+   verfällt sie.**
+3. **Nachgelegte Module laufen eingesperrt:** `<iframe sandbox="allow-scripts">`
+   ohne `allow-same-origin` (leerer Ursprung, kein Cookie, kein `window.chimera`),
+   Verkehr nur per `postMessage`. Der Rahmen leitet Aufrufe an
+   `/api/<modul>/…` weiter; das Gateway prüft **serverseitig** bei jedem Aufruf
+   Recht und Freigabe. `/api/<modul>/` gehört genau diesem Modul. Die
+   Content-Security-Policy der Modulseite sperrt `connect-src` und `eval`.
+   Eingebaute Module (Teil des Binarys) laufen im Rahmen.
+4. **Eigene Logik als eigener Prozess** mit Unix-Socket (Regel 14); das Gateway
+   reicht nur `/api/<modul>/` dorthin durch, mit Größen- und Zeitgrenze, und gibt
+   dem Modul nur den Teil des Nutzers mit, den sein Recht abdeckt (kein Cookie,
+   kein Hash).
+5. **Einfach:** Ablegen heißt, ein Verzeichnis nach `/opt/chimera/web/module/`
+   zu kopieren (Besitzer root). Dazu eine Vorlage `module/_vorlage/` mit
+   `manifest.json` (Platzhalter), `modul.js` und `VARIABLEN.md`;
+   `chimera-tor --module-neu` setzt die Variablen ein und prüft mit demselben
+   `manifest_lesen`, das beim Laden prüft; `--module-pruefen` zeigt die
+   Prüfsumme. Entfernen heißt, das Verzeichnis zu löschen; die Freigabe verfällt.
+6. **Erweiterbar.** Wer etwas hinzufügt, ändert genau eine Stelle: eine
+   neue Sonde (`impl Sonde` + Zeile in `sonden()`), ein neues Recht (Eintrag in
+   der Rechteliste), ein neuer Anbietertyp (`impl Anbieter` + Zeile in der
+   Typliste). Ein Test durchläuft alle Einträge (eindeutige IDs, nichts leer).
+
+**Grenze:** Das Gateway kann ein eingesperrtes Modul nicht daran hindern,
+dem Nutzer in seinem eigenen Fenster Falsches **anzuzeigen**. Antwort darauf
+sind Freigabe mit Prüfsumme und der Rahmenhinweis „Dieses Modul stammt nicht
+vom Projekt“. Ein Modul-Dienst (Punkt 4) ist ein Prozess mit Rechten seines
+Nutzers; der Installer legt ihn unter einem eigenen Nutzer an.
+
+**Stand:** Beschlossen, noch nicht gebaut. Eingebaut sind `chat` und `status`;
+das Status-Modul folgt Punkt 6 schon (`status.rs`).
+
 ### Architekturregel 5b, Fassung für das Gateway — PR #407 ist die Vorlage, Punkt für Punkt
 
 Vorgabe smilez (16.10.): Die Abo-Anmeldung im Gateway hält sich an den
@@ -3116,6 +3168,7 @@ Test muss rot werden.
 - **5n** — Chimera spricht nur über sein Gateway mit der Welt
 - **5t** — Anbieter, Schlüssel, Katalog und Wahl sind vier Ablagen mit je einem Schreiber
 - **5u** — Passwort ändern braucht das alte; Werksreset braucht das Gerät
+- **5v** — Module melden sich einfach und sicher am Gateway an
 - **5o** — Der Briefkasten ist ein eigener Prozess hinter dem Gateway, mit eigenem Port
 - **5p** — Was ein anderer Agent schreibt, ist Eingabe, kein Befehl
 - **5e** — zram und Auslagerungsdatei gehören zum Aufbau

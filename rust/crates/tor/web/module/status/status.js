@@ -1,44 +1,57 @@
 "use strict";
-// Status-Modul (DESIGN 5m): zeigt Dienste, Speicher, Temperatur, Last, Platte.
-// Werte nur per textContent; fehlt ein Wert, steht "nicht lesbar", nie 0.
+// Status-Modul (DESIGN 5m): zeigt Zeilen, die das Gateway liefert -- Gruppe, Titel,
+// Text, Balken, Stufe. Neue Messungen kommen allein aus dem Gateway (status.rs,
+// `sonden()`); dieses Element kennt keine einzelne Messung. Werte nur per textContent.
 class ChimeraStatus extends HTMLElement {
   connectedCallback() {
     this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = `
       <style>
         :host { display:block; padding:1rem; }
-        table { border-collapse:collapse; width:100%; max-width:34rem; }
-        td { padding:.4rem .5rem; border-bottom:1px solid #2b2f3b; }
-        td:first-child { color:#8a90a2; width:45%; }
-        .aus { color:#ff7a7a; } .ein { color:#7be0a0; }
+        h3 { margin:1rem 0 .25rem; font-size:.8rem; color:#8a90a2; text-transform:uppercase; letter-spacing:.05em; }
+        .z { padding:.45rem 0; border-bottom:1px solid #2b2f3b; }
+        .k { display:flex; justify-content:space-between; gap:.75rem; }
+        .t { color:#8a90a2; } .w { text-align:right; }
+        .bahn { height:.35rem; background:#2b2f3b; border-radius:.2rem; margin-top:.3rem; overflow:hidden; }
+        .bahn > div { height:100%; background:#7be0a0; }
+        .warnung .bahn > div, .warnung .w { background:#ffd989; color:#ffd989; }
+        .kritisch .bahn > div, .kritisch .w { background:#ff7a7a; color:#ff7a7a; }
+        .unbekannt .w { color:#8a90a2; }
+        .ok .w { color:#e6e8ee; }
+        .warnung .bahn > div, .kritisch .bahn > div { color:inherit; }
         small { color:#8a90a2; }
       </style>
-      <table id="t"></table><p><small id="zeit"></small></p>`;
+      <div id="t"></div><p><small id="zeit"></small></p>`;
     this.laden();
-    this.takt = setInterval(() => this.laden(), 5000);
+    this.takt = setInterval(() => this.laden(), 3000);
   }
   disconnectedCallback() { clearInterval(this.takt); }
-  zeile(name, wert, klasse) {
-    const tr = document.createElement("tr");
-    const a = document.createElement("td"), b = document.createElement("td");
-    a.textContent = name; b.textContent = wert;
-    if (klasse) b.className = klasse;
-    tr.append(a, b);
-    return tr;
-  }
   async laden() {
     const r = await window.chimera.api("/api/status/messwerte");
     const t = this.shadowRoot.getElementById("t");
     t.replaceChildren();
-    if (!r.ok) { t.appendChild(this.zeile("Fehler", r.fehler || "nicht erreichbar", "aus")); return; }
-    const nl = "nicht lesbar";
-    const gb = (m) => (m / 1024).toFixed(1) + " GB";
-    t.appendChild(this.zeile("Temperatur", r.temperatur_c == null ? nl : r.temperatur_c.toFixed(1) + " °C"));
-    t.appendChild(this.zeile("Arbeitsspeicher", r.speicher_mib ? `${r.speicher_mib.verfuegbar} von ${r.speicher_mib.gesamt} MiB frei` : nl));
-    t.appendChild(this.zeile("Last (1/5/15 min)", r.last ? r.last.join(" / ") : nl));
-    t.appendChild(this.zeile("Laufzeit", r.laufzeit_s == null ? nl : Math.floor(r.laufzeit_s / 3600) + " h"));
-    t.appendChild(this.zeile("Platte", r.platte_mib ? `${gb(r.platte_mib.belegt)} von ${gb(r.platte_mib.gesamt)} belegt` : nl));
-    for (const d of r.dienste || []) t.appendChild(this.zeile(d.name, d.zustand, d.zustand === "aktiv" ? "ein" : "aus"));
+    if (!r.ok) {
+      const d = document.createElement("div"); d.className = "z kritisch";
+      d.textContent = "Fehler: " + (r.fehler || "nicht erreichbar"); t.appendChild(d); return;
+    }
+    let gruppe = null;
+    for (const z of r.zeilen || []) {
+      if (z.gruppe !== gruppe) {
+        gruppe = z.gruppe;
+        const h = document.createElement("h3"); h.textContent = gruppe; t.appendChild(h);
+      }
+      const d = document.createElement("div"); d.className = "z " + (z.stufe || "unbekannt");
+      const k = document.createElement("div"); k.className = "k";
+      const a = document.createElement("span"); a.className = "t"; a.textContent = z.titel;
+      const b = document.createElement("span"); b.className = "w"; b.textContent = z.text;
+      k.append(a, b); d.appendChild(k);
+      if (typeof z.anteil === "number") {
+        const bahn = document.createElement("div"); bahn.className = "bahn";
+        const f = document.createElement("div"); f.style.width = Math.max(0, Math.min(100, z.anteil)) + "%";
+        bahn.appendChild(f); d.appendChild(bahn);
+      }
+      t.appendChild(d);
+    }
     this.shadowRoot.getElementById("zeit").textContent = "Stand: " + new Date().toLocaleTimeString();
   }
 }
