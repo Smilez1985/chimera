@@ -457,6 +457,6 @@ fn lan_adressen_werden_unterschieden() {
 }
 
 #[test]
-fn lan_nur_ist_vorgabe() {
-    assert!(Zustand::neu(hash_erzeugen("x-passwort").unwrap(), None, "/x".into(), Strom::neu()).lan_nur);
+fn nur_lan_ist_vorgabe() {
+    assert!(Zustand::neu(hash_erzeugen("x-passwort").unwrap(), None, "/x".into(), Strom::neu()).nur_lan);
 }

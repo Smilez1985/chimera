@@ -68,7 +68,7 @@ mutiere "LAN: private Adressen nicht erkannt" \
 mutiere "LAN: alles gilt als LAN" \
   'IpAddr::V4(a) => a.is_loopback() || a.is_private() || a.is_link_local(),' 'IpAddr::V4(_) => true,'
 mutiere "LAN-Sperre nicht Vorgabe" \
-  '            lan_nur: true,' '            lan_nur: false,'
+  '            nur_lan: true,' '            nur_lan: false,'
 
 cp "$SICH" "$F"
 if cmp -s "$SICH" "$F"; then echo "Quelle zurueckgelegt (cmp ok)"; else echo "QUELLE NICHT ZURUECK"; exit 2; fi

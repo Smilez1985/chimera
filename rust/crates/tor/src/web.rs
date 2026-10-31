@@ -280,7 +280,7 @@ pub struct Zustand {
     pub sitzung_socket: PathBuf,
     pub strom: Arc<Strom>,
     /// Nur Anfragen aus dem eigenen Netz bedienen (Vorgabe an, `CHIMERA_WEB_LAN_NUR=0` schaltet ab).
-    pub lan_nur: bool,
+    pub nur_lan: bool,
     angemeldet: Mutex<BTreeMap<String, Instant>>,
     fehlversuche: Mutex<VecDeque<Instant>>,
 }
@@ -292,7 +292,7 @@ impl Zustand {
             modul_dir,
             sitzung_socket,
             strom,
-            lan_nur: true,
+            nur_lan: true,
             angemeldet: Mutex::new(BTreeMap::new()),
             fehlversuche: Mutex::new(VecDeque::new()),
         }
@@ -593,7 +593,7 @@ fn kopf(name: &str, wert: &str) -> tiny_http::Header {
 }
 
 fn bedienen(z: &Zustand, mut req: tiny_http::Request) {
-    if z.lan_nur {
+    if z.nur_lan {
         // Ohne erkennbare Quelladresse wird nicht bedient (Verdachtsfall, kein Durchlass).
         let im_lan = req.remote_addr().map(|a| ip_im_lan(a.ip())).unwrap_or(false);
         if !im_lan {
@@ -646,7 +646,7 @@ pub fn starten(hash: String, adresse: &str, z_modul: Option<PathBuf>, sitzung_so
         std::thread::Builder::new().name("web-strom".into()).spawn(move || strom_halten(s, st)).map_err(|e| e.to_string())?;
     }
     let mut zs = Zustand::neu(hash, z_modul, sitzung_socket, strom);
-    zs.lan_nur = std::env::var("CHIMERA_WEB_LAN_NUR").map(|v| v.trim() != "0").unwrap_or(true);
+    zs.nur_lan = std::env::var("CHIMERA_WEB_LAN_NUR").map(|v| v.trim() != "0").unwrap_or(true);
     let z = Arc::new(zs);
     // Mehrere Arbeiter: ein wartender Long-Poll darf die anderen nicht aufhalten.
     for i in 0..6 {
