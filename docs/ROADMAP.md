@@ -316,7 +316,7 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       3. [x] Ein Zusatzmodul erscheint ohne Änderung an Rahmen oder Gateway
          (Test mit Gegenprobe).
       4. [x] Installer trägt den Hash ein (`CHIMERA_WEB_PASSWORT`);
-         [ ] Port nur im LAN begrenzen (Unit).
+         [x] Port nur im LAN begrenzen (Prüfung der Quelladresse im Gateway, 5m).
       5. [ ] Am Pi laufen lassen (Anmeldung, Chat gegen die echte Sitzung).
 - [ ] **Weitere Anbieter im Gateway:** Anthropic-Schlüssel, Anthropic-Abo
       nach PR #407 (Regel 5b, Fassung für das Gateway: Registry-Version,

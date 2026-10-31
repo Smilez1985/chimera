@@ -1056,6 +1056,16 @@ alles andere verlangt die Anmeldung. Moduldateien werden nur mit bekannter
 Endung und ohne Pfadausbruch ausgeliefert; ein nachgelegtes Modul ersetzt nie
 ein eingebautes. Das Chat-Modul darf nur, was sein Manifest als Recht nennt.
 
+**Nur im eigenen Netz (Entscheidung 31.10.):** Die Oberfläche prüft in
+jeder Anfrage die Quelladresse und bedient nur Loopback, private
+(RFC 1918), Link-Local und IPv6-ULA; ohne erkennbare Quelle wird abgewiesen.
+Grund: Ein IP-Filter der Unit (`IPAddressDeny`) scheidet aus, weil er am
+Gateway auch Telegram und die Anbieter sperren würde, und an einer
+Socket-Unit zeigte er am Pi ein ungeklärtes Verhalten. Die Prüfung im
+Gateway ersetzt keine Firewall und keinen Router (Portfreigabe ins
+Internet bleibt Sache des Nutzers); sie fängt den Fall ab, dass der Port
+versehentlich erreichbar wird. `CHIMERA_WEB_LAN_NUR=0` hebt sie auf.
+
 **Unverändert aus Fassung 1:** läuft im Gateway, nicht als eigener Prozess;
 ohne Passwort startet sie nicht (5j); HTTP mit Passwort im LAN als
 Voreinstellung, HTTPS Opt-in, sichtbarer Hinweis bei HTTP; Änderungen wirken

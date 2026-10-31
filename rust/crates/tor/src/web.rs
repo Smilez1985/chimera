@@ -279,6 +279,8 @@ pub struct Zustand {
     pub modul_dir: Option<PathBuf>,
     pub sitzung_socket: PathBuf,
     pub strom: Arc<Strom>,
+    /// Nur Anfragen aus dem eigenen Netz bedienen (Vorgabe an, `CHIMERA_WEB_LAN_NUR=0` schaltet ab).
+    pub lan_nur: bool,
     angemeldet: Mutex<BTreeMap<String, Instant>>,
     fehlversuche: Mutex<VecDeque<Instant>>,
 }
@@ -290,6 +292,7 @@ impl Zustand {
             modul_dir,
             sitzung_socket,
             strom,
+            lan_nur: true,
             angemeldet: Mutex::new(BTreeMap::new()),
             fehlversuche: Mutex::new(VecDeque::new()),
         }
@@ -571,11 +574,34 @@ fn strom_halten(sock: PathBuf, strom: Arc<Strom>) {
     }
 }
 
+/// Gehoert die Quelladresse zum eigenen Netz? Loopback, private (RFC 1918),
+/// Link-Local und IPv6-ULA ja; alles andere (oeffentlich) nein. IPv4 in
+/// IPv6-Schreibweise wird als IPv4 beurteilt.
+pub fn ip_im_lan(ip: std::net::IpAddr) -> bool {
+    use std::net::IpAddr;
+    match ip {
+        IpAddr::V4(a) => a.is_loopback() || a.is_private() || a.is_link_local(),
+        IpAddr::V6(a) => match a.to_ipv4_mapped() {
+            Some(v4) => ip_im_lan(IpAddr::V4(v4)),
+            None => a.is_loopback() || (a.segments()[0] & 0xfe00) == 0xfc00 || (a.segments()[0] & 0xffc0) == 0xfe80,
+        },
+    }
+}
+
 fn kopf(name: &str, wert: &str) -> tiny_http::Header {
     tiny_http::Header::from_bytes(name.as_bytes(), wert.as_bytes()).expect("Kopf")
 }
 
 fn bedienen(z: &Zustand, mut req: tiny_http::Request) {
+    if z.lan_nur {
+        // Ohne erkennbare Quelladresse wird nicht bedient (Verdachtsfall, kein Durchlass).
+        let im_lan = req.remote_addr().map(|a| ip_im_lan(a.ip())).unwrap_or(false);
+        if !im_lan {
+            melden(Stufe::Warnung, &format!("Web: Anfrage von ausserhalb des eigenen Netzes abgewiesen ({}).", req.remote_addr().map(|a| a.ip().to_string()).unwrap_or_else(|| "?".into())));
+            let _ = req.respond(tiny_http::Response::from_string("nur im eigenen Netz").with_status_code(403));
+            return;
+        }
+    }
     let methode = req.method().as_str().to_string();
     let url = req.url().to_string();
     let (pfad, query) = url.split_once('?').unwrap_or((url.as_str(), ""));
@@ -619,7 +645,9 @@ pub fn starten(hash: String, adresse: &str, z_modul: Option<PathBuf>, sitzung_so
         let (s, st) = (sitzung_socket.clone(), strom.clone());
         std::thread::Builder::new().name("web-strom".into()).spawn(move || strom_halten(s, st)).map_err(|e| e.to_string())?;
     }
-    let z = Arc::new(Zustand::neu(hash, z_modul, sitzung_socket, strom));
+    let mut zs = Zustand::neu(hash, z_modul, sitzung_socket, strom);
+    zs.lan_nur = std::env::var("CHIMERA_WEB_LAN_NUR").map(|v| v.trim() != "0").unwrap_or(true);
+    let z = Arc::new(zs);
     // Mehrere Arbeiter: ein wartender Long-Poll darf die anderen nicht aufhalten.
     for i in 0..6 {
         let (srv, z) = (server.clone(), z.clone());

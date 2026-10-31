@@ -63,6 +63,13 @@ mutiere "Hash: Form nicht geprueft" \
         && t[0] == KOPF' 't.len() == 4
         && true'
 
+mutiere "LAN: private Adressen nicht erkannt" \
+  'IpAddr::V4(a) => a.is_loopback() || a.is_private() || a.is_link_local(),' 'IpAddr::V4(a) => a.is_loopback() || a.is_link_local(),'
+mutiere "LAN: alles gilt als LAN" \
+  'IpAddr::V4(a) => a.is_loopback() || a.is_private() || a.is_link_local(),' 'IpAddr::V4(_) => true,'
+mutiere "LAN-Sperre nicht Vorgabe" \
+  '            lan_nur: true,' '            lan_nur: false,'
+
 cp "$SICH" "$F"
 if cmp -s "$SICH" "$F"; then echo "Quelle zurueckgelegt (cmp ok)"; else echo "QUELLE NICHT ZURUECK"; exit 2; fi
 echo "rot: $ROT  gruen (schlecht): $GRUEN"

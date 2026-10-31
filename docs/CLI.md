@@ -223,6 +223,7 @@ in `/opt/chimera/config/.env`. Never print keys or commit them.
 | `CHIMERA_WEB_PASSWORT_HASH` | Passwort-Hash der Web-Oberfläche; leer = Oberfläche aus. / Web UI password hash; empty = UI off. |
 | `CHIMERA_WEB_PORT` | Port der Oberfläche (Vorgabe 8080). / UI port (default 8080). |
 | `CHIMERA_WEB_BIND` | Adresse der Oberfläche (Vorgabe `0.0.0.0`). / UI bind address (default `0.0.0.0`). |
+| `CHIMERA_WEB_LAN_NUR` | `0` lässt Anfragen von außerhalb des eigenen Netzes zu (Vorgabe: nur Loopback, private und Link-Local-Adressen). / `0` allows requests from outside the local network (default: loopback, private and link-local only). |
 | `CHIMERA_WEB_MODULE` | Verzeichnis nachgelegter Web-Module (Vorgabe `/opt/chimera/web/module`). / Directory of add-on web modules. |
 | `CHIMERA_SITZUNG_SOCKET` | Pfad des Sitzungs-Sockets (Vorgabe `/run/chimera/sitzung.sock`). / Session socket path. |
 | `CHIMERA_HOME` | Datenverzeichnis des Agenten. / Agent data directory. |

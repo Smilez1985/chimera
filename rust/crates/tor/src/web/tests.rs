@@ -445,3 +445,18 @@ fn ein_hash_mit_fremdem_kopf_ist_ungueltig_auch_wenn_der_rest_stimmt() {
     assert!(!hash_gueltig(&format!("md5${rest}")));
     assert!(!hash_pruefen(&format!("md5${rest}"), "irgendwas-8"));
 }
+
+// --- Nur im eigenen Netz ---
+
+#[test]
+fn lan_adressen_werden_unterschieden() {
+    let ja = ["127.0.0.1", "10.1.2.3", "172.16.0.1", "172.31.255.1", "192.168.1.5", "169.254.1.1", "::1", "fd12::1", "fe80::1", "::ffff:192.168.1.5"];
+    let nein = ["8.8.8.8", "172.32.0.1", "172.15.0.1", "1.1.1.1", "2a02:810b::1", "::ffff:8.8.8.8", "100.64.0.1"];
+    for a in ja { assert!(ip_im_lan(a.parse().unwrap()), "{a}"); }
+    for a in nein { assert!(!ip_im_lan(a.parse().unwrap()), "{a}"); }
+}
+
+#[test]
+fn lan_nur_ist_vorgabe() {
+    assert!(Zustand::neu(hash_erzeugen("x-passwort").unwrap(), None, "/x".into(), Strom::neu()).lan_nur);
+}
