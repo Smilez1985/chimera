@@ -129,6 +129,12 @@ pub struct Modul {
     pub eingebaut: bool,
 }
 
+/// Die Rechte, die ein Modul im Manifest verlangen darf (DESIGN 5v). **Hier
+/// eintragen**, wenn das Gateway ein neues Recht kennt. Ein Recht, das nicht in
+/// dieser Liste steht, verwirft das Modul -- sonst wuerde ein Tippfehler im
+/// Manifest still ein wirkungsloses Recht verlangen.
+pub const RECHTE: &[&str] = &["chat", "status"];
+
 fn name_ok(s: &str) -> bool {
     !s.is_empty() && s.len() <= 32 && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
@@ -169,6 +175,9 @@ pub fn manifest_lesen(verzeichnis: &str, text: &str, eingebaut: bool) -> Result<
         .iter()
         .map(|r| r.as_str().map(str::to_string).ok_or("rechte: nur Texte"))
         .collect::<Result<Vec<_>, _>>()?;
+    if let Some(r) = rechte.iter().find(|r| !RECHTE.contains(&r.as_str())) {
+        return Err(format!("unbekanntes Recht '{r}' (bekannt: {})", RECHTE.join(", ")));
+    }
     Ok(Modul {
         name: name.to_string(),
         titel,

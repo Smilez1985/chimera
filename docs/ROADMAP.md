@@ -312,7 +312,7 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       2. Module, in dieser Reihenfolge (DESIGN 5t, 5u):
          [x] Chat (Strom, Senden, ältere Sitzungen lesen);
          [x] Status (Dienste, Speicher, Temperatur);
-         [ ] Modul-Registrierung (5v): Rechteliste, Freigabe mit Prüfsumme und
+         [ ] Modul-Registrierung (5v) — Rechteliste steht; offen: Freigabe mit Prüfsumme und
          Passwort, Sandbox-iframe mit Brücke, Weitergabe an Modul-Socket,
          Vorlage `_vorlage/` mit `--module-neu`/`--module-pruefen`;
          [ ] Datenschicht im Gateway (Anbieter, Schlüssel, Katalog, Wahl,

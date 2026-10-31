@@ -506,3 +506,43 @@ fn der_rahmen_versteckt_hidden_auch_gegen_display_regeln() {
     // Die Kopfzeile hat `display:flex`; ohne diese Regel bliebe sie vor der Anmeldung sichtbar.
     assert!(RAHMEN_HTML.contains("[hidden] { display: none !important; }"));
 }
+
+// --- Rechteliste (DESIGN 5v) ---
+
+#[test]
+fn ein_unbekanntes_recht_verwirft_das_modul_mit_grund() {
+    let t = r#"{"name":"x","titel":"T","element":"x-x","einstieg":"x.js","rechte":["chat","root-zugriff"]}"#;
+    let e = manifest_lesen("x", t, false).unwrap_err();
+    assert!(e.contains("root-zugriff") && e.contains("bekannt"), "{e}");
+    let ok = r#"{"name":"x","titel":"T","element":"x-x","einstieg":"x.js","rechte":["chat","status"]}"#;
+    assert!(manifest_lesen("x", ok, false).is_ok());
+}
+
+#[test]
+fn die_eingebauten_module_verlangen_nur_bekannte_rechte() {
+    // Faengt die Fehlerklasse "Recht im Manifest, aber nicht in RECHTE eingetragen".
+    let (m, f) = module_erkennen(None);
+    assert!(f.is_empty(), "{f:?}");
+    for x in &m {
+        for r in &x.rechte {
+            assert!(RECHTE.contains(&r.as_str()), "{}: {r}", x.name);
+        }
+    }
+}
+
+#[test]
+fn nachgelegte_dateien_mit_unbekannter_endung_werden_nicht_ausgeliefert() {
+    // Ein Modulverzeichnis darf nur bekannte Dateitypen preisgeben (kein .env, .sh, .key ...).
+    let d = tmp("endung");
+    std::fs::create_dir_all(d.join("zusatz")).unwrap();
+    std::fs::write(d.join("zusatz/manifest.json"), ok_manifest("zusatz")).unwrap();
+    std::fs::write(d.join("zusatz/zusatz.js"), "//").unwrap();
+    for n in ["geheim.key", "start.sh", "daten.bin", "notiz.txt", "ohne-endung"] {
+        std::fs::write(d.join("zusatz").join(n), "x").unwrap();
+    }
+    assert!(modul_datei(Some(&d), "zusatz", "zusatz.js").is_some());
+    for n in ["geheim.key", "start.sh", "daten.bin", "notiz.txt", "ohne-endung"] {
+        assert!(modul_datei(Some(&d), "zusatz", n).is_none(), "{n} darf nicht ausgeliefert werden");
+    }
+    let _ = std::fs::remove_dir_all(&d);
+}
