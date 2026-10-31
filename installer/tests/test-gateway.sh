@@ -59,6 +59,12 @@ feld() {
 	# Attrappe fuer das Binary: Argumente festhalten, Exitcode aus Datei.
 	cat >"$R/opt/chimera/bin/chimera-tor" <<EOF
 #!/bin/sh
+if [ "\${1:-}" = --passwort-hash ]; then
+	read -r pw; printf 'pw=%s\nargs=%s\n' "\$pw" "\$*" >>"$F/pw-spur"
+	[ -f "$F/hash-leer" ] && exit 0
+	printf 'pbkdf2-sha256\$1\$aabbccdd11223344\$%s\n' "0000000000000000000000000000000000000000000000000000000000000000"
+	exit 0
+fi
 printf '%s\n' "\$*" >>"$F/ping-spur"
 exit "\$(cat "$F/ping-rc")"
 EOF
@@ -264,6 +270,65 @@ lauf gateway_einrichten
 : >"$F/haelt"
 lauf gateway_rueckbau
 check "Rueckbau: laeuft noch -> rc 1" "$(cat "$F/rc")" 1
+
+# --- 7. Web-Passwort (Regel 5m, 5j) ----------------------------------------
+ENVD=etc/chimera/.env
+webfeld() {
+	feld "$1"
+	mkdir -p "$R/opt/chimera/config"
+	printf '# x\nCHIMERA_WEB_PASSWORT_HASH=%s\nCHIMERA_WEB_PORT=\n' "${2:-}" >"$R/opt/chimera/config/.env"
+	chmod 640 "$R/opt/chimera/config/.env"
+}
+WENV=opt/chimera/config/.env
+
+webfeld web-ohne
+lauf gateway_einrichten
+check "Web ohne Passwort: rc 0" "$(cat "$F/rc")" 0
+hat_nicht "Web ohne Passwort: kein Hash eingetragen" "$R/$WENV" "pbkdf2"
+hat "Web ohne Passwort: sagt, wie man einschaltet" "$F/aus" "Web-Oberflaeche bleibt zu"
+
+webfeld web-mit
+CHIMERA_WEB_PASSWORT='Geheimes-Pw-1' lauf gateway_einrichten
+check "Web mit Passwort: rc 0" "$(cat "$F/rc")" 0
+hat "Web mit Passwort: Hash steht in der .env" "$R/$WENV" "CHIMERA_WEB_PASSWORT_HASH=pbkdf2-sha256\$1\$aabbccdd11223344"
+hat_nicht "Web mit Passwort: Klartext nicht in der .env" "$R/$WENV" "Geheimes-Pw-1"
+hat_nicht "Web mit Passwort: Klartext nicht im Protokoll" "$F/aus" "Geheimes-Pw-1"
+hat "Web mit Passwort: Binary bekam es ueber stdin" "$F/pw-spur" "pw=Geheimes-Pw-1"
+hat_nicht "Web mit Passwort: nicht als Argument" "$F/pw-spur" "--passwort-hash Geheimes"
+hat "Web mit Passwort: Aufruf nur mit --passwort-hash" "$F/pw-spur" "args=--passwort-hash"
+check "Web mit Passwort: .env behaelt Modus 640" "$(stat -c %a "$R/$WENV")" 640
+check "Web mit Passwort: Port-Zeile bleibt" "$(grep -c '^CHIMERA_WEB_PORT=' "$R/$WENV")" 1
+
+# Ohne vorhandene Zeile wird angehaengt (anderer Zweig als oben).
+webfeld web-anhaengen
+sed -i '/^CHIMERA_WEB_PASSWORT_HASH=/d' "$R/$WENV"
+CHIMERA_WEB_PASSWORT='Anhaengen-Pw-5' lauf gateway_einrichten
+check "Web anhaengen: rc 0" "$(cat "$F/rc")" 0
+hat "Web anhaengen: Hash steht in der .env" "$R/$WENV" "CHIMERA_WEB_PASSWORT_HASH=pbkdf2-sha256\$1\$aabbccdd11223344"
+hat_nicht "Web anhaengen: Klartext nicht in der .env" "$R/$WENV" "Anhaengen-Pw-5"
+check "Web anhaengen: genau eine Hash-Zeile" "$(grep -c '^CHIMERA_WEB_PASSWORT_HASH=' "$R/$WENV")" 1
+
+webfeld web-da 'pbkdf2-sha256$1$aa$bb'
+CHIMERA_WEB_PASSWORT='Anderes-Pw-22' lauf gateway_einrichten
+hat "Web: vorhandener Hash bleibt" "$R/$WENV" "CHIMERA_WEB_PASSWORT_HASH=pbkdf2-sha256\$1\$aa\$bb"
+check "Web: Binary wurde nicht gefragt" "$(cat "$F/pw-spur" 2>/dev/null | wc -l | tr -d ' ')" 0
+
+webfeld web-leer
+: >"$F/hash-leer"
+CHIMERA_WEB_PASSWORT='Zu-Kurz' lauf gateway_einrichten
+check "Web: leerer Hash -> Abbruch rc 2" "$(cat "$F/rc")" 2
+hat_nicht "Web: leerer Hash wird nicht eingetragen" "$R/$WENV" "CHIMERA_WEB_PASSWORT_HASH=pb"
+check "Web: keine Nebendatei liegt herum" "$(ls "$R/opt/chimera/config" | grep -c neu)" 0
+
+webfeld web-trocken
+MODUS=dry CHIMERA_WEB_PASSWORT='Trocken-Pw-3' lauf gateway_einrichten
+hat_nicht "Web Trockenlauf: nichts eingetragen" "$R/$WENV" "pbkdf2"
+
+webfeld web-neustart
+lauf gateway_einrichten
+: >"$F/spur"
+CHIMERA_WEB_PASSWORT='Neustart-Pw-4' lauf gateway_einrichten
+hat "Web: neuer Hash -> Gateway wird neu gestartet (stop)" "$F/spur" "systemctl stop chimera-tor.service"
 
 printf '\nErgebnis: %s ok, %s fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

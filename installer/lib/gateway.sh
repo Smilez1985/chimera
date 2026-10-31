@@ -150,6 +150,54 @@ gateway_nutzer() {
 	return 0
 }
 
+# Web-Passwort (Regel 5m, 5j): Der Installer fragt nicht, er liest
+# CHIMERA_WEB_PASSWORT aus der Umgebung des Laufs, hasht es mit dem Binary
+# (Eingabe nur ueber stdin, nie als Argument) und traegt NUR den Hash in die
+# .env ein. Ein vorhandener Hash wird nie ueberschrieben. Ohne Passwort bleibt
+# die Oberflaeche zu -- das ist gewollt, kein Fehler.
+# rc 0 nichts zu tun oder eingetragen (CHIMERA_WEB_NEU=1 bei neu), 2 Abbruch.
+gateway_web_passwort() {
+	CHIMERA_WEB_NEU=0
+	_wp_env="$(rootpath "$CHIMERA_CONFIG")/.env"
+	_wp_prog="$(rootpath "$(gateway_programm)")"
+	if is_dry_run; then
+		[ -n "${CHIMERA_WEB_PASSWORT:-}" ] && info "[wuerde] Web-Passwort hashen und in die .env eintragen"
+		return 0
+	fi
+	[ -f "$_wp_env" ] || { info "Web-Oberflaeche: keine .env -- uebersprungen."; return 0; }
+	if grep -Eq '^CHIMERA_WEB_PASSWORT_HASH=.+' "$_wp_env"; then
+		info "Web-Oberflaeche: Passwort-Hash vorhanden (bleibt unangetastet)."
+		return 0
+	fi
+	if [ -z "${CHIMERA_WEB_PASSWORT:-}" ]; then
+		info "Web-Oberflaeche bleibt zu (kein Passwort). Einschalten:"
+		info "  echo 'MeinPasswort' | $(gateway_programm) --passwort-hash"
+		info "  und den Hash als CHIMERA_WEB_PASSWORT_HASH in $CHIMERA_CONFIG/.env eintragen."
+		return 0
+	fi
+	_wp_hash="$(printf '%s\n' "$CHIMERA_WEB_PASSWORT" | "$_wp_prog" --passwort-hash 2>/dev/null)" || _wp_hash=""
+	# Ergebnis pruefen, nicht den Exitcode: leer oder falsche Form = Abbruch.
+	case "$_wp_hash" in
+		pbkdf2-sha256\$*\$*\$*) : ;;
+		*) err "Web-Passwort: kein Hash erhalten (mindestens 8 Zeichen?)."; return 2 ;;
+	esac
+	_wp_tmp="$_wp_env.neu"
+	if grep -q '^CHIMERA_WEB_PASSWORT_HASH=' "$_wp_env"; then
+		HASH="$_wp_hash" awk '/^CHIMERA_WEB_PASSWORT_HASH=/ { print "CHIMERA_WEB_PASSWORT_HASH=" ENVIRON["HASH"]; next } { print }' "$_wp_env" >"$_wp_tmp" || { rm -f "$_wp_tmp"; return 2; }
+	else
+		{ cat "$_wp_env"; printf 'CHIMERA_WEB_PASSWORT_HASH=%s\n' "$_wp_hash"; } >"$_wp_tmp" || { rm -f "$_wp_tmp"; return 2; }
+	fi
+	chmod --reference="$_wp_env" "$_wp_tmp" 2>/dev/null || chmod 640 "$_wp_tmp"
+	chown --reference="$_wp_env" "$_wp_tmp" 2>/dev/null || true
+	if ! grep -qxF "CHIMERA_WEB_PASSWORT_HASH=$_wp_hash" "$_wp_tmp"; then
+		rm -f "$_wp_tmp"; err "Web-Passwort: Eintrag nicht geschrieben."; return 2
+	fi
+	mv "$_wp_tmp" "$_wp_env" || { rm -f "$_wp_tmp"; return 2; }
+	CHIMERA_WEB_NEU=1
+	info "Web-Oberflaeche: Passwort-Hash eingetragen (Port ${CHIMERA_WEB_PORT:-8080})."
+	return 0
+}
+
 # Der ganze Ablauf. rc 0 Gateway antwortet nachweislich, 1 Befund, 2 Abbruch.
 gateway_einrichten() {
 	_ge_prog="$(rootpath "$(gateway_programm)")"
@@ -169,6 +217,10 @@ gateway_einrichten() {
 
 	log "Gateway-Nutzer"
 	gateway_nutzer || return 2
+	log ""
+
+	log "Web-Oberflaeche"
+	gateway_web_passwort || return 2
 	log ""
 
 	log "Units"
@@ -201,6 +253,10 @@ gateway_einrichten() {
 		manifest_record dienst "$CHIMERA_SITZUNG_SOCKETUNIT" aktiviert
 	elif [ "$_ge_neu" = 1 ]; then
 		systemctl restart "$CHIMERA_SITZUNG_SOCKETUNIT" >/dev/null 2>&1 || true
+	fi
+	if [ "$CHIMERA_WEB_NEU" = 1 ] && [ "$_ge_neu" = 0 ] && [ "$_ge_tor_neu" = 0 ]; then
+		# Neuer Hash: das Gateway liest die .env nur beim Start.
+		systemctl stop "$CHIMERA_TOR_DIENSTUNIT" >/dev/null 2>&1 || true
 	fi
 	if [ "$_ge_neu" = 1 ] && [ "$_ge_tor_neu" = 0 ]; then
 		# Neue Unit-Fassung: Socket und Dienst neu laden. Der Socket-Neustart

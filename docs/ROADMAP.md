@@ -315,8 +315,8 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
          (Waveshare), [ ] Status.
       3. [x] Ein Zusatzmodul erscheint ohne Änderung an Rahmen oder Gateway
          (Test mit Gegenprobe).
-      4. [ ] Installer fragt das Web-Passwort ab und trägt den Hash ein
-         (`chimera-tor --passwort-hash`); Unit öffnet den Port nur im LAN.
+      4. [x] Installer trägt den Hash ein (`CHIMERA_WEB_PASSWORT`);
+         [ ] Port nur im LAN begrenzen (Unit).
       5. [ ] Am Pi laufen lassen (Anmeldung, Chat gegen die echte Sitzung).
 - [ ] **Weitere Anbieter im Gateway:** Anthropic-Schlüssel, Anthropic-Abo
       nach PR #407 (Regel 5b, Fassung für das Gateway: Registry-Version,

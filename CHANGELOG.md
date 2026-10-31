@@ -25,6 +25,7 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 - **Sitzung:** Wechsel der Hauptsitzung mit Übergabe (`wechseln`): `haupt` zeigt auf die neue Sitzung, die alte ist nur lesbar, die vorletzte wird archiviert, Archive über 3 Tage werden gelöscht. Neue Operationen `wechseln`, `sitzungen`, `lesen` am Sitzungs-Socket.
 - **Gateway:** Web-Oberfläche als Plattform aus Modulen (`module/*/manifest.json`, eingebaut oder unter `/opt/chimera/web/module/`), Anmeldung mit Passwort, Chat-Modul am Strom der Hauptsitzung. Ohne `CHIMERA_WEB_PASSWORT_HASH` bleibt sie zu.
 - **Gateway:** `chimera-tor --passwort-hash` erzeugt den Passwort-Hash aus der Standardeingabe.
+- **Installer:** Modul 99 trägt das Web-Passwort ein: `CHIMERA_WEB_PASSWORT` im Lauf wird über stdin gehasht und nur der Hash landet in der `.env`; ein vorhandener Hash bleibt, das Gateway startet danach neu.
 - **Anzeige:** Eigenes Treiberpaket `chimera.displays` — Whisplay-LCD, LED,
   Backlight und Taste laufen ohne Herstellercode; ein neues Panel ist ein
   Ordner mit `display.json` und `panel.py`.

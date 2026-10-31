@@ -63,6 +63,31 @@ mutation ohne-sitzungs-socket \
 	's|^Environment=CHIMERA_SITZUNG_SOCKET=.*$||' \
 	"Dienst: kennt den Sitzungs-Socket"
 
+# M-W1: Klartext-Passwort landet in der .env statt des Hashs.
+mutation web-klartext \
+	's|printf .CHIMERA_WEB_PASSWORT_HASH=%s\\n. "$_wp_hash"|printf "CHIMERA_WEB_PASSWORT_HASH=%s\\n" "$CHIMERA_WEB_PASSWORT"|;s|HASH="$_wp_hash" awk|HASH="$CHIMERA_WEB_PASSWORT" awk|' \
+	"Web mit Passwort: rc 0"
+
+# M-W2: Ein vorhandener Hash wird ueberschrieben.
+mutation web-ueberschreibt \
+	's|grep -Eq .\^CHIMERA_WEB_PASSWORT_HASH=\.+. "$_wp_env"|false|' \
+	"Web: vorhandener Hash bleibt"
+
+# M-W3: Leerer Hash wird nicht erkannt.
+mutation web-leer-ok \
+	's|\*) err "Web-Passwort: kein Hash erhalten (mindestens 8 Zeichen?)."; return 2 ;;|*) : ;;|' \
+	"Web: leerer Hash -> Abbruch rc 2"
+
+# M-W4: Das Passwort geht als Argument ans Binary (Prozessliste!).
+mutation web-argument \
+	's|"$_wp_prog" --passwort-hash 2>/dev/null|"$_wp_prog" --passwort-hash "$CHIMERA_WEB_PASSWORT" 2>/dev/null|' \
+	"Web mit Passwort: nicht als Argument"
+
+# M-W5: Nach neuem Hash wird das Gateway nicht neu gestartet.
+mutation web-ohne-neustart \
+	's|if \[ "$CHIMERA_WEB_NEU" = 1 \] \&\& |if false \&\& |' \
+	"Web: neuer Hash -> Gateway wird neu gestartet"
+
 # M1: Socket fuer alle offen.
 mutation socket-offen \
 	's|SocketMode=0660|SocketMode=0666|' \
