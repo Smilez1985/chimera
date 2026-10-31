@@ -120,6 +120,7 @@ board is one entry rather than a hunt through every module.
 - [`docs/HERKUNFT.md`](docs/HERKUNFT.md) — what is taken from where, and what isn't
 - [`docs/DISPLAYS.md`](docs/DISPLAYS.md) — supported panels and how they are detected
 - [`docs/PROVIDER.md`](docs/PROVIDER.md) — model providers, MCP, audio process
+- [`docs/CLI.md`](docs/CLI.md) — every command and option, by category (checked by a test)
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — what is missing, by priority
 - [`CHANGELOG.md`](CHANGELOG.md) — what has happened
 

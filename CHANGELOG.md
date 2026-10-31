@@ -28,6 +28,7 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 - **Installer:** Modul 99 trägt das Web-Passwort ein: `CHIMERA_WEB_PASSWORT` im Lauf wird über stdin gehasht und nur der Hash landet in der `.env`; ein vorhandener Hash bleibt, das Gateway startet danach neu.
 - **Installer:** `CHIMERA_RUST_LOKAL=<Pfad>` legt ein selbst gebautes `chimera-tor` ab (ohne CI, ohne Commit); Versions- und Laufprobe gelten unverändert.
 - **Installer:** Modul 99 hält den laufenden Dienst kurz an, wenn es den Sitzungs-Socket erstmals einschaltet (systemd verweigert sonst den Start), und prüft den Zustand der Sockets statt nur das Manifest.
+- **Dokumentation:** `docs/CLI.md` listet alle Befehle, Optionen und Umgebungsvariablen nach Kategorie, zweisprachig; `tests/test_cli_doku.py` prüft sie in beide Richtungen gegen die Programme.
 - **Anzeige:** Eigenes Treiberpaket `chimera.displays` — Whisplay-LCD, LED,
   Backlight und Taste laufen ohne Herstellercode; ein neues Panel ist ein
   Ordner mit `display.json` und `panel.py`.

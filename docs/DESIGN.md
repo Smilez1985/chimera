@@ -2976,6 +2976,23 @@ nicht an den Verlauf kommt.
 
 ---
 
+## 15. Befehle
+
+### Architekturregel 15 — Jeder Befehl steht in der CLI-Referenz, und ein Test hält sie wahr
+
+`docs/CLI.md` listet alle Befehle, Optionen und Umgebungsvariablen nach
+Kategorie, zweisprachig. Sie ist **geprüft, nicht gepflegt**:
+`tests/test_cli_doku.py` ruft die Programme mit `--help` auf und vergleicht in
+beide Richtungen. Eine Option, die das Programm kennt und die Doku nicht, lässt
+den Test rot werden; ebenso eine in der Doku, die es nicht gibt. Gleiches gilt
+für jede Variable in `.env.example`. Was geplant, aber noch nicht gebaut ist,
+trägt die Marke „geplant / planned" und zählt für den Test nicht.
+
+Wer einen Befehl oder eine Option ändert, ändert **im selben Commit** die
+Tabelle. Gegenprobe: `--gegenprobe` entfernt zwei Optionen aus der Doku, der
+Test muss rot werden.
+
+
 ## Verzeichnis der Architekturregeln
 
 - **1** — Die GPL-Grenze ist hart
@@ -3045,3 +3062,4 @@ nicht an den Verlauf kommt.
 - **10s** — Root gibt es nur auf Rückfrage, auf Zeit, und nicht für den Agenten selbst
 - **13a** — Vor jedem Push wird geprüft, und die Prüfung beweist ihre Sehfähigkeit
 - **14** — Was dauernd läuft und nicht auf das Modell wartet, ist Rust
+- **15** — Jeder Befehl steht in der CLI-Referenz, und ein Test hält sie wahr
