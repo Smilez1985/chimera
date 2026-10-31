@@ -16,6 +16,9 @@ Anfragen (``op``):
                  ``ref``. Felder: ``tuer`` (Name der Tür), ``text``, optional
                  ``sitzung`` (jede andere als ``haupt`` wird umgeleitet).
 * ``status``   → ``{"ok":true,"busy":...,"nr":N}``
+* ``wechseln``/``sitzungen``/``lesen`` -- Sitzungsablage (Regel 8d)
+* ``neu``      → ``{"ok":true}``; leert den Verlauf der Sitzung (Regel 5i:
+                 wirkt auf die Sitzung, nicht auf eine Tür)
 
 Der Server hält keinen Zustand außer der Sitzung selbst (Regel 5i).
 """
@@ -199,16 +202,49 @@ class SitzungsServer:
                     for ev in rest:
                         abo(ev)
                     threading.Thread(target=schreiber, daemon=True).start()
+                elif op == "neu":
+                    tuer = str(q.get("tuer") or "").strip()
+                    if not tuer:
+                        antwort({"ok": False, "fehler": "tuer nötig"})
+                        continue
+                    self.session.neu(tuer)
+                    antwort({"ok": True})
+                elif op == "wechseln":
+                    tuer = str(q.get("tuer") or "").strip()
+                    if not tuer or self.session.ablage is None:
+                        antwort({"ok": False, "fehler": "tuer nötig / keine Ablage"})
+                        continue
+                    try:
+                        neu = self.session.wechseln(str(q.get("uebergabe") or ""), tuer)
+                    except Exception as exc:              # noqa: BLE001
+                        antwort({"ok": False, "fehler": str(exc)})
+                        continue
+                    antwort({"ok": True, "sitzung": neu})
+                elif op == "sitzungen":
+                    if self.session.ablage is None:
+                        antwort({"ok": False, "fehler": "keine Ablage"})
+                    else:
+                        antwort({"ok": True, **self.session.ablage.sitzungen()})
+                elif op == "lesen":
+                    sid = str(q.get("sitzung") or "")
+                    try:
+                        antwort({"ok": True, "eintraege":
+                                 self.session.ablage.lesen(sid)[-int(q.get("max", 200)):]})
+                    except Exception as exc:              # noqa: BLE001
+                        antwort({"ok": False, "fehler": str(exc)})
                 elif op == "frage":
                     tuer = str(q.get("tuer") or "").strip()
                     text = str(q.get("text") or "").strip()
                     if not tuer or not text:
                         antwort({"ok": False, "fehler": "tuer und text nötig"})
                         continue
-                    umgeleitet = str(q.get("sitzung") or HAUPT) != HAUPT
+                    ziel = str(q.get("sitzung") or HAUPT)
+                    # Türen kennen nur „haupt“; eine ältere ID (auch die
+                    # frühere Hauptsitzung) wird umgeleitet (Regel 5s).
+                    umgeleitet = ziel not in (HAUPT, self.session.hauptsitzung())
                     if umgeleitet:
                         self.session.emit("umgeleitet", tuer,
-                                          f"Eingabe an {q.get('sitzung')} "
+                                          f"Eingabe an {ziel} "
                                           "→ Hauptsitzung")
                     antwort({"ok": True, "umgeleitet": umgeleitet})
                     threading.Thread(

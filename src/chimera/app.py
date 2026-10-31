@@ -255,7 +255,11 @@ def build(*, probe_network: bool = True, home: Path | None = None,
     skills = _try_skills(root, notes)
 
     agent = Agent(registry, toolbox, skills=skills, memory=memory)
-    session = Session(agent)
+    # Verlauf auf der Platte (Regel 8d): übersteht Neustarts.
+    from .ablage import Ablage, Verlauf
+    ablage = Ablage(root / "sitzungen-ablage")
+    agent.history = Verlauf(ablage, ablage.laden())
+    session = Session(agent, ablage=ablage)
 
     chi = Chimera(home=root, session=session, registry=registry,
                   toolbox=toolbox, memory=memory, skills=skills,

@@ -5,6 +5,9 @@
 
 mod dienst;
 mod ollama;
+mod sitzung;
+mod telegram;
+mod web;
 
 use gemein::protokoll::{melden, Stufe};
 use std::path::PathBuf;
@@ -21,6 +24,7 @@ chimera-tor -- Gateway von Chimera
   chimera-tor --help      diese Hilfe
   chimera-tor --dienst    Dienstbetrieb: den von systemd uebergebenen Socket
                           bedienen, ohne systemd mit --socket PFAD selbst binden
+  chimera-tor --passwort-hash  Passwort von stdin lesen, Hash fuer CHIMERA_WEB_PASSWORT_HASH ausgeben
   chimera-tor --ping [PFAD]  Gateway fragen (Vorgabe /run/chimera/tor.sock), rc 0 = antwortet";
 
 fn pruefen() -> serde_json::Value {
@@ -71,7 +75,65 @@ fn main() -> ExitCode {
                 }
                 Ok(l) => {
                     melden(Stufe::Info, &format!("chimera-tor {} bereit", gemein::version()));
+                    // Telegram ist eine Tuer im Gateway (Regel 5s). Ohne Token
+                    // bleibt sie zu; mit Token aber falscher Liste ist es eine
+                    // Fehlkonfiguration (rc 2, kein Neustart hilft).
+                    match telegram::konfig() {
+                        telegram::Konfig::Aus => melden(Stufe::Info, "Telegram nicht eingerichtet (CHIMERA_TELEGRAM_TOKEN leer)."),
+                        telegram::Konfig::Falsch(f) => {
+                            melden(Stufe::Fehler, &format!("Telegram falsch eingerichtet: {f}"));
+                            return ExitCode::from(2);
+                        }
+                        telegram::Konfig::Bereit { token, erlaubt } => {
+                            let pfad = std::env::var("CHIMERA_SITZUNG_SOCKET")
+                                .unwrap_or_else(|_| sitzung::SOCKET.to_string());
+                            telegram::starten(&token, erlaubt, PathBuf::from(pfad));
+                        }
+                    }
+                    // Web-Oberflaeche (Regel 5m): ohne Passwort-Hash bleibt sie zu (5j).
+                    match web::konfig() {
+                        web::Konfig::Aus => melden(Stufe::Info, "Web-Oberflaeche nicht eingerichtet (CHIMERA_WEB_PASSWORT_HASH leer)."),
+                        web::Konfig::Falsch(f) => {
+                            melden(Stufe::Fehler, &format!("Web falsch eingerichtet: {f}"));
+                            return ExitCode::from(2);
+                        }
+                        web::Konfig::Bereit { hash, adresse } => {
+                            let sock = std::env::var("CHIMERA_SITZUNG_SOCKET")
+                                .unwrap_or_else(|_| sitzung::SOCKET.to_string());
+                            match web::starten(hash, &adresse, web::modul_verzeichnis(), PathBuf::from(sock)) {
+                                Ok(a) => melden(Stufe::Info, &format!("Web-Oberflaeche auf http://{a} (unverschluesselt, nur im eigenen Netz).")),
+                                Err(e) => {
+                                    melden(Stufe::Fehler, &format!("Web-Oberflaeche startet nicht: {e}"));
+                                    return ExitCode::from(2);
+                                }
+                            }
+                        }
+                    }
                     dienst::lauschen(l)
+                }
+            }
+        }
+        Some("--passwort-hash") => {
+            // Passwort von der Standardeingabe lesen (nie als Argument: sonst
+            // steht es in der Prozessliste und im Verlauf der Shell).
+            let mut pw = String::new();
+            if std::io::stdin().read_line(&mut pw).is_err() {
+                melden(Stufe::Fehler, "Passwort nicht lesbar.");
+                return ExitCode::from(2);
+            }
+            let pw = pw.trim_end_matches(['\n', '\r']);
+            if pw.chars().count() < 8 {
+                melden(Stufe::Fehler, "Das Passwort braucht mindestens 8 Zeichen.");
+                return ExitCode::from(2);
+            }
+            match web::hash_erzeugen(pw) {
+                Ok(h) => {
+                    println!("{h}");
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    melden(Stufe::Fehler, &e);
+                    ExitCode::from(2)
                 }
             }
         }

@@ -53,6 +53,7 @@ make	command -v make	Treiberbau
 gcc	command -v gcc	Treiberbau
 device-tree-compiler	command -v dtc	Overlays uebersetzen
 alsa-utils	command -v aplay	Audio pruefen und abspielen
+ca-certificates	test -s /etc/ssl/certs/ca-certificates.crt	TLS-Pruefung fuer Cloud-Anbieter und Telegram (Gateway)
 EOF
 }
 

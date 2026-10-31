@@ -139,6 +139,31 @@ detect_whisplay() {
 	esac
 }
 
+# Geht die Uhr plausibel? Der Pi hat keine RTC; nach dem Start steht sie
+# auf dem Stand des letzten Herunterfahrens, bis NTP nachzieht. Eine Uhr vor
+# dem Erscheinungsjahr dieser Fassung bricht jede TLS-Pruefung (Zertifikat
+# "noch nicht gueltig"), und der Fehler zeigt sich erst im Gateway.
+# Untergrenze: Jahr der ersten Fassung, ueberstimmbar fuer Tests.
+# rc 0 plausibel, 1 unplausibel. Gibt eine Zeile aus, nennt aber nie das Datum
+# als "falsch" -- nur dass sie vor der Untergrenze liegt.
+: "${CHIMERA_UHR_MIN:=1767225600}"   # 2026-01-01 00:00:00 UTC
+uhr_pruefen() {
+	_up_jetzt="${CHIMERA_UHR_JETZT:-$(date +%s 2>/dev/null || true)}"
+	case "$_up_jetzt" in
+		''|*[!0-9]*)
+			warn "Uhr nicht lesbar -- nicht pruefbar, ob TLS gelingt."
+			return 1 ;;
+	esac
+	if [ "$_up_jetzt" -lt "$CHIMERA_UHR_MIN" ]; then
+		warn "Die Uhr steht vor 2026 ($(date -u -d "@$_up_jetzt" '+%Y-%m-%d' 2>/dev/null || echo "$_up_jetzt"))."
+		warn "  TLS-Zertifikate wirken dann 'noch nicht gueltig'; Cloud-Anbieter und"
+		warn "  Telegram scheitern. Zeit nachziehen (NTP) oder das Datum setzen."
+		return 1
+	fi
+	info "Uhr plausibel: $(date -u -d "@$_up_jetzt" '+%Y-%m-%d %H:%M UTC' 2>/dev/null || echo "$_up_jetzt")"
+	return 0
+}
+
 # Ist die Whisplay-Soundkarte schon im laufenden Geraetebaum?
 whisplay_soundcard_live() {
 	_wl="$(read_dt /proc/device-tree/sound/compatible || true)"

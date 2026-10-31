@@ -111,6 +111,24 @@ def _lauf(chi, args) -> int:
         if bot is not None:
             bot.stop()
 
+def _gateway_hat_telegram() -> bool:
+    """Meldet das Gateway, dass seine Telegram-Tuer laeuft?
+
+    Nur ein ausdrueckliches "an" zaehlt. Ein Gateway ohne diese Angabe (aeltere
+    Fassung) oder ohne Antwort heisst: der Dienst oeffnet seine eigene Tuer
+    wie bisher -- ein Versionsunterschied nimmt Telegram nie weg.
+    """
+    try:
+        from .provider.gateway import anfragen
+        from .provider.base import LLMError
+    except ImportError:
+        # Ein Stand ohne Gateway-Connector: kein Gateway, also keine Tuer dort.
+        return False
+    try:
+        return anfragen({"op": "status"}, warten=5.0).get("telegram") == "an"
+    except LLMError:
+        return False
+
 def dienst(chi, stop: threading.Event | None = None, env=None) -> int:
     """Als systemd-Dienst laufen (INSTALLER.md §4c).
 
@@ -149,7 +167,11 @@ def dienst(chi, stop: threading.Event | None = None, env=None) -> int:
         chi.paint_once()
 
     bot = None
-    if (env.get("CHIMERA_TELEGRAM_TOKEN") or "").strip():
+    if (env.get("CHIMERA_TELEGRAM_TOKEN") or "").strip() and _gateway_hat_telegram():
+        # Regel 5s: Die Tuer gehoert dem Gateway. Eine zweite im Dienst wuerde
+        # um dieselben Nachrichten streiten (Telegram: ein Abholer je Token).
+        log.info("Telegram laeuft im Gateway -- keine eigene Tuer im Dienst.")
+    elif (env.get("CHIMERA_TELEGRAM_TOKEN") or "").strip():
         try:
             bot = chi.telegram()
         except ValueError as exc:

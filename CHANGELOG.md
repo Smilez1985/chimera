@@ -19,6 +19,12 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 - **Installer:** Modul 00 hält den Commit der Quelle in `state/quelle-commit` fest.
 - **Sitzung:** Alle Eingaben und Antworten laufen als nummerierter Ereignisstrom; der Dienst bedient dafür den Socket `/run/chimera/sitzung.sock` (`anmelden`, `frage`, `status`, `ping`). Mit Bezugsnummer `ref` und Umleitung fremder Sitzungs-Kennungen auf die Hauptsitzung.
 - **Installer:** Modul 99 legt zusätzlich `chimera-sitzung.socket` an (Besitzer `chimera`, Gruppe `chimera-tor`, Modus 0660); Rückbau 99 entfernt es.
+- **Installer:** `ca-certificates` ist zwingend; der Nachweis prüft, dass das Zertifikatsbündel vorhanden und nicht leer ist (Modul 20).
+- **Installer:** Der Preflight (Modul 10) meldet eine unplausible Uhr als Befund, weil TLS Zertifikate gegen die Zeit prüft.
+- **Sitzung:** Der Verlauf liegt auf der Platte (`sitzungen-ablage/<id>/verlauf.jsonl`) und übersteht Neustarts; Verdichten lässt das Protokoll unberührt.
+- **Sitzung:** Wechsel der Hauptsitzung mit Übergabe (`wechseln`): `haupt` zeigt auf die neue Sitzung, die alte ist nur lesbar, die vorletzte wird archiviert, Archive über 3 Tage werden gelöscht. Neue Operationen `wechseln`, `sitzungen`, `lesen` am Sitzungs-Socket.
+- **Gateway:** Web-Oberfläche als Plattform aus Modulen (`module/*/manifest.json`, eingebaut oder unter `/opt/chimera/web/module/`), Anmeldung mit Passwort, Chat-Modul am Strom der Hauptsitzung. Ohne `CHIMERA_WEB_PASSWORT_HASH` bleibt sie zu.
+- **Gateway:** `chimera-tor --passwort-hash` erzeugt den Passwort-Hash aus der Standardeingabe.
 - **Anzeige:** Eigenes Treiberpaket `chimera.displays` — Whisplay-LCD, LED,
   Backlight und Taste laufen ohne Herstellercode; ein neues Panel ist ein
   Ordner mit `display.json` und `panel.py`.

@@ -250,7 +250,21 @@ mod tests {
         let h = std::thread::spawn(move || {
             let mut gesehen = Vec::new();
             for (status, koerper) in antworten {
-                let (mut s, _) = l.accept().unwrap();
+                // Frist: Ein Test, der auf eine Anfrage wartet, die nie kommt (etwa weil der
+                // geprueften Code verfaelscht wurde), muss rot werden und nicht haengen.
+                l.set_nonblocking(true).unwrap();
+                let t0 = std::time::Instant::now();
+                let (mut s, _) = loop {
+                    match l.accept() {
+                        Ok(v) => break v,
+                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock
+                            && t0.elapsed() < std::time::Duration::from_secs(10) => {
+                            std::thread::sleep(std::time::Duration::from_millis(5));
+                        }
+                        Err(e) => panic!("der erwartete Aufruf kam nicht: {e}"),
+                    }
+                };
+                s.set_nonblocking(false).unwrap();
                 let mut puf = Vec::new();
                 let mut b = [0u8; 4096];
                 loop {

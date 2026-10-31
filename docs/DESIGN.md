@@ -1045,6 +1045,17 @@ modular.
   (Regel 5s, 8d). Das Chat-Modul hängt am selben Strom wie Telegram;
   „Alle Chats“ heißt: die Hauptsitzung plus die abgelegten, diese nur lesbar.
 
+**Umsetzung (Stand):** Rahmen, Anmeldung, Modul-Erkennung und das Chat-Modul
+stehen in `rust/crates/tor/src/web.rs` und `rust/crates/tor/web/`. Festgelegt
+dabei: Das Passwort liegt als `pbkdf2-sha256$N$SALZ$HASH` in
+`CHIMERA_WEB_PASSWORT_HASH` (erzeugt mit `chimera-tor --passwort-hash`, Eingabe
+nur über stdin); Anmeldung gilt 12 Stunden im Cookie `HttpOnly; SameSite=Strict`;
+nach 5 Fehlversuchen je Minute antwortet das Gateway 429; jede Änderung
+(POST) braucht den Kopf `X-Chimera: 1`. Offen ist nur die Hülle (`GET /`),
+alles andere verlangt die Anmeldung. Moduldateien werden nur mit bekannter
+Endung und ohne Pfadausbruch ausgeliefert; ein nachgelegtes Modul ersetzt nie
+ein eingebautes. Das Chat-Modul darf nur, was sein Manifest als Recht nennt.
+
 **Unverändert aus Fassung 1:** läuft im Gateway, nicht als eigener Prozess;
 ohne Passwort startet sie nicht (5j); HTTP mit Passwort im LAN als
 Voreinstellung, HTTPS Opt-in, sichtbarer Hinweis bei HTTP; Änderungen wirken
@@ -1881,6 +1892,14 @@ data/gedaechtnis/
 - Das Tagesgedächtnis (8c) hängt **nicht** an der Sitzung. Ein Wechsel
   verliert keinen Tag.
 
+
+**Umsetzung (Stand):** Die Ablage läuft vorläufig als Python-Modul
+`chimera.ablage` (Schnittstelle `anhaengen`, `laden`, `lesen`, `wechseln`,
+`aufraeumen`), damit sie vor dem Umzug nach Rust (Regel 14) belegt ist. Das
+Protokoll ist nur-anhängend; Verdichten und Leeren sind Einträge, das Fenster
+entsteht durch Abspielen. Der Wechsel schreibt erst die neue Sitzung, dann den
+Zeiger (atomar), dann räumt er die alte auf. Ein Auslöser (Wächter, Schwelle)
+fehlt noch: Gewechselt wird bisher nur auf Anforderung (`wechseln`).
 
 ### Architekturregel 8e — Persönlichkeit ist eine Datei, kein Code, und jede Schicht hat einen Besitzer
 

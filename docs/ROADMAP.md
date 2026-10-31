@@ -304,22 +304,20 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       Python-Connector `provider/gateway.py` (Name bleibt `ollama`, Anzeige
       „ollama @ Host“); der Dienst nutzt das Gateway, wenn es antwortet,
       sonst den direkten Weg.
-- [ ] **Ein Kanal, eine Hauptsitzung** (DESIGN 5s) — Stand: Sitzungs-Socket und Ereignisstrom im Dienst fertig (Modul 99 legt `chimera-sitzung.socket` an); offen: Telegram und Web als Türen im Gateway, Umleitung/Wechsel (8d): Sitzungs-Socket des
-      Dienstes, Ereignisstrom mit laufender Nummer, Telegram und Web als
-      Türen im Gateway, `haupt` statt Sitzungs-ID, Umleitung auf die
-      Hauptsitzung, nach dem Wechsel alte Sitzung nur lesbar. Test mit
-      Gegenprobe.
-      Die Klingel (Briefkasten, 5o) nutzt denselben Socket mit `ref`,
-      quittiert erst nach `antwort` und wechselt mit `haupt`.
+- [ ] **Ein Kanal, eine Hauptsitzung** (DESIGN 5s) — Sitzungs-Socket, Ereignisstrom, Telegram-Tür im Gateway, Umleitung auf `haupt` und Sitzungsablage mit Wechsel (`wechseln`, `sitzungen`, `lesen`) laufen. Offen: Auslöser für den Wechsel (Wächter, 8d), Python-Telegram im Dienst entfernen, Klingel (Briefkasten, 5o) als Tür mit `ref`.
 - [ ] **Web-Oberfläche als Modul-Plattform** (5m), **vor** den weiteren
       Anbietern, damit alles per Oberfläche einstellbar ist:
-      1. Rahmen: Anmeldung (Passwort), Menü, Router, Modul-Erkennung
-         (`module/*/manifest.json`), Designvorgaben.
-      2. Module in dieser Reihenfolge: Anbieter und Modelle (zum Testen
-         Ollama), Chat, Einstellungen (Sprache, Updates), Anzeigespiegel
-         (Waveshare), Status.
-      3. Ein Zusatzmodul muss ohne Änderung an Rahmen oder Gateway
-         erscheinen (Test mit Gegenprobe).
+      1. [x] Rahmen: Anmeldung (Passwort-Hash), Menü, Router, Modul-Erkennung
+         (`module/*/manifest.json`), eingebaute und nachgelegte Module.
+      2. Module: [x] Chat (Strom, Senden, ältere Sitzungen lesen);
+         [ ] Anbieter und Modelle (zum Testen Ollama), [ ] Einstellungen
+         (Sprache, Updates, Passwort, Telegram), [ ] Anzeigespiegel
+         (Waveshare), [ ] Status.
+      3. [x] Ein Zusatzmodul erscheint ohne Änderung an Rahmen oder Gateway
+         (Test mit Gegenprobe).
+      4. [ ] Installer fragt das Web-Passwort ab und trägt den Hash ein
+         (`chimera-tor --passwort-hash`); Unit öffnet den Port nur im LAN.
+      5. [ ] Am Pi laufen lassen (Anmeldung, Chat gegen die echte Sitzung).
 - [ ] **Weitere Anbieter im Gateway:** Anthropic-Schlüssel, Anthropic-Abo
       nach PR #407 (Regel 5b, Fassung für das Gateway: Registry-Version,
       nur vorwärts, ein Header-Satz für Token- und Chat-Weg). Zeitgrenzen
@@ -355,9 +353,11 @@ Rust-Teile im selben Cargo-Workspace wie das Gateway (Regel 14).
       HTTP), eigener Port am Gateway, Token als sha256, Quittung erst nach
       dem Turn. Kanal `briefkasten` im Dienst, gesperrt für Root und
       Konfiguration (5p).
-- [ ] **Sitzungsablage** `chimera-sitzung` (Rust): `verlauf.jsonl`,
-      `nachlesen`, Wechsel aktiv/alt, Tarball, Löschen nach 3 Tagen erst
-      nach geprüftem Auspacken.
+- [ ] **Sitzungsablage in Rust** (`chimera-sitzung`): Die Ablage läuft
+      bereits als Python-Modul `chimera.ablage` (`verlauf.jsonl`, Wechsel
+      aktiv/alt, Archiv, Löschen nach 3 Tagen nach geprüftem Auspacken,
+      Verdichtung ohne Verlust im Protokoll). Umzug nach Rust (Regel 14)
+      hinter derselben Schnittstelle; Werkzeug `nachlesen` für den Agenten.
 - [ ] Wächter im Sitzungsdienst. **Schwelle „schwer“ messen** und ins
       Design eintragen.
 - [ ] Verdichten neu: Zusammenfassung mit Verweis, offene Punkte

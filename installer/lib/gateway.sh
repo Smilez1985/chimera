@@ -102,6 +102,10 @@ Group=$CHIMERA_TOR_NUTZER
 # Die .env liest systemd als root; der Prozess bekommt nur die Werte.
 # So braucht chimera-tor kein Leserecht auf die Datei (Regel 5l).
 EnvironmentFile=-$CHIMERA_CONFIG/.env
+# Der eine Weg in die Hauptsitzung (Regel 5s). Die Telegram-Tuer im Gateway
+# spricht ueber diesen Socket; er gehoert dem Agent-Dienst, die Gruppe des
+# Sockets ist die des Gateways (SocketGroup in chimera-sitzung.socket).
+Environment=CHIMERA_SITZUNG_SOCKET=$CHIMERA_SITZUNG_SOCKET
 ExecStart=$(gateway_programm) --dienst
 Restart=on-failure
 RestartSec=5

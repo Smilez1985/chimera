@@ -281,7 +281,10 @@ class Agent:
         except Exception as exc:
             log.info("Verdichten über das Modell ging nicht: %s", exc)
 
-        if summary:
+        if hasattr(self.history, "verdichten"):
+            # Auf der Platte: das Protokoll behält alles (Regel 8d).
+            self.history.verdichten(summary or "", 4)
+        elif summary:
             self.history = [{"role": "user",
                              "content": f"[Bisheriges Gespräch]\n{summary}"}] + tail
         else:

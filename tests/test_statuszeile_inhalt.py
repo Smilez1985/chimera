@@ -182,6 +182,7 @@ class Geraet:
         self.registry = Reg(0)
         self.renderer = None
         self.notes = []
+        self.session = None   # kein Sitzungs-Socket gewollt (env leer)
         self.gemeldet = threading.Event()
     def start_display(self): return False
     def paint_once(self): pass

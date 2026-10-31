@@ -11,6 +11,14 @@ targets = ["aarch64-unknown-linux-musl", "x86_64-unknown-linux-gnu"]
 allow = [
     "MIT",
     "Apache-2.0",
+    # TLS fuer die Cloud-Anbieter und Telegram (ureq + rustls, DESIGN 5n).
+    # Alle drei sind permissiv und vertraeglich mit MIT im statischen Link:
+    #   ISC               ring, rustls-webpki, untrusted
+    #   BSD-3-Clause      subtle
+    #   CDLA-Permissive-2.0  webpki-roots (Mozillas Zertifikatsliste, nur Daten)
+    "ISC",
+    "BSD-3-Clause",
+    "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.9
 

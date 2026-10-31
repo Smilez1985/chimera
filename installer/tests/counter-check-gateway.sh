@@ -58,6 +58,11 @@ mutation sitzung-dienst \
 	'/^gateway_sitzung_socket_text/,/^}/ s|^Service=.*$||' \
 	"Sitzungs-Socket: reicht an den Agent-Dienst weiter"
 
+# M-S4: Das Gateway kennt den Sitzungs-Socket nicht (Telegram-Tuer bliebe zu).
+mutation ohne-sitzungs-socket \
+	's|^Environment=CHIMERA_SITZUNG_SOCKET=.*$||' \
+	"Dienst: kennt den Sitzungs-Socket"
+
 # M1: Socket fuer alle offen.
 mutation socket-offen \
 	's|SocketMode=0660|SocketMode=0666|' \

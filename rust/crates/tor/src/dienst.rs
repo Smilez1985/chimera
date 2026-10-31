@@ -70,6 +70,7 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
             "anfragen": stand.anfragen.load(Ordering::Relaxed),
             "offen": stand.offen.load(Ordering::Relaxed),
             "ollama": stand.ollama.as_deref().map(ollama::host_von),
+            "telegram": if crate::telegram::laeuft() { "an" } else { "aus" },
         }),
         "chat" => match anfrage.get("anbieter").and_then(Value::as_str) {
             Some("ollama") => ollama::op_chat(stand.ollama.as_deref(), anfrage),

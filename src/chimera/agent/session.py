@@ -135,6 +135,8 @@ class Session:
     _nr: int = field(default=0, repr=False)
     _subs: list = field(default_factory=list, repr=False)
     _strom_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    #: Die Sitzungsablage (Regel 8d); ohne sie lebt der Verlauf nur im RAM.
+    ablage: object = None
 
     # --- Ereignisstrom (Regel 5s) -----------------------------------------
 
@@ -179,6 +181,32 @@ class Session:
         with self._strom_lock:
             if f in self._subs:
                 self._subs.remove(f)
+
+    def neu(self, tuer: str) -> None:
+        """Das Gespräch von vorn -- für die Sitzung, nie für eine Tür (Regel 5i)."""
+        with self._lock:
+            self.agent.history.clear()
+        self.emit("neu", tuer, "Verlauf geleert")
+
+    def hauptsitzung(self) -> str:
+        """Name der Sitzung hinter ``haupt`` (ohne Ablage: ``haupt``)."""
+        return self.ablage.aktiv() if self.ablage is not None else "haupt"
+
+    def wechseln(self, uebergabe: str, tuer: str) -> str:
+        """Neue Hauptsitzung beginnen (Regel 8d, 5s).
+
+        Die Sperre wird erst frei, wenn der laufende Turn zu Ende ist; danach
+        zeigt ``haupt`` atomar auf die neue Sitzung. Die alte bleibt lesbar.
+        """
+        if self.ablage is None:
+            raise RuntimeError("keine Ablage -- kein Wechsel")
+        from ..ablage import Verlauf
+        with self._lock:
+            alt = self.ablage.aktiv()
+            neu = self.ablage.wechseln(uebergabe)
+            self.agent.history = Verlauf(self.ablage, self.ablage.laden())
+        self.emit("wechsel", tuer, f"{alt} -> {neu}")
+        return neu
 
     @property
     def nr(self) -> int:

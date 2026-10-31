@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chimera</title>
+<style>
+  :root { --bg:#12141a; --fl:#1c1f28; --rd:#2b2f3b; --tx:#e6e8ee; --ak:#7aa2ff; --gedimmt:#8a90a2; --fehler:#ff7a7a; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--tx);
+               font: 16px/1.4 system-ui, sans-serif; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+  header { display: flex; align-items: center; gap: .5rem; padding: .5rem .75rem;
+           background: var(--fl); border-bottom: 1px solid var(--rd); }
+  header strong { margin-right: auto; }
+  nav { display: flex; gap: .25rem; overflow-x: auto; }
+  nav button, button.knopf { background: var(--rd); color: var(--tx); border: 0; border-radius: .5rem;
+                             padding: .45rem .8rem; font: inherit; cursor: pointer; }
+  nav button[aria-current="true"] { background: var(--ak); color: #0b0d12; }
+  main { flex: 1; min-height: 0; overflow: auto; }
+  #warnung { background: #4a3a12; color: #ffd989; padding: .35rem .75rem; font-size: .85rem; display: none; }
+  #anmeldung { max-width: 22rem; margin: 18vh auto 0; padding: 1rem; display: none; }
+  #anmeldung input { width: 100%; padding: .6rem; margin: .5rem 0; border-radius: .5rem;
+                     border: 1px solid var(--rd); background: var(--fl); color: var(--tx); font: inherit; }
+  .fehler { color: var(--fehler); min-height: 1.4em; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="warnung">Unverschlüsselte Verbindung (HTTP). Nur im eigenen Netz benutzen.</div>
+  <header id="kopf" hidden>
+    <strong>Chimera</strong>
+    <nav id="menue"></nav>
+    <button class="knopf" id="abmelden">Abmelden</button>
+  </header>
+  <main id="inhalt">
+    <form id="anmeldung">
+      <h2>Chimera</h2>
+      <input id="pw" type="password" autocomplete="current-password" placeholder="Passwort" autofocus>
+      <button class="knopf" type="submit">Anmelden</button>
+      <div class="fehler" id="anmeldefehler"></div>
+    </form>
+  </main>
+</div>
+<script>
+"use strict";
+// Der Rahmen kennt kein einzelnes Modul: Er fragt /api/module und baut das Menü daraus.
+const $ = (id) => document.getElementById(id);
+const sprache = (navigator.language || "de").slice(0, 2);
+const api = async (pfad, opt = {}) => {
+  const r = await fetch(pfad, { ...opt, headers: { "X-Chimera": "1", "Content-Type": "application/json" } });
+  let j = {}; try { j = await r.json(); } catch (_) {}
+  return { status: r.status, ...j };
+};
+window.chimera = { api, sprache };
+
+if (location.protocol === "http:") $("warnung").style.display = "block";
+
+function titel(m) {
+  const t = m.titel;
+  return typeof t === "string" ? t : (t[sprache] || t.de || t.en || m.name);
+}
+
+async function zeigeModul(m) {
+  for (const b of $("menue").children) b.setAttribute("aria-current", b.dataset.name === m.name ? "true" : "false");
+  const inhalt = $("inhalt");
+  inhalt.replaceChildren();
+  if (!customElements.get(m.element)) {
+    await new Promise((ok, nein) => {
+      const s = document.createElement("script");
+      s.src = `/module/${encodeURIComponent(m.name)}/${encodeURIComponent(m.einstieg)}`;
+      s.onload = ok; s.onerror = () => nein(new Error("Modul nicht ladbar"));
+      document.head.appendChild(s);
+    }).catch((e) => { inhalt.textContent = `${titel(m)}: ${e.message}`; });
+  }
+  if (customElements.get(m.element)) inhalt.appendChild(document.createElement(m.element));
+}
+
+async function start() {
+  const r = await api("/api/module");
+  if (r.status === 401) { $("kopf").hidden = true; $("anmeldung").style.display = "block"; return; }
+  $("anmeldung").style.display = "none";
+  $("kopf").hidden = false;
+  const menue = $("menue"); menue.replaceChildren();
+  for (const m of r.module || []) {
+    const b = document.createElement("button");
+    b.textContent = `${m.symbol || ""} ${titel(m)}`.trim();
+    b.dataset.name = m.name;
+    b.onclick = () => zeigeModul(m);
+    menue.appendChild(b);
+  }
+  if (r.verworfen && r.verworfen.length) console.warn("Verworfene Module:", r.verworfen);
+  if (r.module && r.module.length) zeigeModul(r.module[0]);
+}
+
+$("anmeldung").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const r = await api("/api/login", { method: "POST", body: JSON.stringify({ passwort: $("pw").value }) });
+  $("pw").value = "";
+  if (r.ok) { $("anmeldefehler").textContent = ""; start(); }
+  else $("anmeldefehler").textContent = r.fehler || "Fehler";
+});
+$("abmelden").onclick = async () => { await api("/api/logout", { method: "POST", body: "{}" }); location.reload(); };
+start();
+</script>
+</body>
+</html>

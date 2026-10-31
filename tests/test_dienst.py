@@ -118,6 +118,28 @@ check("Ende rc 0", erg, [0])
 stop = threading.Event(); stop.set()
 check("ohne Konfiguration kein Socket, rc 0", cm.dienst(Geraet(), stop=stop, env={}), 0)
 
+# 3c. Das Gateway hat die Telegram-Tuer (Regel 5s): der Dienst oeffnet keine zweite.
+_alt = cm._gateway_hat_telegram
+cm._gateway_hat_telegram = lambda: True
+g = Geraet(telegram_fehler="darf nicht gerufen werden")
+stop = threading.Event(); stop.set()
+check("Gateway hat Telegram: keine eigene Tuer, rc 0",
+      cm.dienst(g, stop=stop, env={"CHIMERA_TELEGRAM_TOKEN": "x"}), 0)
+check("Gateway hat Telegram: Bot nie gestartet", g.bot.lief.is_set(), False)
+# Ohne Gateway (oder ohne Angabe): wie bisher die eigene Tuer.
+cm._gateway_hat_telegram = lambda: False
+g = Geraet()
+stop = threading.Event()
+t, erg = im_faden(lambda: cm.dienst(g, stop=stop, env={"CHIMERA_TELEGRAM_TOKEN": "x"}))
+check("ohne Gateway-Tuer: eigener Bot startet", g.bot.lief.wait(2), True)
+stop.set(); t.join(2)
+cm._gateway_hat_telegram = _alt
+# Die echte Pruefung: ohne erreichbares Gateway heisst es nein, nie eine Ausnahme.
+import os as _os2
+_os2.environ["CHIMERA_TOR_SOCKET"] = "/nonexistent/tor.sock"
+check("kein Gateway erreichbar: keine Tuer dort", cm._gateway_hat_telegram(), False)
+del _os2.environ["CHIMERA_TOR_SOCKET"]
+
 # 4. Ohne Token wird Telegram nicht versucht (kein Fehler, kein Bot).
 g = Geraet(telegram_fehler="darf nicht gerufen werden")
 stop = threading.Event(); stop.set()

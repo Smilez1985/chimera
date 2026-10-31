@@ -126,6 +126,11 @@ else
 fi
 log ""
 
+log "Uhr (TLS prueft Zertifikate gegen die Zeit)"
+UHR_BEFUND=0
+uhr_pruefen || UHR_BEFUND=1
+log ""
+
 log "Bauvoraussetzungen"
 info "Kernel-Headers:   $HEADERS_OK ($HEADERS_DIR)"
 info "/boot/config-*:   $BOOTCONFIG"
@@ -229,6 +234,12 @@ fi
 
 if [ "$SUPPORTED" = yes ]; then
 	log "Ergebnis: $BOARD wird unterstuetzt."
+	# Eine unplausible Uhr ist ein Befund, kein Abbruch: Der Installer laeuft
+	# weiter (er braucht kein TLS), aber der Lauf endet nicht als "alles gut".
+	if [ "${UHR_BEFUND:-0}" = 1 ]; then
+		log "  Befund: Uhr unplausibel -- Gateway-TLS wird scheitern, bis die Zeit stimmt."
+		log_close 1; exit 1
+	fi
 	log_close 0; exit 0
 fi
 

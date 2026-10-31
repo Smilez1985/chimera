@@ -1,0 +1,9 @@
+{
+  "name": "chat",
+  "titel": {"de": "Chat", "en": "Chat"},
+  "symbol": "💬",
+  "reihenfolge": 10,
+  "einstieg": "chat.js",
+  "element": "chimera-chat",
+  "rechte": ["chat"]
+}
