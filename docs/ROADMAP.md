@@ -314,9 +314,11 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
          [x] Status (Dienste, Speicher, Temperatur);
          [ ] Modul-Registrierung (5v) — Rechteliste und Vorlage (`--module-neu`, `--module-pruefen`) stehen; offen: Freigabe mit Prüfsumme und
          Passwort, Sandbox-iframe mit Brücke, Weitergabe an Modul-Socket;
-         [ ] Datenschicht im Gateway (Anbieter, Schlüssel, Katalog, Wahl,
-         Rechte der Unit, Umzug von Token und Hash aus der `.env`,
-         `migrate_from`);
+         [ ] Datenschicht im Gateway — Ablagen, Operationen und Unit-Rechte
+         stehen; offen: Katalog füllen (Abfrage + `fehlt_seit`), Neustart
+         des Gateways nach Schlüsseländerung, Umzug von Telegram-Token und
+         Passwort-Hash aus der `.env` nach `config/geheim/`
+         (`migrate_from`), Rechte `anbieter-lesen`/`anbieter-schreiben`;
          [ ] Anbieter Ollama (Vorlage für alle) und „Anbieter hinzufügen“,
          Netzsuche als Vorschlag;
          [ ] Reihenfolge (Wahl über Anbieter hinweg);

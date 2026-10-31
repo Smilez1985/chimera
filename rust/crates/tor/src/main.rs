@@ -3,6 +3,7 @@
 //! Stand Phase 4d Schritt 2: Geruest mit Socket (`ping`, `status`).
 //! Anbieter, Telegram und Web folgen (docs/ROADMAP.md, Phase 4d).
 
+mod daten;
 mod dienst;
 mod modul_vorlage;
 mod ollama;

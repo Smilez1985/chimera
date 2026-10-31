@@ -41,7 +41,13 @@ manifest_init() {
 	_bi_d="$(dirname "$CHIMERA_MANIFEST")"
 	# state/ gehoert root und ist fuer den Dienstnutzer nicht einmal
 	# lesbar (Regel 10r): Das Manifest legt fest, was der Rueckbau loescht.
-	( umask 077; mkdir -p "$_bi_d" ) 2>/dev/null && chmod 700 "$_bi_d" 2>/dev/null || {
+	# 700 nur beim Anlegen: spaetere Schritte (Gateway, Regel 5t) duerfen den
+	# Modus fuer genau einen weiteren Nutzer aufweiten (710), und jeder
+	# manifest_record darf das nicht zuruecksetzen.
+	if [ -d "$_bi_d" ]; then _bi_ok=0; else
+		( umask 077; mkdir -p "$_bi_d" ) 2>/dev/null && chmod 700 "$_bi_d" 2>/dev/null; _bi_ok=$?
+	fi
+	[ "$_bi_ok" = 0 ] || {
 		warn "Manifest nicht anlegbar: $_bi_d"
 		warn "Es wird installiert, aber nicht festgehalten -- eine spaetere"
 		warn "Deinstallation muesste raten. Das ist ein Mangel, kein Detail."

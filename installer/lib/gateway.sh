@@ -120,7 +120,38 @@ PrivateDevices=yes
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes
+# Regel 5t: schreiben darf das Gateway nur in die vier Ablagen, nie in
+# config/ oder state/ als Ganzes. Das "-" vor dem Pfad: fehlt ein Ordner,
+# startet die Unit trotzdem (der Installer legt sie vorher an).
+ReadWritePaths=-$CHIMERA_CONFIG/anbieter -$CHIMERA_CONFIG/geheim -$CHIMERA_CONFIG/wahl -$CHIMERA_STATE/katalog
 EOF
+}
+
+# Die vier Ablagen aus Regel 5t. config/ und state/ selbst bekommen nur ein
+# Durchgangsrecht (x), kein Lese- oder Schreibrecht: chimera-tor erreicht
+# seine Unterordner, listen darf er dort nichts (die .env bleibt 640).
+# rc 0 ok, 2 nicht anlegbar.
+gateway_ablagen() {
+	for _ga_d in "$CHIMERA_CONFIG/anbieter" "$CHIMERA_CONFIG/geheim" "$CHIMERA_CONFIG/wahl" "$CHIMERA_STATE/katalog"; do
+		if is_dry_run; then info "[wuerde anlegen] $_ga_d"; continue; fi
+		_ga_p="$(rootpath "$_ga_d")"
+		mkdir -p "$_ga_p" || { err "nicht anlegbar: $_ga_d"; return 2; }
+		chown "$CHIMERA_TOR_NUTZER:$CHIMERA_TOR_NUTZER" "$_ga_p" 2>/dev/null || true
+		chmod 700 "$_ga_p"
+		manifest_has verzeich "$_ga_d" || manifest_record verzeich "$_ga_d" ""
+		info "Ablage: $_ga_d (700 $CHIMERA_TOR_NUTZER)"
+	done
+	if ! is_dry_run; then
+		# config/: Agent liest dort die .env (root:chimera 750); fuer das
+		# Gateway kommt nur das Durchgangsrecht dazu. state/ bleibt dem
+		# Agent verschlossen (Regel 10r): 710 root:chimera-tor, nur das
+		# Gateway darf hindurch, ein Agent kommt nicht einmal ans Manifest.
+		chmod 751 "$(rootpath "$CHIMERA_CONFIG")" 2>/dev/null || true
+		chown "root:$CHIMERA_TOR_NUTZER" "$(rootpath "$CHIMERA_STATE")" 2>/dev/null || true
+		chmod 710 "$(rootpath "$CHIMERA_STATE")" 2>/dev/null || true
+		info "Durchgang: $CHIMERA_CONFIG 751; $CHIMERA_STATE 710 root:$CHIMERA_TOR_NUTZER"
+	fi
+	return 0
 }
 
 # Systemnutzer sicherstellen. rc 0 ok, 2 nicht anlegbar.
@@ -217,6 +248,10 @@ gateway_einrichten() {
 
 	log "Gateway-Nutzer"
 	gateway_nutzer || return 2
+	log ""
+
+	log "Ablagen (Regel 5t)"
+	gateway_ablagen || return 2
 	log ""
 
 	log "Web-Oberflaeche"

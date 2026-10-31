@@ -40,6 +40,8 @@ pub struct Stand {
     offen: AtomicUsize,
     /// Adresse des Ollama-Servers, einmal beim Start aus der Umgebung.
     ollama: Option<String>,
+    /// Die vier Ablagen (Regel 5t).
+    daten: crate::daten::Pfade,
 }
 
 impl Stand {
@@ -53,6 +55,7 @@ impl Stand {
             anfragen: AtomicU64::new(0),
             offen: AtomicUsize::new(0),
             ollama,
+            daten: crate::daten::Pfade::aus_umgebung(),
         }
     }
 }
@@ -83,7 +86,9 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
             None => zeile::fehlerantwort("anbieter_fehlt", "Die Abfrage braucht ein Feld \"anbieter\"."),
         },
         "" => zeile::fehlerantwort("op_fehlt", "Die Anfrage braucht ein Feld \"op\"."),
-        andere => zeile::fehlerantwort("op_unbekannt", &format!("Unbekannte Operation: {andere}")),
+        andere => crate::daten::op(andere, anfrage, &stand.daten).unwrap_or_else(|| {
+            zeile::fehlerantwort("op_unbekannt", &format!("Unbekannte Operation: {andere}"))
+        }),
     }
 }
 

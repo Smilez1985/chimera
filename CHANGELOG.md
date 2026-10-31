@@ -33,6 +33,8 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 - **Gateway:** Ein Web-Modul darf nur Rechte aus einer festen Liste verlangen; ein unbekanntes Recht verwirft das Modul mit Meldung.
 - **Gateway:** Neue Status-Messungen sind Sonden (`impl Sonde` plus eine Zeile in `sonden()`); die Oberfläche zeigt nur die gelieferten Zeilen.
 - **Installer:** Modul 99 hält den laufenden Dienst kurz an, wenn es den Sitzungs-Socket erstmals einschaltet (systemd verweigert sonst den Start), und prüft den Zustand der Sockets statt nur das Manifest.
+- **Gateway:** Datenschicht für Anbieter, Schlüssel, Katalog und Wahl (`config/anbieter`, `config/geheim`, `state/katalog`, `config/wahl`): atomares Schreiben, kaputte Dateien und Verweise ins Leere werden gemeldet und bleiben liegen, Schlüssel erscheinen in keiner Antwort. Neue Operationen am Gateway-Socket: `anbieter_liste`, `anbieter_setzen`, `anbieter_entfernen`, `schluessel_setzen`, `wahl_lesen`, `wahl_setzen`.
+- **Installer:** Modul 99 legt die vier Ablagen an (Modus 700, Besitzer `chimera-tor`) und beschränkt das Schreiben der Gateway-Unit darauf (`ReadWritePaths`); `state/` ist danach 710 `root:chimera-tor`.
 - **Dokumentation:** `docs/CLI.md` listet alle Befehle, Optionen und Umgebungsvariablen nach Kategorie, zweisprachig; `tests/test_cli_doku.py` prüft sie in beide Richtungen gegen die Programme.
 - **Anzeige:** Eigenes Treiberpaket `chimera.displays` — Whisplay-LCD, LED,
   Backlight und Taste laufen ohne Herstellercode; ein neues Panel ist ein

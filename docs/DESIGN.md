@@ -1115,6 +1115,11 @@ Beispiele, keine Vorgabe.
   `.env` nach `config/geheim/`; die `.env` bleibt für Adressen und Schalter
   und wird vom Gateway nur gelesen. Der Installer übernimmt den Umzug in
   `migrate_from()`.
+- **Durchgang statt Lesen:** Die vier Ordner gehören `chimera-tor` (700).
+  `config/` bekommt das Durchgangsrecht (751; der Agent liest dort die
+  `.env`). `state/` bleibt dem Agent verschlossen (10r) und wird 710
+  `root:chimera-tor`: nur das Gateway darf hindurch, das Manifest bleibt
+  für den Agent unerreichbar.
 - **Nach einer Schlüsseländerung startet sich das Gateway neu**; der Socket
   fängt Anfragen in der Zwischenzeit auf.
 - **Menü:** Je Anbieter ein Modul, das Gateway liefert dafür ein virtuelles

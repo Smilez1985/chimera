@@ -163,5 +163,35 @@ mutation agent-haengt-am-gateway \
 	's|^	log "Gateway-Nutzer"$|	echo "Requires=chimera-tor.socket" >>"$_ge_dir/chimera.service"; log "Gateway-Nutzer"|' \
 	"Agent-Dienst-Unit bleibt unberuehrt"
 
+# M11: ReadWritePaths nennt config/ als Ganzes (Regel 5t: nur vier Ordner).
+mutation config-ganz-schreibbar \
+	's|^ReadWritePaths=-\$CHIMERA_CONFIG/anbieter|ReadWritePaths=-$CHIMERA_CONFIG -$CHIMERA_CONFIG/anbieter|' \
+	"Dienst: config/ oder state/ als Ganzes schreibbar"
+
+# M12: Katalog fehlt in ReadWritePaths.
+mutation katalog-nicht-schreibbar \
+	's| -\$CHIMERA_STATE/katalog$||' \
+	"Dienst: state/katalog fehlt in ReadWritePaths"
+
+# M13: Schluesselordner offen statt 700.
+mutation geheim-offen \
+	's|chmod 700 "\$_ga_p"|chmod 755 "$_ga_p"|' \
+	"Ablage config/geheim: Modus 700"
+
+# M14: state/ fuer alle offen (Agent koennte das Manifest lesen, Regel 10r).
+mutation state-offen \
+	's|chmod 710 "\$(rootpath "\$CHIMERA_STATE")"|chmod 755 "$(rootpath "$CHIMERA_STATE")"|' \
+	"state/ nur fuer das Gateway durchgaengig (710), Agent bleibt draussen (10r)"
+
+# M15: Ablagen werden nicht ins Manifest geschrieben (Rueckbau fuende sie nicht).
+mutation ablagen-nicht-im-manifest \
+	's|manifest_has verzeich "\$_ga_d" \|\| manifest_record verzeich "\$_ga_d" ""|true|' \
+	"Ablage config/anbieter im Manifest"
+
+# M16: Ablagen werden gar nicht angelegt.
+mutation ablagen-fehlen \
+	's|^	gateway_ablagen \|\| return 2$|	true|' \
+	"Ablage fehlt: config/anbieter"
+
 printf '\nErgebnis: %s ok, %s fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
