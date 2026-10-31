@@ -311,7 +311,7 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
          (`module/*/manifest.json`), eingebaute und nachgelegte Module.
       2. Module, in dieser Reihenfolge (DESIGN 5t, 5u):
          [x] Chat (Strom, Senden, ältere Sitzungen lesen);
-         [ ] Status (Dienste, Speicher, Temperatur);
+         [x] Status (Dienste, Speicher, Temperatur);
          [ ] Datenschicht im Gateway (Anbieter, Schlüssel, Katalog, Wahl,
          Rechte der Unit, Umzug von Token und Hash aus der `.env`,
          `migrate_from`);

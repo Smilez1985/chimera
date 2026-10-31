@@ -158,24 +158,23 @@ fn ok_manifest(n: &str) -> String {
 fn das_eingebaute_chatmodul_ist_gueltig_und_erkannt() {
     let (m, f) = module_erkennen(None);
     assert!(f.is_empty(), "{f:?}");
-    assert_eq!(m.len(), 1);
-    assert_eq!(m[0].name, "chat");
-    assert!(m[0].eingebaut);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "status"]);
+    assert!(m.iter().all(|x| x.eingebaut));
 }
 
 #[test]
 fn ein_neues_verzeichnis_erscheint_im_menue_ohne_codeaenderung() {
     let d = tmp("neu");
-    std::fs::create_dir_all(d.join("status")).unwrap();
-    std::fs::write(d.join("status/manifest.json"), ok_manifest("status")).unwrap();
+    std::fs::create_dir_all(d.join("zusatz")).unwrap();
+    std::fs::write(d.join("zusatz/manifest.json"), ok_manifest("zusatz")).unwrap();
     let (m, f) = module_erkennen(Some(&d));
     assert!(f.is_empty(), "{f:?}");
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "status"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "status", "zusatz"]);
     let z = zustand(Some(d), "/x".into());
     let c = anmelden(&z);
     let r = behandle(&z, &a("GET", "/api/module", &c, b""));
     let v: Value = serde_json::from_slice(&r.body).unwrap();
-    assert_eq!(v["module"].as_array().unwrap().len(), 2);
+    assert_eq!(v["module"].as_array().unwrap().len(), 3);
 }
 
 #[test]
@@ -189,7 +188,7 @@ fn ein_kaputtes_manifest_verwirft_nur_dieses_modul_und_wird_gemeldet() {
     std::fs::create_dir_all(d.join("leer")).unwrap(); // Verzeichnis ohne Manifest
     let (m, f) = module_erkennen(Some(&d));
     let namen: Vec<_> = m.iter().map(|x| x.name.as_str()).collect();
-    assert_eq!(namen, vec!["chat", "gut"]);
+    assert_eq!(namen, vec!["chat", "status", "gut"]);
     assert_eq!(f.len(), 4, "{f:?}");
 }
 
@@ -199,8 +198,8 @@ fn ein_nachgelegtes_modul_ersetzt_kein_eingebautes() {
     std::fs::create_dir_all(d.join("chat")).unwrap();
     std::fs::write(d.join("chat/manifest.json"), ok_manifest("chat")).unwrap();
     let (m, f) = module_erkennen(Some(&d));
-    assert_eq!(m.len(), 1);
-    assert!(m[0].eingebaut);
+    assert_eq!(m.len(), 2);
+    assert!(m.iter().all(|x| x.eingebaut));
     assert_eq!(f.len(), 1);
 }
 
@@ -213,7 +212,7 @@ fn die_reihenfolge_kommt_aus_dem_manifest() {
             format!(r#"{{"name":"{n}","titel":"T","element":"x-{n}","einstieg":"a.js","rechte":[],"reihenfolge":{r}}}"#)).unwrap();
     }
     let (m, _) = module_erkennen(Some(&d));
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["b-zuerst", "chat", "a-zuletzt"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["b-zuerst", "chat", "status", "a-zuletzt"]);
 }
 
 #[test]
@@ -459,4 +458,42 @@ fn lan_adressen_werden_unterschieden() {
 #[test]
 fn nur_lan_ist_vorgabe() {
     assert!(Zustand::neu(hash_erzeugen("x-passwort").unwrap(), None, "/x".into(), Strom::neu()).nur_lan);
+}
+
+// --- Status-Modul ---
+
+#[test]
+fn status_ist_ein_zweites_modul_ohne_aenderung_am_rahmen() {
+    let z = zustand(None, "/x".into());
+    let c = anmelden(&z);
+    let r = behandle(&z, &a("GET", "/api/module", &c, b""));
+    let namen: Vec<String> = serde_json::from_slice::<Value>(&r.body).unwrap()["module"]
+        .as_array().unwrap().iter().map(|m| m["name"].as_str().unwrap().to_string()).collect();
+    assert!(namen.contains(&"chat".to_string()) && namen.contains(&"status".to_string()), "{namen:?}");
+}
+
+#[test]
+fn status_braucht_anmeldung_und_liefert_messwerte() {
+    let z = zustand(None, "/x".into());
+    assert_eq!(behandle(&z, &a("GET", "/api/status/messwerte", "", b"")).status, 401);
+    let c = anmelden(&z);
+    let r = behandle(&z, &a("GET", "/api/status/messwerte", &c, b""));
+    assert_eq!(r.status, 200);
+    let v: Value = serde_json::from_slice(&r.body).unwrap();
+    assert!(v["speicher_mib"]["gesamt"].as_u64().unwrap() > 0);
+    assert!(v["dienste"].as_array().unwrap().len() == STATUS_DIENSTE.len());
+}
+
+#[test]
+fn status_ohne_recht_im_manifest_ist_403() {
+    let d = tmp("status-ohne-recht");
+    std::fs::create_dir_all(&d).unwrap();
+    let z = zustand(Some(d.clone()), "/x".into());
+    let c = anmelden(&z);
+    // Ein nachgelegtes Modul kann ein eingebautes nie ersetzen (5m): das Recht
+    // kommt immer aus dem eingebauten Manifest -- hier pruefen wir hat_recht direkt.
+    let leer: Vec<Modul> = Vec::new();
+    assert!(!hat_recht(&leer, "status", "status"));
+    assert_eq!(behandle(&z, &a("GET", "/api/status/unbekannt", &c, b"")).status, 404);
+    let _ = std::fs::remove_dir_all(&d);
 }

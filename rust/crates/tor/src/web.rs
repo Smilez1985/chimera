@@ -44,11 +44,21 @@ struct Eingebaut {
     dateien: &'static [(&'static str, &'static str, &'static str)], // (datei, typ, inhalt)
 }
 
-const EINGEBAUT: &[Eingebaut] = &[Eingebaut {
-    name: "chat",
-    manifest: include_str!("../web/module/chat/manifest.json"),
-    dateien: &[("chat.js", "text/javascript; charset=utf-8", include_str!("../web/module/chat/chat.js"))],
-}];
+const EINGEBAUT: &[Eingebaut] = &[
+    Eingebaut {
+        name: "chat",
+        manifest: include_str!("../web/module/chat/manifest.json"),
+        dateien: &[("chat.js", "text/javascript; charset=utf-8", include_str!("../web/module/chat/chat.js"))],
+    },
+    Eingebaut {
+        name: "status",
+        manifest: include_str!("../web/module/status/manifest.json"),
+        dateien: &[("status.js", "text/javascript; charset=utf-8", include_str!("../web/module/status/status.js"))],
+    },
+];
+
+/// Units, deren Zustand das Status-Modul zeigt.
+const STATUS_DIENSTE: &[&str] = &["chimera", "chimera-tor", "chimera-tor.socket", "chimera-sitzung.socket"];
 
 const RAHMEN_HTML: &str = include_str!("../web/rahmen.html");
 
@@ -428,6 +438,7 @@ pub fn behandle(z: &Zustand, a: &Anfrage) -> Antwort {
             }
         }
         (_, p) if p.starts_with("/api/chat/") => chat_api(z, a, &p["/api/chat/".len()..]),
+        (_, p) if p.starts_with("/api/status/") => status_api(z, a, &p["/api/status/".len()..]),
         _ => fehler(404, "nicht gefunden"),
     }
 }
@@ -463,6 +474,17 @@ fn ereignis_json(e: &sitzung::Ereignis) -> Value {
 /// Darf das Modul `name` das Recht `recht` ausueben? Nur, was sein Manifest nennt.
 fn hat_recht(module: &[Modul], name: &str, recht: &str) -> bool {
     module.iter().any(|x| x.name == name && x.rechte.iter().any(|r| r == recht))
+}
+
+fn status_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
+    let (m, _) = module_erkennen(z.modul_dir.as_deref());
+    if !hat_recht(&m, "status", "status") {
+        return fehler(403, "Modul status hat das Recht 'status' nicht");
+    }
+    match (a.methode, was) {
+        ("GET", "messwerte") => json_antwort(200, crate::status::messen(Path::new("/"), STATUS_DIENSTE, true)),
+        _ => fehler(404, "nicht gefunden"),
+    }
 }
 
 fn chat_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {

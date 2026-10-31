@@ -1,0 +1,9 @@
+{
+  "name": "status",
+  "titel": {"de": "Status", "en": "Status"},
+  "symbol": "📊",
+  "reihenfolge": 90,
+  "einstieg": "status.js",
+  "element": "chimera-status",
+  "rechte": ["status"]
+}

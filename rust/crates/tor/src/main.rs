@@ -6,6 +6,7 @@
 mod dienst;
 mod ollama;
 mod sitzung;
+mod status;
 mod telegram;
 mod web;
 
