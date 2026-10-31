@@ -98,9 +98,9 @@ mutation ohne-laufprobe step \
 
 # M5: Ohne Commit wird geraten statt gemeldet.
 mutation commit-raten step \
-	"	'')
-		warn \"Kein Commit der Quelle" "	'__nie__')
-		warn \"Kein Commit der Quelle" \
+	"		'')
+			warn \"Kein Commit der Quelle" "		'__nie__')
+			warn \"Kein Commit der Quelle" \
 	"ohne Commit: benannt"
 
 # M6: Architektur wird nicht geprueft.
@@ -116,6 +116,11 @@ mutation fremde-datei step \
 		err "$BIN existiert und steht nicht im Manifest' 'if false; then
 		err "$BIN existiert und steht nicht im Manifest' \
 	"fremde Datei: rc 2"
+
+# M-L1: Die Versionsprobe entfaellt fuer die lokale Datei.
+mutation lokal-ohne-version step \
+	'if [ "$_ist" != "chimera-tor $SOLL_V" ]; then' 'if false; then' \
+	"lokal falsche Version: rc 2"
 
 # M8: Idempotenz fehlt -- immer neu laden.
 mutation immer-laden step \

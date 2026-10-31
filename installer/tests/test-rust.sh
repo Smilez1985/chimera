@@ -221,6 +221,43 @@ check "fremde Datei: rc 2" "$RC" "2"
 check "fremde Datei: Inhalt unveraendert" "$(cat "$BIN")" "gehoert jemand anders"
 hat "fremde Datei: benannt" "$OUT" "nicht im Manifest"
 
+# --- 8b. Lokale Datei (CHIMERA_RUST_LOKAL) ----------------------------------------------
+# Selbst gebautes Binary, ohne Netz und ohne Commit. Die Proben bleiben dieselben.
+binary_bauen "$W/lokal-gut" "$VERSION_SOLL"
+mkroot lokal ""
+CHIMERA_RUST_LOKAL="$W/lokal-gut" fahr run
+check "lokal: rc 0 auch ohne Commit" "$RC" "0"
+check "lokal: Binary liegt da" "$([ -x "$BIN" ] && echo ja || echo nein)" "ja"
+check "lokal: Inhalt = Datei" "$(summe "$BIN")" "$(summe "$W/lokal-gut")"
+hat "lokal: Manifest Summe" "$(cat "$MANIFEST")" "$(summe "$BIN")"
+hat "lokal: sagt, woher" "$OUT" "lokale Datei"
+_z="$(wc -l <"$MANIFEST")"; _m="$(stat -c %Y "$BIN")"; sleep 1
+CHIMERA_RUST_LOKAL="$W/lokal-gut" fahr run
+check "lokal: zweiter Lauf rc 0" "$RC" "0"
+hat "lokal: zweiter Lauf erkennt es" "$OUT" "Schon vorhanden und geprueft"
+check "lokal: Manifest waechst nicht" "$(wc -l <"$MANIFEST")" "$_z"
+check "lokal: nicht neu geschrieben" "$(stat -c %Y "$BIN")" "$_m"
+
+binary_bauen "$W/lokal-alt" "9.9.9"
+mkroot lokal-v ""
+CHIMERA_RUST_LOKAL="$W/lokal-alt" fahr run
+check "lokal falsche Version: rc 2" "$RC" "2"
+check "lokal falsche Version: nichts abgelegt" "$([ -e "$BIN" ] && echo da || echo weg)" "weg"
+printf 'kein programm\n' >"$W/lokal-tot"; chmod 755 "$W/lokal-tot"
+mkroot lokal-t ""
+CHIMERA_RUST_LOKAL="$W/lokal-tot" fahr run
+check "lokal laeuft nicht: rc 2" "$RC" "2"
+check "lokal laeuft nicht: nichts abgelegt" "$([ -e "$BIN" ] && echo da || echo weg)" "weg"
+mkroot lokal-f ""
+CHIMERA_RUST_LOKAL="$W/gibt-es-nicht" fahr run
+check "lokal fehlt: rc 2" "$RC" "2"
+: >"$W/lokal-leer"
+CHIMERA_RUST_LOKAL="$W/lokal-leer" fahr run
+check "lokal leer: rc 2" "$RC" "2"
+mkroot lokal-a ""
+ARCH=armv7l CHIMERA_RUST_LOKAL="$W/lokal-gut" fahr run
+check "lokal auf armv7l: rc 1" "$RC" "1"
+
 # --- 9. Trockenlauf ----------------------------------------------------------------------
 mkroot trocken abc1234
 fahr dry

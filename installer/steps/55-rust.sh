@@ -60,19 +60,30 @@ case "$_arch" in
 		log_close 1; exit 1 ;;
 esac
 
-# --- Welcher Commit? -----------------------------------------------------
-COMMIT="$(tr -d ' \t\r\n' <"$QC" 2>/dev/null || true)"
-case "$COMMIT" in
-	'')
-		warn "Kein Commit der Quelle ($QC fehlt oder ist leer)."
-		warn "  Zip, Paket oder geaenderter rust/-Baum haben keinen -- es wird nicht geraten."
-		warn "  Das Binary muss zum Commit der Quelle passen; ohne Commit kein Binary."
-		log_close 1; exit 1 ;;
-	*[!0-9a-f]*)
-		err "Commit in $QC ist kein Hex: '$COMMIT'"
-		log_close 2; exit 2 ;;
-esac
-info "Quelle: Commit $COMMIT"
+# --- Lokale Datei statt Prerelease -------------------------------------------
+# CHIMERA_RUST_LOKAL=<Pfad>: ein selbst gebautes Binary (CI nicht erreichbar,
+# Entwicklung am Geraet). Es ersetzt NUR das Laden: Die Versionsprobe und die
+# Laufprobe unten gelten unveraendert, die Summe wird aus der Datei gebildet.
+LOKAL="${CHIMERA_RUST_LOKAL:-}"
+if [ -n "$LOKAL" ]; then
+	[ -f "$LOKAL" ] && [ -s "$LOKAL" ] || { err "CHIMERA_RUST_LOKAL: '$LOKAL' fehlt oder ist leer."; log_close 2; exit 2; }
+	COMMIT=lokal
+	info "Quelle: lokale Datei $LOKAL"
+else
+	# --- Welcher Commit? -----------------------------------------------------
+	COMMIT="$(tr -d ' \t\r\n' <"$QC" 2>/dev/null || true)"
+	case "$COMMIT" in
+		'')
+			warn "Kein Commit der Quelle ($QC fehlt oder ist leer)."
+			warn "  Zip, Paket oder geaenderter rust/-Baum haben keinen -- es wird nicht geraten."
+			warn "  Das Binary muss zum Commit der Quelle passen; ohne Commit kein Binary."
+			log_close 1; exit 1 ;;
+		*[!0-9a-f]*)
+			err "Commit in $QC ist kein Hex: '$COMMIT'"
+			log_close 2; exit 2 ;;
+	esac
+	info "Quelle: Commit $COMMIT"
+fi
 
 SOLL_V="$(tr -d ' \t\r\n' <"$_HERE/../VERSION" 2>/dev/null || true)"
 [ -n "$SOLL_V" ] || { err "VERSION der Quelle fehlt."; log_close 2; exit 2; }
@@ -92,8 +103,12 @@ fi
 
 # --- Trockenlauf -----------------------------------------------------------
 if is_dry_run; then
-	info "[wuerde laden] $URL/$ASSET"
-	info "[wuerde pruefen] SHA-256 aus $ASSET.sha256, danach $BIN --version = chimera-tor $SOLL_V"
+	if [ -n "$LOKAL" ]; then
+		info "[wuerde kopieren] $LOKAL"
+	else
+		info "[wuerde laden] $URL/$ASSET"
+	fi
+	info "[wuerde pruefen] SHA-256, danach $BIN --version = chimera-tor $SOLL_V"
 	info "[wuerde ablegen] $BIN (root, 755)"
 	log_close 0; exit 0
 fi
@@ -103,15 +118,23 @@ _tmp="$(tmp_path chimera-rust)" && rm -f "$_tmp" && mkdir -p "$_tmp" || {
 	err "Kein Zwischenverzeichnis."; log_close 2; exit 2; }
 trap 'rm -rf "$_tmp"' EXIT INT TERM
 
-if ! network_fetch "$URL/$ASSET.sha256" "$_tmp/$ASSET.sha256"; then
-	warn "Zum Commit $COMMIT gibt es kein Prerelease (rust-$COMMIT) oder es ist nicht erreichbar."
-	warn "  Die CI veroeffentlicht es fuer Staende auf 'entwicklung' mit Rust-Aenderung;"
-	warn "  ein anderer Stand wird NICHT genommen -- Binary und Quelle muessen passen."
-	log_close 1; exit 1
+if [ -n "$LOKAL" ]; then
+	SUMME="$(network_checksum "$LOKAL")"
+else
+	if ! network_fetch "$URL/$ASSET.sha256" "$_tmp/$ASSET.sha256"; then
+		warn "Zum Commit $COMMIT gibt es kein Prerelease (rust-$COMMIT) oder es ist nicht erreichbar."
+		warn "  Die CI veroeffentlicht es fuer Staende auf 'entwicklung' mit Rust-Aenderung;"
+		warn "  ein anderer Stand wird NICHT genommen -- Binary und Quelle muessen passen."
+		log_close 1; exit 1
+	fi
+	SUMME="$(awk '{ print $1; exit }' "$_tmp/$ASSET.sha256")"
+	case "$SUMME" in
+		*[!0-9a-f]*|'') err "Pruefsummendatei unbrauchbar: '$SUMME'"; log_close 2; exit 2 ;;
+	esac
+	[ "${#SUMME}" = 64 ] || { err "Pruefsumme hat ${#SUMME} statt 64 Zeichen."; log_close 2; exit 2; }
 fi
-SUMME="$(awk '{ print $1; exit }' "$_tmp/$ASSET.sha256")"
 case "$SUMME" in
-	*[!0-9a-f]*|'') err "Pruefsummendatei unbrauchbar: '$SUMME'"; log_close 2; exit 2 ;;
+	*[!0-9a-f]*|'') err "Pruefsumme unbrauchbar: '$SUMME'"; log_close 2; exit 2 ;;
 esac
 [ "${#SUMME}" = 64 ] || { err "Pruefsumme hat ${#SUMME} statt 64 Zeichen."; log_close 2; exit 2; }
 
@@ -123,7 +146,10 @@ if [ -n "$_eigen_summe" ] && [ "$_eigen_summe" = "$SUMME" ] && \
 fi
 
 # --- Laden (network_fetch prueft die Summe und schreibt erst in eine Nebendatei)
-if ! network_fetch "$URL/$ASSET" "$_tmp/$ASSET" "$SUMME"; then
+if [ -n "$LOKAL" ]; then
+	cp "$LOKAL" "$_tmp/$ASSET" && [ "$(network_checksum "$_tmp/$ASSET")" = "$SUMME" ] || {
+		err "Lokale Datei nicht kopierbar oder veraendert -- nichts abgelegt."; log_close 2; exit 2; }
+elif ! network_fetch "$URL/$ASSET" "$_tmp/$ASSET" "$SUMME"; then
 	err "Binary nicht geladen oder Pruefsumme stimmt nicht -- nichts abgelegt."
 	log_close 2; exit 2
 fi
@@ -168,5 +194,5 @@ if [ -n "$_eigen_summe" ] && [ -f "$CHIMERA_MANIFEST" ]; then
 fi
 manifest_record datei "$BIN" "$SUMME"
 
-info "Abgelegt: $BIN (rust-$COMMIT, $(printf '%.12s' "$SUMME"))"
+info "Abgelegt: $BIN (${LOKAL:+lokale Datei}${LOKAL:-rust-$COMMIT}, $(printf '%.12s' "$SUMME"))"
 log_close 0; exit 0
