@@ -25,11 +25,11 @@ log = logging.getLogger(__name__)
 #: fehlt einer in der Bibliothek, wird der Zustand einfach nicht angezeigt,
 #: statt dass etwas abstürzt.
 STATE_MOODS = {
-    "wartet": ("IDLE", "LISTEN"),
+    "wartet": ("IDLE",),
     "hoert": ("LISTEN",),
-    "denkt": ("CURIOUS", "LISTEN"),
-    "arbeitet": ("FOCUS", "CURIOUS"),
-    "spricht": ("TALK", "LISTEN"),
+    "denkt": ("CURIOUS", "IDLE"),
+    "arbeitet": ("WORK", "CURIOUS"),
+    "spricht": ("SPEAK",),
     "verwirrt": ("CHAOS", "SCARED"),
     "fehler": ("SAD", "SCARED"),
 }

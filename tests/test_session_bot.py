@@ -262,7 +262,7 @@ zustaende = []
 api5 = FakeAPI()
 b5 = Bot(api5, Session(FakeAgent()), {7}, on_state=zustaende.append)
 b5.handle(b5.parse(msg(40, "hi")))
-check("denkt und spricht gemeldet", zustaende, ["denkt", "spricht"])
+check("denkt, spricht, dann wartet (4d)", zustaende, ["denkt", "spricht", "wartet"])
 # Gegenprobe: ein kaputter Rückruf darf nichts umwerfen.
 def kaputt_ruf(_):
     raise RuntimeError("Gesicht weg")
@@ -273,7 +273,7 @@ ok("kaputtes Gesicht stört nicht")
 z2 = []
 b7 = Bot(FakeAPI(), Session(FakeAgent(boom=True)), {7}, on_state=z2.append)
 b7.handle(b7.parse(msg(42, "hi")))
-check("Fehlerzustand gemeldet", z2, ["denkt", "fehler"])
+check("Fehler, dann wartet (4d)", z2, ["denkt", "fehler", "wartet"])
 
 print("== Lange Antworten teilen ==")
 check("kurz bleibt eins", len(_split("abc", 100)), 1)

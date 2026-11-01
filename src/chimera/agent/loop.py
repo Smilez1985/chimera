@@ -158,6 +158,15 @@ class Agent:
     # --- der Lauf ---------------------------------------------------------
 
     def run(self, prompt: str) -> Result:
+        """Ein Auftrag. Jede Antwort endet mit ``wartet`` (DESIGN 4d) -- auch
+        bei einem Fehler, sonst bleibt das Gesicht auf dem letzten Ausdruck
+        stehen."""
+        try:
+            return self._run(prompt)
+        finally:
+            self._state("wartet")
+
+    def _run(self, prompt: str) -> Result:
         self.guard.reset()
         steps: list[Step] = []
         system = self._system()

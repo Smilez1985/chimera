@@ -38,6 +38,10 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 - **Gateway:** Netzsuche: Das Gateway sucht im eigenen Subnetz (bis /22) nach Ollama-Servern, trägt jeden Fund als Anbieter ein und füllt dessen Katalog; ein vom Nutzer entfernter Server bleibt entfernt. Aus mit `CHIMERA_NETZSUCHE=0`, Abstand mit `CHIMERA_NETZSUCHE_S` (Vorgabe 300 s).
 - **Gateway:** Katalog eines Ollama-Servers mit Größe, Kontext und gemessener Werkzeugfähigkeit (`/api/show`); nicht Messbares erscheint als „unbekannt“. Neue Operationen am Socket: `katalog_aktualisieren`, `netzsuche`.
 - **Web-Oberfläche:** Neues Modul „Ollama“: Server hinzufügen, entfernen, ein- und ausschalten, Modelle holen, ein Modell testen. Neue Rechte `anbieter-lesen` und `anbieter-schreiben`; nur eingebaute Module dürfen sie nutzen.
+- **Anzeige:** Neuer Ausdruck `SPEAK` für den Zustand „spricht“: Blick geradeaus, kein Zubehör, Mund mit vier Phasen (zu, halb, offen, halb) im Kreis, jede Phase mehrere Bilder lang (`SPEAK_HALTE`, Vorgabe 3). Neuer Mundstil `speak` im Schema.
+- **Anzeige:** Nach jeder Antwort meldet die Agentenschleife und die Telegram-Tür `wartet`, auch nach einem Fehler; das Gesicht bleibt nicht auf dem letzten Ausdruck stehen.
+- **Tests:** `tests/test_gesicht_zustand.py` prüft die Zuordnung Zustand zu Ausdruck gegen die echte Bibliothek, die Mundphasen im echten Renderer und das `wartet` nach jeder Antwort; `tests/gegenprobe_gesicht.py` verfälscht dazu zwölf Stellen.
+- **Tests:** `rust/gegenprobe-daten.sh`, `rust/gegenprobe-anbieter.sh` und `rust/gegenprobe-netzsuche.sh` verfälschen je Stelle die Datenschicht, die Anbieter-Schnittstelle und die Netzsuche; `tests/test_cli_doku.py` prüft, dass jede Gegenprobe in `docs/CLI.md` steht.
 - **Dokumentation:** `docs/CLI.md` listet alle Befehle, Optionen und Umgebungsvariablen nach Kategorie, zweisprachig; `tests/test_cli_doku.py` prüft sie in beide Richtungen gegen die Programme.
 - **Anzeige:** Eigenes Treiberpaket `chimera.displays` — Whisplay-LCD, LED,
   Backlight und Taste laufen ohne Herstellercode; ein neues Panel ist ein
@@ -93,6 +97,9 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   Erfolg mehr.
 
 ### Geaendert
+- **Anzeige:** Der bisherige Ausdruck `TALK` (Ohr, gerader Mund, Blick zur Seite) heißt jetzt `LISTEN` und gehört dem Zustand „hört zu“; das bisherige lächelnde `LISTEN` heißt `IDLE` und ist der Ruhezustand. Die Bibliothek hat 42 Ausdrücke.
+- **Gateway:** `anbieter_speichern` nimmt die Adresse von der Ablehnungsliste der Netzsuche, wenn der Nutzer einen entfernten Server wieder hinzufügt.
+- **Installer:** `manifest_init` setzt `state/` nur noch beim Anlegen auf 700 und überschreibt spätere Rechte nicht mehr.
 - **Anzeige:** `chimera.display.panel` ist nur noch die Fassade; welche
   Anzeige geöffnet wird, sagt `CHIMERA_ANZEIGE` bzw. `state/anzeige`, der
   Dienst erkennt nicht mehr selbst. Läuft er blind, steht der Grund in der
@@ -123,6 +130,8 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Anzeige:** Der Zustand „spricht“ zeigte ein Gesicht mit Ohr, also „hört zu“; der Zustand „arbeitet“ verwies auf einen Ausdruck `FOCUS`, den es nie gab, und blieb darum unsichtbar (jetzt `WORK`).
+- **Gateway:** Eine Adresse für einen Ollama-Anbieter muss mit `http://` oder `https://` beginnen; alles andere wird beim Speichern abgewiesen.
 - **Gateway:** Die Kopfzeile der Oberfläche (mit „Abmelden“) ist vor der Anmeldung nicht mehr sichtbar.
 - **Installer:** Ein Download von einer Adresse mit Port (Spiegel, Test) prüft jetzt diesen Port statt 80 oder 443.
 - **Anzeige:** Die Statuszeile unter dem Gesicht wird wieder gezeichnet —

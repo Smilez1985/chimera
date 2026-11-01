@@ -192,10 +192,14 @@ class Bot:
 
         self.api.typing(upd.chat_id)
         self._state("denkt")
-        turn: Turn = self.session.ask(upd.text, CHANNEL)
-        self._state("fehler" if turn.error else "spricht")
-        self._send(upd.chat_id, turn.text)
-        return turn.text
+        try:
+            turn: Turn = self.session.ask(upd.text, CHANNEL)
+            self._state("fehler" if turn.error else "spricht")
+            self._send(upd.chat_id, turn.text)
+            return turn.text
+        finally:
+            # DESIGN 4d: nach jeder Antwort zurueck in den Ruhezustand.
+            self._state("wartet")
 
     def _command(self, cmd: str) -> str | None:
         """Die drei Befehle, die ein Bot ohne Bildschirm braucht."""

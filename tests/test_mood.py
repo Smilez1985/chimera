@@ -286,14 +286,14 @@ bi = Path(__file__).resolve().parent.parent / "data" / "moods-builtin.json"
 if bi.exists():
     import json as _json
     data = _json.loads(bi.read_text(encoding="utf-8"))["moods"]
-    check("41 Moods", len(data), 41)
+    check("42 Moods", len(data), 42)
     reg4 = Registry(capacity=500)
     bad_ones = []
     for entry in data:
         e, rp = reg4.add(entry, origin="builtin")
         if rp.drops:
             bad_ones.append((entry.get("name"), rp.drops))
-    check("alle aufgenommen", len(reg4), 41)
+    check("alle aufgenommen", len(reg4), 42)
     ok("keiner beanstandet") if not bad_ones else bad(f"beanstandet: {bad_ones[:2]}")
     mixed = blend.mix(reg4.get("ROCK"), reg4.get("CHILL"), 0.5, name="ROCKCHILL")
     ok("zwei Startmoods mischbar") if mixed["name"] == "ROCKCHILL" else bad("Mischen fehlgeschlagen")
@@ -303,7 +303,7 @@ if bi.exists():
     # (flaches gegen verpacktes Format). Der Weg, den das Programm
     # wirklich nimmt, muss auch geprüft werden.
     geladen = Registry.load(bi, capacity=500)
-    check("load() liest die mitgelieferte Datei", len(geladen), 41)
+    check("load() liest die mitgelieferte Datei", len(geladen), 42)
     ok("Namen kommen mit") if "CHILL" in geladen else bad("CHILL fehlt nach load()")
     # Gegenprobe: das verpackte Format (save) muss weiter gehen.
     import tempfile as _tf
@@ -311,7 +311,7 @@ if bi.exists():
         _p = Path(_td) / "rund.json"
         geladen.save(_p)
         zurueck = Registry.load(_p)
-        check("Rundlauf save→load", len(zurueck), 41)
+        check("Rundlauf save→load", len(zurueck), 42)
         ok("Nutzungszähler überlebt") if all(
             zurueck.find(n) is not None for n in ("CHILL", "ROCK")) \
             else bad("Moods nach Rundlauf verschwunden")

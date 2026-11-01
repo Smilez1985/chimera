@@ -688,7 +688,7 @@
       "accessory": {
         "type": []
       },
-      "name": "LISTEN",
+      "name": "IDLE",
       "priority": 30,
       "fast_track": false
     },
@@ -1215,7 +1215,7 @@
           "big_ear"
         ]
       },
-      "name": "TALK",
+      "name": "LISTEN",
       "priority": 40,
       "fast_track": false
     },
@@ -3113,6 +3113,81 @@
       },
       "name": "GAME",
       "priority": 5,
+      "fast_track": false
+    },
+    {
+      "body": {
+        "color": [
+          135,
+          200,
+          160
+        ],
+        "glow": [
+          65,
+          105,
+          85
+        ]
+      },
+      "eyes": {
+        "scale_w": 1.0,
+        "scale_h": 1.0,
+        "look_offset": 0,
+        "droopy": false,
+        "focused": false,
+        "swirl": false
+      },
+      "mouth": {
+        "style": "speak",
+        "width": 1.0
+      },
+      "hair": {
+        "visible": true,
+        "wobble": false,
+        "blown": false,
+        "style": null,
+        "color": [
+          139,
+          90,
+          43
+        ],
+        "color_dark": [
+          110,
+          70,
+          30
+        ],
+        "color_light": [
+          165,
+          110,
+          55
+        ]
+      },
+      "physics": {
+        "headbang_speed": 0,
+        "headbang_amp": 0,
+        "bounce_speed": 0,
+        "bounce_amp": 0,
+        "sway_speed": 0.04,
+        "sway_amp": 1.5,
+        "shake_x": 0,
+        "shake_y": 0,
+        "stretch_w": 0,
+        "stretch_h": 0,
+        "toke": false
+      },
+      "particles": {
+        "type": null,
+        "rate": 0,
+        "color": [
+          255,
+          255,
+          255
+        ]
+      },
+      "accessory": {
+        "type": []
+      },
+      "name": "SPEAK",
+      "priority": 40,
       "fast_track": false
     }
   ]

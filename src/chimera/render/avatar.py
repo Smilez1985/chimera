@@ -412,6 +412,11 @@ class NoisyRenderer:
         # Diese beiden standen in Noisy im Konstruktor, den Chimera
         # ersetzt hat -- sie gehoeren zum Zustand und werden hier gesetzt.
         self.frame = 0.0
+        # Sprechmund (DESIGN 4d): 2 bis 4 Phasen im Kreis, jede SPEAK_HALTE
+        # Bilder lang. Das Halten ist die Bildverdopplung: Der Mund soll
+        # nicht schneller klappen, als das Auge folgt.
+        self.SPEAK_PHASEN = ("zu", "halb", "offen", "halb")
+        self.SPEAK_HALTE = 3
         self.particles = ParticleSystem(max_particles=30)
 
         # Wo die Temperatur steht. Eine Eigenschaft, keine Konstante: Auf
@@ -1040,13 +1045,29 @@ class NoisyRenderer:
     # ----------------------------------------------------------
     # Mund (Default + Overrides)
     # ----------------------------------------------------------
+    def sprech_phase(self, frame):
+        """Die Mundphase zu einem Bild. Haengt am Bildzaehler, nicht an der Uhr:
+        Faellt ein Bild aus, bleibt die Folge stabil. Jede Phase steht
+        SPEAK_HALTE Bilder."""
+        halte = max(1, int(self.SPEAK_HALTE))
+        n = len(self.SPEAK_PHASEN)
+        return self.SPEAK_PHASEN[(int(frame) // halte) % n]
+
     def draw_mouth(self, draw, cx, cy, r, mouth_data, mood_id):
         my = cy + r * 0.22
         style = mouth_data.get("style", "smile")
         w = mouth_data.get("width", 1.0)
         mw = r * 0.15 * w
 
-        if style == "grin":
+        if style == "speak":
+            phase = self.sprech_phase(self.frame)
+            if phase == "zu":
+                draw.line([cx - 8, my + 8, cx + 8, my + 8], fill=EYE_COLOR, width=3)
+            elif phase == "halb":
+                draw.ellipse([cx - 9, my + 4, cx + 9, my + 13], fill=EYE_COLOR)
+            else:
+                draw.ellipse([cx - 10, my + 1, cx + 10, my + 22], fill=EYE_COLOR)
+        elif style == "grin":
             draw.chord([cx - 18, my - 5, cx + 18, my + 22], 0, 180, fill=EYE_COLOR)
         elif style == "open_round":
             draw.ellipse([cx - 8, my + 2, cx + 8, my + 18], fill=EYE_COLOR)

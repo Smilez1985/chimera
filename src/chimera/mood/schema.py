@@ -110,6 +110,7 @@ class Slot:
 MOUTH_STYLES = (
     "smile", "grin", "smirk", "neutral", "line", "frown", "concerned",
     "open_round", "focused", "chewing", "sip", "squiggle", "tongue", "yawn",
+    "speak",
 )
 
 PARTICLE_TYPES = (

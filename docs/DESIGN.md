@@ -318,6 +318,34 @@ Modelle (int8, deutsch):
 | STT | `nemo-fast-conformer-ctc-en-de-es-fr-14288-int8` | 98 MB |
 | TTS | `vits-piper-de_DE-thorsten_emotional-medium-int8` | 22 MB |
 
+#### Architekturregel 4d — Sprechen hat einen eigenen Ausdruck mit Mundphasen (smilez, 1.11.)
+
+Fund am Gerät: Der Zustand `spricht` zeigte `TALK`, und `TALK` ist in
+Noisys Bibliothek ein Ausdruck für **Zuhören** (Ohr, gerader Mund, Blick zur
+Seite). Das Gesicht sagte das Gegenteil des Zustands. Dazu wurde `wartet`
+nie gemeldet, das Gesicht blieb nach der ersten Antwort stehen.
+
+1. **`TALK` heißt `LISTEN`.** Der Ausdruck „jemand spricht, ich höre zu“
+   (Ohr, Blick zur Seite) trägt den Namen `LISTEN` und gehört dem Zustand
+   `hoert` (Hörmodus, Phase 5a). Der bisherige `LISTEN` (lächelnd, ohne
+   Zubehör) war de facto das Ruhegesicht und heißt jetzt `IDLE`; so sucht
+   `face.py` den Ruhezustand schon (`wartet` -> `IDLE`).
+2. **`SPEAK` ist neu** und gehört dem Zustand `spricht`: kein Zubehör, Blick
+   geradeaus, **Mund mit Phasen**.
+3. **Mundphasen statt Mundform.** `mouth.style = "speak"` zeigt 2 bis 4
+   Phasen, die im Kreis laufen (`zu`, `halb`, `offen`, `halb`). Jede Phase
+   bleibt **`SPEAK_HALTE` Bilder** stehen (Vorgabe 3, wählbar 1 bis 10),
+   damit der Mund nicht schneller klappt, als ein Auge folgt: bei 15 Bildern
+   je Sekunde und Halten 3 wechselt der Mund 5-mal je Sekunde. Die Phase
+   hängt am Bildzähler, nicht an der Uhrzeit, also bleibt sie stabil, wenn
+   Bilder ausfallen.
+4. **Ein Ausdruck, kein Ersatz für die Stimme.** Solange es keine
+   Sprachausgabe gibt, läuft der Mund, solange der Zustand `spricht`
+   gemeldet ist. Mit Sprachausgabe (Phase 5) folgt die Phase der Lautstärke
+   (Regel 4c, „Mundform zur Lautstärke“); die Phasen bleiben dieselben.
+5. **Jede Antwort endet mit `wartet`.** Wer `spricht` meldet, meldet danach
+   `wartet`, auch bei Fehler (Regel 8a). Test mit Gegenprobe.
+
 #### Architekturregel 4c — Das Sprachmodell setzt Absicht, nicht Bilder
 
 Die Arbeitsteilung folgt derselben Staffelung wie beim Umgebungshören
@@ -977,6 +1005,23 @@ Oberfläche.
   Kennung `ollama`, bis der Nutzer auf die Anbieterliste umgestellt hat.
   Die frühere Selbstübernahme einer Adresse in die `.env` entfällt.
 
+**Stand am Gerät (1.11.):** Die Regel gilt noch nicht durchgesetzt. Der
+Dienst `chimera` hat `IPAddressDeny` und `IPAddressAllow` leer und ruft
+Ollama und Anthropic im Python-Code selbst per `urllib` auf; `discover()`
+scannt das Netz selbst. Der Weg über das Gateway ist ein zusätzlicher Pfad
+und fällt bei Ausfall des Gateways auf den direkten zurück. Durchgesetzt ist
+die Regel erst, wenn Anthropic im Gateway läuft und `IPAddressDeny=any` mit
+Zugang nur zum Gateway-Socket gesetzt ist (ROADMAP, Phase 4d).
+
+**Das Gateway fragt alles ab, was über einen Anbieter gewusst werden muss,**
+damit „kommt etwas an?“ jederzeit beantwortbar ist, ohne am Server
+nachzusehen: bei Ollama `/api/tags`, `/api/show` und `/api/ps` (geladen,
+VRAM, Ablauf) sowie die Zeiten aus jeder Antwort (`load_duration`,
+`total_duration`, `eval_duration`). Es hält das gewählte Modell mit
+`keep_alive` warm und lädt es auf Wunsch vor. **Ein Modell, das der Nutzer
+nicht gewählt hat, wird nie geladen.** Der Dienst bekommt diese Angaben über
+den Socket.
+
 ### Architekturregel 5l — Wer Schlüssel hat, hat kein Werkzeug; wer Werkzeuge hat, hat keine Schlüssel
 
 Folgt aus 5n und ersetzt die Fassung 1 (zwei Schreiber).
@@ -1007,6 +1052,11 @@ die Netzsuche gefunden.
   Stattdessen gilt: das erste Modell mit `tools`.
 - Ein Modell ohne `tools` wird für Aufgaben, die Werkzeuge brauchen,
   **übersprungen und benannt**.
+- **Stand am Gerät (1.11.):** `provider/setup.py` schlägt für das Gespräch
+  noch das größte Modell vor (`gemma4:31b`; eine Antwort brauchte 71 Sekunden
+  und lud das Modell erst), und `wahl.json` entsteht erst mit der
+  Reihenfolge-Seite. Bis dahin entscheidet `OLLAMA_MODEL`; ist es leer, wählt
+  der Vorschlag. Das Ersetzen durch „erstes Modell mit `tools`“ ist offen.
 - **Leere Kette: melden, nicht ausweichen.** Den stillen Rückfall von
   OpenMinis auf „neuestes sichtbares Modell“ übernehmen wir nicht.
 - Weitere Anbieter (LiteLLM, ROADMAP) werden auf der Web-Oberfläche
@@ -2710,6 +2760,15 @@ belegte 150 MB unter `MemoryMax=20M` und lief durch. Die Gegenprobe
 `RuntimeMaxSec=1` griff, systemd hat die Eigenschaften also übernommen.
 Eine solche Zeile in der Unit wäre stiller Erfolg (Regel 8a).
 
+**Gemessen am Zero 2 W (1.11.):** 462 MB gesamt, **339 MB verfügbar**
+(der Rest ist Cache, der sich freigibt); belegt sind etwa 46 MB. Der Dienst
+`chimera` (Python) hält 50 MB (27 MB anonym, 23 MB aus Dateien), das Gateway
+1,5 MB, `systemd` 14 MB, `journald` 10 MB. Der Kernel reserviert 64 MB für
+CMA (Kamera, GPU), obwohl es weder `/dev/video*` noch `vc4`/`v3d`/`unicam`
+gibt; `/proc/cgroups` zeigt keinen Speicher-Controller. Ob sich die CMA
+verkleinern lässt und was `cgroup_enable=memory` kostet, ist nicht gemessen
+(ROADMAP, Phase 4d).
+
 Daraus folgt:
 
 - Der Dienst begrenzt sich selbst. Liegt `VmRSS + VmSwap` über einer
@@ -3176,6 +3235,7 @@ Test muss rot werden.
 - **4a** — VAD läuft vor STT, KWS vor VAD
 - **4b** — Gesicht und Stimme tragen denselben Mood
 - **4c** — Das Sprachmodell setzt Absicht, nicht Bilder
+- **4d** — Sprechen hat einen eigenen Ausdruck mit Mundphasen
 - **5** — Sprache lokal, Sprachmodell immer remote
 - **5a** — Registry statt fester Connector-Attribute
 - **5b** — Anthropic-Anmeldung wie im OpenMinis-PR

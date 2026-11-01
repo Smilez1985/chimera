@@ -43,7 +43,7 @@ by = {}
 for m in raw:
     v, _ = validate(m)
     by[v["name"]] = v
-check("41 Moods", len(by), 41)
+check("42 Moods", len(by), 42)
 
 st = State()
 rr = NoisyRenderer(st, NullPanel())

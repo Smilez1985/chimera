@@ -344,20 +344,49 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       auch die Claude-Zugänge im Gateway laufen, sonst verliert der
       Python-Dienst seine Anbieter. (Am Pi gemessen: mit dem Profil
       erreicht der Dienst Ollama über den Socket, das LAN nicht.)
+- [ ] **Ollama im Gateway ganz abfragen** (5n, 5k): `/api/ps` (geladen,
+      VRAM, Ablauf), die Zeiten aus der Antwort (`load_duration`,
+      `total_duration`, `eval_duration`), `keep_alive` und Vorladen des
+      gewählten Modells; Anzeige „geladen / kalt“ und letzte Antwortzeit je
+      Modell im Ollama-Modul. Der Dienst fragt dafür das Gateway, nicht den
+      Server.
+- [ ] **Modellwahl durch den Nutzer** (5h): bis zur Reihenfolge-Seite
+      gilt `OLLAMA_MODEL`; das Vorschlagen des größten Modells
+      (`provider/setup.py`, `_target_for`) wird durch „erstes Modell mit
+      `tools`“ ersetzt. Ein Modell, das nicht ausgewählt ist, wird nie
+      geladen.
+- [ ] **Der Dienst verliert sein Netz** (5n): Er ruft heute Ollama und
+      Anthropic noch selbst über `urllib` auf (`IPAddressDeny` ist leer);
+      der Weg über das Gateway ist nur ein zusätzlicher Pfad, `discover()`
+      scannt selbst. Reihenfolge: Anthropic ins Gateway, dann Sperre mit
+      Test, dann `provider/` und `bot/telegram.py` entfernen.
+- [ ] **Installer: Sitzungs-Socket nach einem Lauf:** `chimera-sitzung.socket`
+      blieb nach einem Lauf von Schritt 99 inaktiv („Socket service already
+      active, refusing“), der Dienst lief ohne Sitzungs-Socket weiter. Der
+      Nachweis von Schritt 99 muss den Zustand beider Sockets prüfen, nicht
+      nur den des Gateway-Sockets.
 - [ ] **Websuche** (5r): zuerst Anthropic serverseitig, dann OpenRouter,
       dann Suchquellen mit Nutzer-Schlüssel (Ollama Cloud, Tavily, Exa,
       SearXNG; Brave ohne Platten-Cache; ddgs nur Opt-in).
 - [ ] **Netzsuche** (5k): Selbsteintrag steht; offen: Telegram `/suche`,
       Knopf „Jetzt suchen“ im Ollama-Modul, Installer Schritt 50.
-- [ ] **Speicher am Pi:** `MemoryMax=` wirkt auf dem Pi nicht
-      (`cgroup_disable=memory`); der Installer soll das melden (10q). CMA
-      verkleinern (nach Prüfung des Displays), Journal im RAM begrenzen.
+- [ ] **Speicher am Pi** (10q): `MemoryMax=` wirkt nicht
+      (`cgroup_disable=memory`); der Installer meldet das, und das Gateway
+      begrenzt sich selbst (`VmRSS` prüfen, bei Überschreiten sauber
+      beenden). Installermodul `26-boot` mit Sicherung und `--dry-run`:
+      CMA verkleinern (`dtoverlay=cma,cma-size=...` in `config.txt`, bei
+      Kamera wieder anheben, Schalter `CHIMERA_CMA_MB`) und
+      `cgroup_enable=memory` prüfen; je ein Neustart mit Messung davor und
+      danach, sonst gilt es nicht als erledigt. Journal im RAM begrenzen.
 - [ ] **Gedächtnis-Verdichtung in Blöcken** (8c): lange Verläufe an
       Nachrichtengrenzen teilen, je Block zusammenfassen, zusammenführen; feste
       Briefstruktur (Ziel, Kontext, Stand, nächste Schritte, offene Fragen);
       auch für die Übergabe beim Wechsel der Hauptsitzung (5s).
 - [ ] **DeepSeek** als Anbietermodul über die API (OpenAI-kompatibel). Eine
-      Browser-Brücke zur Weboberfläche ist nicht beschlossen.
+      Browser-Brücke zur Weboberfläche ist nicht beschlossen: Sie bräuchte
+      einen Browser auf einem anderen Rechner im LAN (der Pi hat 462 MB RAM)
+      und liegt in einem Bereich der Nutzungsbedingungen, der nicht
+      eindeutig ist.
 - [ ] **`wahl.json`** mit bevorzugter Liste (5h). Telegram im Gateway mit
       `/model` und `/suche`.
 - [ ] **CLI** als Socket-Client, ohne eigene Anzeige.
@@ -479,6 +508,12 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
 - [ ] TTS-Emotion an Mood koppeln (Architekturregel 4b)
 
 ### Mienenspiel beim Sprechen (`docs/DESIGN.md` §4.1)
+
+- [x] **Ausdruck für „spricht“** (Regel 4d): `SPEAK` mit vier Mundphasen,
+      `LISTEN` für „hört zu“, `IDLE` für den Ruhezustand, `wartet` nach jeder
+      Antwort; Tests und Gegenprobe stehen, am Pi noch nicht angesehen.
+- [ ] Mundphase folgt der Lautstärke der Sprachausgabe (Regel 4c), sobald es
+      sie gibt.
 - [ ] Mundform folgt der Lautstärke der Sprachausgabe, jedes Bild
 - [ ] Kopfbewegung und Pausen aus dem Sprachsignal, ~100 ms
 - [ ] Sprachmodell liefert **Regieanweisung zum Satz** (Mood-Name oder
@@ -525,6 +560,9 @@ Offen bleibt:
       Gegenprobe 7 Mutationen
 - [x] Statuszeile angeschlossen (war gebaut, aber nie an den Renderer gegeben)
 - [x] Taste verdrahtet: quittiert per LED, protokolliert
+- [ ] Das Display zeigt einen Zustand erst nach dem Neustart des Dienstes
+      richtig: Am Pi nach der Änderung von `SPEAK` ansehen und mit dem
+      Dienstprotokoll abgleichen (Ausdruck, Statuszeile, LED).
 - [ ] Button: Gesten (kurz / lang / mehrfach) und Bedeutung (Wake-Word-
       Ersatz, DESIGN §3.4) — hängt am Audio-Prozess
 - [ ] Software-PWM bei Zwischenwerten: Backlight 50 % kostet ~9 % eines
