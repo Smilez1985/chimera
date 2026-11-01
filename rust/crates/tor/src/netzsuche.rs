@@ -163,6 +163,20 @@ pub fn ablehnen(p: &Pfade, adresse: &str) -> Result<(), String> {
     daten::atomar_schreiben(&p.anbieter_dir().join(".abgelehnt.json"), &text, 0o640)
 }
 
+/// Eine Adresse von der Ablehnungsliste nehmen (der Nutzer hat den Server
+/// wieder hinzugefuegt). Gibt zurueck, ob sie darauf stand.
+pub fn zulassen(p: &Pfade, adresse: &str) -> Result<bool, String> {
+    let a = norm(adresse);
+    let v = abgelehnt(p);
+    if !v.contains(&a) {
+        return Ok(false);
+    }
+    let rest: Vec<String> = v.into_iter().filter(|x| *x != a).collect();
+    let text = serde_json::to_vec_pretty(&rest).map_err(|e| e.to_string())?;
+    daten::atomar_schreiben(&p.anbieter_dir().join(".abgelehnt.json"), &text, 0o640)?;
+    Ok(true)
+}
+
 /// Neue Funde als Anbieter eintragen. Rueckgabe: die neu angelegten Kennungen.
 /// Bekannte Adressen, vorhandene Kennungen und abgelehnte Adressen bleiben aussen vor.
 pub fn eintragen(p: &Pfade, funde: &[String]) -> Vec<String> {
@@ -414,5 +428,15 @@ wlan0\t006433C6\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0\n";
         let n = eintragen(&p, &["http://192.0.2.100:11434".into(), "http://192.0.2.101:11434".into()]);
         assert_eq!(n.len(), 2);
         assert_ne!(n[0], n[1]);
+    }
+
+    #[test]
+    fn wieder_hinzufuegen_nimmt_die_adresse_von_der_ablehnungsliste() {
+        let p = tmp("zulassen");
+        ablehnen(&p, "http://192.0.2.100:11434").unwrap();
+        ablehnen(&p, "http://192.0.2.101:11434").unwrap();
+        assert_eq!(zulassen(&p, "HTTP://192.0.2.100:11434/").unwrap(), true);
+        assert_eq!(abgelehnt(&p), vec!["http://192.0.2.101:11434"], "nur diese eine");
+        assert_eq!(zulassen(&p, "http://192.0.2.100:11434").unwrap(), false, "stand nicht mehr darauf");
     }
 }

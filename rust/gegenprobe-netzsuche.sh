@@ -43,4 +43,6 @@ mut marke-auto-fehlt netzsuche.rs '"auto": true,' '' netzsuche::
 mut ablehnung-nicht-gemerkt daten.rs 'if v["auto"] == true {' 'if false {' daten::
 mut ablehnung-bei-hand daten.rs 'if v["auto"] == true {' 'if true {' daten::
 mut schreibweise netzsuche.rs 'a.trim().trim_end_matches('"'"'/'"'"').to_ascii_lowercase()' 'a.trim().to_ascii_lowercase()' netzsuche::
+mut ablehnung-bleibt daten.rs 'crate::netzsuche::zulassen(p, ad)' 'Ok::<bool, String>(false)' daten::
+mut zulassen-leert-alles netzsuche.rs 'v.into_iter().filter(|x| *x != a).collect()' 'Vec::new()' netzsuche::
 echo "== $gruen gruen =="

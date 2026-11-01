@@ -139,7 +139,13 @@ pub fn anbieter_pruefen(id: &str, a: &Value) -> Result<(), String> {
 
 pub fn anbieter_speichern(p: &Pfade, id: &str, a: &Value) -> Result<(), String> {
     anbieter_pruefen(id, a)?;
-    json_schreiben(&p.anbieter_dir().join(format!("{id}.json")), a, 0o640)
+    json_schreiben(&p.anbieter_dir().join(format!("{id}.json")), a, 0o640)?;
+    // Fuegt der Nutzer einen Server wieder hinzu, den er einmal entfernt hat,
+    // gilt die Ablehnung nicht mehr (5k).
+    if let Some(ad) = a["adresse"].as_str() {
+        crate::netzsuche::zulassen(p, ad).map_err(|e| format!("gespeichert, aber Ablehnung nicht aufgehoben: {e}"))?;
+    }
+    Ok(())
 }
 
 pub fn anbieter_entfernen(p: &Pfade, id: &str) -> Result<(), String> {
@@ -696,5 +702,17 @@ mod tests {
         anbieter_speichern(&p, "hand", &hand).unwrap();
         anbieter_entfernen(&p, "hand").unwrap();
         assert_eq!(crate::netzsuche::abgelehnt(&p), vec!["http://x:11434"], "Handeintrag nicht vorgemerkt");
+    }
+
+    #[test]
+    fn server_wieder_hinzufuegen_hebt_die_ablehnung_auf_und_die_suche_nimmt_ihn_wieder() {
+        let p = tmp("wieder");
+        let mut a = ollama();
+        a["auto"] = json!(true);
+        anbieter_speichern(&p, "ollama-x", &a).unwrap();
+        anbieter_entfernen(&p, "ollama-x").unwrap();
+        assert_eq!(crate::netzsuche::abgelehnt(&p).len(), 1);
+        anbieter_speichern(&p, "mein-x", &ollama()).unwrap();
+        assert!(crate::netzsuche::abgelehnt(&p).is_empty(), "Ablehnung muss weg sein");
     }
 }
