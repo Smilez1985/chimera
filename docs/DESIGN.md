@@ -952,16 +952,30 @@ Chimera installiert und startet **nie** ein eigenes Ollama.
 `/suche`, Web-Oberfläche) und wenn die eingetragene Adresse beim Start
 oder nach Ausfällen nicht antwortet.
 
-**Selbstübernahme (smilez: ja):** Antwortet die eingetragene Adresse
-nicht mehr, übernimmt das Gateway eine neue nur, wenn **genau ein**
-Server gefunden wird **und** dieser **alle Ollama-Modelle der Ketten**
-hat. Dann wird sie in `.env` geschrieben (Sidecar-Datei, danach `mv`),
-und die Übernahme wird gemeldet: Statuszeile, Telegram, Protokoll mit
-alter und neuer Adresse. Bei mehreren Funden oder fehlenden Modellen
-wird nur gemeldet.
+**Selbsteintrag (smilez, 1.11.): Jeder gefundene Ollama-Server trägt sich
+selbst in die Anbieterliste ein.** Das Gateway sucht im Hintergrund (kurz
+nach dem Start, danach alle 5 Minuten; `CHIMERA_NETZSUCHE=0` schaltet es
+ab, `CHIMERA_NETZSUCHE_S` setzt den Abstand) und beim Aufruf aus der
+Oberfläche.
 
-Die Adresse steht **nur** in `/opt/chimera/config/.env`. `.env.example`
-behält den Platzhalter (§13).
+- Ein neuer Fund wird als Anbieterdatei `config/anbieter/ollama-<host>.json`
+  angelegt (Typ `ollama`, an, Marke `auto: true`, Bezeichnung „Ollama @ Host“).
+  Danach wird sein Katalog gefüllt (Modelle, `tools`, Kontext).
+- **Die Wahl (5h) ändert die Suche nie.** Ein Server in der Liste heißt
+  noch nicht, dass Anfragen dorthin gehen: Prompts verlassen das Gerät erst,
+  wenn der Nutzer ein Modell dieses Servers in die Reihenfolge aufnimmt.
+  Das begrenzt, was ein fremder Server im LAN bewirken kann, der sich als
+  Ollama ausgibt.
+- Eine bekannte Adresse wird nicht doppelt angelegt. Entfernt der Nutzer
+  einen selbst eingetragenen Server, steht seine Adresse in
+  `config/anbieter/.abgelehnt.json`, und die Suche trägt ihn nicht wieder ein.
+- Kataloge bekannter Server werden höchstens stündlich erneuert (7-Tage-Frist
+  der Modelle nach 5t). Ein nicht erreichbarer Server behält seinen Katalog.
+- Die Adresse steht nur auf dem Gerät in `config/anbieter/`, nie im Repo (§13).
+- Bei Netzen über /22 wird nicht gesucht und das gemeldet.
+- Die Adresse in der `.env` (`OLLAMA_API_BASE`) bleibt als Rückfall unter der
+  Kennung `ollama`, bis der Nutzer auf die Anbieterliste umgestellt hat.
+  Die frühere Selbstübernahme einer Adresse in die `.env` entfällt.
 
 ### Architekturregel 5l — Wer Schlüssel hat, hat kein Werkzeug; wer Werkzeuge hat, hat keine Schlüssel
 

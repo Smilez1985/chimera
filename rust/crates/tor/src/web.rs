@@ -55,6 +55,11 @@ const EINGEBAUT: &[Eingebaut] = &[
         manifest: include_str!("../web/module/status/manifest.json"),
         dateien: &[("status.js", "text/javascript; charset=utf-8", include_str!("../web/module/status/status.js"))],
     },
+    Eingebaut {
+        name: "ollama",
+        manifest: include_str!("../web/module/ollama/manifest.json"),
+        dateien: &[("ollama.js", "text/javascript; charset=utf-8", include_str!("../web/module/ollama/ollama.js"))],
+    },
 ];
 
 
@@ -133,7 +138,7 @@ pub struct Modul {
 /// eintragen**, wenn das Gateway ein neues Recht kennt. Ein Recht, das nicht in
 /// dieser Liste steht, verwirft das Modul -- sonst wuerde ein Tippfehler im
 /// Manifest still ein wirkungsloses Recht verlangen.
-pub const RECHTE: &[&str] = &["chat", "status"];
+pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben"];
 
 fn name_ok(s: &str) -> bool {
     !s.is_empty() && s.len() <= 32 && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
@@ -299,6 +304,8 @@ pub struct Zustand {
     pub strom: Arc<Strom>,
     /// Nur Anfragen aus dem eigenen Netz bedienen (Vorgabe an, `CHIMERA_WEB_LAN_NUR=0` schaltet ab).
     pub nur_lan: bool,
+    /// Zugriff auf die Anbieter und die Datenschicht (dieselbe Logik wie am Socket).
+    pub stand: crate::dienst::Stand,
     angemeldet: Mutex<BTreeMap<String, Instant>>,
     fehlversuche: Mutex<VecDeque<Instant>>,
 }
@@ -311,6 +318,7 @@ impl Zustand {
             sitzung_socket,
             strom,
             nur_lan: true,
+            stand: crate::dienst::Stand::neu(),
             angemeldet: Mutex::new(BTreeMap::new()),
             fehlversuche: Mutex::new(VecDeque::new()),
         }
@@ -447,6 +455,7 @@ pub fn behandle(z: &Zustand, a: &Anfrage) -> Antwort {
         }
         (_, p) if p.starts_with("/api/chat/") => chat_api(z, a, &p["/api/chat/".len()..]),
         (_, p) if p.starts_with("/api/status/") => status_api(z, a, &p["/api/status/".len()..]),
+        (_, p) if p.starts_with("/api/anbieter/") => anbieter_api(z, a, &p["/api/anbieter/".len()..]),
         _ => fehler(404, "nicht gefunden"),
     }
 }
@@ -493,6 +502,75 @@ fn status_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
         ("GET", "messwerte") => json_antwort(200, crate::status::messen(&crate::status::Kontext { wurzel: Path::new("/"), mit_befehlen: true })),
         _ => fehler(404, "nicht gefunden"),
     }
+}
+
+/// Haben die Module das Recht? Zaehlen tun nur eingebaute: ein nachgelegtes
+/// Modul laeuft ohne Freigabe nicht (5v), also gibt sein Manifest nichts frei.
+pub fn schreibrecht_vergeben(module: &[Modul], recht: &str) -> bool {
+    module.iter().any(|x| x.eingebaut && x.rechte.iter().any(|r| r == recht))
+}
+
+/// Die Anbieter-Schnittstelle fuer Module mit den Rechten `anbieter-lesen` und
+/// `anbieter-schreiben` (DESIGN 5t, 5v). Das Gateway prueft das Recht bei jedem
+/// Aufruf; Schluessel erscheinen in keiner Antwort.
+fn anbieter_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
+    let (m, _) = module_erkennen(z.modul_dir.as_deref());
+    anbieter_antwort(z, a, was, &m)
+}
+
+/// Wie `anbieter_api`, mit der Modulliste von aussen (so prueft ein Test den
+/// Fall „kein Modul hat das Recht“, den die eingebauten Module sonst verdecken).
+fn anbieter_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort {
+    let (recht, op, nur_post) = match was {
+        "liste" => ("anbieter-lesen", "anbieter_liste", false),
+        "katalog" => ("anbieter-lesen", "katalog_lesen", false),
+        "setzen" => ("anbieter-schreiben", "anbieter_setzen", true),
+        "entfernen" => ("anbieter-schreiben", "anbieter_entfernen", true),
+        "schluessel" => ("anbieter-schreiben", "schluessel_setzen", true),
+        "aktualisieren" => ("anbieter-schreiben", "katalog_aktualisieren", true),
+        "probe" => ("anbieter-schreiben", "chat", true),
+        "suchen" => ("anbieter-schreiben", "netzsuche", true),
+        _ => return fehler(404, "nicht gefunden"),
+    };
+    if !schreibrecht_vergeben(m, recht) {
+        return fehler(403, &format!("kein Modul hat das Recht '{recht}'"));
+    }
+    if nur_post != (a.methode == "POST") {
+        return fehler(405, "Methode nicht erlaubt");
+    }
+    let mut anfrage: Value = if a.methode == "POST" {
+        match serde_json::from_slice(a.body) {
+            Ok(v @ Value::Object(_)) => v,
+            _ => return fehler(400, "kein JSON-Objekt"),
+        }
+    } else {
+        json!({})
+    };
+    if let Some(id) = query_wert(a.query, "id") {
+        anfrage["id"] = json!(id);
+    }
+    anfrage["op"] = json!(op);
+    if was == "suchen" {
+        anfrage = json!({"op": "netzsuche"});
+    }
+    if was == "probe" {
+        // Kurzer Test eines Anbieters: feste Frage, kein Verlauf, kein System.
+        let Some(id) = anfrage["id"].as_str().map(str::to_string) else {
+            return fehler(400, "id fehlt");
+        };
+        anfrage = json!({"op": "chat", "anbieter": id, "modell": anfrage["modell"], "prompt": "Antworte mit einem kurzen Satz auf Deutsch: Funktionierst du?"});
+    }
+    let r = if op == "katalog_lesen" {
+        match anfrage["id"].as_str() {
+            Some(id) if crate::daten::id_gueltig(id) => {
+                json!({"ok": true, "id": id, "katalog": crate::daten::katalog_lesen(&z.stand.daten, id)})
+            }
+            _ => gemein::zeile::fehlerantwort("id_ungueltig", "Die Anfrage braucht eine gueltige \"id\"."),
+        }
+    } else {
+        crate::dienst::antworten(&anfrage, &z.stand)
+    };
+    json_antwort(200, r)
 }
 
 fn chat_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {

@@ -195,6 +195,9 @@ Braucht `CHIMERA_LOG_RAM` und `CHIMERA_LOG_KARTE`. / Needs both variables.
 | `sh rust/gegenprobe-telegram.sh` | Gegenprobe der Telegram-Tür. / Telegram counter-check. |
 | `sh rust/gegenprobe-status.sh` | Gegenprobe der Status-Sonden. / Status probes counter-check. |
 | `sh rust/gegenprobe-vorlage.sh` | Gegenprobe der Modul-Vorlage und Prüfsumme. / Module template and checksum counter-check. |
+| `sh rust/gegenprobe-daten.sh` | Gegenprobe der Datenschicht (Anbieter, Schlüssel, Katalog, Wahl). / Data layer counter-check. |
+| `sh rust/gegenprobe-anbieter.sh` | Gegenprobe der Anbieter-Schnittstelle und des Katalogs. / Provider API and catalogue counter-check. |
+| `sh rust/gegenprobe-netzsuche.sh` | Gegenprobe der Netzsuche. / Network discovery counter-check. |
 | `cd rust && cargo test --locked` | Rust-Tests. / Rust tests. |
 | `python3 tools/check-globals.py` | Namen finden, die gelesen, aber nie definiert werden. / Find names read as globals but never defined. |
 | `python3 tools/contact-sheet.py [ZIEL.png]` | Moods nebeneinander zeichnen. / Draw moods side by side. |
@@ -234,6 +237,10 @@ in `/opt/chimera/config/.env`. Never print keys or commit them.
 | `CHIMERA_WEB_PORT` | Port der Oberfläche (Vorgabe 8080). / UI port (default 8080). |
 | `CHIMERA_WEB_BIND` | Adresse der Oberfläche (Vorgabe `0.0.0.0`). / UI bind address (default `0.0.0.0`). |
 | `CHIMERA_WEB_LAN_NUR` | `0` lässt Anfragen von außerhalb des eigenen Netzes zu (Vorgabe: nur Loopback, private und Link-Local-Adressen). / `0` allows requests from outside the local network (default: loopback, private and link-local only). |
+| `CHIMERA_NETZSUCHE` | `0` schaltet die Netzsuche nach Ollama-Servern ab (Vorgabe: an). / `0` turns off the network search for Ollama servers (default: on). |
+| `CHIMERA_NETZSUCHE_S` | Abstand der Netzsuche in Sekunden, mindestens 30 (Vorgabe 300). / Interval of the network search in seconds, at least 30 (default 300). |
+| `CHIMERA_CONFIG_DIR` | Ort der Ablagen `anbieter`, `geheim`, `wahl` (Vorgabe `/opt/chimera/config`). / Location of the stores (default `/opt/chimera/config`). |
+| `CHIMERA_STATE_DIR` | Ort des Katalogs (Vorgabe `/opt/chimera/state`). / Location of the catalogue (default `/opt/chimera/state`). |
 | `CHIMERA_WEB_MODULE` | Verzeichnis nachgelegter Web-Module (Vorgabe `/opt/chimera/web/module`). / Directory of add-on web modules. |
 | `CHIMERA_SITZUNG_SOCKET` | Pfad des Sitzungs-Sockets (Vorgabe `/run/chimera/sitzung.sock`). / Session socket path. |
 | `CHIMERA_HOME` | Datenverzeichnis des Agenten. / Agent data directory. |

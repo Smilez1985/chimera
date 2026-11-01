@@ -6,6 +6,7 @@
 mod daten;
 mod dienst;
 mod modul_vorlage;
+mod netzsuche;
 mod ollama;
 mod sitzung;
 mod status;
@@ -119,6 +120,8 @@ fn main() -> ExitCode {
                             telegram::starten(&token, erlaubt, PathBuf::from(pfad));
                         }
                     }
+                    // Netzsuche (Regel 5k): gefundene Ollama-Server tragen sich selbst ein.
+                    netzsuche::starten();
                     // Web-Oberflaeche (Regel 5m): ohne Passwort-Hash bleibt sie zu (5j).
                     match web::konfig() {
                         web::Konfig::Aus => melden(Stufe::Info, "Web-Oberflaeche nicht eingerichtet (CHIMERA_WEB_PASSWORT_HASH leer)."),

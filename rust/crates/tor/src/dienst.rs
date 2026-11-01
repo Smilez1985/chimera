@@ -41,7 +41,7 @@ pub struct Stand {
     /// Adresse des Ollama-Servers, einmal beim Start aus der Umgebung.
     ollama: Option<String>,
     /// Die vier Ablagen (Regel 5t).
-    daten: crate::daten::Pfade,
+    pub daten: crate::daten::Pfade,
 }
 
 impl Stand {
@@ -50,12 +50,16 @@ impl Stand {
     }
 
     pub fn mit_ollama(ollama: Option<String>) -> Self {
+        Self::mit(ollama, crate::daten::Pfade::aus_umgebung())
+    }
+
+    pub fn mit(ollama: Option<String>, daten: crate::daten::Pfade) -> Self {
         Stand {
             start: Instant::now(),
             anfragen: AtomicU64::new(0),
             offen: AtomicUsize::new(0),
             ollama,
-            daten: crate::daten::Pfade::aus_umgebung(),
+            daten,
         }
     }
 }
@@ -76,20 +80,82 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
             "telegram": if crate::telegram::laeuft() { "an" } else { "aus" },
         }),
         "chat" => match anfrage.get("anbieter").and_then(Value::as_str) {
-            Some("ollama") => ollama::op_chat(stand.ollama.as_deref(), anfrage),
-            Some(a) => zeile::fehlerantwort("anbieter_unbekannt", &format!("Unbekannter Anbieter: {a}")),
+            Some(a) => match ollama_adresse(a, stand) {
+                Ok(adr) => ollama::op_chat(adr.as_deref(), anfrage),
+                Err(f) => f,
+            },
             None => zeile::fehlerantwort("anbieter_fehlt", "Der Chat braucht ein Feld \"anbieter\"."),
         },
         "modelle" => match anfrage.get("anbieter").and_then(Value::as_str) {
-            Some("ollama") => ollama::op_modelle(stand.ollama.as_deref()),
-            Some(a) => zeile::fehlerantwort("anbieter_unbekannt", &format!("Unbekannter Anbieter: {a}")),
+            Some(a) => match ollama_adresse(a, stand) {
+                Ok(adr) => ollama::op_modelle(adr.as_deref()),
+                Err(f) => f,
+            },
             None => zeile::fehlerantwort("anbieter_fehlt", "Die Abfrage braucht ein Feld \"anbieter\"."),
         },
+        "katalog_aktualisieren" => katalog_aktualisieren(anfrage, stand),
+        "netzsuche" => crate::netzsuche::durchgang(stand),
         "" => zeile::fehlerantwort("op_fehlt", "Die Anfrage braucht ein Feld \"op\"."),
         andere => crate::daten::op(andere, anfrage, &stand.daten).unwrap_or_else(|| {
             zeile::fehlerantwort("op_unbekannt", &format!("Unbekannte Operation: {andere}"))
         }),
     }
+}
+
+/// Die Adresse eines Ollama-Anbieters. `ollama` ohne eigene Datei ist der
+/// Anbieter aus der `.env` (Rueckfall bis zur Umstellung); jede andere Id muss
+/// eine Anbieterdatei vom Typ `ollama` haben. `Ok(None)` heisst „nicht
+/// eingerichtet“ (die Antwort der Operation sagt das selbst).
+fn ollama_adresse(id: &str, stand: &Stand) -> Result<Option<String>, Value> {
+    if !crate::daten::id_gueltig(id) {
+        return Err(zeile::fehlerantwort("anbieter_unbekannt", &format!("Unbekannter Anbieter: {id}")));
+    }
+    let (liste, _) = crate::daten::anbieter_laden(&stand.daten);
+    if let Some((_, a)) = liste.iter().find(|(i, _)| i == id) {
+        if a["typ"] != "ollama" {
+            return Err(zeile::fehlerantwort(
+                "anbieter_unbekannt",
+                &format!("Anbieter {id} hat den Typ {}, den dieser Weg nicht bedient.", a["typ"]),
+            ));
+        }
+        if a.get("an").and_then(Value::as_bool) == Some(false) {
+            return Err(zeile::fehlerantwort("anbieter_aus", &format!("Anbieter {id} ist ausgeschaltet.")));
+        }
+        return Ok(ollama::adresse_aus(a["adresse"].as_str()));
+    }
+    if id == "ollama" {
+        return Ok(stand.ollama.clone());
+    }
+    Err(zeile::fehlerantwort("anbieter_unbekannt", &format!("Unbekannter Anbieter: {id}")))
+}
+
+/// `op: katalog_aktualisieren` mit `id`: Server fragen, Katalog abgleichen
+/// (Frist statt Loeschen) und schreiben. Ein nicht erreichbarer Server
+/// laesst den alten Katalog unberuehrt.
+fn katalog_aktualisieren(anfrage: &Value, stand: &Stand) -> Value {
+    let id = match anfrage.get("id").and_then(Value::as_str) {
+        Some(i) if crate::daten::id_gueltig(i) => i,
+        _ => return zeile::fehlerantwort("id_ungueltig", "Die Anfrage braucht eine gueltige \"id\"."),
+    };
+    let adr = match ollama_adresse(id, stand) {
+        Ok(Some(a)) => a,
+        Ok(None) => return zeile::fehlerantwort("nicht_eingerichtet", "Der Anbieter hat keine Adresse."),
+        Err(f) => return f,
+    };
+    let neu = match ollama::katalog_von(&adr, ollama::KATALOG_BUDGET) {
+        Ok(k) => k,
+        Err(f) => return f,
+    };
+    let jetzt = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let alt = crate::daten::katalog_lesen(&stand.daten, id);
+    let katalog = crate::daten::katalog_abgleichen(&alt, &neu, jetzt);
+    if let Err(e) = crate::daten::katalog_speichern(&stand.daten, id, &katalog) {
+        return zeile::fehlerantwort("katalog_nicht_gespeichert", &e);
+    }
+    json!({"ok": true, "id": id, "modelle": katalog["modelle"].as_object().map(|m| m.len()), "host": ollama::host_von(&adr)})
 }
 
 /// Eine Verbindung bedienen: Zeilen lesen, antworten, bis das Gegenueber geht.
@@ -330,5 +396,63 @@ mod tests_anbieter {
     fn status_zeigt_nur_den_host_nie_die_ganze_adresse() {
         let s = Stand::mit_ollama(Some("http://ollama.example:11434".into()));
         assert_eq!(antworten(&json!({"op": "status"}), &s)["ollama"], "ollama.example:11434");
+    }
+
+    fn stand_mit_daten(n: &str, ollama: Option<String>) -> (Stand, crate::daten::Pfade) {
+        let d = std::env::temp_dir().join(format!("chimera-dienst-{n}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let p = crate::daten::Pfade::neu(d.join("config"), d.join("state"));
+        (Stand::mit(ollama, p.clone()), p)
+    }
+
+    #[test]
+    fn katalog_aktualisieren_schreibt_den_katalog_des_anbieters() {
+        let (b, h) = ollama::tests::server(vec![
+            (200, r#"{"models":[{"name":"a"}]}"#.into()),
+            (200, r#"{"capabilities":["tools"]}"#.into()),
+        ]);
+        let (s, p) = stand_mit_daten("kat", None);
+        crate::daten::anbieter_speichern(&p, "lan", &json!({"typ": "ollama", "bezeichnung": "L", "adresse": b})).unwrap();
+        let r = antworten(&json!({"op": "katalog_aktualisieren", "id": "lan"}), &s);
+        assert_eq!(r["ok"], true, "{r}");
+        assert_eq!(crate::daten::katalog_lesen(&p, "lan")["modelle"]["a"]["tools"], true);
+        h.join().unwrap();
+    }
+
+    #[test]
+    fn nicht_erreichbarer_server_laesst_den_alten_katalog_stehen() {
+        let (s, p) = stand_mit_daten("alt", None);
+        crate::daten::anbieter_speichern(&p, "lan", &json!({"typ": "ollama", "bezeichnung": "L", "adresse": "http://127.0.0.1:1"})).unwrap();
+        let alt = json!({"stand": 1, "modelle": {"a": {"tools": true}}});
+        crate::daten::katalog_speichern(&p, "lan", &alt).unwrap();
+        let r = antworten(&json!({"op": "katalog_aktualisieren", "id": "lan"}), &s);
+        assert_eq!(r["fehler"]["code"], "nicht_erreichbar", "{r}");
+        assert_eq!(crate::daten::katalog_lesen(&p, "lan"), alt);
+    }
+
+    #[test]
+    fn anbieter_aus_der_datenschicht_wird_fuer_chat_benutzt_ausgeschaltete_nicht() {
+        let (b, h) = ollama::tests::server(vec![(200, r#"{"models":[{"name":"m"}]}"#.into())]);
+        let (s, p) = stand_mit_daten("chat", None);
+        crate::daten::anbieter_speichern(&p, "lan", &json!({"typ": "ollama", "bezeichnung": "L", "adresse": b})).unwrap();
+        assert_eq!(antworten(&json!({"op": "modelle", "anbieter": "lan"}), &s)["modelle"], json!(["m"]));
+        h.join().unwrap();
+        crate::daten::anbieter_speichern(&p, "aus", &json!({"typ": "ollama", "bezeichnung": "A", "adresse": "http://x:1", "an": false})).unwrap();
+        assert_eq!(antworten(&json!({"op": "modelle", "anbieter": "aus"}), &s)["fehler"]["code"], "anbieter_aus");
+    }
+
+    #[test]
+    fn id_ohne_datei_ist_unbekannt_nur_ollama_faellt_auf_die_env_zurueck() {
+        let (s, _) = stand_mit_daten("env", Some("http://127.0.0.1:1".into()));
+        assert_eq!(antworten(&json!({"op": "modelle", "anbieter": "irgendwer"}), &s)["fehler"]["code"], "anbieter_unbekannt");
+        assert_eq!(antworten(&json!({"op": "modelle", "anbieter": "../x"}), &s)["fehler"]["code"], "anbieter_unbekannt");
+        assert_eq!(antworten(&json!({"op": "modelle", "anbieter": "ollama"}), &s)["fehler"]["code"], "nicht_erreichbar");
+    }
+
+    #[test]
+    fn anbieter_anderen_typs_wird_nicht_als_ollama_bedient() {
+        let (s, p) = stand_mit_daten("typ", None);
+        crate::daten::anbieter_speichern(&p, "cloud", &json!({"typ": "anthropic", "bezeichnung": "C"})).unwrap();
+        assert_eq!(antworten(&json!({"op": "chat", "anbieter": "cloud"}), &s)["fehler"]["code"], "anbieter_unbekannt");
     }
 }

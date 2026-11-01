@@ -319,8 +319,8 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
          des Gateways nach Schlüsseländerung, Umzug von Telegram-Token und
          Passwort-Hash aus der `.env` nach `config/geheim/`
          (`migrate_from`), Rechte `anbieter-lesen`/`anbieter-schreiben`;
-         [ ] Anbieter Ollama (Vorlage für alle) und „Anbieter hinzufügen“,
-         Netzsuche als Vorschlag;
+         [x] Anbieter Ollama (Vorlage für alle), „Anbieter hinzufügen“ und
+         Netzsuche mit Selbsteintrag (am Pi gelaufen);
          [ ] Reihenfolge (Wahl über Anbieter hinweg);
          [ ] Einstellungen: Passwort ändern, Werksreset mit Satz am Display,
          Telegram, Sprache;
@@ -347,8 +347,17 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
 - [ ] **Websuche** (5r): zuerst Anthropic serverseitig, dann OpenRouter,
       dann Suchquellen mit Nutzer-Schlüssel (Ollama Cloud, Tavily, Exa,
       SearXNG; Brave ohne Platten-Cache; ddgs nur Opt-in).
-- [ ] **Netzsuche** (5k) mit Selbstübernahme der Adresse, Installer
-      Schritt 50.
+- [ ] **Netzsuche** (5k): Selbsteintrag steht; offen: Telegram `/suche`,
+      Knopf „Jetzt suchen“ im Ollama-Modul, Installer Schritt 50.
+- [ ] **Speicher am Pi:** `MemoryMax=` wirkt auf dem Pi nicht
+      (`cgroup_disable=memory`); der Installer soll das melden (10q). CMA
+      verkleinern (nach Prüfung des Displays), Journal im RAM begrenzen.
+- [ ] **Gedächtnis-Verdichtung in Blöcken** (8c): lange Verläufe an
+      Nachrichtengrenzen teilen, je Block zusammenfassen, zusammenführen; feste
+      Briefstruktur (Ziel, Kontext, Stand, nächste Schritte, offene Fragen);
+      auch für die Übergabe beim Wechsel der Hauptsitzung (5s).
+- [ ] **DeepSeek** als Anbietermodul über die API (OpenAI-kompatibel). Eine
+      Browser-Brücke zur Weboberfläche ist nicht beschlossen.
 - [ ] **`wahl.json`** mit bevorzugter Liste (5h). Telegram im Gateway mit
       `/model` und `/suche`.
 - [ ] **CLI** als Socket-Client, ohne eigene Anzeige.

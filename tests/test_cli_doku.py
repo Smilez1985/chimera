@@ -108,8 +108,15 @@ beispiel = set(re.findall(r"^([A-Z][A-Z_]+)=", (ROOT / ".env.example").read_text
 (ok if beispiel <= envdoku else bad)(f".env.example: jede Variable steht in CLI.md -- fehlt: {sorted(beispiel - envdoku)}")
 
 print("== Verweise ==")
+# Jede Gegenprobe im Verzeichnis rust/ muss in CLI.md stehen (sonst wuchs sie unbemerkt).
+_cli_text = (ROOT / "docs" / "CLI.md").read_text()
+for _gp in sorted((ROOT / "rust").glob("gegenprobe-*.sh")):
+    (ok if f"rust/{_gp.name}" in _cli_text else bad)(f"rust/{_gp.name}: steht in CLI.md")
+
 for datei in ("tools/check-globals.py", "tools/contact-sheet.py", "tools/import-noisy-moods.py",
-              "installer/run-tests.sh", "rust/gegenprobe-web.sh", "rust/gegenprobe-telegram.sh"):
+              "installer/run-tests.sh", "rust/gegenprobe-web.sh", "rust/gegenprobe-telegram.sh",
+              "rust/gegenprobe-status.sh", "rust/gegenprobe-vorlage.sh", "rust/gegenprobe-daten.sh",
+              "rust/gegenprobe-anbieter.sh", "rust/gegenprobe-netzsuche.sh"):
     (ok if (ROOT / datei).exists() and datei in doku else bad)(f"{datei}: existiert und ist genannt")
 
 print(f"\nErgebnis: {PASS} ok, {FAIL} fehlgeschlagen")

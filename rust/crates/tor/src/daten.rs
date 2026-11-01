@@ -118,6 +118,12 @@ pub fn anbieter_pruefen(id: &str, a: &Value) -> Result<(), String> {
             _ => return Err(format!("Feld \"{feld}\" fehlt oder ist leer")),
         }
     }
+    if let Some(ad) = o.get("adresse") {
+        match ad.as_str() {
+            Some(t) if t.starts_with("http://") || t.starts_with("https://") => {}
+            _ => return Err("Feld \"adresse\" muss mit http:// oder https:// beginnen".into()),
+        }
+    }
     if let Some(v) = o.get("an") {
         if !v.is_boolean() {
             return Err("Feld \"an\" muss wahr/falsch sein".into());
@@ -141,7 +147,18 @@ pub fn anbieter_entfernen(p: &Pfade, id: &str) -> Result<(), String> {
         return Err(format!("Id \"{id}\" ist ungueltig"));
     }
     let f = p.anbieter_dir().join(format!("{id}.json"));
-    fs::remove_file(&f).map_err(|e| format!("{} nicht entfernbar: {e}", f.display()))
+    // Ein selbst eingetragener Server (Marke `auto`) kommt nach dem Entfernen
+    // nicht wieder: seine Adresse wandert auf die Ablehnungsliste (5k).
+    let vorher: Option<Value> = fs::read_to_string(&f).ok().and_then(|t| serde_json::from_str(&t).ok());
+    fs::remove_file(&f).map_err(|e| format!("{} nicht entfernbar: {e}", f.display()))?;
+    if let Some(v) = vorher {
+        if v["auto"] == true {
+            if let Some(a) = v["adresse"].as_str() {
+                crate::netzsuche::ablehnen(p, a).map_err(|e| format!("entfernt, aber Ablehnung nicht gemerkt: {e}"))?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Alle brauchbaren Anbieter (nach Id sortiert) plus Meldungen zu den
@@ -514,6 +531,11 @@ mod tests {
         c["typ"] = json!("  ");
         assert!(anbieter_pruefen("o", &c).is_err());
         assert!(anbieter_speichern(&tmp("id"), "../x", &ollama()).is_err());
+        for schlecht in [json!("ftp://x"), json!("x:11434"), json!(5), json!("file:///etc/passwd")] {
+            let mut e = ollama();
+            e["adresse"] = schlecht.clone();
+            assert!(anbieter_pruefen("o", &e).is_err(), "{schlecht}");
+        }
     }
 
     #[test]
@@ -658,5 +680,21 @@ mod tests {
         assert_eq!(r["brauchbar"].as_array().unwrap().len(), 0);
         assert!(!r["meldungen"].as_array().unwrap().is_empty());
         assert_eq!(r["wahl"]["reihenfolge"][0], "ollama/x", "nicht still geloescht");
+    }
+
+    #[test]
+    fn entfernen_eines_selbst_eingetragenen_servers_merkt_die_adresse() {
+        let p = tmp("ablehnen");
+        let mut a = ollama();
+        a["auto"] = json!(true);
+        anbieter_speichern(&p, "ollama-x", &a).unwrap();
+        anbieter_entfernen(&p, "ollama-x").unwrap();
+        assert_eq!(crate::netzsuche::abgelehnt(&p), vec!["http://x:11434"]);
+        // Ein von Hand eingetragener Server wird dabei nicht vorgemerkt.
+        let mut hand = ollama();
+        hand["adresse"] = json!("http://anderer:11434");
+        anbieter_speichern(&p, "hand", &hand).unwrap();
+        anbieter_entfernen(&p, "hand").unwrap();
+        assert_eq!(crate::netzsuche::abgelehnt(&p), vec!["http://x:11434"], "Handeintrag nicht vorgemerkt");
     }
 }

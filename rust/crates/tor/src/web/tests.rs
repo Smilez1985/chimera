@@ -158,7 +158,7 @@ fn ok_manifest(n: &str) -> String {
 fn das_eingebaute_chatmodul_ist_gueltig_und_erkannt() {
     let (m, f) = module_erkennen(None);
     assert!(f.is_empty(), "{f:?}");
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "status"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "ollama", "status"]);
     assert!(m.iter().all(|x| x.eingebaut));
 }
 
@@ -169,12 +169,12 @@ fn ein_neues_verzeichnis_erscheint_im_menue_ohne_codeaenderung() {
     std::fs::write(d.join("zusatz/manifest.json"), ok_manifest("zusatz")).unwrap();
     let (m, f) = module_erkennen(Some(&d));
     assert!(f.is_empty(), "{f:?}");
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "status", "zusatz"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "ollama", "status", "zusatz"]);
     let z = zustand(Some(d), "/x".into());
     let c = anmelden(&z);
     let r = behandle(&z, &a("GET", "/api/module", &c, b""));
     let v: Value = serde_json::from_slice(&r.body).unwrap();
-    assert_eq!(v["module"].as_array().unwrap().len(), 3);
+    assert_eq!(v["module"].as_array().unwrap().len(), 4);
 }
 
 #[test]
@@ -188,7 +188,7 @@ fn ein_kaputtes_manifest_verwirft_nur_dieses_modul_und_wird_gemeldet() {
     std::fs::create_dir_all(d.join("leer")).unwrap(); // Verzeichnis ohne Manifest
     let (m, f) = module_erkennen(Some(&d));
     let namen: Vec<_> = m.iter().map(|x| x.name.as_str()).collect();
-    assert_eq!(namen, vec!["chat", "status", "gut"]);
+    assert_eq!(namen, vec!["chat", "ollama", "status", "gut"]);
     assert_eq!(f.len(), 4, "{f:?}");
 }
 
@@ -198,7 +198,7 @@ fn ein_nachgelegtes_modul_ersetzt_kein_eingebautes() {
     std::fs::create_dir_all(d.join("chat")).unwrap();
     std::fs::write(d.join("chat/manifest.json"), ok_manifest("chat")).unwrap();
     let (m, f) = module_erkennen(Some(&d));
-    assert_eq!(m.len(), 2);
+    assert_eq!(m.len(), 3);
     assert!(m.iter().all(|x| x.eingebaut));
     assert_eq!(f.len(), 1);
 }
@@ -212,7 +212,7 @@ fn die_reihenfolge_kommt_aus_dem_manifest() {
             format!(r#"{{"name":"{n}","titel":"T","element":"x-{n}","einstieg":"a.js","rechte":[],"reihenfolge":{r}}}"#)).unwrap();
     }
     let (m, _) = module_erkennen(Some(&d));
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["b-zuerst", "chat", "status", "a-zuletzt"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["b-zuerst", "chat", "ollama", "status", "a-zuletzt"]);
 }
 
 #[test]
@@ -545,4 +545,142 @@ fn nachgelegte_dateien_mit_unbekannter_endung_werden_nicht_ausgeliefert() {
         assert!(modul_datei(Some(&d), "zusatz", n).is_none(), "{n} darf nicht ausgeliefert werden");
     }
     let _ = std::fs::remove_dir_all(&d);
+}
+
+// --- Anbieter-Schnittstelle (5t, 5v) ---
+
+fn anbieter_zustand(n: &str) -> (Zustand, crate::daten::Pfade) {
+    let d = tmp(n);
+    let p = crate::daten::Pfade::neu(d.join("config"), d.join("state"));
+    let mut z = zustand(None, "/x".into());
+    z.stand = crate::dienst::Stand::mit(None, p.clone());
+    (z, p)
+}
+
+fn api(z: &Zustand, c: &str, m: &str, pfad: &str, body: &str) -> Value {
+    let r = behandle(z, &a(m, pfad, c, body.as_bytes()));
+    let mut v: Value = serde_json::from_slice(&r.body).unwrap_or(json!({}));
+    v["_status"] = json!(r.status);
+    v
+}
+
+#[test]
+fn anbieter_api_braucht_anmeldung() {
+    let (z, _) = anbieter_zustand("ap-anm");
+    assert_eq!(behandle(&z, &a("GET", "/api/anbieter/liste", "", b"")).status, 401);
+    assert_eq!(behandle(&z, &a("POST", "/api/anbieter/setzen", "", b"{}")).status, 401);
+}
+
+#[test]
+fn anbieter_hinzufuegen_auflisten_und_entfernen_ueber_die_oberflaeche() {
+    let (z, p) = anbieter_zustand("ap-ok");
+    let c = anmelden(&z);
+    let neu = r#"{"id":"lan","anbieter":{"typ":"ollama","bezeichnung":"LAN","adresse":"http://127.0.0.1:1","an":true}}"#;
+    assert_eq!(api(&z, &c, "POST", "/api/anbieter/setzen", neu)["ok"], true);
+    let l = api(&z, &c, "GET", "/api/anbieter/liste", "");
+    assert_eq!(l["anbieter"][0]["id"], "lan");
+    assert_eq!(l["anbieter"][0]["schluessel"], false);
+    assert!(p.anbieter_dir().join("lan.json").exists());
+    assert_eq!(api(&z, &c, "POST", "/api/anbieter/entfernen", r#"{"id":"lan"}"#)["ok"], true);
+    assert!(!p.anbieter_dir().join("lan.json").exists());
+}
+
+#[test]
+fn schreibende_wege_nur_per_post_lesende_nur_per_get() {
+    let (z, _) = anbieter_zustand("ap-meth");
+    let c = anmelden(&z);
+    assert_eq!(api(&z, &c, "GET", "/api/anbieter/setzen", "")["_status"], 405);
+    assert_eq!(api(&z, &c, "POST", "/api/anbieter/liste", "{}")["_status"], 405);
+}
+
+#[test]
+fn ungueltige_eingaben_werden_mit_grund_abgewiesen() {
+    let (z, p) = anbieter_zustand("ap-bad");
+    let c = anmelden(&z);
+    for body in [
+        r#"{"id":"../x","anbieter":{"typ":"ollama","bezeichnung":"x"}}"#,
+        r#"{"id":"a","anbieter":{"typ":"ollama","bezeichnung":"x","adresse":"ftp://h"}}"#,
+        r#"{"id":"a","anbieter":{}}"#,
+    ] {
+        let r = api(&z, &c, "POST", "/api/anbieter/setzen", body);
+        assert_eq!(r["ok"], false, "{body}");
+    }
+    assert_eq!(api(&z, &c, "POST", "/api/anbieter/setzen", "kein json")["_status"], 400);
+    assert!(!p.anbieter_dir().exists() || std::fs::read_dir(p.anbieter_dir()).unwrap().count() == 0);
+}
+
+#[test]
+fn der_schluessel_steht_in_keiner_antwort() {
+    let (z, p) = anbieter_zustand("ap-key");
+    let c = anmelden(&z);
+    api(&z, &c, "POST", "/api/anbieter/setzen", r#"{"id":"lan","anbieter":{"typ":"ollama","bezeichnung":"L"}}"#);
+    let r = api(&z, &c, "POST", "/api/anbieter/schluessel", r#"{"id":"lan","wert":"sk-nie-zeigen"}"#);
+    assert!(!r.to_string().contains("sk-nie-zeigen"));
+    let l = api(&z, &c, "GET", "/api/anbieter/liste", "");
+    assert_eq!(l["anbieter"][0]["schluessel"], true);
+    assert!(!l.to_string().contains("sk-nie-zeigen"));
+    assert_eq!(crate::daten::schluessel_lesen(&p, "lan").as_deref(), Some("sk-nie-zeigen"));
+}
+
+fn modul(name: &str, rechte: &[&str], eingebaut: bool) -> Modul {
+    Modul {
+        name: name.into(), titel: json!("T"), symbol: String::new(), reihenfolge: 1,
+        einstieg: "a.js".into(), element: "x-a".into(),
+        rechte: rechte.iter().map(|r| r.to_string()).collect(), eingebaut,
+    }
+}
+
+#[test]
+fn nur_eingebaute_module_vergeben_das_schreibrecht() {
+    let liste = vec![modul("fremd", &["anbieter-schreiben"], false), modul("ollama", &["anbieter-lesen"], true)];
+    assert!(!schreibrecht_vergeben(&liste, "anbieter-schreiben"), "nachgelegt zaehlt nicht");
+    assert!(schreibrecht_vergeben(&liste, "anbieter-lesen"));
+    let mit = vec![modul("ollama", &["anbieter-schreiben"], true)];
+    assert!(schreibrecht_vergeben(&mit, "anbieter-schreiben"));
+}
+
+#[test]
+fn das_eingebaute_ollamamodul_hat_beide_anbieterrechte() {
+    let (m, f) = module_erkennen(None);
+    assert!(f.is_empty(), "{f:?}");
+    assert!(schreibrecht_vergeben(&m, "anbieter-lesen"));
+    assert!(schreibrecht_vergeben(&m, "anbieter-schreiben"));
+}
+
+#[test]
+fn unbekannter_weg_ist_404() {
+    let (z, _) = anbieter_zustand("ap-404");
+    let c = anmelden(&z);
+    assert_eq!(api(&z, &c, "GET", "/api/anbieter/wasanderes", "")["_status"], 404);
+}
+
+#[test]
+fn katalog_lesen_ueber_die_oberflaeche() {
+    let (z, p) = anbieter_zustand("ap-kat");
+    let c = anmelden(&z);
+    crate::daten::katalog_speichern(&p, "lan", &json!({"stand": 5, "modelle": {"a": {"tools": true}}})).unwrap();
+    let r = api(&z, &c, "GET", "/api/anbieter/katalog?id=lan", "");
+    assert_eq!(r["katalog"]["modelle"]["a"]["tools"], true);
+    assert_eq!(api(&z, &c, "GET", "/api/anbieter/katalog?id=../x", "")["ok"], false);
+    assert_eq!(api(&z, &c, "GET", "/api/anbieter/katalog", "")["ok"], false);
+}
+
+#[test]
+fn ohne_modul_mit_dem_recht_ist_jeder_anbieterweg_403() {
+    let (z, p) = anbieter_zustand("ap-403");
+    let leer: Vec<Modul> = vec![];
+    let nur_lesen = vec![modul("x", &["anbieter-lesen"], true)];
+    for (m, pfad, body) in [
+        ("GET", "liste", ""), ("GET", "katalog", ""),
+        ("POST", "setzen", r#"{"id":"a","anbieter":{"typ":"ollama","bezeichnung":"x"}}"#),
+        ("POST", "entfernen", r#"{"id":"a"}"#), ("POST", "schluessel", r#"{"id":"a","wert":"k"}"#),
+        ("POST", "aktualisieren", r#"{"id":"a"}"#), ("POST", "probe", r#"{"id":"a"}"#),
+    ] {
+        let r = anbieter_antwort(&z, &a(m, &format!("/api/anbieter/{pfad}"), "", body.as_bytes()), pfad, &leer);
+        assert_eq!(r.status, 403, "{pfad} ohne Modul");
+    }
+    // Nur das Leserecht: Schreibwege bleiben zu, nichts wird angelegt.
+    let r = anbieter_antwort(&z, &a("POST", "/api/anbieter/setzen", "", br#"{"id":"a","anbieter":{"typ":"ollama","bezeichnung":"x"}}"#), "setzen", &nur_lesen);
+    assert_eq!(r.status, 403);
+    assert!(!p.anbieter_dir().join("a.json").exists());
 }

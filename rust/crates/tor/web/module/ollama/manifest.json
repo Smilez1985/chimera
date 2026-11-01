@@ -1,0 +1,9 @@
+{
+  "name": "ollama",
+  "titel": {"de": "Ollama", "en": "Ollama"},
+  "symbol": "🦙",
+  "reihenfolge": 40,
+  "einstieg": "ollama.js",
+  "element": "chimera-ollama",
+  "rechte": ["anbieter-lesen", "anbieter-schreiben"]
+}
