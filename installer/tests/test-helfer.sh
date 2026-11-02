@@ -192,6 +192,7 @@ hat "Klammer an: Zustand wird vor dem Anhalten aufgenommen" "$F/aus" "Zustand vo
 hat "Klammer an: Dienst steht in der Liste, obwohl der Socket ihn mitnimmt" \
 	"$F/aus" "laufen nach dem Lauf wieder: chimera-mojo.timer chimera.service chimera-tor.service"
 hat "Klammer an: jeder Halt wird mit Exitcode protokolliert" "$F/aus" "chimera.service angehalten (rc="
+hat "Klammer an: Anzeige ohne Socket wird uebersprungen" "$F/aus" "Anzeige: kein laufender Sitzungs-Socket"
 check "Klammer an: nicht laufende Einheiten werden nicht angefasst" \
 	"$(grep -c 'stop chimera-logabgleich.timer' "$F/spur" || true)" 0
 

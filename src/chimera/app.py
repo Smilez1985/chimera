@@ -113,6 +113,22 @@ class Chimera:
         from .bot.telegram import from_env
         return from_env(self.session, on_state=self._on_state)
 
+    def _gesicht_setzen(self, name: str) -> bool:
+        """Einen Ausdruck setzen, ohne die Sitzung zu bedienen.
+
+        Gedacht fuer die Update-Anzeige des Installers: Er laeuft, waehrend
+        die Dienste gleich angehalten werden, und braucht eine Anzeige, die
+        den Zustand zeigt und stehen bleibt.
+        """
+        if self.face is None:
+            return False
+        try:
+            self.face.set_by_name(name, hard=True)
+            return True
+        except KeyError:
+            log.warning("Gesicht %r gibt es nicht", name)
+            return False
+
     def _on_state(self, what: str) -> None:
         """Den Zustand ans Gesicht melden.
 
@@ -267,6 +283,10 @@ def build(*, probe_network: bool = True, home: Path | None = None,
                   statusline=statusline, led=led, notes=notes)
     # Erst jetzt verdrahten: Der Agent meldet seinen Zustand ans Gesicht.
     agent.on_state = chi._on_state
+    # Und die Anzeige ist ueber den Sitzungs-Socket erreichbar (Operation
+    # "gesicht"): Damit setzt der Installer das Update-Gesicht, bevor er die
+    # Dienste anhaelt.
+    session.gesicht_setzen = chi._gesicht_setzen
     # Die Taste, wenn das Panel eine hat (Whisplay). Ein Panel ohne Taste
     # hat die Methode nicht -- dann gibt es nichts zu verdrahten.
     if panel is not None and hasattr(panel, "bei_taste"):

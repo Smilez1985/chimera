@@ -51,7 +51,13 @@ zram wird nicht angefasst, wenn es läuft.
       `--no-block` wartet auf den `oneshot` und meldet dessen Exitcode als
       Startfehler. Belegt: Verbindungsabbruch nach 9 s, Helfer lief durch,
       Zettel `fertig`, Dienste aktiv, Web 200.
-- [ ] **„Updated“-Gesicht vor dem Anhalten:** Der Installer setzt am Anfang ein
+- [x] **„Updated“-Gesicht vor dem Anhalten:** Gesicht `UPDATE` (Mood) +
+      Operation `gesicht` am Sitzungs-Socket; der Installer setzt es, bevor die
+      Dienste gehen (`installer/lib/py/gesicht.py`). Das Panel wird nicht
+      geleert, das Bild bleibt bis zum Dienststart stehen.
+- [ ] **„Updated“-Gesicht: Nachweis am Gerät:** Einmal mit laufendem Dienst
+      ausführen und am Display ablesen. Bisher nur im Test belegt (Socket-Antwort
+      und Protokollzeile), nicht am Panel. Der Installer setzt am Anfang ein
       Gesicht, das den Update-Zustand zeigt, und der Bildschirminhalt bleibt bis
       zum Dienststart bzw. Neustart stehen (Panel nicht leeren, Backlight an).
       Braucht einen Weg vom Installer zur Anzeige (Socket-Operation).

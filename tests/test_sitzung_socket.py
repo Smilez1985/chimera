@@ -168,6 +168,24 @@ x.f.write(b"kein json\n"); check("kaputte Zeile", x.lesen()["ok"], False)
 x.senden(op="frage", tuer="", text="x"); check("Frage ohne Tür", x.lesen()["ok"], False)
 x.senden(op="ping"); check("danach weiter bedienbar", x.lesen()["ok"], True)
 
+print("== Gesicht über den Socket (Update-Anzeige) ==")
+gesehen = []
+sess.gesicht_setzen = lambda name: (gesehen.append(name), True)[1]
+y = Client(pfad)
+y.senden(op="gesicht", name="UPDATE")
+_a = y.lesen()
+check("gesicht: bestaetigt", _a.get("ok"), True)
+check("gesicht: Name kommt an", gesehen, ["UPDATE"])
+y.senden(op="gesicht", name="")
+check("gesicht: ohne Name ein Fehler", y.lesen().get("ok"), False)
+sess.gesicht_setzen = None
+y.senden(op="gesicht", name="UPDATE")
+check("gesicht: ohne Bruecke ein Fehler", y.lesen().get("ok"), False)
+sess.gesicht_setzen = lambda name: (None, False)[1]
+y.senden(op="gesicht", name="GIBTSNICHT")
+check("gesicht: unbekannter Name ein Fehler", y.lesen().get("ok"), False)
+y.s.close()
+
 print("== Besitz und Aufräumen ==")
 check("Rechte 660", oct(os.stat(pfad).st_mode & 0o777), "0o660")
 try:

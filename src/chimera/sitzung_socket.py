@@ -194,6 +194,18 @@ class SitzungsServer:
                 elif op == "status":
                     antwort({"ok": True, "nr": self.session.nr,
                              "busy": self.session.busy_channel})
+                elif op == "gesicht":
+                    # Die Anzeige ansprechen, ohne dass der Dienst die Sitzung
+                    # bedient -- der Installer setzt so das Update-Gesicht,
+                    # bevor er die Dienste anhaelt (Roadmap, Update-Anzeige).
+                    name = str(q.get("name", "")).strip()
+                    if not name:
+                        antwort({"ok": False, "fehler": "name fehlt"})
+                    elif self.session.gesicht(name):
+                        antwort({"ok": True, "gesicht": name})
+                    else:
+                        antwort({"ok": False,
+                                 "fehler": f"Gesicht {name} nicht gesetzt"})
                 elif op == "anmelden":
                     seit = int(q.get("seit", 0))
                     angemeldet.append(abo)

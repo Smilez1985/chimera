@@ -137,6 +137,21 @@ class Session:
     _strom_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     #: Die Sitzungsablage (Regel 8d); ohne sie lebt der Verlauf nur im RAM.
     ablage: object = None
+    #: Wie das Gesicht gesetzt wird (Regel 5s). Der Dienst reicht hier seine
+    #: Face-Bruecke ein; ohne sie kann die Anzeige nicht angesprochen werden,
+    #: und das wird gemeldet statt verschwiegen (Regel 10h).
+    gesicht_setzen: object = None
+
+    def gesicht(self, name: str) -> bool:
+        """Einen Ausdruck setzen, etwa aus dem Installer (Update-Anzeige).
+
+        Rueckgabe False, wenn keine Bruecke eingehaengt ist oder der Name
+        unbekannt ist. Der Aufrufer meldet das -- stilles Nichtstun waere
+        die Fehlerklasse "es hat ja funktioniert".
+        """
+        if self.gesicht_setzen is None:
+            return False
+        return bool(self.gesicht_setzen(name))
 
     # --- Ereignisstrom (Regel 5s) -----------------------------------------
 

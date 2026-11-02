@@ -36,6 +36,8 @@
 # geladen ist -- sonst bricht sie unter `set -u` ab (am Pi 2.11.:
 # "CHIMERA_TOR_SOCKET: parameter not set", Exitcode 2).
 : "${CHIMERA_TOR_SOCKET:=/run/chimera/tor.sock}"
+# Der eine Weg in die Hauptsitzung (Regel 5s) -- fuer die Update-Anzeige.
+: "${CHIMERA_SITZUNG_SOCKET:=/run/chimera/sitzung.sock}"
 
 # Umgebungsvariablen, die der Lauf von aussen bekommt und die der Helfer erben
 # soll. Feste Liste: Was hier nicht steht, hat im Helfer seine Vorgabe.
@@ -291,6 +293,21 @@ klammer_an() {
 	if [ -z "$(echo "$_ka_liste" | tr -d ' ')" ]; then
 		info "Es lief nichts -- der Lauf fasst keine Dienste an."
 		return 0
+	fi
+
+	# Update-Anzeige (Vorgabe smilez): Bevor die Dienste gehen, zeigt das Gesicht
+	# den Update-Zustand. Das Bild bleibt stehen, weil das Panel nicht geleert
+	# wird -- nach dem Start zeichnet der Dienst selbst weiter.
+	# Ein Fehlschlag bricht nichts ab, wird aber gemeldet (kein stiller Erfolg).
+	_ka_gesicht="${_HERE:-${HERE:-.}}/lib/py/gesicht.py"
+	if [ -f "$_ka_gesicht" ] && [ -S "${CHIMERA_SITZUNG_SOCKET:-/run/chimera/sitzung.sock}" ]; then
+		if _ka_aus="$(python3 "$_ka_gesicht" "${CHIMERA_SITZUNG_SOCKET:-/run/chimera/sitzung.sock}" UPDATE 2>&1)"; then
+			info "  Anzeige: ${_ka_aus:-Gesicht gesetzt}"
+		else
+			warn "  Anzeige nicht gesetzt: ${_ka_aus:-ohne Meldung}"
+		fi
+	else
+		info "  Anzeige: kein laufender Sitzungs-Socket -- uebersprungen."
 	fi
 
 	# 2. Anhalten: Timer, Dienste, dann Sockets. Ein Socket nimmt ueber
