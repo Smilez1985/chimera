@@ -11,7 +11,7 @@ Stand: 2026-10-11. Pre-Alpha.
 
 - [x] `docs/DESIGN.md` — Architektur, Regeln, Grenzen
 - [x] `docs/ROADMAP.md`
-- [x] `CHANGELOG.md` mit `[Unreleased]`
+- [x] `CHANGELOG.md` nach Keep a Changelog (ohne `[Unreleased]`, Regel „Changelog ohne Unreleased“)
 - [x] `README.md`, `LICENSE`, `VERSION`
 - [x] `docs/HARDWARE.md` — Zielplattform und Boardfrage
 - [x] Debian-Fassung entschieden: **Trixie** (stable), nicht Forky
@@ -604,7 +604,7 @@ Rust-Teile im selben Cargo-Workspace wie das Gateway (Regel 14).
 
 ## Phase 4c — Telegram erhalten ✓
 
-Erledigt, siehe `CHANGELOG.md` unter `[Unreleased]`. Telegram wurde nicht
+Erledigt, siehe `CHANGELOG.md`. Telegram wurde nicht
 übernommen, sondern ohne Fremdbibliothek neu gebaut (nur `urllib`) — auf
 512 MB ist jede vermiedene Abhängigkeit eine gesparte. Gemeinsamer Verlauf,
 Kanal als Kontext und die Zustandsmeldung ans Gesicht sind verdrahtet und

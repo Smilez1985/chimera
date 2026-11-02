@@ -3440,6 +3440,25 @@ selbst**, nicht in einem Aufrufparameter — damit sie bei jedem Lauf gilt.
    laufen alle Dienste wieder, die vorher liefen, und der Sitzungs-Socket ist
    aktiv; `oom_score_adj` einer neuen SSH-Sitzung ist negativ.
 
+### Regel „Changelog ohne Unreleased“ — was im Repo liegt, ist released
+
+Vorgabe smilez (2.11.): **Es gibt keinen `[Unreleased]`-Block.** Das ist eine
+bewusste, strengere Abweichung von Keep a Changelog:
+
+- Was noch nicht fertig ist, steht in `docs/ROADMAP.md` — nicht im Changelog.
+- Was committet und gepusht ist, gilt als released und steht im Changelog, im
+  Abschnitt der laufenden Version.
+
+Grund: Ein Unreleased-Block sammelt Wünsche, Absichten und Halbfertiges unter
+derselben Überschrift wie Gebautes. Nach kurzer Zeit weiß niemand mehr, was
+davon es wirklich gibt. Das Changelog beantwortet genau eine Frage: **was ist
+drin**. Was fehlt, beantwortet die Roadmap.
+
+Die Abschnitte folgen Keep a Changelog: Hinzugefügt, Geändert, Veraltet,
+Entfernt, Behoben, Sicherheit — eine Zeile je Änderung, was sich für den Nutzer
+ändert. Die Version bleibt ungetaggt, solange sie nicht auf echter Hardware
+gelaufen ist; die Überschrift benennt den Stand, nicht ein Release.
+
 ### Regel „Fortschritt“ — Ein Balken, der den echten Stand zeigt
 
 Vorgabe smilez (2.11.): „ein funktionierender Fortschrittsbalken, der den echten

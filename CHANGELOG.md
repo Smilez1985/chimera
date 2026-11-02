@@ -8,9 +8,97 @@ einer bewussten Abweichung: **ein Versionssprung bricht keine laufende
 Installation.** Was ein Release an bestehenden Installationen ändert,
 erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 
-## [Unreleased]
+## [0.1.0] — Pre-Alpha, nicht getaggt
+
+**Nicht getaggt.** Pre-Alpha bleibt ungetaggt, bis eine Fassung auf echter
+Hardware gelaufen ist. Die Versionsnummer markiert den Stand, nicht ein
+Release.
+
+Alles hier Genannte ist committet und geprüft. **Kein `[Unreleased]`-Block:**
+Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
+zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+**Anzeige**
+- **Prioritäts-Verwalter** (`chimera.arbiter`): löst auf, wer das
+  Ausgabegerät bespielen darf. Quellen mit fester Basis-Priorität, ein
+  Platz je Quelle, Auflösung in drei Stufen (Priorität → jüngster
+  Zeitstempel → feste Quellenreihenfolge). Kurze Laufzeit plus
+  Erneuerungsbedingung statt langer Laufzeit, damit kein Eintrag
+  hängenbleibt, den jemand zu löschen vergisst.
+- **Statuszeile** (`chimera.display.statusline`) in den unteren 40 Zeilen
+  des 240×280-Panels, angeschlossen in `NoisyRenderer.show()`. Sieben
+  Quellen von Abschaltmeldung bis Leerlaufbeschriftung.
+- Der Verwalter ist **ein Baustein für zwei Nutzer** (Statuszeile jetzt,
+  LED später). Die Vorlage nimmt an dieser Stelle bewusst zwei
+  Umsetzungen in Kauf; das wäre die Doppelimplementierung, die im Projekt
+  schon einmal drei Varianten derselben Logik erzeugt hat.
+- Der Quellenkatalog prüft beim Start seine eigenen Abstände. Ein zu eng
+  einsortierter Eintrag lässt die Statuszeile **nicht starten**, statt
+  später „manchmal" falsch zu sein.
+**Ausdruck**
+- Mood-Vokabular, Validator und Registry (`chimera.mood`). Schema für das
+  Sprachmodell und Prüfung entstehen aus **einer** Tabelle.
+- Freie Zeichenformen: elf Grundformen mit relativen Koordinaten, Ebene
+  und Bewegung. Benannte Bausteine sind Vorschläge — ein unbekannter Name
+  wird übernommen und über eigene Formen dargestellt.
+- Mischen und Variieren ohne Sprachmodell; Farben über den Farbton, damit
+  Rot und Blau über Violett laufen statt über Grau.
+- Übergänge über alle Felder, weich und hart. `fast_track` schaltet
+  sofort, damit ein Schreck nicht einblendet.
+- 41 Moods aus Noisy als Startbestand, ohne die Audio-Kopplung.
+**Anzeige**
+- Renderer aus Noisy übernommen und auflösungsrelativ gemacht: Bildgröße
+  kommt vom Panel, Ausgabe über ein beliebiges `Panel`, Zustand statt
+  Orchestrator.
+- Bildausgabe in den Panelspeicher über SPI. Die Umrechnung nach RGB565
+  läuft über `numpy` und ist rund 25-mal schneller als bildpunktweise
+  (2,5 ms gegen 62,9 ms je Bild).
+**Sprachmodelle**
+- Anbieter-Registry mit Aufgaben und Gruppen. Der Rückfall geht **über
+  Anbietergrenzen**: Ist Ollama weg, hilft ein zweites Ollama-Modell nicht.
+- Ollama mit Platzhalter-Erkennung und Netzsuche; Claude getrennt nach Abo
+  und API-Schlüssel, jede Antwort trägt ihre Herkunft.
+- Client-Kennung für den Abo-Weg wird zur Laufzeit ermittelt (OpenMinis
+  PR #407), mit Rückfallwert wenn die CLI fehlt.
+- Ersteinrichtung sucht, schlägt vor und übernimmt — jede Zeile änderbar.
+**Agent**
+- Werkzeugschleife mit fünf Werkzeugen: Befehl ausführen, Datei lesen und
+  schreiben, Verzeichnis auflisten, Gesicht setzen.
+- Sicherheitsschranke aus openclawgotchi übernommen: keine Shell, keine
+  Verkettung, keine Ersetzung, keine verschachtelten Interpreter, `sudo`
+  gesperrt. Ergänzt um Netzsperre und Pfadschutz gegen `..` und Symlinks.
+- Vorprüfung und JSON-Reparatur: abgebrochene Argumentangaben werden
+  gerettet statt verworfen.
+- Schleifenerkennung, die **vor** der Ausführung greift und dem Modell
+  sagt, dass es feststeckt. Wechselnde Ergebnisse gelten nicht als Kreis.
+- Kontextschwellen, gestaffelt nach Fenstergröße und geprüft gegen das
+  Modell, das die Anfrage **tatsächlich bedient**.
+- Der Agentzustand ist am Gesicht ablesbar: denkt, arbeitet, spricht,
+  verwirrt.
+- Skills im `SKILL.md`-Format mit **Voraussetzungsprüfung**: Ein Skill,
+  dessen Programme fehlen, wird gar nicht erst angeboten — genannt wird er
+  trotzdem, mit Grund.
+- Gedächtnis mit Rangordnung: dauerhafte Notizen sind für den Agenten nur
+  lesbar, Tageslogs schreibt er selbst. Beim Einspeisen wird gesagt, dass
+  es Hintergrund ist und nicht Auftrag.
+**Installer**
+- `chimera-install` mit Modulen, `--only`, `--list`, `--dry-run`, `--check`.
+- Modul 10 `preflight`: erkennt Board, Betriebssystem und Bootmethode
+  getrennt, liest das Whisplay-EEPROM, meldet die Bauvoraussetzungen.
+- Boardprofile für Pi Zero 2 W und Radxa ZERO 3W samt Tabelle bekannter
+  Kombinationen. Unbekanntes führt zum Abbruch mit Auskunft, nicht zum
+  Rateversuch.
+- Protokoll je Lauf, auch bei Erfolg; die jüngsten 20 bleiben erhalten.
+- Atomares Schreiben mit geprüftem `mktemp`; leere Eingaben werden
+  abgelehnt.
+**Blaupause**
+- **Regel 10p:** Was beim Laden abstürzt, wird beim nächsten Start nicht
+  wieder geladen (Startmarke, Quarantäne, gemeldeter Rückfall,
+  `StartLimitBurst=`).
+- **Regel 10q:** Speicher wird am Prozess gemessen (`VmRSS`/`VmHWM`/
+  `VmSwap`) und vom Prozess selbst begrenzt. Anlass ist ein auf zwei
+  Geräten unabhängig ausgewertetes Absturzbild einer Android-App.
 - **Anzeige:** Der Installer setzt vor dem Anhalten der Dienste das Gesicht `UPDATE` (bernsteinfarben, fokussierte Augen, Sternchen); das Bild bleibt bis zum Dienststart stehen.
 - **Sitzung:** Neue Operation `gesicht` am Sitzungs-Socket — die Anzeige lässt sich ansprechen, ohne die Sitzung zu bedienen.
 - **Anzeige:** Fortschrittsbalken während des Installer-Laufs — eine Stufe gleich viel, „Updating…" darüber; der Stand überlebt den Selbstneustart und springt nicht zurück.
@@ -289,129 +377,7 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 - **Installer:** Eine Datei mit Zeilenumbruch im Namen fiel still aus der
   Prüfsumme heraus; jetzt bricht die Prüfung benannt ab.
 
-### Geprüft
-431 Tests, alle grün: 361 Python, 70 Installer. Neu darunter 27 für die
-Gesichtskette (`test_display_wiring.py`) und 24 für Regel 10k. Jeder
-Regressionstest hat eine Gegenprobe, und die Gegenproben wurden gegen den
-jeweils alten Code **verifiziert** — jeder der sechs Befunde färbt den
-Test rot, wenn man ihn wiederherstellt.
-Die Prüfung des H4-Stands gegen die Blaupause steht in
-`docs/PRUEFUNG-H4.md`.
-**Zum ersten Mal auf der Zielhardware gelaufen** (Pi Zero 2 W, DietPi
-10.7, Kernel 6.18.50): Preflight mit Exitcode 0, Whisplay-Treiber gebaut,
-ALSA-Karte `whisplaysound` registriert (Codec WM8960). Was sich dabei
-gezeigt hat — auch die Fehlschläge und ihre Ursachen — steht in
-`docs/HARDWARE-BEFUNDE.md`.
-
 ### Bekannte Einschränkungen
-- **Nichts davon lief auf der Zielhardware.** Insbesondere ist die
-  Bildrate von 15 auf einem Pi Zero 2 W nicht gemessen, sondern von Noisy
-  übernommen.
-- Der Renderer läuft als Faden im Hauptprozess (Regel 7a). Dass die
-  globale Sperre dabei nicht stört, ist begründet, aber auf dem Zero 2 W
-  nicht gemessen.
-
-## [0.1.0] — unveröffentlicht
-
-**Nicht getaggt.** Pre-Alpha bleibt ungetaggt, bis eine Fassung auf echter
-Hardware gelaufen ist. Die Versionsnummer markiert den Stand, nicht ein
-Release.
-
-Erste Fassung mit lauffähigem Agenten. Alles hier Genannte ist verdrahtet
-und geprüft; was noch offen ist, steht unter „Bekannte Einschränkungen"
-oder in der Roadmap.
-
-### Hinzugefügt
-
-**Anzeige**
-- **Prioritäts-Verwalter** (`chimera.arbiter`): löst auf, wer das
-  Ausgabegerät bespielen darf. Quellen mit fester Basis-Priorität, ein
-  Platz je Quelle, Auflösung in drei Stufen (Priorität → jüngster
-  Zeitstempel → feste Quellenreihenfolge). Kurze Laufzeit plus
-  Erneuerungsbedingung statt langer Laufzeit, damit kein Eintrag
-  hängenbleibt, den jemand zu löschen vergisst.
-- **Statuszeile** (`chimera.display.statusline`) in den unteren 40 Zeilen
-  des 240×280-Panels, angeschlossen in `NoisyRenderer.show()`. Sieben
-  Quellen von Abschaltmeldung bis Leerlaufbeschriftung.
-- Der Verwalter ist **ein Baustein für zwei Nutzer** (Statuszeile jetzt,
-  LED später). Die Vorlage nimmt an dieser Stelle bewusst zwei
-  Umsetzungen in Kauf; das wäre die Doppelimplementierung, die im Projekt
-  schon einmal drei Varianten derselben Logik erzeugt hat.
-- Der Quellenkatalog prüft beim Start seine eigenen Abstände. Ein zu eng
-  einsortierter Eintrag lässt die Statuszeile **nicht starten**, statt
-  später „manchmal" falsch zu sein.
-
-**Ausdruck**
-- Mood-Vokabular, Validator und Registry (`chimera.mood`). Schema für das
-  Sprachmodell und Prüfung entstehen aus **einer** Tabelle.
-- Freie Zeichenformen: elf Grundformen mit relativen Koordinaten, Ebene
-  und Bewegung. Benannte Bausteine sind Vorschläge — ein unbekannter Name
-  wird übernommen und über eigene Formen dargestellt.
-- Mischen und Variieren ohne Sprachmodell; Farben über den Farbton, damit
-  Rot und Blau über Violett laufen statt über Grau.
-- Übergänge über alle Felder, weich und hart. `fast_track` schaltet
-  sofort, damit ein Schreck nicht einblendet.
-- 41 Moods aus Noisy als Startbestand, ohne die Audio-Kopplung.
-
-**Anzeige**
-- Renderer aus Noisy übernommen und auflösungsrelativ gemacht: Bildgröße
-  kommt vom Panel, Ausgabe über ein beliebiges `Panel`, Zustand statt
-  Orchestrator.
-- Bildausgabe in den Panelspeicher über SPI. Die Umrechnung nach RGB565
-  läuft über `numpy` und ist rund 25-mal schneller als bildpunktweise
-  (2,5 ms gegen 62,9 ms je Bild).
-
-**Sprachmodelle**
-- Anbieter-Registry mit Aufgaben und Gruppen. Der Rückfall geht **über
-  Anbietergrenzen**: Ist Ollama weg, hilft ein zweites Ollama-Modell nicht.
-- Ollama mit Platzhalter-Erkennung und Netzsuche; Claude getrennt nach Abo
-  und API-Schlüssel, jede Antwort trägt ihre Herkunft.
-- Client-Kennung für den Abo-Weg wird zur Laufzeit ermittelt (OpenMinis
-  PR #407), mit Rückfallwert wenn die CLI fehlt.
-- Ersteinrichtung sucht, schlägt vor und übernimmt — jede Zeile änderbar.
-
-**Agent**
-- Werkzeugschleife mit fünf Werkzeugen: Befehl ausführen, Datei lesen und
-  schreiben, Verzeichnis auflisten, Gesicht setzen.
-- Sicherheitsschranke aus openclawgotchi übernommen: keine Shell, keine
-  Verkettung, keine Ersetzung, keine verschachtelten Interpreter, `sudo`
-  gesperrt. Ergänzt um Netzsperre und Pfadschutz gegen `..` und Symlinks.
-- Vorprüfung und JSON-Reparatur: abgebrochene Argumentangaben werden
-  gerettet statt verworfen.
-- Schleifenerkennung, die **vor** der Ausführung greift und dem Modell
-  sagt, dass es feststeckt. Wechselnde Ergebnisse gelten nicht als Kreis.
-- Kontextschwellen, gestaffelt nach Fenstergröße und geprüft gegen das
-  Modell, das die Anfrage **tatsächlich bedient**.
-- Der Agentzustand ist am Gesicht ablesbar: denkt, arbeitet, spricht,
-  verwirrt.
-- Skills im `SKILL.md`-Format mit **Voraussetzungsprüfung**: Ein Skill,
-  dessen Programme fehlen, wird gar nicht erst angeboten — genannt wird er
-  trotzdem, mit Grund.
-- Gedächtnis mit Rangordnung: dauerhafte Notizen sind für den Agenten nur
-  lesbar, Tageslogs schreibt er selbst. Beim Einspeisen wird gesagt, dass
-  es Hintergrund ist und nicht Auftrag.
-
-**Installer**
-- `chimera-install` mit Modulen, `--only`, `--list`, `--dry-run`, `--check`.
-- Modul 10 `preflight`: erkennt Board, Betriebssystem und Bootmethode
-  getrennt, liest das Whisplay-EEPROM, meldet die Bauvoraussetzungen.
-- Boardprofile für Pi Zero 2 W und Radxa ZERO 3W samt Tabelle bekannter
-  Kombinationen. Unbekanntes führt zum Abbruch mit Auskunft, nicht zum
-  Rateversuch.
-- Protokoll je Lauf, auch bei Erfolg; die jüngsten 20 bleiben erhalten.
-- Atomares Schreiben mit geprüftem `mktemp`; leere Eingaben werden
-  abgelehnt.
-
-**Blaupause**
-- **Regel 10p:** Was beim Laden abstürzt, wird beim nächsten Start nicht
-  wieder geladen (Startmarke, Quarantäne, gemeldeter Rückfall,
-  `StartLimitBurst=`).
-- **Regel 10q:** Speicher wird am Prozess gemessen (`VmRSS`/`VmHWM`/
-  `VmSwap`) und vom Prozess selbst begrenzt. Anlass ist ein auf zwei
-  Geräten unabhängig ausgewertetes Absturzbild einer Android-App.
-
-### Bekannte Einschränkungen
-
 - **`MemoryMax=` wirkt auf dem Pi nicht.** Der RPi-Kernel startet mit
   `cgroup_disable=memory`. Gemessen: 150 MB unter `MemoryMax=20M` liefen
   durch. Regel 10q setzt deshalb auf Selbstbegrenzung, die noch nicht
@@ -445,10 +411,27 @@ oder in der Roadmap.
 - **Auf der Zielhardware gemessen wurde bisher nur die Bildrate**
   (39,3 ms je Bild, SPI 28,1 davon) sowie Display, Ton, Mikrofon und LED.
   Statuszeile und Verwalter liefen dort noch nicht.
+- **Nichts davon lief auf der Zielhardware.** Insbesondere ist die
+  Bildrate von 15 auf einem Pi Zero 2 W nicht gemessen, sondern von Noisy
+  übernommen.
+- Der Renderer läuft als Faden im Hauptprozess (Regel 7a). Dass die
+  globale Sperre dabei nicht stört, ist begründet, aber auf dem Zero 2 W
+  nicht gemessen.
 
 ### Geprüft
-
 302 Tests, alle grün: 64 Agent, 68 Mood, 46 Installer, 41 Anbieter,
 35 Skills und Gedächtnis, 21 Übergänge, 16 Renderer, 11 Anzeige. Jeder Regressionstest hat eine Gegenprobe. Die
 Anbieterschicht und die Agent-Schleife wurden zusätzlich gegen einen
 echten Ollama-Server geprüft.
+431 Tests, alle grün: 361 Python, 70 Installer. Neu darunter 27 für die
+Gesichtskette (`test_display_wiring.py`) und 24 für Regel 10k. Jeder
+Regressionstest hat eine Gegenprobe, und die Gegenproben wurden gegen den
+jeweils alten Code **verifiziert** — jeder der sechs Befunde färbt den
+Test rot, wenn man ihn wiederherstellt.
+Die Prüfung des H4-Stands gegen die Blaupause steht in
+`docs/PRUEFUNG-H4.md`.
+**Zum ersten Mal auf der Zielhardware gelaufen** (Pi Zero 2 W, DietPi
+10.7, Kernel 6.18.50): Preflight mit Exitcode 0, Whisplay-Treiber gebaut,
+ALSA-Karte `whisplaysound` registriert (Codec WM8960). Was sich dabei
+gezeigt hat — auch die Fehlschläge und ihre Ursachen — steht in
+`docs/HARDWARE-BEFUNDE.md`.
