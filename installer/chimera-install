@@ -15,6 +15,11 @@
 #   chimera-install --check          Zustand pruefen, Exitcode sprechend
 #   chimera-install --log-dir DIR    Ablage des Protokolls
 #
+# Abgekoppelt: Die Arbeit laeuft als eigene Unit "chimera-installhelper"
+# (DESIGN, Regel "Installerhelfer"). Ein Abbruch der SSH-Sitzung beendet den Lauf
+# damit nicht, und der Lauf sitzt nicht in der cgroup von ssh.service. Das
+# interne --helfer fuehrt die Arbeit direkt aus (so ruft sich der Lauf selbst).
+#
 # Exitcode: der des ersten fehlgeschlagenen Moduls, sonst 0.
 #           Stand ein Schritt auf "Neustart noetig" und war sonst alles in
 #           Ordnung, ist es 3 -- fertig ist der Lauf dann naemlich nicht.
@@ -28,6 +33,10 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 MODE=run
 ONLY=""
 HARDWARE=0
+HELFER_AUFTRAG=0
+# Der Startbaum ist das Repo, aus dem dieser Lauf gestartet wurde (fuer den
+# Vergleich "aendert sich etwas?").
+: "${CHIMERA_STARTBAUM:=$(cd "$HERE/.." && pwd)}"
 VERSION="$(cat "$HERE/../VERSION" 2>/dev/null || echo '?')"
 
 usage() {
@@ -62,12 +71,21 @@ while [ $# -gt 0 ]; do
 				*) err "--mit kennt nur: i2c video"; exit 2 ;;
 			esac
 			shift 2 ;;
+		--helfer) HELFER_AUFTRAG=1; shift ;;
 		-h|--help) usage; exit 0 ;;
 		*) err "Unbekannte Option: $1"; usage >&2; exit 2 ;;
 	esac
 done
 
 export CHIMERA_DOWNGRADE="${CHIMERA_DOWNGRADE:-false}" CHIMERA_MIT="${CHIMERA_MIT:-}"
+
+# Der Helfer liest die Umgebung, die der Aufruf ihm hinterlassen hat.
+. "$HERE/lib/source.sh"
+. "$HERE/lib/python.sh"
+. "$HERE/lib/helfer.sh"
+if [ "$HELFER_AUFTRAG" = 1 ]; then
+	helfer_env_lesen
+fi
 
 # Die Argumente fuer den Neustart aus source/ (I8) festhalten -- nach der
 # Schleife oben sind sie verbraucht.
@@ -86,6 +104,29 @@ if [ "$MODE" = list ]; then
 	printf 'Verfuegbare Module:\n'
 	steps_list | while read -r m; do printf '  %s\n' "$(basename "$m" .sh)"; done
 	exit 0
+fi
+
+# Abkoppeln: Ein echter Lauf, der nicht schon der Helfer ist, wird als eigene
+# Unit gestartet. Bei --list, --dry-run und --check bleibt er hier: Sie aendern
+# nichts und brauchen keine eigene Unit.
+# Nur der Helfer fuehrt die Arbeit aus; jeder andere Aufruf reicht sie weiter.
+# Auch ohne root: Dann wird der Lauf abgelehnt statt in der Sitzung zu laufen --
+# sonst haenge das Ergebnis davon ab, wie jemand den Installer aufruft (Regel
+# "Installerhelfer", Punkt 1).
+if [ "$MODE" = run ] && [ "$HELFER_AUFTRAG" != 1 ] && [ "${CHIMERA_HELFER:-0}" != 1 ]; then
+	if [ "$(id -u)" != 0 ]; then
+		err "Dieser Lauf braucht root -- und er laeuft nie in der aufrufenden Sitzung."
+		err "  sudo sh $0 $*"
+		exit 2
+	fi
+	_ah_neu=""
+	[ -n "$ONLY" ] && _ah_neu="$_ah_neu --only $ONLY"
+	[ "$HARDWARE" = 1 ] && _ah_neu="$_ah_neu --hardware"
+	[ "$CHIMERA_DOWNGRADE" = true ] && _ah_neu="$_ah_neu --downgrade=true"
+	[ -n "$CHIMERA_MIT" ] && _ah_neu="$_ah_neu --mit $(printf '%s' "$CHIMERA_MIT" | tr ' ' '\n' | head -1)"
+	# shellcheck disable=SC2086
+	helfer_starten "$HERE/chimera-install" $_ah_neu
+	exit $?
 fi
 
 log_open "install" || warn "Kein Protokoll moeglich -- Lauf wird nicht festgehalten."
@@ -110,6 +151,20 @@ fi
 rm -f "$CHIMERA_LOG_DIR/.befund-quelle" 2>/dev/null || true
 RAN=0
 NEUSTART=0
+
+# Klammer: Dateien nicht unter einem laufenden Dienst ersetzen. Nur im Helfer
+# (also in einem echten, abgekoppelten Lauf) und nicht beim Boot-Abgleich: Der
+# laeuft, bevor die Dienste starten, und darf den Dienst nicht anhalten, der
+# auf ihn wartet (gemessen: Job canceled).
+_KLAMMER=0
+if helfer_laeuft && [ "$MODE" = run ] && [ "$HARDWARE" != 1 ]; then
+	if klammer_noetig; then
+		klammer_an || { log_close 2; exit 2; }
+		_KLAMMER=1
+	else
+		info "Kein neuer Stand und alle Abhaengigkeiten erfuellt -- Dienste laufen weiter, nichts wird angefasst."
+	fi
+fi
 
 for mod in $(steps_list); do
 	name="$(basename "$mod" .sh)"
@@ -179,10 +234,18 @@ for mod in $(steps_list); do
 		[ "$FIRST_RC" -eq 0 ] && FIRST_RC=$rc
 		_log_raw "Modul $name: Exitcode $rc"
 		err "Modul $name bricht den Lauf ab (Exitcode $rc)."
+		if [ "$_KLAMMER" = 1 ]; then
+			klammer_aus || true
+		fi
 		log_close "$rc"
 		exit "$rc"
 	fi
 done
+
+if [ "$_KLAMMER" = 1 ]; then
+	klammer_aus || { [ "$FAILED" -eq 0 ] && { FAILED=1; FIRST_RC=1; }; }
+	_KLAMMER=0
+fi
 
 if [ "$RAN" -eq 0 ]; then
 	err "Kein Modul ausgefuehrt${ONLY:+ -- kein Treffer fuer '$ONLY'}."

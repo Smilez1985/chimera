@@ -43,6 +43,12 @@ SERVICE_TIMER_DIENST=chimera-logabgleich.service
 # Ton zur Laufzeit. Der Dienst wartet darauf (After/Wants).
 SERVICE_HARDWARE=chimera-hardware.service
 SERVICE_INSTALLER="$CHIMERA_SOURCE/installer/chimera-install"
+# Schutz der SSH-Sitzung: Sie soll einen Speicherengpass ueberleben (Regel
+# "Installerhelfer"). Welche Unit das ist, steht nicht fest (ssh oder sshd).
+SERVICE_SSH_UNITS="ssh.service sshd.service"
+#: Wie weit die Sitzung vor dem Speicherkiller geschuetzt wird. -1000 hat sshd
+#: selbst; fuer die Sitzungsprozesse ist -900 genug und laesst dem Kernel Luft.
+SERVICE_SSH_OOM=-900
 
 service_unit_pfad()  { rootpath "/etc/systemd/system/$CHIMERA_DIENST"; }
 service_stand_pfad() { rootpath "$CHIMERA_STATE/dienst-stand"; }
@@ -148,6 +154,10 @@ EnvironmentFile=-$CHIMERA_CONFIG/.env
 Environment=CHIMERA_NETWORK_LIMIT=20
 Environment=CHIMERA_LOG_DIR=$CHIMERA_RUNLOG/installer
 Environment=LANG=C.UTF-8
+# Der Installer laeuft NICHT in dieser Unit, sondern abgekoppelt als
+# chimera-installhelper (Regel "Installerhelfer"): Gemessen am Pi brach ein
+# Dienst ab, der aus seiner eigenen Unit heraus einen Dienst mit Before= auf
+# sich selbst startet ("Job canceled"). Diese Unit ruft nur und wartet.
 ExecStart=/bin/sh $SERVICE_INSTALLER --hardware
 # rc 1 = Befund (z. B. nichts erkannt), rc 3 = Neustart gewuenscht: beides
 # kein Grund, den Dienst zu verhindern. Erst ab 2 ist etwas kaputt.
@@ -319,6 +329,38 @@ service_lesbar() {
 
 # Der ganze Ablauf. $1 venv-Python (Zielpfad), $2 Repo.
 # rc 0 Dienst laeuft nachweislich, 1 Befund, 2 Abbruch.
+# Drop-in fuer die SSH-Unit: nur OOMScoreAdjust, die Unit selbst bleibt
+# unberuehrt (Regel "Was nicht im Manifest steht, gehoert nicht uns" gilt fuer
+# die Unit; das Drop-in ist unsere Datei und steht im Manifest).
+service_ssh_text() {
+	cat <<EOF
+# Von chimera-install angelegt (Schritt 98). Die SSH-Sitzung soll einen
+# Speicherengpass ueberleben; am Pi gemessen hatte nur der sshd-Hauptprozess
+# -1000, die Sitzungsprozesse 0 (DESIGN, Regel "Installerhelfer").
+[Service]
+OOMScoreAdjust=$SERVICE_SSH_OOM
+EOF
+}
+
+# rc 0 ok, 2 Fehler. Fehlt die SSH-Unit, wird das gesagt und nicht geraten.
+service_ssh_schutz() {
+	_ss_unit=""
+	for _ss_k in $SERVICE_SSH_UNITS; do
+		if [ -f "$(rootpath "/etc/systemd/system/$_ss_k")" ] || 		   [ -f "$(rootpath "/lib/systemd/system/$_ss_k")" ]; then
+			_ss_unit="$_ss_k"
+			break
+		fi
+	done
+	if [ -z "$_ss_unit" ]; then
+		warn "Keine SSH-Unit gefunden ($SERVICE_SSH_UNITS) -- kein Schutz eingetragen."
+		return 1
+	fi
+	_ss_dir="$(dirname "$(service_unit_pfad)")"
+	service_datei "$_ss_dir/$_ss_unit.d/10-chimera-oom.conf" "$(service_ssh_text)" || return 2
+	info "SSH-Schutz: $_ss_unit.d/10-chimera-oom.conf (OOMScoreAdjust=$SERVICE_SSH_OOM)"
+	return 0
+}
+
 service_einrichten() {
 	_se_py="$1"
 	_se_repo="$2"
@@ -341,6 +383,9 @@ service_einrichten() {
 	service_datei "$(dirname "$_se_unit")/$SERVICE_TIMER_DIENST" "$(service_timer_dienst_text)" || return 2
 	service_datei "$(dirname "$_se_unit")/$SERVICE_TIMER" "$(service_timer_text)" || return 2
 	service_datei "$(dirname "$_se_unit")/$SERVICE_HARDWARE" "$(service_hardware_text)" || return 2
+	# Der SSH-Schutz ist ein Befund, wenn er nicht geht, kein Abbruch: Der
+	# Installer soll deswegen nicht stehen bleiben.
+	service_ssh_schutz || warn "SSH-Schutz nicht eingerichtet."
 	_se_timer_neu=$_sd_neu
 
 	_se_code="$(service_code_stand "$_se_repo")"

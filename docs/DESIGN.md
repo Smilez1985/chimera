@@ -3337,6 +3337,76 @@ Tabelle. Gegenprobe: `--gegenprobe` entfernt zwei Optionen aus der Doku, der
 Test muss rot werden.
 
 
+### Regel „Installerhelfer“ — Der Installer läuft nie unter einem Dienst und nie in der SSH-Sitzung
+
+Vorgabe smilez (2.11.): Der Installer darf **nicht** unter
+`chimera-hardware.service` laufen; er läuft abgekoppelt als eigener Dienst
+`chimera-installhelper`, **nur wenn er aufgerufen wird**, nicht dauerhaft. Und:
+**Die SSH-Sitzung darf nie abreißen, nur weil Chimera ein Update bekommt.**
+
+`chimera-hardware.service` ist der **Boot-Abgleich der Hardware**, nicht die
+SSH-Schicht. Die Abkopplung ist eine eigene Sache und steht **im Installercode
+selbst**, nicht in einem Aufrufparameter — damit sie bei jedem Lauf gilt.
+
+**Gemessen am Pi (2.11.2026), was die Regel begründet:**
+- Ein Dienst, der aus seiner eigenen Unit heraus einen Dienst mit `Before=`
+  auf sich selbst startet, wird abgebrochen: „Job for … canceled“, rc 1 nach
+  0 Sekunden. Genau das täte `chimera-install --hardware` aus
+  `chimera-hardware.service` heraus, sobald er den Dienst neu startet.
+- `sshd` selbst hat `oom_score_adj=-1000`, die **Sitzungsprozesse 0**; die Unit
+  setzt `OOMScoreAdjust` nicht. Ein Speicherengpass trifft also die Sitzung.
+- Ein über SSH gestarteter Installer läuft **in `/system.slice/ssh.service`**.
+  Reißt die Verbindung, stirbt der Lauf mitten im Schreiben von Dateien.
+- Der Speicher-Controller ist aus (`MemoryMin`/`MemoryMax` wirken nicht); Schutz
+  vor dem Speicherkiller geht nur über `oom_score_adj`.
+- Netz und SSH fasst der Installer nicht an (in allen Schritten geprüft).
+
+1. **Ein eigener Lauf, abgekoppelt.** `chimera-install` startet die Arbeit als
+   **`chimera-installhelper`** (transiente Unit, `systemd-run --collect`, Typ
+   `oneshot`) und wartet auf sie. Fällt die SSH-Verbindung, läuft der Lauf
+   weiter; die Rückmeldung im Terminal entfällt, das Protokoll bleibt.
+   Aufruf über `--helfer` (intern) führt die Arbeit direkt aus — nur so läuft
+   der Helfer selbst.
+2. **Kein dauerhafter Dienst.** `chimera-installhelper` hat **kein `[Install]`**
+   und wird nie beim Boot gestartet; er existiert, solange ein Lauf dauert.
+3. **Nie unter einem fremden Dienst.** Auch `chimera-hardware.service` ruft den
+   Installer nur **über den Helfer** auf; die Unit wartet auf das Ergebnis,
+   führt die Arbeit aber nicht selbst aus. Damit gibt es keinen Deadlock mehr.
+4. **Klammer nur bei echter Änderung** (Vorgabe smilez, 2.11.: „wenn es schon da
+   ist und sich nichts ändert, lass die Finger weg“). Sind Quellstand und
+   Abhängigkeiten unverändert, wird **nichts** angehalten und **nichts**
+   geschrieben. Erst wenn etwas fehlt oder eine neue Version es verlangt, greift
+   die Klammer: **erst anhalten, dann schreiben, dann starten.**
+   nach dem letzten Schritt hält er an, was noch läuft, und startet in der
+   richtigen Reihenfolge. **Gemessene Reihenfolge** (der Fehler vom 31.10.):
+   Sockets **vor** den Diensten starten, sonst verweigert systemd den Socket
+   („Socket service already active, refusing“).
+   - Anhalten: `chimera-mojo.timer`, `chimera-sitzung.socket`,
+     `chimera-tor.socket`, `chimera-tor.service`, `chimera.service`.
+   - Starten: `chimera-tor.socket`, `chimera-sitzung.socket`, `chimera.service`,
+     `chimera-tor.service` (nur wenn er vorher lief), `chimera-mojo.timer`.
+   - Gestartet wird, was **vorher lief** oder was danach laufen soll; nicht
+     blind alles.
+   - Kein Anhalten bei `--dry-run`, `--check`, `--list` und **nicht** bei
+     `--hardware` (beim Boot läuft noch nichts, und der Dienst startet danach).
+5. **SSH ist eine eigene, geschützte Sache.** Der Installer fasst weder Netz noch
+   SSH an (Regel „Was nicht im Manifest steht, gehört nicht uns“), und er läuft
+   nie in der cgroup der SSH-Sitzung, weil die Arbeit im Helfer läuft.
+   Zusätzlich bekommt `ssh.service` ein Drop-in mit `OOMScoreAdjust=-900`, damit
+   die Sitzung einen Speicherengpass überlebt (der Speicher-Controller ist aus,
+   `MemoryMin` gibt es nicht). Das Drop-in liegt im Manifest und ist
+   rückbaubar; es ändert die Unit nicht, nur einen Zusatz.
+6. **Wiederaufruf hängt sich an, startet nichts Neues.** Läuft
+   `chimera-installhelper` schon — etwa weil die SSH-Verbindung abgerissen ist
+   und man neu verbindet —, dann **hängt sich der neue Aufruf an den laufenden
+   Lauf** und liefert dessen Exitcode. Einen zweiten Lauf gibt es nie, aber der
+   Lauf ist nach einer Trennung jederzeit wieder erreichbar.
+7. **Gegenprobe:** Ein Lauf mit einem scheiternden Schritt liefert dessen
+   Exitcode zurück; ein Abbruch der aufrufenden Sitzung beendet den Helfer
+   nicht; ein zweiter Aufruf während eines Laufs wird abgewiesen; nach dem Lauf
+   laufen alle Dienste wieder, die vorher liefen, und der Sitzungs-Socket ist
+   aktiv; `oom_score_adj` einer neuen SSH-Sitzung ist negativ.
+
 ### Regel „ACP“ — Chimera ist ein Agent für Editoren, erreichbar über eine Transportschicht am Gateway
 
 Vorgabe smilez (2.11.): ACP ist eine **Pflicht-Schnittstelle**. Gemeint ist der
@@ -3548,6 +3618,7 @@ einen Verweis liest, soll verstehen, **worum es geht**, ohne nachzuschlagen.
 - **10q** — Speicher wird am Prozess gemessen und vom Prozess begrenzt
 - **10r** — Der Agent ist ein eigener Nutzer, und was root ausführt, kann er nicht ändern
 - **10s** — Root gibt es nur auf Rückfrage, auf Zeit, und nicht für den Agenten selbst
+- **Installerhelfer** — Der Installer läuft nie unter einem Dienst und nie in der SSH-Sitzung
 - **ACP** — Chimera ist ein Agent für Editoren, erreichbar über eine Transportschicht am Gateway
 - **MQTT** — Ein Broker in Rust löst gespeicherte Moods auf dem Display aus
 - **Sprechende Namen** — Eine Regel, ein Befehl, ein Baustein heißt nach dem, was er tut

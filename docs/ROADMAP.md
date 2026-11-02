@@ -21,6 +21,48 @@ Stand: 2026-10-11. Pre-Alpha.
 
 ---
 
+## Phase Installer — Idempotenz, Abkopplung, Anzeige beim Update
+
+Vorgaben smilez (2.11.): Der Installer fasst **nur an, was fehlt oder wegen
+einer neuen Version aktualisiert werden muss**; er läuft nie in der SSH-Sitzung;
+zram wird nicht angefasst, wenn es läuft.
+
+- [x] **Abkopplung im Code:** `chimera-install` startet die Arbeit als
+      `chimera-installhelper` (transient, `oneshot`) und wartet; ohne root wird
+      abgelehnt statt in der Sitzung zu laufen. Ein zweiter Aufruf hängt sich an
+      den laufenden Lauf.
+- [x] **Klammer um den Lauf:** Dienste anhalten, Dateien tauschen, in der
+      gemessenen Reihenfolge starten (Sockets **vor** Diensten), Nachweis, dass
+      alles läuft. Das Gateway wird über den Socket **geweckt**, nicht direkt
+      gestartet (am Pi gemessen: direkter Start scheitert, es braucht
+      `LISTEN_FDS`).
+- [x] **Klammer nur bei echter Änderung:** unveränderter Quellstand und erfüllte
+      Abhängigkeiten → Dienste laufen weiter, nichts wird angefasst.
+- [x] **zram:** Läuft es, bleibt der Speicherschritt ganz aus (kein
+      `swapoff -a`, kein Dateischritt, keine Änderung der Konfiguration).
+      Angelegt wird nur, wenn es fehlt.
+- [x] **SSH-Schutz:** Drop-in `ssh.service.d/10-chimera-oom.conf` mit
+      `OOMScoreAdjust=-900` (Sitzungsprozesse hatten `oom_score_adj=0`).
+- [ ] **Transiente Unit klären:** Am Pi meldet `systemd-run` Erfolg, die Unit
+      gilt aber als `inactive`, während ihr Prozess läuft („Failed to open
+      /run/systemd/transient/…“). Der Abbruch der Verbindung ist deshalb **noch
+      nicht belegt** — erst klären, dann behaupten.
+- [ ] **„Updated“-Gesicht vor dem Anhalten:** Der Installer setzt am Anfang ein
+      Gesicht, das den Update-Zustand zeigt, und der Bildschirminhalt bleibt bis
+      zum Dienststart bzw. Neustart stehen (Panel nicht leeren, Backlight an).
+      Braucht einen Weg vom Installer zur Anzeige (Socket-Operation).
+- [ ] **pip: nur Fehlendes, ohne `--upgrade`.** Zurückgestellt: Die Änderung
+      machte zwei Tests von `test-python-env.sh` rot; der erprobte Stand bleibt,
+      bis die Ursache geklärt ist (das venv hatte `numpy 2.5.4` statt `1.26.4`).
+- [ ] **UV für `requirements.txt`** (Vorgabe smilez, 2.11.): eigenes
+      Werkzeug-venv, nur anlegen wenn es fehlt, Installation über pip (Prüfsummen
+      von PyPI), harte Zeitgrenzen, Rückfall auf pip. Vorbedingung: die Tests von
+      `test-python-env.sh` müssen ohne Netz reproduzierbar sein (der
+      Nachweis-Fall geht heute ins Netz und hängt in der Sandbox).
+- [ ] **`test-python-env.sh` hermetisch machen:** alle Fälle mit
+      `PIP_NO_INDEX=1` und lokalen Wheels, damit das Ergebnis nicht davon
+      abhängt, ob der Rechner Internet hat.
+
 ## Phase ACP — Chimera als Agent für Editoren und IDEs (DESIGN: Regel „ACP“)
 
 Pflicht-Schnittstelle (smilez, 2.11.). **Entschieden: Der ACP-Server wird gebaut,

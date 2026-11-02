@@ -17,6 +17,12 @@
 # GiB, PiPortal). Fuer einen Agenten-Harness ist viel Auslagerung OOM-Schutz,
 # kein Luxus (Entscheidung smilez, 11.10.2026).
 #
+# Laeuft zram schon, wird der GANZE Speicherschritt uebersprungen (Vorgabe
+# smilez, 2.11.): kein Umkonfigurieren, kein Dateischritt, und vor allem
+# **kein `swapoff -a`** -- das wuerde die laufende Auslagerung abschalten und
+# den Speicher auf einmal in den RAM zwingen. Idempotent heisst hier: nicht
+# anfassen, was schon laeuft.
+#
 # Bekannte Grenze (DESIGN 5e): DietPis Werkzeug beginnt mit `swapoff -a` --
 # das schaltet auch zram ab. Beim Ersetzen der Datei gibt es deshalb einen
 # kurzen Moment ohne Auslagerung; danach wird zram sofort neu gestartet.
@@ -200,7 +206,41 @@ speicher_datei() {
 # Nach Zustand: Hat dietpi-set_swapfile mit `swapoff -a` auch zram
 # abgeschaltet, fehlt /dev/zram0 in /proc/swaps -- dann wird neu gestartet.
 # rc 0 Soll erreicht, 1 Befund, 2 Abbruch.
+# Ist zram schon eingerichtet, egal von wem? Gibt den Grund aus, rc 0 = ja.
+# Geprueft wird der Zustand, nicht das Manifest: Auch was der Nutzer von Hand
+# eingerichtet hat, ist "vorhanden" und wird nicht angefasst.
+speicher_zram_vorhanden() {
+	if [ -n "$(speicher_swap_eintrag /dev/zram0)" ]; then
+		printf 'in /proc/swaps aktiv\n'; return 0
+	fi
+	if [ -e "$(rootpath /dev/zram0)" ]; then
+		printf '/dev/zram0 vorhanden\n'; return 0
+	fi
+	if have_cmd systemctl && systemctl cat zramswap.service >/dev/null 2>&1; then
+		printf 'Dienst zramswap.service\n'; return 0
+	fi
+	if [ -f "$(rootpath "$SPEICHER_ZRAM_CONF")" ]; then
+		printf '%s\n' "$SPEICHER_ZRAM_CONF"; return 0
+	fi
+	if [ -e "$(rootpath /etc/systemd/zram-generator.conf)" ]; then
+		printf '/etc/systemd/zram-generator.conf\n'; return 0
+	fi
+	return 1
+}
+
 speicher_zram() {
+	# Nur anlegen, was noch nicht da ist (Vorgabe smilez, 2.11.). Ein Lauf, der
+	# eine vorhandene Einrichtung ueberschreibt, macht aus zwei Systemen eines und
+	# nimmt dem Nutzer seine Einstellung weg.
+	if _sz_vor="$(speicher_zram_vorhanden)"; then
+		# Die Buchfuehrung laeuft trotzdem: Sie aendert nichts am System und ohne
+		# sie weiss der Rueckbau nicht, dass zram-tools schon da war.
+		manifest_package_present zram-tools &&
+			{ manifest_has paket zram-tools || manifest_record paket zram-tools vorher_da; }
+		info "zram ist bereits eingerichtet ($_sz_vor) -- bleibt unveraendert, Schritt uebersprungen."
+		return 0
+	fi
+
 	_sz_soll="$(speicher_zram_soll_bytes)" || { err "MemTotal nicht lesbar."; return 2; }
 
 	if ! manifest_package_present zram-tools; then
@@ -261,10 +301,29 @@ speicher_zram() {
 # --- Ablauf ----------------------------------------------------------------
 speicher_einrichten() {
 	if _se_f="$(speicher_fremd)"; then
-		err "Fremde zram-Verwaltung gefunden: $_se_f"
-		err "Zwei Verwalter fuer /dev/zram0 waeren zwei Systeme. Nicht"
-		err "umgebaut -- Umstellen dieses Falls ist ein offenes Ende (ROADMAP)."
-		return 2
+		case "$_se_f" in
+			dphys-swapfile)
+				# Betrifft die Auslagerungsdatei, nicht zram: Hier waeren wir der
+				# zweite Verwalter derselben Datei.
+				err "Fremde Verwaltung der Auslagerungsdatei: $_se_f"
+				err "Nicht umgebaut -- Umstellen dieses Falls ist ein offenes Ende (ROADMAP)."
+				return 2 ;;
+			*)
+				# Ein zram-Verwalter ist schon da: Er bleibt der Verwalter.
+				info "zram wird bereits verwaltet ($_se_f) -- Chimera fasst es nicht an."
+				return 0 ;;
+		esac
+	fi
+
+	# Laeuft zram schon, bleibt der Speicher unberuehrt: kein Dateischritt
+	# (der ruft `swapoff -a`), kein Umkonfigurieren. Ein Update soll den
+	# laufenden Speicher nicht umwerfen.
+	if _se_zram_laeuft="$(speicher_zram_vorhanden)"; then
+		log "Speicher"
+		info "zram laeuft ($_se_zram_laeuft) -- Auslagerung und zram bleiben unberuehrt."
+		info "Kein Dateischritt: er wuerde 'swapoff -a' ausloesen."
+		log ""
+		return 0
 	fi
 
 	log "Auslagerungsdatei"
