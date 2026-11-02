@@ -22,6 +22,10 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 - **Anzeige:** Fortschrittsbalken während des Installer-Laufs — eine Stufe gleich viel, „Updating…" darüber; der Stand überlebt den Selbstneustart und springt nicht zurück.
 - **Anzeige:** Die Schritte 40/46/50 bekommen das Panel frei, damit die Anzeige-Erkennung nicht „Leitungen belegt" meldet.
 - **Anzeige:** Die Pause für die Anzeige-Schritte setzt ihren Wiedereinstiegspunkt selbst und zeichnet kein „fertig" mehr — der Balken springt nicht mehr auf 100 % und zurück.
+- **Anzeige:** LED zeigt den Verlauf — gelb blinkend während des Updates, grün bei Abschluss, ruhig gelb bei Befund, rot SOS bei Fehler.
+- **Anzeige:** Jede Backlight-Änderung wird mit Grund protokolliert; der Zeichner schreibt eine Spur (`/run/chimera-setup/zeichner.log`).
+- **Installer:** Ein Zeichner pro Lauf statt drei (er überlebt den Selbstneustart); das Display bleibt dadurch hell.
+- **Installer:** Bei einem Fehler ab rc 2 startet Mojo (`--mojo --fix`) abgekoppelt als `chimera-mojo-install`.
 ### Hinzugefügt
 - **Gateway:** Rust-Grundlage `rust/` mit dem Programm `chimera-tor`; die CI baut es statisch für aarch64 und legt es mit SHA-256 als Artefakt und auf `entwicklung` als Prerelease `rust-<commit>` ab.
 - **Installer:** Neues Modul 55 lädt das Gateway-Binary `chimera-tor` zum Commit der Quelle (`rust-<commit>`), prüft SHA-256 und Version und legt es nach `/opt/chimera/bin`; Rückbau 55 entfernt es.

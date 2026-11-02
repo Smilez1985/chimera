@@ -82,6 +82,35 @@ for wert, erwartet in ((0.0, 0), (0.5, 1), (1.0, 1)):
         check(f"{int(wert*100)} %: rechts Spur", rechts == (40, 32, 20), True)
     check(f"{int(wert*100)} %: Spur vorhanden", rechts != (0, 0, 0) or wert == 1.0, True)
 
+print("\n== LED-Abschlusszeichen ==")
+
+
+class _LEDPanel:
+    def __init__(self):
+        self.folge = []
+
+    def led(self, r, g, b):
+        self.folge.append((r, g, b))
+
+
+_p = _LEDPanel()
+mod.led_abschluss(_p, "ok", "")
+check("gruen: ein ruhiges Signal", len(_p.folge), 1)
+check("gruen: Farbe", _p.folge[0], (0, 210, 70))
+
+_p = _LEDPanel()
+mod.led_abschluss(_p, "fehler", "")
+_muster = [1 if c[0] else 0 for c in _p.folge]
+check("SOS: drei kurz, drei lang, drei kurz", _muster, [1, 0] * 9)
+
+_p = _LEDPanel()
+mod.led_abschluss(_p, "befund", "")
+check("Befund: gelb ruhig", (_p.folge[0], len(_p.folge)), ((255, 180, 0), 1))
+
+_p = _LEDPanel()
+mod.led_abschluss(_p, "", "")
+check("ohne Ergebnis gilt als Erfolg", len(_p.folge), 1)
+
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(1 if FAIL else 0)

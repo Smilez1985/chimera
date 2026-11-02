@@ -55,6 +55,50 @@ def lies(datei: Path) -> tuple[int, int] | None:
         return None
 
 
+GELB = (255, 180, 0)
+GRUEN = (0, 210, 70)
+ROT = (230, 30, 30)
+AUS = (0, 0, 0)
+
+
+def _led(panel, farbe) -> None:
+    """LED setzen, ohne dass ein Panel ohne LED den Lauf stoert."""
+    try:
+        panel.led(*farbe)
+    except Exception:                              # noqa: BLE001
+        pass
+
+
+def led_abschluss(panel, ergebnis: str, spur=None) -> None:
+    """Abschlusszeichen: gruen aufleuchten, bei Fehler rot SOS.
+
+    Vorgabe smilez (2.11.): waehrend des Updates gelb blinken, bei Abschluss
+    gruen aufleuchten, bei Fehler rot SOS blinken.
+    """
+    # Drei Ausgaenge, nicht zwei: Ein Befund (rc 1) ist kein Fehler -- sonst
+    # leuchtet die LED nach jedem Lauf rot, in dem nur etwas fehlt (etwa das
+    # Gateway-Binary ohne Commit). Gelb ruhig heisst "geschafft, mit Hinweis".
+    if ergebnis in ("ok", "", "0"):
+        _spur(spur, "LED: gruen (Abschluss)")
+        _led(panel, GRUEN)
+        time.sleep(3.0)
+        return
+    if ergebnis in ("befund", "hinweis"):
+        _spur(spur, "LED: gelb ruhig (Abschluss mit Befund)")
+        _led(panel, GELB)
+        time.sleep(3.0)
+        return
+    # SOS: kurz-kurz-kurz, lang-lang-lang, kurz-kurz-kurz -- ein Durchgang.
+    _spur(spur, "LED: rot SOS (Fehler)")
+    punkte = [(0.2, 0.2)] * 3 + [(0.6, 0.2)] * 3 + [(0.2, 0.2)] * 3
+    for an, pause in punkte:
+        _led(panel, ROT)
+        time.sleep(an)
+        _led(panel, AUS)
+        time.sleep(pause)
+    time.sleep(0.8)
+
+
 def _schrift(groesse: int):
     """Eine lesbare Schrift; ohne TrueType bleibt die eingebaute."""
     from PIL import ImageFont
@@ -124,6 +168,27 @@ def baue(breite: int, hoehe: int, moods: Path):
     return NoisyRenderer(state=st, width=breite, height=hoehe)
 
 
+def lies_ergebnis(pfad: str) -> str:
+    """Abschluss aus der Ergebnisdatei: ``ok`` oder alles andere = Fehler."""
+    if not pfad:
+        return "ok"
+    try:
+        return Path(pfad).read_text(encoding="utf-8").strip() or "ok"
+    except OSError:
+        return "ok"
+
+
+def _spur(pfad: str, text: str) -> None:
+    """Eine Zeile mit Zeitstempel in die Zeichnerspur schreiben."""
+    if not pfad:
+        return
+    try:
+        with open(pfad, "a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%H:%M:%S')} {text}\n")
+    except OSError:
+        pass
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="fortschritt")
     ap.add_argument("--datei", required=True)
@@ -132,6 +197,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--pause", default="",
                     help="Marke: nur beenden (Panel wird anderswo gebraucht)")
     ap.add_argument("--spur", default="", help="Zeichenspur (Werte) ablegen")
+    ap.add_argument("--ergebnis", default="",
+                    help="Datei mit ok|fehler fuer das Abschlusszeichen der LED")
+    ap.add_argument("--log", default="",
+                    help="Zeichnerspur (Zeitstempel, Grund) ablegen")
     ap.add_argument("--wieder", default="",
                     help="Wiedereinstiegspunkt: die Pause schreibt hierher, "
                          "wie weit sie gekommen ist")
@@ -145,6 +214,7 @@ def main(argv: list[str]) -> int:
 
     from chimera.display.panel import open_panel
 
+    _spur(args.log, f"Start (PID {os.getpid()}), Stand aus {args.datei}")
     datei = Path(args.datei)
     marke = Path(args.marke) if args.marke else None
     pause = Path(args.pause) if args.pause else None
@@ -159,12 +229,19 @@ def main(argv: list[str]) -> int:
     ren = baue(getattr(panel, "width", 240), getattr(panel, "height", 280),
                Path(args.moods) if args.moods else Path("data/moods-builtin.json"))
 
+    blinken = True
+    blink_an = True
+    pausiert = False
     letzter = -1.0
     letzter_stand: tuple[int, int] | None = None
     letzte_aenderung = time.time()
     fertig_gezeichnet = False
 
     while True:
+        if blinken:
+            _led(panel, GELB if blink_an else AUS)
+            blink_an = not blink_an
+
         stand = lies(datei)
         if stand:
             letzter_stand = stand
@@ -175,6 +252,7 @@ def main(argv: list[str]) -> int:
                 zeichne_text(img, args.text)
                 zeichne_balken(img, wert)
                 panel.show(img)
+                _spur(args.log, f"gezeichnet {wert:.4f} ({stand[0]}/{stand[1]})")
                 if args.bild:
                     img.save(args.bild)
             if args.spur:
@@ -200,8 +278,11 @@ def main(argv: list[str]) -> int:
                 except OSError as exc:
                     print(f"Wiedereinstiegspunkt nicht schreibbar: {exc}",
                           file=sys.stderr)
+            pausiert = True
+            _spur(args.log, "Pause: Panel wird freigegeben, Stand gesetzt")
             break
         if marke is not None and marke.exists() and not fertig_gezeichnet:
+            _spur(args.log, "Ende: fertig")
             img = ren.render()
             if img is not None:
                 zeichne_text(img, args.text)
@@ -214,15 +295,25 @@ def main(argv: list[str]) -> int:
                     except OSError:
                         pass
             fertig_gezeichnet = True
+            blinken = False
+            led_abschluss(panel, lies_ergebnis(args.ergebnis), args.log)
             break
         if time.time() - letzte_aenderung > args.sekunden:
             print("kein Fortschritt mehr — Anzeige beendet", file=sys.stderr)
             break
         time.sleep(0.5)
-    try:
-        panel.close()
-    except Exception:                              # noqa: BLE001
-        pass
+    if not pausiert:
+        _spur(args.log, "Ende: Panel wird geschlossen (Hintergrundlicht aus)")
+        try:
+            panel.close()
+        except Exception:                          # noqa: BLE001
+            pass
+    else:
+        _spur(args.log, "Pause: kein close() -- Hintergrundlicht bleibt an")
+    # Beim Pausieren wird bewusst NICHT geschlossen: close() setzt die
+    # Hintergrundbeleuchtung aus, und das Display bliebe waehrend des Schritts
+    # dunkel (am Geraet gesehen: 6 bis 24 s schwarz). Die Leitungen gibt der
+    # Prozess beim Ende ohnehin frei.
     return 0
 
 

@@ -224,9 +224,17 @@ for mod in $(steps_list); do
 	# Schritte, die das Panel selbst brauchen, bekommen es frei: Sonst meldet
 	# die Anzeige-Erkennung "Leitungen belegt" (am Pi 2.11. gemessen).
 	_FORT_PAUSIERT=0
+	# Nur Schritt 40 oeffnet das Panel selbst -- und auch das nur, wenn er
+	# wirklich erkennen muss. Ist die Anzeige schon eingerichtet (state/anzeige
+	# und /dev/spidev0.0), bricht er sofort ab. Dann bliebe das Panel bei einer
+	# Pause unnoetig dunkel: Beim Prozessende gibt der Kernel die GPIO-Leitung
+	# frei, und das Hintergrundlicht geht aus (am Geraet gesehen, 2.11.).
 	case "$name" in
-		40-*|46-*|50-*)
-			if [ "$_FORT_VORHANDEN" = 1 ]; then
+		40-*)
+			if [ "$_FORT_VORHANDEN" = 1 ] && \
+			   { [ ! -f "$(rootpath "$CHIMERA_OPT")/state/anzeige" ] || \
+			     [ ! -e /dev/spidev0.0 ]; }; then
+				info "Anzeige: Pause -- Schritt 40 muss das Panel selbst pruefen."
 				fortschritt_halt
 				_FORT_PAUSIERT=1
 			fi ;;
@@ -264,9 +272,9 @@ for mod in $(steps_list); do
 		# arbeitet unter dem angehaltenen Dienst weiter und muss ihn danach
 		# wieder starten -- sonst bliebe der Merker liegen und niemand
 		# protokollierte den Start.
-		# Anhalten, aber den Stand behalten: Der neue Prozess setzt den Balken
-		# fort, statt bei 0 zu beginnen.
-		fortschritt_halt
+		# Der Zeichner laeuft weiter: Der neue Prozess uebernimmt ihn (gleiche
+		# PID-Datei), statt ihn anzuhalten und neu zu starten. Jedes Anhalten
+		# macht das Display dunkel, weil der Kernel die GPIO-Leitung freigibt.
 		CHIMERA_LOGFILE_FORTSETZEN="$CHIMERA_LOGFILE"; export CHIMERA_LOGFILE_FORTSETZEN
 		[ "$_KLAMMER" = 1 ] && { CHIMERA_KLAMMER=1; export CHIMERA_KLAMMER; }
 		if [ "$HELFER_AUFTRAG" = 1 ]; then
@@ -305,7 +313,32 @@ for mod in $(steps_list); do
 	fi
 done
 
+# Bei einem echten Fehler (rc 2 oder mehr) steigt Mojo ein: Es prueft die
+# Dienste, Sockets und den Speicher und repariert, was es reparieren kann
+# (Vorgabe smilez, 2.11.). Ein Befund (rc 1) loest das nicht aus -- sonst
+# liefe Mojo nach jedem Lauf, in dem nur etwas fehlt.
+if [ "$FIRST_RC" -ge 2 ] && [ -x "$(rootpath "$CHIMERA_OPT")/bin/chimera-tor" ]; then
+	if have_cmd systemd-run; then
+		systemd-run --unit=chimera-mojo-install --collect --no-block --quiet \
+			"$(rootpath "$CHIMERA_OPT")/bin/chimera-tor" --mojo --fix \
+			>/dev/null 2>&1 && info "Mojo steigt ein (chimera-mojo-install)." || \
+			warn "Mojo konnte nicht gestartet werden."
+	else
+		"$(rootpath "$CHIMERA_OPT")/bin/chimera-tor" --mojo --fix >/dev/null 2>&1 || true
+	fi
+fi
+
 if [ "$_FORT_VORHANDEN" = 1 ]; then
+	# Ergebnis ans Abschlusszeichen: gruen bei Erfolg, rot SOS bei Befund oder
+	# Fehler (Vorgabe smilez, 2.11.).
+	if [ "$FAILED" -eq 0 ] && [ "$NEUSTART" -eq 0 ]; then
+		fortschritt_ergebnis ok
+	elif [ "$FIRST_RC" -le 1 ] && [ "$NEUSTART" -eq 0 ]; then
+		# Befund (rc 1): geschafft, aber etwas fehlt -- gelb, nicht rot.
+		fortschritt_ergebnis befund
+	else
+		fortschritt_ergebnis fehler
+	fi
 	fortschritt_stop
 fi
 

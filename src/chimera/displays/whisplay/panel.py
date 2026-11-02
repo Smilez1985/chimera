@@ -8,6 +8,7 @@ wir auch nicht: kein Daemon, kein exklusiver Zugriff (DESIGN Regel 7).
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from pathlib import Path
@@ -16,6 +17,8 @@ from ..base import Panel, Profil, to_rgb565
 from ..gpio import Leitungen
 from ..softpwm import SoftPWM
 from ..st7789 import DISPON, INVON, MADCTL, SLPOUT, St7789
+
+log = logging.getLogger(__name__)
 from ..st7789 import Profil as St7789Profil
 
 HIER = Path(__file__).resolve().parent
@@ -84,7 +87,7 @@ class WhisplayPanel(Panel):
             for k in (self._r, self._g, self._b)}
         for pwm in self._led.values():
             pwm.start(0)
-        self.backlight(100)
+        self.backlight(100, grund="Panel geoeffnet")
         self._taste_cb = None
         self._taste_laeuft = True
         self._taste_poll = taste_poll_s
@@ -98,8 +101,13 @@ class WhisplayPanel(Panel):
         self.pruefe_groesse(image)
         self._st.schreibe_bild(to_rgb565(image))
 
-    def backlight(self, percent: int) -> None:
+    def backlight(self, percent: int, *, grund: str = "") -> None:
         p = max(0, min(100, int(percent)))
+        # Jede Aenderung mit Grund ins Protokoll: "das Licht geht aus" ist sonst
+        # nicht nachvollziehbar (Vorgabe smilez, 2.11.).
+        if p != getattr(self, "_bl_zuletzt", None):
+            log.info("Hintergrundlicht: %d %% (Grund: %s)", p, grund or "ohne Angabe")
+            self._bl_zuletzt = p
         if self._bl_pwm is not None:
             self._bl_pwm.start(p)
         else:
@@ -134,6 +142,8 @@ class WhisplayPanel(Panel):
         self._taste_laeuft = False
         for pwm in self._led.values():
             pwm.stop(endpegel_an=False)
+        log.info("Panel schliessen: Hintergrundlicht aus")
+        self._bl_zuletzt = 0
         if self._bl_pwm is not None:
             self._bl_pwm.stop(endpegel_an=False)
         else:

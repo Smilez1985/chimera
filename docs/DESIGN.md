@@ -3470,6 +3470,18 @@ Der Zeichner liest eine Datei (`/run/chimera-setup/stand`, Inhalt
   sieht nach Neustarts aus, ist aber nur die Anzeige. Der Installer selbst
   startet sich **einmal** neu, und nur wenn `source/` sich geändert hat.
 
+**Licht und LED (Vorgabe smilez, 2.11.):** Während des Updates blinkt die LED
+gelb, bei Abschluss leuchtet sie grün, bei einem Befund ruhig gelb, bei einem
+echten Fehler blinkt sie rot SOS (drei kurz, drei lang, drei kurz). Ein Befund
+(rc 1) ist **kein** Fehler — sonst wäre nach jedem Lauf mit fehlendem
+Gateway-Binary alles rot.
+Bei einem Fehler ab rc 2 steigt **Mojo** ein (`chimera-tor --mojo --fix`,
+abgekoppelt als `chimera-mojo-install`).
+Jede Backlight-Änderung wird mit Grund protokolliert („Hintergrundlicht: N %
+(Grund)"), und der Zeichner schreibt eine Spur nach
+`/run/chimera-setup/zeichner.log`. Ohne diese Spur war „das Licht geht aus"
+nicht nachvollziehbar — jede Pause und jedes `close()` schaltet es aus.
+
 **Grenzen:** Bei `--only` und beim Boot-Abgleich gibt es keinen Balken (nichts
 zu verteilen, bzw. der Dienst läuft weiter). Ohne Anzeige oder ohne Python wird
 das gemeldet, nicht verschwiegen.
