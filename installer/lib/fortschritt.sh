@@ -11,6 +11,9 @@
 FORT_DIR="${CHIMERA_FORTSCHRITT_DIR:-/run/chimera-setup}"
 FORT_DATEI="$FORT_DIR/stand"
 FORT_MARKE="$FORT_DIR/stop"
+FORT_PAUSE="$FORT_DIR/pause"
+FORT_SPUR="$FORT_DIR/spur"
+FORT_WIEDER="$FORT_DIR/wieder"
 FORT_PID="$FORT_DIR/pid"
 _FORT_GESAMT=0
 
@@ -36,6 +39,17 @@ fortschritt_start() {
 		warn "Anzeige: $FORT_DIR nicht anlegbar -- kein Fortschrittsbalken."
 		return 0; }
 	rm -f "$FORT_MARKE" 2>/dev/null || true
+	# Wiedereinstiegspunkt: Hat eine Pause ihn geschrieben, gilt er -- der
+	# Zeichner hat dort aufgehoert, also geht es dort weiter.
+	if [ -f "$FORT_WIEDER" ]; then
+		_wd="$(awk 'NR == 1 { print $1 }' "$FORT_WIEDER" 2>/dev/null)"
+		case "$_wd" in
+			''|*[!0-9]*) : ;;
+			*) [ "$_wd" -gt "$_FORT_SCHON" ] && _FORT_SCHON="$_wd" ;;
+		esac
+		rm -f "$FORT_WIEDER" 2>/dev/null || true
+	fi
+
 	# Ein bereits erreichter Stand bleibt stehen: Nach dem Selbstneustart aus
 	# source/ beginnt der Lauf neu, der Balken darf aber nicht zurueckspringen.
 	if [ -f "$FORT_DATEI" ]; then
@@ -56,11 +70,11 @@ fortschritt_start() {
 	if command -v setsid >/dev/null 2>&1; then
 		PYTHONPATH="$_fs_src" PYTHONDONTWRITEBYTECODE=1 \
 			setsid "$_fs_py" "$_fs_skript" --datei "$FORT_DATEI" \
-			--marke "$FORT_MARKE" --moods "$_fs_moods" --text "${CHIMERA_FORTSCHRITT_TEXT:-Updating...}" </dev/null >/dev/null 2>&1 &
+			--marke "$FORT_MARKE" --pause "$FORT_PAUSE" --spur "$FORT_SPUR" --wieder "$FORT_WIEDER" --moods "$_fs_moods" --text "${CHIMERA_FORTSCHRITT_TEXT:-Updating...}" </dev/null >/dev/null 2>&1 &
 	else
 		PYTHONPATH="$_fs_src" PYTHONDONTWRITEBYTECODE=1 \
 			"$_fs_py" "$_fs_skript" --datei "$FORT_DATEI" \
-			--marke "$FORT_MARKE" --moods "$_fs_moods" --text "${CHIMERA_FORTSCHRITT_TEXT:-Updating...}" </dev/null >/dev/null 2>&1 &
+			--marke "$FORT_MARKE" --pause "$FORT_PAUSE" --spur "$FORT_SPUR" --wieder "$FORT_WIEDER" --moods "$_fs_moods" --text "${CHIMERA_FORTSCHRITT_TEXT:-Updating...}" </dev/null >/dev/null 2>&1 &
 	fi
 	echo "$!" >"$FORT_PID" 2>/dev/null || true
 	# Kurz warten und pruefen, ob der Zeichner ueberhaupt lebt.
@@ -97,14 +111,15 @@ fortschritt_setze() {
 # laufendem Zeichner meldet die Erkennung "Leitungen belegt").
 fortschritt_halt() {
 	_fh_pid="$(cat "$FORT_PID" 2>/dev/null || echo "")"
-	: >"$FORT_MARKE" 2>/dev/null || true
+	# Eigene Marke: beenden ohne "fertig" -- sonst zeichnet der Zeichner 100 %.
+	: >"$FORT_PAUSE" 2>/dev/null || true
 	_fh_i=0
 	while [ -n "$_fh_pid" ] && kill -0 "$_fh_pid" 2>/dev/null && [ "$_fh_i" -lt 6 ]; do
 		_fh_i=$((_fh_i + 1))
 		sleep 0.5
 	done
 	[ -n "$_fh_pid" ] && kill "$_fh_pid" 2>/dev/null || true
-	rm -f "$FORT_MARKE" "$FORT_PID" 2>/dev/null || true
+	rm -f "$FORT_PAUSE" "$FORT_PID" 2>/dev/null || true
 	return 0
 }
 
@@ -121,6 +136,6 @@ fortschritt_stop() {
 		kill "$_fst_pid" 2>/dev/null || true
 		warn "Anzeige: Zeichner reagierte nicht -- beendet."
 	fi
-	rm -f "$FORT_MARKE" "$FORT_PID" "$FORT_DATEI" 2>/dev/null || true
+	rm -f "$FORT_MARKE" "$FORT_PAUSE" "$FORT_WIEDER" "$FORT_PID" "$FORT_DATEI" 2>/dev/null || true
 	return 0
 }

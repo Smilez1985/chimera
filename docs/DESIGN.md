@@ -3462,6 +3462,14 @@ Der Zeichner liest eine Datei (`/run/chimera-setup/stand`, Inhalt
   als der in der Datei (Vorgabe an `fortschritt_start` und `fortschritt_setze`).
 - `gesamt` 0 heißt fertig, nicht Division durch Null.
 
+- **Pause ≠ fertig:** Die Pause benutzt eine eigene Marke. Mit derselben Marke
+  zeichnete der Zeichner beim Anhalten 100 % und sprang danach zurück (am Gerät
+  gesehen, 2.11.). Beim Pausieren schreibt er **selbst** seinen Wiedereinstiegs-
+  punkt (`/run/chimera-setup/wieder`); der nächste Zeichner beginnt dort.
+- Der Zeichner wird je Lauf mehrfach gestartet (nach jeder Panel-Pause) — das
+  sieht nach Neustarts aus, ist aber nur die Anzeige. Der Installer selbst
+  startet sich **einmal** neu, und nur wenn `source/` sich geändert hat.
+
 **Grenzen:** Bei `--only` und beim Boot-Abgleich gibt es keinen Balken (nichts
 zu verteilen, bzw. der Dienst läuft weiter). Ohne Anzeige oder ohne Python wird
 das gemeldet, nicht verschwiegen.

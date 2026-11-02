@@ -127,7 +127,14 @@ def baue(breite: int, hoehe: int, moods: Path):
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="fortschritt")
     ap.add_argument("--datei", required=True)
-    ap.add_argument("--marke", default="")
+    ap.add_argument("--marke", default="",
+                    help="Marke: fertig -- zeichnet 100 %% und endet")
+    ap.add_argument("--pause", default="",
+                    help="Marke: nur beenden (Panel wird anderswo gebraucht)")
+    ap.add_argument("--spur", default="", help="Zeichenspur (Werte) ablegen")
+    ap.add_argument("--wieder", default="",
+                    help="Wiedereinstiegspunkt: die Pause schreibt hierher, "
+                         "wie weit sie gekommen ist")
     ap.add_argument("--moods", default="")
     ap.add_argument("--sekunden", type=float, default=600.0)
     ap.add_argument("--still", action="store_true", help="kein Panel, nur rechnen")
@@ -140,16 +147,27 @@ def main(argv: list[str]) -> int:
 
     datei = Path(args.datei)
     marke = Path(args.marke) if args.marke else None
-    panel = open_panel("auto")
+    pause = Path(args.pause) if args.pause else None
+    if args.still:
+        # Ohne Panel (Tests, Prüfung der Rechnung): dasselbe Bild, nur nicht
+        # auf die Leitung -- kein stilles Ueberspringen, der Aufrufer weiss es.
+        from chimera.displays import NullPanel
+
+        panel = NullPanel(width=240, height=280)
+    else:
+        panel = open_panel("auto")
     ren = baue(getattr(panel, "width", 240), getattr(panel, "height", 280),
                Path(args.moods) if args.moods else Path("data/moods-builtin.json"))
 
     letzter = -1.0
+    letzter_stand: tuple[int, int] | None = None
     letzte_aenderung = time.time()
     fertig_gezeichnet = False
 
     while True:
         stand = lies(datei)
+        if stand:
+            letzter_stand = stand
         wert = anteil(*stand) if stand else 0.0
         if abs(wert - letzter) > 1e-9:
             img = ren.render()
@@ -159,14 +177,42 @@ def main(argv: list[str]) -> int:
                 panel.show(img)
                 if args.bild:
                     img.save(args.bild)
+            if args.spur:
+                try:
+                    with open(args.spur, "a", encoding="utf-8") as f:
+                        f.write(f"{wert:.4f}\n")
+                except OSError:
+                    pass
             letzter = wert
             letzte_aenderung = time.time()
+        # Pause: Das Panel wird von einem Schritt gebraucht (Anzeige-Erkennung).
+        # Beenden, ohne 100 % zu zeichnen -- sonst springt der Balken auf voll
+        # und gleich wieder zurueck (am Geraet gesehen, 2.11.).
+        if pause is not None and pause.exists():
+            # Der Zeichner setzt den Wiedereinstiegspunkt selbst -- an der
+            # Stelle, an der er die Pause ansetzt. So beginnt der naechste
+            # Zeichner genau dort, wo dieser aufgehoert hat.
+            if args.wieder and letzter_stand:
+                try:
+                    Path(args.wieder).write_text(
+                        f"{letzter_stand[0]} {letzter_stand[1]}\n",
+                        encoding="utf-8")
+                except OSError as exc:
+                    print(f"Wiedereinstiegspunkt nicht schreibbar: {exc}",
+                          file=sys.stderr)
+            break
         if marke is not None and marke.exists() and not fertig_gezeichnet:
             img = ren.render()
             if img is not None:
                 zeichne_text(img, args.text)
                 zeichne_balken(img, 1.0)
                 panel.show(img)
+                if args.spur:
+                    try:
+                        with open(args.spur, "a", encoding="utf-8") as f:
+                            f.write("1.0000\n")
+                    except OSError:
+                        pass
             fertig_gezeichnet = True
             break
         if time.time() - letzte_aenderung > args.sekunden:
