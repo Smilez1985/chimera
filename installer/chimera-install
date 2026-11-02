@@ -85,6 +85,14 @@ export CHIMERA_DOWNGRADE="${CHIMERA_DOWNGRADE:-false}" CHIMERA_MIT="${CHIMERA_MI
 . "$HERE/lib/helfer.sh"
 if [ "$HELFER_AUFTRAG" = 1 ]; then
 	helfer_env_lesen
+	# Laufzettel: Der Helfer meldet selbst, dass er laeuft und wie er endet.
+	# Noetig, weil die transiente Unit am Pi nach dem Start nicht abfragbar ist.
+	_hel_start="$(date +%s)"
+	helfer_zettel_schreiben laufend "$$" "" "$_hel_start"
+	_helfer_ende() {
+		helfer_zettel_schreiben fertig "" "${1:-0}" "$_hel_start"
+	}
+	trap '_helfer_ende 2' INT TERM
 fi
 
 # Die Argumente fuer den Neustart aus source/ (I8) festhalten -- nach der
@@ -191,7 +199,7 @@ for mod in $(steps_list); do
 	# Betriebsart wird an das Modul durchgereicht; Module, die sie nicht
 	# kennen, ignorieren sie.
 	set +e
-	CHIMERA_MODE="$MODE" CHIMERA_LOGFILE="$CHIMERA_LOGFILE" sh "$mod"
+	CHIMERA_MODE="$MODE" CHIMERA_LOGFILE="$CHIMERA_LOGFILE" CHIMERA_KLAMMER="$_KLAMMER" sh "$mod"
 	rc=$?
 	set -e
 
@@ -274,6 +282,9 @@ else
 	[ "$NEUSTART" -eq 1 ] && \
 		warn "Ausserdem steht ein Neustart aus (wird erst nach Fehlern gemeldet)."
 	ENDE_RC="$FIRST_RC"
+fi
+if [ "$HELFER_AUFTRAG" = 1 ]; then
+	helfer_zettel_schreiben fertig "" "$ENDE_RC" "$_hel_start"
 fi
 log_close "$ENDE_RC"
 exit "$ENDE_RC"

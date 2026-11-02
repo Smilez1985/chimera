@@ -83,17 +83,58 @@ helfer_env_lesen() {
 	rm -f "$_hel_d"
 }
 
+# --- Laufzettel ------------------------------------------------------------
+#
+# Warum nicht ueber systemd: Am Pi gemessen ist die transiente Unit nach dem
+# Start nicht abfragbar ("could not be found", /run/systemd/transient/ leer),
+# obwohl sie laeuft. Ein Laufzettel auf der Platte ist davon unabhaengig.
+
+# Der Laufzettel liegt NICHT unter /run/chimera: Das ist RuntimeDirectory der
+# Dienst-Unit, systemd loescht es beim Anhalten -- und die Klammer haelt den
+# Dienst an. Am Pi gemessen: der Lauf war fertig, der Zettel verschwunden.
+: "${CHIMERA_HELFER_STATUS:=/run/chimera-installhelper.status}"
+
+helfer_zettel() {
+	_hz_d="$(dirname "$CHIMERA_HELFER_STATUS")"
+	if [ -d "$_hz_d" ] && [ -w "$_hz_d" ]; then
+		printf '%s\n' "$CHIMERA_HELFER_STATUS"
+		return 0
+	fi
+	# Kein /run (etwa im Test oder mit CHIMERA_ROOT): neben das Protokoll.
+	printf '%s/installhelfer.status\n' "${TMPDIR:-/tmp}"
+}
+
+# $1 zustand (laufend|fertig), $2 pid, $3 rc (nur bei fertig), $4 startzeit
+helfer_zettel_schreiben() {
+	_zf="$(helfer_zettel)"
+	printf 'zustand=%s\npid=%s\nrc=%s\nstart=%s\nende=%s\n' \
+		"$1" "${2:-}" "${3:-}" "${4:-}" "$(date +%s)" >"$_zf" 2>/dev/null || true
+}
+
+helfer_zettel_wert() {
+	_zf="$(helfer_zettel)"
+	[ -f "$_zf" ] || return 1
+	sed -n "s/^$1=//p" "$_zf" | head -n1
+}
+
+# Laeuft laut Laufzettel noch ein Lauf? rc 0 = ja.
+helfer_zettel_laeuft() {
+	[ "$(helfer_zettel_wert zustand)" = laufend ] || return 1
+	_zp="$(helfer_zettel_wert pid)"
+	[ -n "$_zp" ] || return 1
+	kill -0 "$_zp" 2>/dev/null
+}
+
 # Die Arbeit abgekoppelt starten und ihr Ergebnis abwarten.
 # $1 das Programm (chimera-install), Rest: seine Argumente.
 # Rueckgabe: Exitcode des Laufs; 2 wenn er nicht startbar ist.
 helfer_starten() {
 	_hs_prog="$1"; shift
 	have_cmd systemd-run || { err "systemd-run fehlt -- der Lauf kann nicht abgekoppelt werden."; return 2; }
-	if helfer_aktiv; then
-		# Wieder aufrufbar: Ein zweiter Aufruf startet nichts Neues, er haengt
-		# sich an den laufenden Lauf (etwa nach einem Abbruch der Verbindung).
-		info "Ein Lauf ist bereits im Gange ($CHIMERA_HELFER_UNIT) -- haenge mich an, kein zweiter Start."
-		info "  Fortschritt: journalctl -u $CHIMERA_HELFER_UNIT -f"
+	if helfer_zettel_laeuft; then
+		# Wieder aufrufbar: nach einem Abbruch der Verbindung findet der neue
+		# Aufruf den laufenden Lauf und haengt sich an ihn.
+		info "Ein Lauf ist bereits im Gange (PID $(helfer_zettel_wert pid)) -- haenge mich an, kein zweiter Start."
 		helfer_abwarten
 		return $?
 	fi
@@ -103,13 +144,25 @@ helfer_starten() {
 		rm -f "$_hs_env"
 		return 0
 	fi
-	if ! systemd-run --unit="$CHIMERA_HELFER_UNIT" --collect --quiet --service-type=oneshot \
+	helfer_zettel_schreiben laufend "" "" "$(date +%s)"
+	# Der Name kann von einem frueheren Lauf belegt sein ("Unit ... was already
+	# loaded") -- etwa nach einem Abbruch. Einmal freigeben und erneut versuchen.
+	_hs_fehl=""
+	if ! _hs_fehl="$(systemd-run --unit="$CHIMERA_HELFER_UNIT" --collect --quiet --service-type=oneshot \
 		--description="Chimera -- Installer (abgekoppelt)" \
 		--setenv="CHIMERA_HELFER=1" --setenv="CHIMERA_HELFER_ENV=$_hs_env" \
-		/bin/sh "$_hs_prog" --helfer "$@"; then
-		err "Der Helfer startete nicht (systemd-run)."
-		rm -f "$_hs_env"
-		return 2
+		/bin/sh "$_hs_prog" --helfer "$@" 2>&1)"; then
+		systemctl reset-failed "$CHIMERA_HELFER_UNIT" >/dev/null 2>&1 || true
+		_hs_fehl=""
+		if ! _hs_fehl="$(systemd-run --unit="$CHIMERA_HELFER_UNIT" --collect --quiet --service-type=oneshot \
+			--description="Chimera -- Installer (abgekoppelt)" \
+			--setenv="CHIMERA_HELFER=1" --setenv="CHIMERA_HELFER_ENV=$_hs_env" \
+			/bin/sh "$_hs_prog" --helfer "$@" 2>&1)"; then
+			helfer_zettel_schreiben fehler "" 2 "$(date +%s)"
+			err "Der Helfer startete nicht (systemd-run): ${_hs_fehl:-ohne Meldung}"
+			rm -f "$_hs_env"
+			return 2
+		fi
 	fi
 	info "Lauf laeuft abgekoppelt als $CHIMERA_HELFER_UNIT -- eine getrennte SSH-Sitzung beendet ihn nicht."
 	helfer_abwarten
@@ -117,15 +170,26 @@ helfer_starten() {
 
 # Warten, bis die Unit fertig ist, und ihren Exitcode zurueckgeben.
 helfer_abwarten() {
-	while systemctl is-active --quiet "$CHIMERA_HELFER_UNIT" 2>/dev/null; do
+	# Warten, bis der Laufzettel "fertig" sagt oder der Prozess verschwunden ist.
+	while helfer_zettel_laeuft; do
 		sleep 2
 	done
-	_hw_rc="$(systemctl show "$CHIMERA_HELFER_UNIT" -p ExecMainStatus --value 2>/dev/null)"
-	case "$_hw_rc" in
-		'' | *[!0-9]*) warn "Exitcode des Helfers nicht lesbar -- Ergebnis im Protokoll."; return 0 ;;
+	case "$(helfer_zettel_wert zustand)" in
+		fertig)
+			_hw_rc="$(helfer_zettel_wert rc)"
+			case "$_hw_rc" in
+				''|*[!0-9]*) warn "Exitcode des Helfers nicht lesbar -- Ergebnis im Protokoll."; return 0 ;;
+			esac
+			info "Helfer beendet mit Exitcode $_hw_rc."
+			return "$_hw_rc" ;;
+		laufend)
+			# Prozess weg, aber kein "fertig": abgestuerzt.
+			err "Der Helfer endete ohne Ergebnis (Hartabbruch?) -- Protokoll pruefen."
+			return 2 ;;
+		*)
+			warn "Kein Laufzettel -- Ergebnis im Protokoll."
+			return 0 ;;
 	esac
-	info "Helfer beendet mit Exitcode $_hw_rc."
-	return "$_hw_rc"
 }
 
 # --- Klammer um den Lauf ---------------------------------------------------
@@ -237,6 +301,32 @@ klammer_aus() {
 			warn "Gateway-Programm fehlt ($_ke_prog) -- Wecken uebersprungen."
 		fi
 	done
+	# Sicherheitsnetz: Der Sitzungs-Socket muss lauschen, sobald der Dienst
+	# laeuft -- unabhaengig davon, wie er vor dem Lauf stand. Am 31.10. und am
+	# 2.11. blieb er aus ("Socket service already active, refusing"), und der
+	# Dienst lief 22 Stunden ohne ihn.
+	# Nur, wenn der Socket auch eingeschaltet ist: Ein bewusst abgeschalteter
+	# bleibt aus (Vorgabe: nichts anfassen, was der Nutzer so eingerichtet hat).
+	for _kn_s in $KLAMMER_SOCKETS; do
+		systemctl is-active --quiet "$_kn_s" 2>/dev/null && continue
+		[ "$(systemctl is-enabled "$_kn_s" 2>/dev/null)" = enabled ] || {
+			info "Socket $_kn_s ist aus und nicht eingeschaltet -- bleibt so."
+			continue; }
+		if systemctl is-active --quiet "$CHIMERA_DIENST" 2>/dev/null; then
+			warn "$_kn_s laesst sich nicht starten, solange $CHIMERA_DIENST laeuft -- Dienst wird dafuer angehalten."
+			systemctl stop "$CHIMERA_DIENST" >/dev/null 2>&1 || true
+		fi
+		if systemctl start "$_kn_s" >/dev/null 2>&1; then
+			info "Socket nachgezogen: $_kn_s"
+		else
+			err "Socket $_kn_s nicht startbar."
+			_ke_befund=1
+		fi
+		systemctl is-active --quiet "$CHIMERA_DIENST" 2>/dev/null || \
+			systemctl start "$CHIMERA_DIENST" >/dev/null 2>&1 || {
+				err "Dienst nach dem Socket-Start nicht startbar."; _ke_befund=1; }
+	done
+
 	# Nachweis: Ein Dienst, der gleich wieder stirbt, ist kein Erfolg.
 	for _ke_u in $KLAMMER_SOCKETS $KLAMMER_DIENSTE; do
 		case "$_ke_lief" in *" $_ke_u "*) ;; *) continue ;; esac

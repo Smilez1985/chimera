@@ -61,9 +61,13 @@ lauf() {
 		# nach common.sh: es setzt CHIMERA_RUNLOG auf seinen eigenen Vorgabewert
 		CHIMERA_RUNLOG="$F/run"; CHIMERA_LOG_DIR="$F/run"
 		CHIMERA_OPT="$F/opt"; CHIMERA_TOR_SOCKET="$F/tor.sock"
+		CHIMERA_HELFER_STATUS="$F/zettel.status"
 
 		systemd-run() {
 			printf 'systemd-run %s\n' "$*" >>"$F/spur"
+			# Wie der echte Helfer: Laufzettel schreiben (er sagt, wie es ausging).
+			printf 'zustand=fertig\npid=\nrc=%s\nstart=0\nende=0\n' "$(cat "$F/rc")" \
+				>"$CHIMERA_HELFER_STATUS"
 			# Argumente der Unit festhalten, um sie im Test zu pruefen.
 			printf '%s\n' "$*" >"$F/unit-args"
 			return "${SR_RC:-0}"
@@ -126,9 +130,11 @@ hat_nicht "Helfer: kein Passwort auf der Befehlszeile" "$F/unit-args" "CHIMERA_W
 
 # --- 2. Zweiter Aufruf haengt sich an, startet nichts Neues --------------
 feld doppelt
-printf 'chimera-installhelper\n' >"$F/lauf"
 printf '3\n' >"$F/rc"
-printf '2\n' >"$F/ende-nach"   # der laufende Lauf endet nach der zweiten Abfrage
+mkdir -p "$F/run"
+# Ein Lauf ist im Gange: Laufzettel "laufend" mit lebender PID; nach 2 s endet er.
+printf 'zustand=laufend\npid=%s\nrc=\nstart=0\nende=0\n' "$$" >"$F/zettel.status"
+( sleep 2; printf 'zustand=fertig\npid=\nrc=3\nstart=0\nende=1\n' >"$F/zettel.status" ) &
 SR_RC=0 lauf helfer_starten /pfad/chimera-install
 check "Wiederaufruf: Exitcode des laufenden Laufs" "$(cat "$F/rc-aus")" 3
 check "Wiederaufruf: kein zweiter systemd-run" "$(grep -c '^systemd-run' "$F/spur" || true)" 0

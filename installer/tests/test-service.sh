@@ -146,6 +146,8 @@ hat "Boot-Abgleich: Befund und Neustartwunsch sind kein Fehler" "$HW" "SuccessEx
 hat "Boot-Abgleich: kurze Netzgrenze" "$HW" "Environment=CHIMERA_NETWORK_LIMIT=20"
 hat "Dienst wartet auf den Boot-Abgleich (After=)" "$U" "After=network-online.target chimera-hardware.service"
 hat_nicht "Dienst haengt nicht hart am Abgleich (kein Requires)" "$U" "Requires=chimera-hardware.service"
+hat "Dienst: haengt am Sitzungs-Socket" "$U" "Requires=chimera-sitzung.socket"
+hat "Dienst: Sitzungs-Socket kommt vor dem Dienst" "$U" "After=chimera-sitzung.socket"
 hat "Dienst liest die Anzeige aus dem RAM (EnvironmentFile=-)" "$U" "EnvironmentFile=-/run/chimera/anzeige.env"
 if grep -q "systemctl enable chimera-hardware.service" "$F/spur"; then ok "Boot-Abgleich aktiviert (enable, nicht --now)"
 else bad "Boot-Abgleich nicht aktiviert"; fi

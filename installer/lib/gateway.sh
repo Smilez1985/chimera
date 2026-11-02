@@ -298,6 +298,11 @@ gateway_einrichten() {
 			systemctl stop "$CHIMERA_DIENST" >/dev/null 2>&1 || {
 				err "systemctl stop $CHIMERA_DIENST schlug fehl."; return 2; }
 		fi
+		if [ "${CHIMERA_KLAMMER:-0}" = 1 ]; then
+			info "Klammer laeuft -- Socket wird am Ende gestartet, nicht jetzt."
+			systemctl enable "$CHIMERA_SITZUNG_SOCKETUNIT" >/dev/null 2>&1 || true
+			manifest_record dienst "$CHIMERA_SITZUNG_SOCKETUNIT" aktiviert
+		else
 		systemctl enable --now "$CHIMERA_SITZUNG_SOCKETUNIT" >/dev/null 2>&1 || {
 			err "systemctl enable --now $CHIMERA_SITZUNG_SOCKETUNIT schlug fehl."
 			[ "$_ge_dienst_lief" = 1 ] && systemctl start "$CHIMERA_DIENST" >/dev/null 2>&1
@@ -306,6 +311,7 @@ gateway_einrichten() {
 		if [ "$_ge_dienst_lief" = 1 ]; then
 			systemctl start "$CHIMERA_DIENST" >/dev/null 2>&1 || {
 				err "systemctl start $CHIMERA_DIENST schlug fehl."; return 2; }
+		fi
 		fi
 	elif [ "$_ge_neu" = 1 ]; then
 		systemctl restart "$CHIMERA_SITZUNG_SOCKETUNIT" >/dev/null 2>&1 || true

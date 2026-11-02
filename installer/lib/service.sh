@@ -42,6 +42,9 @@ SERVICE_TIMER_DIENST=chimera-logabgleich.service
 # Leitungen!), zieht bei Abweichung die Hardware-Module nach, laedt den
 # Ton zur Laufzeit. Der Dienst wartet darauf (After/Wants).
 SERVICE_HARDWARE=chimera-hardware.service
+# Der eine Weg in die Hauptsitzung (Regel 5s). Der Dienst haengt daran; die
+# Unit legt Schritt 99 an, hier wird nur der Name gebraucht.
+: "${CHIMERA_SITZUNG_SOCKETUNIT:=chimera-sitzung.socket}"
 SERVICE_INSTALLER="$CHIMERA_SOURCE/installer/chimera-install"
 # Schutz der SSH-Sitzung: Sie soll einen Speicherengpass ueberleben (Regel
 # "Installerhelfer"). Welche Unit das ist, steht nicht fest (ssh oder sshd).
@@ -84,6 +87,13 @@ service_unit_text() {
 Description=Chimera -- ein Agent, der ein Gesicht macht
 After=network-online.target $SERVICE_HARDWARE
 Wants=network-online.target
+# Der Sitzungs-Socket ist der eine Weg in die Hauptsitzung. Ohne ihn ist der
+# Dienst nicht erreichbar, und systemd verweigert spaeter den Socket, wenn der
+# Dienst schon laeuft ("Socket service already active, refusing"; am 31.10. und
+# 2.11. so passiert). Requires zieht ihn beim Start immer zuerst hoch,
+# After legt die Reihenfolge fest. Wird der Socket gestoppt, endet der Dienst.
+Requires=$CHIMERA_SITZUNG_SOCKETUNIT
+After=$CHIMERA_SITZUNG_SOCKETUNIT
 # Erst der Boot-Abgleich (Erkennung, Ton), dann das Gesicht. Scheitert der
 # Abgleich, startet der Dienst trotzdem (Wants, nicht Requires): blind mit
 # benanntem Grund ist besser als gar nicht (Regel 8a) -- und der Abgleich
@@ -429,11 +439,19 @@ service_einrichten() {
 		# reset-failed: Eine fruehere Schleife hat sonst das Startlimit
 		# schon verbraucht, und der Start wird abgelehnt.
 		systemctl reset-failed "$CHIMERA_DIENST" >/dev/null 2>&1 || true
-		systemctl restart "$CHIMERA_DIENST" || {
+		if [ "${CHIMERA_KLAMMER:-0}" = 1 ]; then
+			# Die Klammer haelt den Dienst angehalten und startet ihn am Ende
+			# in der richtigen Reihenfolge (Sockets zuerst). Ein Start hier
+			# wuerde das verhindern: systemd verweigert dann den Socket
+			# ("Socket service already active, refusing"; am Pi 2.11. gesehen).
+			info "Klammer laeuft -- Dienst wird am Ende gestartet, nicht jetzt."
+		elif systemctl restart "$CHIMERA_DIENST"; then
+			_se_gestartet=1
+		else
 			err "systemctl restart $CHIMERA_DIENST schlug fehl."
 			err "  journalctl -u $CHIMERA_DIENST -n 30"
-			return 1; }
-		_se_gestartet=1
+			return 1
+		fi
 	fi
 	log ""
 

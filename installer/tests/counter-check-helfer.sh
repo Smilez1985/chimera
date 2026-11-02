@@ -136,5 +136,20 @@ mutation gateway-direkt \
 	's|KLAMMER_DIENSTE:=chimera.service}|KLAMMER_DIENSTE:=chimera.service chimera-tor.service}|' \
 	"Klammer aus: Gateway nicht direkt gestartet"
 
+# M20: Der Helfer schreibt keinen Laufzettel -> der Aufrufer wartet ins Leere.
+mutation kein-zettel \
+	's|^\thelfer_zettel_schreiben laufend "" "" "$(date +%s)"$|\t:|' \
+	"Helfer: Exitcode des Laufs kommt an (42)"
+
+# M21: Ein zweiter Aufruf startet trotz laufendem Lauf neu.
+mutation zettel-ignoriert \
+	's|^\tif helfer_zettel_laeuft; then$|\tif false; then|' \
+	"Wiederaufruf: kein zweiter systemd-run"
+
+# M22: Ein Laufzettel ohne "fertig" gilt als Erfolg.
+mutation hartabbruch-still \
+	's|^\t\t\terr "Der Helfer endete ohne Ergebnis (Hartabbruch?) -- Protokoll pruefen."$|\t\t\t:|' \
+	"Helfer: Exitcode des Laufs kommt an (42)"
+
 printf '\nErgebnis: %s ok, %s fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
