@@ -55,15 +55,16 @@ zram wird nicht angefasst, wenn es läuft.
       Operation `gesicht` am Sitzungs-Socket; der Installer setzt es, bevor die
       Dienste gehen (`installer/lib/py/gesicht.py`). Das Panel wird nicht
       geleert, das Bild bleibt bis zum Dienststart stehen.
-- [x] **Fortschrittsbalken:** echte Stufen (fertig/gesamt), „Updating…"
-      darüber, eigener Zeichner, Pause um die Panel-Schritte. Am Pi belegt:
-      0 → 1 → 7 → 8 → 9 von 12 ohne Rücksprung; Anzeige-Erkennung ohne Befund.
-- [ ] **„Updated“-Gesicht: Nachweis am Gerät:** Einmal mit laufendem Dienst
-      ausführen und am Display ablesen. Bisher nur im Test belegt (Socket-Antwort
-      und Protokollzeile), nicht am Panel. Der Installer setzt am Anfang ein
-      Gesicht, das den Update-Zustand zeigt, und der Bildschirminhalt bleibt bis
-      zum Dienststart bzw. Neustart stehen (Panel nicht leeren, Backlight an).
-      Braucht einen Weg vom Installer zur Anzeige (Socket-Operation).
+- [x] **Fortschrittsbalken, LED und Licht:** echte Stufen (fertig/gesamt),
+      „Updating…" darüber, ein Zeichner je Lauf; LED gelb blinkend → grün /
+      gelb ruhig / rot SOS; jede Backlight-Änderung mit Grund protokolliert.
+      Am Pi belegt: Spur `0,00 … 1,00` ohne Rücksprung, genau ein Zeichner.
+- [x] **„Updated“-Gesicht am Gerät:** am Panel abgelesen (2.11.): Gesicht mit
+      Balken und „Updating…" sichtbar, Anzeige bleibt bis zum Dienststart.
+- [ ] **Grüner LED-Abschluss am Gerät:** Bisher leuchtet am Ende gelb, weil
+      jeder Lauf aus einem Zip mit dem Befund „kein Commit ⇒ kein Binary" endet
+      (rc 1). Ein Lauf aus einem Git-Baum mit Commit muss grün zeigen — einmal
+      ablesen, dann ist der Fall belegt.
 - [ ] **pip: nur Fehlendes, ohne `--upgrade`.** Zurückgestellt: Die Änderung
       machte zwei Tests von `test-python-env.sh` rot; der erprobte Stand bleibt,
       bis die Ursache geklärt ist (das venv hatte `numpy 2.5.4` statt `1.26.4`).

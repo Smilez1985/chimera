@@ -3455,8 +3455,13 @@ Der Zeichner liest eine Datei (`/run/chimera-setup/stand`, Inhalt
 
 **Gemessen (2.11.), was die Regel begründet:**
 - Mit laufendem Zeichner meldet die Anzeige-Erkennung „Leitungen belegt" —
-  der Zeichner hält SPI. Die Schritte 40, 46 und 50 bekommen das Panel
-  deshalb frei (`fortschritt_halt` vor dem Schritt, Neustart danach).
+  der Zeichner hält SPI. Nur Schritt 40 braucht das Panel selbst, und auch nur,
+  wenn er wirklich erkennen muss (fehlt `state/anzeige` oder `/dev/spidev0.0`).
+  Dann gibt der Zeichner es frei (`fortschritt_halt`, Neustart danach). 46 und
+  50 lesen nur Dateien — dort läuft der Balken weiter.
+- Jedes Anhalten und jedes `close()` schaltet die Hintergrundbeleuchtung aus;
+  beim Prozessende gibt der Kernel die GPIO-Leitung frei. Deshalb **ein**
+  Zeichner je Lauf, der den Selbstneustart übersteht, statt drei.
 - Nach dem Selbstneustart aus `source/` beginnt der Lauf wieder bei Modul 1.
   Der Balken darf dabei **nicht** zurückspringen: Der Stand wird nie kleiner
   als der in der Datei (Vorgabe an `fortschritt_start` und `fortschritt_setze`).
