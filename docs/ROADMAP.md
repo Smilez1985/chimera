@@ -21,6 +21,81 @@ Stand: 2026-10-11. Pre-Alpha.
 
 ---
 
+## Phase ACP — Chimera als Agent für Editoren und IDEs (DESIGN: Regel „ACP“)
+
+Pflicht-Schnittstelle (smilez, 2.11.). **Entschieden: Der ACP-Server wird gebaut,
+mit einer Transportschicht, damit eine IDE das Gateway ansprechen kann.**
+Recherche: `docs/research/ACP.md` und `docs/research/ACP-MCP.md`. Rust im
+Gateway-Workspace (Regel „Rust, wo dauernd läuft“), eigene Tür.
+
+- [x] Recherche: ACP klären (Client, Communication, Context), mit MCP vergleichen,
+      Android Studio Rabbit 2 lesen.
+- [ ] **Bibliothek messen:** Crate `agent-client-protocol` 3.6.0 gegen den
+      Mindestumfang mit `serde_json` (Größe des Binarys, Speicher, Laufzeit);
+      danach entscheiden.
+- [ ] **ACP-Kern** (`initialize`, `session/new`, `session/prompt`,
+      `session/update`, `session/cancel`) gegen die Hauptsitzung, unabhängig vom
+      Transport; Test gegen die Prüfwerkzeuge der Spezifikation (Seite „Testing“).
+- [ ] **Transportschicht:** ein Bytestrom-Trait mit Zeilenrahmen; Transporte
+      **stdio** (Vermittler `chimera-tor --acp-stdio` auf dem Rechner der IDE),
+      **Unix-Socket** am Gateway, später **HTTP/WebSocket** nach dem Entwurf.
+      Jeder Transport besteht denselben Kern-Test.
+- [ ] **Tür am Gateway** mit Positivliste, Anmeldung und nur im LAN; Test, dass sie
+      ohne Positivliste zu bleibt.
+- [ ] **In einer echten IDE belegen** (Zed, JetBrains oder Android Studio) und
+      klären, wie ein eigener Agent dort ohne Registry eingetragen wird (in den
+      gelesenen Quellen nicht beschrieben).
+- [ ] Später: Registry-Eintrag, Sitzungsliste und Modi, ein ACP-Client für
+      Chimera (Chimera spricht mit anderen Agenten), Gesichter und Moods über ACP
+      bauen (siehe Phase MQTT).
+
+## Phase MQTT — Broker in Rust, verknüpft mit der Anzeige (DESIGN: Regel „MQTT“)
+
+Vorgabe smilez (2.11.): Der MQTT-Broker ist **Rust** und mit der
+**Whisplay-Steuerung** verknüpft: ein per MQTT gesendeter Aufruf löst einen
+**vorgefertigten, gespeicherten Mood** sofort aus. Die StateMaschine aus
+Quelle ist PaKaChi-SM (privat); sie dient als Vorbild, hier wird nachgebaut, nicht kopiert.
+
+- [ ] **Quelle zu Ende lesen** (PaKaChi-SM, privat): StateMaschine, Nachrichten,
+      Architektur; daraus ein Entwurf im DESIGN (Themen, Nachrichten,
+      Zustände), der keine Namen aus dem privaten Projekt übernimmt.
+- [ ] **Entscheidungen von smilez:** Themenaufbau, Anmeldung am Broker, ob auch
+      Fremdgeräte (Sensoren) bedient werden, QoS, Antwortweg.
+- [ ] **Speicher messen:** Ein Broker im Gateway (`MemoryMax=10M`, Pi mit 462 MB)
+      gegen einen eigenen Prozess; erst die Zahl, dann die Form.
+- [ ] **Broker in Rust** (MQTT 3.1.1, kleiner Umfang: verbinden, abonnieren,
+      veröffentlichen), eigene Tür mit Positivliste; Härtung nach den Grundsätzen der Quelle
+      (kein Platzhalter im Thema, Größengrenze, feste Namensmuster, `retain`
+      verwerfen).
+- [ ] **Verknüpfung mit der Anzeige:** Thema trägt einen Mood-Namen, der Broker
+      ruft die Anzeige über das Gateway (`Face.set_by_name`); unbekannter Name
+      lässt das Gesicht unverändert. Zustände der StateMaschine sind die von
+      Chimera (`wartet`, `hoert`, `denkt`, `arbeitet`, `spricht`).
+- [ ] **Moods bauen über MCP und ACP** (falls sinnvoll und machbar): Werkzeuge zum
+      Anlegen von Gesichtern, Zubehör und Moods, mit Anmeldung und Prüfung
+      (Regeln „Gesicht ist ein Paket“ und „Mood wird validiert“); abrufen über
+      MQTT, **anlegen nie über ein offenes Thema**.
+- [ ] **Am Pi belegen:** Mood per MQTT senden, Gesicht ändert sich; ungültiger
+      Name ändert nichts; ohne Positivliste kommt nichts an.
+
+## Phase Regelnamen — Nummern werden zu sprechenden Namen (DESIGN: Regel „Sprechende Namen“)
+
+Alle 74 nummerierten Architekturregeln und die rund 460 Verweise darauf in
+DESIGN, ROADMAP, CHANGELOG, Quelltext und Tests bekommen Namen, die sagen, worum
+es geht („5n“ wird „Gateway“, „10r“ wird „Agent-Nutzer“ usw.).
+Jede Umbenennung ist ein Satz Ersetzungen mit Prüfung, dass kein Verweis auf
+einen alten Namen übrig bleibt.
+
+- [x] Regel „Sprechende Namen“ steht; `tests/test_regelnamen.py` verhindert neue
+      Nummern, mit Gegenprobe.
+- [x] „Sprechgesicht“ (vorher 4d) und „Mojo“ (vorher 10t) tragen schon Namen.
+- [ ] Die Namen für den Altbestand festlegen (eine Tabelle Nummer -> Name, von
+      smilez abzunehmen), dann je Themenblock umbenennen: Anbieter und Gateway
+      (5*), Anzeige (6*, 7*), Gedächtnis und Sitzung (8*), Installer (10*),
+      Rest. Jeder umbenannte Eintrag verlässt die Altbestand-Liste des Tests.
+- [ ] Die Verzeichnisse und Querverweise „Regel 5n“ usw. in Quelltext-Kommentaren
+      folgen mit der Umbenennung.
+
 ## Phase 1 — Mood-Schema und Validator
 
 **Ohne Hardware testbar.** Kern der neuen Idee, deshalb zuerst.
@@ -374,10 +449,9 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       (`cgroup_disable=memory`); der Installer meldet das, und das Gateway
       begrenzt sich selbst (`VmRSS` prüfen, bei Überschreiten sauber
       beenden). Installermodul `26-boot` mit Sicherung und `--dry-run`:
-      CMA verkleinern (`dtoverlay=cma,cma-size=...` in `config.txt`, bei
-      Kamera wieder anheben, Schalter `CHIMERA_CMA_MB`) und
-      `cgroup_enable=memory` prüfen; je ein Neustart mit Messung davor und
-      danach, sonst gilt es nicht als erledigt. Journal im RAM begrenzen.
+      CMA 64 auf 16 MB gemessen: +21 MB verfügbar (Modul `26-boot`, Phase Mojo);
+      `cgroup_enable=memory` bleibt aus (kostet etwa 9 MB, bringt keinen RAM).
+      Journal im RAM begrenzen.
 - [ ] **Gedächtnis-Verdichtung in Blöcken** (8c): lange Verläufe an
       Nachrichtengrenzen teilen, je Block zusammenfassen, zusammenführen; feste
       Briefstruktur (Ziel, Kontext, Stand, nächste Schritte, offene Fragen);
@@ -397,6 +471,41 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
 - [ ] Danach `provider/` und `bot/telegram.py` aus dem Dienst entfernen.
 - [ ] Später, eigener Entwurf: Renderer und Paneltreiber in Rust (Regel 14,
       Stufe 2).
+
+## Phase Mojo — Dienste starten zuverlässig und melden Fehler laut (DESIGN: Regel „Mojo“)
+
+Recherche: `docs/research/MOJO.md`. Rust im Gateway (Regel 14), Installer
+daneben. Jede Stufe für sich lauffähig, am Pi mit einer echten Störung belegt.
+
+- [ ] **`chimera-tor --mojo [--fix] [--json]`:** Befund, Schwere, Stufe,
+      `impl Pruefung` plus Zeile in `pruefungen()`, Nachprüfung nach jeder
+      Reparatur, `unreparierbar` bei wiederkehrendem Code, Sperre gegen zwei
+      gleichzeitige Reparaturen, Schwärzung der Ausgabe, Befunddatei
+      `state/mojo-letzter.json`.
+- [ ] **Erste Prüfungen:** Dienste, beide Sockets (Reparatur „Socket
+      nachziehen“), Hardware-Erkennung, Protokoll auf der Karte, Speicher,
+      Anbieter (Gateway, Ollama erreichbar, Modell gewählt).
+- [ ] **Meldeunit und Zeitgeber:** `chimera-mojo@.service` per `OnFailure=`
+      an `chimera`, `chimera-tor`, `chimera-hardware` (trennt Zwischenfehler
+      von der Aufgabe), `chimera-mojo.timer` (Boot, stündlich).
+- [ ] **Laut:** Journal `<3>`, Zeile auf der Karte, LED und Statuszeile (die
+      LED-Schnittstelle liegt heute im Dienst; fällt der Dienst aus, muss die
+      Meldeunit sie setzen), Anzeige im Status-Modul.
+- [ ] **Installer:** neues Modul `27-mojo` (Units, Drop-ins, Timer), mit
+      `--dry-run`, Sicherung, Manifest und Rückbau; dazu Modul `26-boot` mit dem
+      CMA-Overlay (`dtoverlay=cma,cma-size=…`, Schalter `CHIMERA_CMA_MB`,
+      Sicherung von `config.txt`, Neustart mit Messung davor und danach; am Pi
+      gemessen +21 MB verfügbar).
+- [ ] **`chimera-hardware.service`:** Verhalten bei Fehlschlag klären
+      (`Restart=` bei `oneshot` messen), damit ein gescheiterter Boot-Schritt
+      den Dienst nicht stumm ohne Hardware starten lässt.
+- [ ] **Fehlende Python-Pakete nachladen** (Stufe 2): gebaut mit Tests und
+      Gegenprobe; am Pi noch nicht mit einem echten fehlenden Paket belegt
+      (Installer läuft dazu über `systemd-run`, weil die Mojo-Unit nur nach
+      `state/` schreibt).
+- [ ] Später: Reparaturpläne mit Prüfsumme und Klasse (mit Regel 5v),
+      Reparaturen der Stufen 2 und 3 auf Wunsch über die Oberfläche, Meldung
+      über Telegram.
 
 ## Phase 4e — Briefkasten, Sitzung, Gedächtnis, Root (DESIGN 5o, 5p, 8c, 8d, 10s)
 
@@ -509,7 +618,7 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
 
 ### Mienenspiel beim Sprechen (`docs/DESIGN.md` §4.1)
 
-- [x] **Ausdruck für „spricht“** (Regel 4d): `SPEAK` mit vier Mundphasen,
+- [x] **Ausdruck für „spricht“** (Regel „Sprechgesicht“): `SPEAK` mit vier Mundphasen,
       `LISTEN` für „hört zu“, `IDLE` für den Ruhezustand, `wartet` nach jeder
       Antwort; Tests und Gegenprobe stehen, am Pi noch nicht angesehen.
 - [ ] Mundphase folgt der Lautstärke der Sprachausgabe (Regel 4c), sobald es

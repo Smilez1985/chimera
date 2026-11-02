@@ -318,7 +318,7 @@ Modelle (int8, deutsch):
 | STT | `nemo-fast-conformer-ctc-en-de-es-fr-14288-int8` | 98 MB |
 | TTS | `vits-piper-de_DE-thorsten_emotional-medium-int8` | 22 MB |
 
-#### Architekturregel 4d — Sprechen hat einen eigenen Ausdruck mit Mundphasen (smilez, 1.11.)
+#### Regel „Sprechgesicht“ — Sprechen hat einen eigenen Ausdruck mit Mundphasen (smilez, 1.11.)
 
 Fund am Gerät: Der Zustand `spricht` zeigte `TALK`, und `TALK` ist in
 Noisys Bibliothek ein Ausdruck für **Zuhören** (Ohr, gerader Mund, Blick zur
@@ -2730,6 +2730,8 @@ sprengt.
    das Gesicht fehlt, ist das stiller Erfolg (Regel 8a).
 4. Die Unit begrenzt die Neustarts (`StartLimitIntervalSec=`,
    `StartLimitBurst=`) für den Fall, dass Schritt 2 versagt.
+5. Wer die Grenze erreicht, wird gemeldet und nicht still liegengelassen
+   (Regel „Mojo“).
 
 **Gegenprobe (Regel 9):** Eine Quelle anlegen, deren Laden den Prozess
 beendet (`os._exit(1)` im Testpfad, nicht im Produktivcode). Ohne die
@@ -3013,6 +3015,116 @@ befüllt werden, `productive/` erst im Installerlauf.
 
 ---
 
+### Regel „Mojo“ — jeder Fehler wird bemerkt, mit Ursache benannt, versucht, nachgeprüft und laut gemeldet
+
+Vorgabe smilez (1.11.): Die Dienste starten nach dem Boot zuverlässig, versuchen
+es bei einem Fehler erneut, protokollieren, was schiefging, und werfen **laut
+einen Fehler**, wenn auch der Neuversuch scheitert. Das Muster stammt aus
+Mojo (smilez' Projekte `rag4ll` und `llm_cross-compiler_framework`); gelesen,
+gemessen und verglichen in `docs/research/MOJO.md`. Nichts wird kopiert.
+
+Befund, der die Regel begründet: Ein Dienst, der die Startgrenze (Regel 10p)
+erreicht, bleibt `failed` und meldet sich bei **niemandem**; am Gerät lief der
+Dienst 22 Stunden ohne Sitzungs-Socket, weil `chimera-sitzung.socket` nach einem
+Installerlauf inaktiv geblieben war.
+
+1. **Eine Regelmaschine, kein Modell.** `chimera-tor --mojo` führt feste
+   Prüfungen aus und fragt nie ein Sprachmodell. Es läuft offline und braucht
+   weder Netz noch Anbieter.
+2. **Oracle und Miracle.** Ohne Flag **liest** es nur und ändert nichts.
+   `--fix` führt die Reparaturen der Stufe 1 aus. `--json` schreibt den Bericht
+   maschinenlesbar (Weboberfläche, Skripte).
+3. **Jeder Befund nennt seine Ursache** (smilez, 1.11.), auch „nicht
+   reparierbar“. Eine Ursache ist **gemessen und belegt**, nie geraten, und
+   kommt aus einer von drei Quellen, in dieser Reihenfolge:
+   a) **Was systemd selbst sagt** (`Result`, `ExecMainStatus`), am Gerät
+      gemessen: Status 203 Programm fehlt oder ist nicht ausführbar, 217 der
+      Nutzer fehlt, 226 ein Pfad in `ReadWritePaths=` fehlt, 200 das
+      Arbeitsverzeichnis fehlt; Ergebnis `resources` eine Datei für
+      `EnvironmentFile=` fehlt, `timeout` der Start dauert zu lange, `signal`
+      der Prozess wurde beendet (Signal 9: gekillt, häufig Speichermangel),
+      `dependency` eine Voraussetzung ist gescheitert, „Start request repeated
+      too quickly“ die Startgrenze ist erreicht. Zu jeder Zahl kennt Mojo den
+      Weg: Ordner anlegen, Nutzer anlegen, Rechte setzen, Datei anlegen.
+   b) **Die Ausgabe des Programms** bei Status 1, denn nur das Programm weiß,
+      warum es endete. Mojo kennt eine Liste fester Muster („Address already
+      in use“, „Permission denied“, „No such file or directory“,
+      `ModuleNotFoundError`, „Name or service not known“) und je Muster die
+      Ursache und den Weg.
+   c) **Der Zustand des Systems:** Speicherkarte (SD) voll oder Arbeitsspeicher (RAM) knapp (mit der **genauen Zahl, die
+      fehlt**, und der Angabe, welcher von beiden gemeint ist), Uhr falsch,
+      Gateway oder Anbieter nicht erreichbar, Socket inaktiv.
+   Passt keine Quelle, sagt Mojo ausdrücklich **„Ursache nicht bestimmbar“**
+   und liefert die **Rohdaten** mit (Ergebnis, Status, die letzten Zeilen des
+   Journals, Zustand der abhängigen Dienste). Das ist ein Befund, kein
+   Schweigen. Gibt es für die Ursache keine Reparatur in Software (leere Karte,
+   defekter Baustein), steht dort, **was der Mensch tun muss**. Mojo braucht
+   dafür nie ein Sprachmodell. Ursache und Weg stehen im Protokoll, im Bericht
+   und auf der Oberfläche, **bei jedem Befund**.
+   **Ort der Prüfung:** Das Journal des Systems ist für Nutzer ohne Gruppe
+   `systemd-journal` nicht lesbar (am Gerät gemessen, auch nicht für
+   `chimera-tor`). Mojo läuft deshalb als eigene Unit mit dem Recht zum Lesen
+   (Gruppe `systemd-journal`), nicht im Dienst des Agenten (Regel „Agent ist ein
+   eigener Nutzer“, 10r).
+
+4. **Ein Befund** trägt Schwere (`ok`, `info`, `warn`, `error`), Subsystem,
+   einen **stabilen Code** (`dienst.gescheitert`, `socket.inaktiv`), Meldung,
+   Hinweis und optional eine Reparatur samt Stufe. Der Exitcode folgt dem
+   schlimmsten Befund: 0, 1 (Warnung), 2 (Fehler).
+5. **Stufen.** 1 sanft und lokal (`reset-failed`, Dienst oder Socket neu
+   starten), 2 Komponente neu, 3 Installer neu. **Stufe 1 und 2 laufen von allein** (Dienst oder Socket neu starten; fehlende
+   Python-Pakete nachladen, dazu Installer Schritt 50 und danach Neustart des
+   Dienstes); **Stufe 3 nie von allein**, nur auf ausdrücklichen Wunsch des
+   Nutzers über die Oberfläche. Ein Neustart wird nur versucht, wo er helfen
+   kann; bei fehlendem Programm, fehlendem Nutzer oder fehlendem Pfad gibt es nur
+   Ursache und Weg.
+6. **Die Nachprüfung ist die Wahrheit.** Nach jeder Reparatur laufen dieselben
+   Prüfungen noch einmal. Taucht derselbe Code wieder auf, ist der Befund
+   **unreparierbar**, wird nicht in einer Schleife wiederholt und wird laut
+   gemeldet. Der Rückgabewert der Reparatur zählt nicht (Regel 8a, stiller
+   Erfolg).
+7. **Eine Reparatur gleichzeitig**, per Sperrdatei in `state/`. Eine zweite wird
+   abgelehnt, nicht gewartet.
+8. **Die Prüfungen sind erweiterbar mit einer Stelle:** `impl Pruefung` plus
+   eine Zeile in `pruefungen()` (wie die Sonden in `status.rs`); ein Test je
+   Prüfung mit Gegenprobe.
+9. **Die ersten Prüfungen:** Dienste `chimera`, `chimera-tor`,
+   `chimera-hardware` (failed, zu viele Neustarts); beide Sockets (inaktiv trotz
+   aktiviert); Hardware-Erkennung; Protokoll auf der Karte schreibbar; Speicher
+   (`MemAvailable`); Anbieter (Gateway erreichbar, Ollama erreichbar, ein Modell
+   gewählt). Die Reparatur „Socket nachziehen“ heißt: Dienst stoppen, Socket
+   starten, Dienst starten, dann prüfen, ob `/run/chimera/sitzung.sock` da ist.
+10. **Die Meldeunit.** `chimera-mojo@.service` hängt per
+   `OnFailure=chimera-mojo@%N.service` an `chimera`, `chimera-tor` und
+   `chimera-hardware`. **Gemessen am Gerät (systemd 257): `OnFailure=` feuert bei
+   jedem Fehlschlag, nicht erst nach Erreichen der Startgrenze.** Die Unit muss
+   darum Zwischenfehler von der Aufgabe trennen: Steht der Dienst noch auf
+   `activating`, wird nur protokolliert; steht er auf `failed`, ist es die
+   Aufgabe, und das wird **laut**. Dienstname, Ergebnis und Status kommen aus
+   `MONITOR_UNIT`, `MONITOR_SERVICE_RESULT` und `MONITOR_EXIT_STATUS`.
+11. **Ein Zeitgeber** (`chimera-mojo.timer`, nach dem Boot und stündlich),
+    weil ein Dienst, der nie scheitert, aber still falsch läuft (Socket aus),
+    kein `OnFailure=` auslöst.
+12. **Laut heißt:** Journal mit Stufe `<3>`, der Bericht in
+    `state/mojo-letzter.json`, eine Zeile im Protokoll **auf der Karte**
+    (überlebt den Neustart), LED rot und Name des Dienstes in der Statuszeile,
+    solange ein Befund offen ist, und die Anzeige im Status-Modul der
+    Weboberfläche. Eine Meldung über Telegram folgt, sobald die Telegram-Tür im
+    Gateway steht.
+13. **Schwärzung.** Befunde gehen in Protokolle und Meldungen; Heimverzeichnis,
+    LAN-Adressen und Schlüssel erscheinen nie (Regel 13). Journalinhalt wird
+    **nicht** in den Befund eingebettet, nur Zahlen.
+14. **Nicht Teil dieser Regel:** Reparaturpläne mit Prüfsumme und berechneter
+    Klasse (kommen mit der Freigabe durch den Nutzer in der Oberfläche, Regel
+    5v), Reparaturen der Stufen 2 und 3, Fragen im Terminal (das Gerät hat
+    keins).
+
+**Gegenprobe (Regel 9):** Einen Wegwerf-Dienst mit denselben Neustartwerten, der
+immer scheitert; der Bericht muss nach der Aufgabe `error` mit
+`unreparierbar` zeigen, die Befunddatei muss existieren und die Zeile auf der
+Karte muss stehen. Dazu den Socket von Hand stoppen: `--fix` muss ihn
+nachziehen, und die Nachprüfung muss `ok` zeigen.
+
 ## 11. Headless
 
 Chimera hat **keine grafische Oberfläche.** Es gibt den 240×280-Bildschirm
@@ -3225,6 +3337,146 @@ Tabelle. Gegenprobe: `--gegenprobe` entfernt zwei Optionen aus der Doku, der
 Test muss rot werden.
 
 
+### Regel „ACP“ — Chimera ist ein Agent für Editoren, erreichbar über eine Transportschicht am Gateway
+
+Vorgabe smilez (2.11.): ACP ist eine **Pflicht-Schnittstelle**. Gemeint ist der
+**Agent Client Protocol** (Zed und JetBrains; Editoren und IDEs sprechen mit
+einem Agenten; Android Studio „Rabbit 2“ nutzt ihn seit dem 28.10.2026 für
+„Bring Your Own Agent“). Das Kürzel gehört drei Protokollen; die Klärung und
+die Quellen stehen in `docs/research/ACP.md`, der Vergleich mit MCP in
+`docs/research/ACP-MCP.md`.
+
+**Entschieden (smilez, 2.11.):** Der ACP-Server wird gebaut, **mit einer
+Transportschicht, damit eine IDE das Gateway ansprechen kann.**
+
+1. **Chimera ist der Agent, nicht der Client.** Eine IDE schickt Prompts, Chimera
+   antwortet, meldet Fortschritt und beendet den Zug. Ein ACP-Zug ist ein Turn
+   in der Hauptsitzung (Regel „Ein Kanal, eine Hauptsitzung“); es gibt keinen
+   zweiten Verlauf.
+2. **Die Transportschicht trennt das Protokoll vom Weg.** Der ACP-Kern spricht
+   JSON-RPC 2.0 mit Zeilenrahmen und kennt nur einen Bytestrom. Darunter liegen
+   austauschbare Transporte, jeder ein eigenes Stück Code mit eigenem Test:
+   - **stdio** (Standard von ACP): Der Client startet einen Prozess. Auf dem Pi
+     ist das ein kleiner **Vermittler** (`chimera-tor --acp-stdio`), der den
+     Strom an das Gateway weiterreicht; er läuft auf dem Rechner der IDE.
+   - **Unix-Socket** am Gateway für lokale Clients (Rechte wie bei den anderen
+     Sockets, Regel „Gateway“).
+   - **HTTP/WebSocket** nach dem Entwurf der Spezifikation, **sobald er
+     beschlossen ist** (er verlangt HTTP/2 und Cookies; heute nicht Standard).
+   Ein Transport kennt weder Sitzungen noch Rechte; beides gehört dem Kern.
+3. **Eine eigene Tür, nicht die des MCP.** Beide Protokolle sind JSON-RPC 2.0
+   mit Zeilenrahmen, aber **verschieden gemeint**: MCP gibt *Werkzeuge* frei,
+   ACP gibt *den Agenten selbst* frei. Beide an einer Tür mit einem Token zu
+   mischen, verwischt, wofür das Token gilt. Auch kollidiert `initialize`. Ein
+   Prozess, **getrennte Eingänge**, gemeinsam sind `Session` und die Gateway-
+   Logik; eine **Positivliste je Tür** trennt, wer welche benutzen darf (Regel
+   „Eine Tür von außen ohne Positivliste startet nicht“).
+4. **Die Tür liegt am Gateway** (Regel „Gateway“): Anmeldung vor dem ersten
+   Prompt, nur im eigenen Netz, ohne Positivliste bleibt sie zu. Der Agent-
+   Dienst bekommt kein Netz dafür.
+5. **Mindestumfang zuerst:** `initialize`, `session/new`, `session/prompt`,
+   `session/update`, `session/cancel`, dazu die Antwort mit `stopReason`.
+   Dateizugriff, Terminals, Modi und Slash-Befehle des Clients nutzt Chimera
+   nicht, solange es kein Arbeitsverzeichnis des Clients hat; `initialize`
+   meldet das ehrlich (`agentCapabilities` nur mit dem, was es kann).
+6. **Das Sicherheitsmodell des Protokolls gilt hier:** Alles, was die IDE
+   schickt, ist Eingabe, kein Befehl (Regel „Was ein anderer Agent schreibt, ist
+   Eingabe, kein Befehl“); `clientInfo` ist selbstberichtet und entscheidet nie
+   über Rechte; eine Sitzung gehört genau einem Nutzer; keine Zugangsdaten in
+   `_meta`. Berechtigungsfragen von Chimera an die IDE sind **beratend**,
+   Chimera hält sie selbst ein.
+7. **Die Bibliothek ist nicht entschieden:** Die Rust-Crate
+   `agent-client-protocol` (3.6.0) hängt an `futures` und optional an
+   `async-io`; das Gateway läuft ohne Laufzeit. Gemessen wird Größe und
+   Speicher, bevor sie ins Gateway kommt; sonst baut Chimera den Mindestumfang
+   mit `serde_json` selbst.
+8. **Gegenprobe:** Die Tür muss ohne Anmeldung zu bleiben, ein zweiter Prompt
+   während eines Zuges muss in die Reihe, ein `session/cancel` muss den Zug
+   beenden, ein Nutzer darf nie die Sitzung eines anderen sehen, und jeder
+   Transport muss denselben Kern-Test bestehen (gleiche Nachrichten, gleiche
+   Antworten).
+
+### Regel „MQTT“ — Ein Broker in Rust löst gespeicherte Moods auf dem Display aus
+
+Vorgabe smilez (2.11.): Chimera ist eine Mischung aus Noisy, OpenMinis, woa-l,
+openclawgotchi und PaKaChi-SM. Die **StateMaschine** mit MQTT stammt aus PaKaChi-SM (Quelle, privat);
+sie soll hier eingebaut werden. Der MQTT-Broker ist **Rust** und mit
+der **Whisplay-Steuerung** verknüpft: **Ein per MQTT gesendeter Aufruf löst einen
+vorgefertigten, gespeicherten Mood sofort aus.** Zum Bauen neuer Gesichter,
+Zubehöre und Moods soll das Sprachmodell **MCP und ACP** nutzen können, **falls
+sinnvoll und machbar** (nicht entschieden).
+
+**Was für Chimera zählt (Quelle: PaKaChi-SM, privates Projekt von smilez;
+gelesen am 2.11.2026; `woa-l` enthält kein MQTT):**
+- Eine **gemeinsame StateMaschine** nimmt Zustände und gespeicherte Bewegungen
+  entgegen. Bedienung von Hand, MQTT und MCP laufen durch **denselben** Router,
+  nicht durch drei Wege mit drei Regeln.
+- Ein **ungültiger Zustand ändert den bisherigen nicht**; der Fehler wird
+  gemeldet.
+- Der Broker wird **geschützt betrieben**: nur feste Themenmuster, eine
+  Größengrenze für Nachrichten, eine feste Liste erlaubter Aufrufe, und
+  zurückgehaltene Nachrichten werden verworfen.
+
+Nachgebaut wird nach diesen Grundsätzen, **nicht der Code übernommen**; das
+Projekt ist privat, die Regel gibt keine Namen, Themen oder Werkzeuge daraus
+wieder.
+
+1. **Der Broker ist Rust, im Gateway-Workspace** (Regel „Rust, wo dauernd läuft“),
+   klein und ohne Laufzeit wie das übrige Gateway. Er ist **eine Tür** neben
+   ACP, MCP, Telegram und Web, mit eigener Positivliste (Regel „Eine Tür von
+   außen ohne Positivliste startet nicht“).
+2. **Ein Thema ist ein Mood, kein Befehl an das System.** Der Aufruf nennt einen
+   **Namen aus der Mood-Bibliothek**; der Broker leitet ihn an die Anzeige (Regel
+   „Wer anzeigt, bekommt die Anzeige übergeben“, `Face.set_by_name`). Ein Name,
+   den es nicht gibt, wird verworfen und gemeldet, der bisherige Ausdruck
+   bleibt (Grundsatz der Quelle).
+3. **Die Zustände von Chimera sind die der StateMaschine:** `wartet`, `hoert`,
+   `denkt`, `arbeitet`, `spricht`, `verwirrt`, `fehler` (Regel „Sprechgesicht“).
+   Ein Zustand bleibt aktiv, bis ein neuer kommt; ein Mood ist ein einmaliger
+   Aufruf, der durch den Zustand wieder abgelöst wird.
+4. **Wer Moods bauen darf, trennt die Regel von dem, wer sie abruft.** Abrufen
+   (ein vorhandenes Gesicht zeigen) ist harmlos und geht über MQTT. **Neu
+   anlegen** (Gesicht, Zubehör, Mood) schreibt Dateien und geht nur über die
+   Wege mit Anmeldung und Prüfung (Regel „Ein Gesicht ist ein Paket, das das
+   Modell anlegen darf“, Regel „Ein generierter Mood wird immer validiert“),
+   also MCP oder ACP, nie über ein offenes Thema.
+5. **Härtung nach den Grundsätzen der Quelle, mindestens:** keine Platzhalter im Thema,
+   Größengrenze, feste Namensmuster, `retain` verwerfen, Zähler gegen Fluten.
+6. **Offen, nicht entschieden:** Themenaufbau, Anmeldung am Broker (Passwort,
+   Zertifikat), ob der Broker auch Fremdgeräte bedient (Sensoren) oder nur das
+   Display, QoS-Stufe, wie die Antwort zurückkommt, und ob und wie die
+   StateMaschine der Quelle als Quelltext oder nur als Vorbild einfließt
+   (das Projekt ist privat; hier wird **nachgebaut, nicht kopiert**).
+7. **Gegenprobe:** Ein Aufruf mit unbekanntem Mood-Namen lässt das Gesicht
+   unverändert; ein Thema mit Platzhalter wird abgewiesen; eine Nutzlast über
+   der Grenze wird verworfen; ein Aufruf ohne Positivliste erreicht die Anzeige
+   nie.
+
+### Regel „Sprechende Namen“ — Eine Regel, ein Befehl, ein Baustein heißt nach dem, was er tut
+
+Vorgabe smilez (1.11.): Nummern wie „10t“ oder „5n“ sagen niemandem etwas. Wer
+einen Verweis liest, soll verstehen, **worum es geht**, ohne nachzuschlagen.
+
+1. **Jede neue Regel trägt einen sprechenden Namen** und keine Nummer:
+   `### Regel „Mojo“ — ...`. Verwiesen wird mit dem Namen: „Regel „Mojo““,
+   nicht mit einer Zahl. Das gilt für Regeln, Phasen der ROADMAP, Module und
+   Befehle, auch in Kommentaren, Tests und Commit-Nachrichten.
+2. **Der Name nennt die Sache**, nicht die Reihenfolge, in der sie entstand
+   (Mojo, Sprechgesicht, Datenschicht, Netzsuche), und bleibt kurz genug, um
+   ihn in einem Satz zu verwenden.
+3. **Alle Regeln gehören dem Projekt**, auch die älteren. Dass eine Nummer
+   früher vergeben wurde, ist kein Grund, sie zu behalten. Die bestehenden
+   Nummern werden schrittweise umbenannt (ROADMAP, Phase „Regelnamen“);
+   solange das nicht geschehen ist, gelten sie als **Altbestand**.
+4. **Ein Test hält das wahr** (`tests/test_regelnamen.py`): Er kennt die
+   Altbestand-Nummern als feste Liste. Eine Überschrift mit einer Nummer, die
+   **nicht** auf dieser Liste steht, macht ihn rot. Wird eine Regel umbenannt,
+   muss sie **im selben Commit** aus der Liste, sonst wird der Test ebenfalls rot
+   — die Liste kann nur kürzer werden.
+5. **Beim Umbenennen** werden alle Verweise im selben Commit geändert
+   (DESIGN, ROADMAP, CHANGELOG, Quelltext, Tests); ein Verweis auf einen Namen,
+   den es nicht mehr gibt, ist ein Fehler.
+
 ## Verzeichnis der Architekturregeln
 
 - **1** — Die GPL-Grenze ist hart
@@ -3235,7 +3487,7 @@ Test muss rot werden.
 - **4a** — VAD läuft vor STT, KWS vor VAD
 - **4b** — Gesicht und Stimme tragen denselben Mood
 - **4c** — Das Sprachmodell setzt Absicht, nicht Bilder
-- **4d** — Sprechen hat einen eigenen Ausdruck mit Mundphasen
+- **Sprechgesicht** — Sprechen hat einen eigenen Ausdruck mit Mundphasen
 - **5** — Sprache lokal, Sprachmodell immer remote
 - **5a** — Registry statt fester Connector-Attribute
 - **5b** — Anthropic-Anmeldung wie im OpenMinis-PR
@@ -3296,6 +3548,10 @@ Test muss rot werden.
 - **10q** — Speicher wird am Prozess gemessen und vom Prozess begrenzt
 - **10r** — Der Agent ist ein eigener Nutzer, und was root ausführt, kann er nicht ändern
 - **10s** — Root gibt es nur auf Rückfrage, auf Zeit, und nicht für den Agenten selbst
+- **ACP** — Chimera ist ein Agent für Editoren, erreichbar über eine Transportschicht am Gateway
+- **MQTT** — Ein Broker in Rust löst gespeicherte Moods auf dem Display aus
+- **Sprechende Namen** — Eine Regel, ein Befehl, ein Baustein heißt nach dem, was er tut
+- **Mojo** — jeder Fehler wird bemerkt, mit Ursache benannt, versucht, nachgeprüft und laut gemeldet
 - **13a** — Vor jedem Push wird geprüft, und die Prüfung beweist ihre Sehfähigkeit
 - **14** — Was dauernd läuft und nicht auf das Modell wartet, ist Rust
 - **15** — Jeder Befehl steht in der CLI-Referenz, und ein Test hält sie wahr

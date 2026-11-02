@@ -118,6 +118,8 @@ board is one entry rather than a hunt through every module.
 - [`docs/DESIGN.md`](docs/DESIGN.md) — architecture, decisions, constraints
 - [`docs/HYBRID-PLAN.md`](docs/HYBRID-PLAN.md) — how the three sources fit together
 - [`docs/HERKUNFT.md`](docs/HERKUNFT.md) — what is taken from where, and what isn't
+- [`docs/research/MOJO.md`](docs/research/MOJO.md) — research: health checks and self-repair (Mojo)
+- [`docs/research/ACP.md`](docs/research/ACP.md) and [`ACP-MCP.md`](docs/research/ACP-MCP.md) — research: the Agent Client Protocol and how it differs from MCP
 - [`docs/DISPLAYS.md`](docs/DISPLAYS.md) — supported panels and how they are detected
 - [`docs/PROVIDER.md`](docs/PROVIDER.md) — model providers, MCP, audio process
 - [`docs/CLI.md`](docs/CLI.md) — every command and option, by category (checked by a test)

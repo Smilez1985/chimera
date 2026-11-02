@@ -142,6 +142,10 @@ only process with network access.
 | `--ziel VERZ` | (bei `--module-neu`) Zielverzeichnis, Vorgabe `.`. / Target directory, default `.`. |
 | `--module-pruefen VERZ` | Web-Modul prüfen und die SHA-256-Prüfsumme nennen (JSON). / Check a web module and print its SHA-256 checksum. |
 | `--module-vorlage` | Die Variablen der Vorlage ausgeben. / Print the template variables. |
+| `--mojo` | Dienste, Sockets, gescheiterte Units, Speicherkarte (SD) und Arbeitsspeicher (RAM) prüfen; jeder Befund nennt Ursache, Beleg und Weg. Ohne `--fix` ändert es nichts. Exitcode 0 sauber, 1 Warnung, 2 Fehler. / Check services, sockets, failed units, SD card and RAM; every finding names cause, evidence and fix. Changes nothing without `--fix`. |
+| `--fix` | (mit `--mojo`) Sanfte Reparaturen ausführen (Neustart, Socket nachziehen, fehlende Python-Pakete nachladen), danach nachprüfen; höchstens 2 wirkungslose Versuche je Gegenstand und Stunde. / (with `--mojo`) Run the gentle repairs, then re-check. |
+| `--json` | (mit `--mojo`) Bericht als JSON ausgeben. / (with `--mojo`) Print the report as JSON. |
+| `--datei PFAD` | (mit `--mojo`) Bericht zusätzlich als Datei ablegen (Vorgabe `state/mojo-letzter.json`). / (with `--mojo`) Also store the report as a file. |
 | `-h`, `--help` | Hilfe. / Help. |
 
 Das Passwort nie als Argument übergeben (Prozessliste). / Never pass the
@@ -198,6 +202,7 @@ Braucht `CHIMERA_LOG_RAM` und `CHIMERA_LOG_KARTE`. / Needs both variables.
 | `sh rust/gegenprobe-daten.sh` | Gegenprobe der Datenschicht (Anbieter, Schlüssel, Katalog, Wahl). / Data layer counter-check. |
 | `sh rust/gegenprobe-anbieter.sh` | Gegenprobe der Anbieter-Schnittstelle und des Katalogs. / Provider API and catalogue counter-check. |
 | `sh rust/gegenprobe-netzsuche.sh` | Gegenprobe der Netzsuche. / Network discovery counter-check. |
+| `sh rust/gegenprobe-mojo.sh` | Gegenprobe von Mojo (Ursachen, Reparaturen, Nachprüfung, Meldung). / Mojo counter-check. |
 | `cd rust && cargo test --locked` | Rust-Tests. / Rust tests. |
 | `python3 tools/check-globals.py` | Namen finden, die gelesen, aber nie definiert werden. / Find names read as globals but never defined. |
 | `python3 tools/contact-sheet.py [ZIEL.png]` | Moods nebeneinander zeichnen. / Draw moods side by side. |
@@ -241,6 +246,8 @@ in `/opt/chimera/config/.env`. Never print keys or commit them.
 | `CHIMERA_NETZSUCHE_S` | Abstand der Netzsuche in Sekunden, mindestens 30 (Vorgabe 300). / Interval of the network search in seconds, at least 30 (default 300). |
 | `CHIMERA_CONFIG_DIR` | Ort der Ablagen `anbieter`, `geheim`, `wahl` (Vorgabe `/opt/chimera/config`). / Location of the stores (default `/opt/chimera/config`). |
 | `CHIMERA_STATE_DIR` | Ort des Katalogs (Vorgabe `/opt/chimera/state`). / Location of the catalogue (default `/opt/chimera/state`). |
+| `CHIMERA_LOG_KARTE` | Ordner des Protokolls auf der Speicherkarte; Mojo prüft, ob dort geschrieben werden kann (setzt die Mojo-Unit). / Folder of the log on the SD card; Mojo checks it is writable. |
+| `CHIMERA_REQUIREMENTS` | Pfad der `requirements.txt`, gegen die Mojo prüft, ob ein fehlendes Paket nachladbar ist (Vorgabe `/opt/chimera/source/requirements.txt`). / Path of `requirements.txt` used to decide whether a missing package can be reloaded. |
 | `CHIMERA_WEB_MODULE` | Verzeichnis nachgelegter Web-Module (Vorgabe `/opt/chimera/web/module`). / Directory of add-on web modules. |
 | `CHIMERA_SITZUNG_SOCKET` | Pfad des Sitzungs-Sockets (Vorgabe `/run/chimera/sitzung.sock`). / Session socket path. |
 | `CHIMERA_HOME` | Datenverzeichnis des Agenten. / Agent data directory. |

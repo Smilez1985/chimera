@@ -158,7 +158,7 @@ class Agent:
     # --- der Lauf ---------------------------------------------------------
 
     def run(self, prompt: str) -> Result:
-        """Ein Auftrag. Jede Antwort endet mit ``wartet`` (DESIGN 4d) -- auch
+        """Ein Auftrag. Jede Antwort endet mit ``wartet`` (DESIGN: Regel „Sprechgesicht“) -- auch
         bei einem Fehler, sonst bleibt das Gesicht auf dem letzten Ausdruck
         stehen."""
         try:

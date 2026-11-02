@@ -412,7 +412,7 @@ class NoisyRenderer:
         # Diese beiden standen in Noisy im Konstruktor, den Chimera
         # ersetzt hat -- sie gehoeren zum Zustand und werden hier gesetzt.
         self.frame = 0.0
-        # Sprechmund (DESIGN 4d): 2 bis 4 Phasen im Kreis, jede SPEAK_HALTE
+        # Sprechmund (DESIGN: Regel „Sprechgesicht“): 2 bis 4 Phasen im Kreis, jede SPEAK_HALTE
         # Bilder lang. Das Halten ist die Bildverdopplung: Der Mund soll
         # nicht schneller klappen, als das Auge folgt.
         self.SPEAK_PHASEN = ("zu", "halb", "offen", "halb")

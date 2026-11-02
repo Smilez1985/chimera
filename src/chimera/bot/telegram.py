@@ -198,7 +198,7 @@ class Bot:
             self._send(upd.chat_id, turn.text)
             return turn.text
         finally:
-            # DESIGN 4d: nach jeder Antwort zurueck in den Ruhezustand.
+            # DESIGN, Regel „Sprechgesicht“: nach jeder Antwort zurueck in den Ruhezustand.
             self._state("wartet")
 
     def _command(self, cmd: str) -> str | None:

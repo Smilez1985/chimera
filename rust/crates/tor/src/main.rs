@@ -6,6 +6,7 @@
 mod daten;
 mod dienst;
 mod modul_vorlage;
+mod mojo;
 mod netzsuche;
 mod ollama;
 mod sitzung;
@@ -33,7 +34,10 @@ chimera-tor -- Gateway von Chimera
   chimera-tor --module-neu NAME --titel-de TEXT [--titel-en TEXT] [--symbol Z] [--reihenfolge N]
                           [--recht R]... [--ziel VERZ]   Web-Modul aus der Vorlage anlegen (Regel 5v)
   chimera-tor --module-pruefen VERZ   Web-Modul pruefen, Pruefsumme nennen (JSON)
-  chimera-tor --module-vorlage   die Variablen der Vorlage (VARIABLEN.md) ausgeben";
+  chimera-tor --module-vorlage   die Variablen der Vorlage (VARIABLEN.md) ausgeben
+  chimera-tor --mojo [--fix] [--json] [--datei PFAD]   Dienste und Sockets pruefen, Ursache nennen;
+                          mit --fix die sanften Reparaturen, danach Nachpruefung (Regel Mojo).
+                          Exitcode 0 sauber, 1 Warnung, 2 Fehler";
 
 fn pruefen() -> serde_json::Value {
     serde_json::json!({
@@ -65,6 +69,48 @@ fn modul_neu(a: &[String]) -> Result<PathBuf, String> {
         i += 2;
     }
     modul_vorlage::anlegen(&e, &ziel)
+}
+
+/// `--mojo`: pruefen (und mit `--fix` sanft reparieren), Bericht ausgeben,
+/// den Bericht auch als Datei ablegen (Vorgabe `state/mojo-letzter.json`).
+fn mojo_befehl(a: &[String]) -> ExitCode {
+    let (mut fix, mut json, mut datei) = (false, false, None::<PathBuf>);
+    let mut i = 0;
+    while i < a.len() {
+        match a[i].as_str() {
+            "--fix" => fix = true,
+            "--json" => json = true,
+            "--datei" => match a.get(i + 1) {
+                Some(p) => {
+                    datei = Some(PathBuf::from(p));
+                    i += 1;
+                }
+                None => {
+                    melden(Stufe::Fehler, "--datei braucht einen Pfad.");
+                    return ExitCode::from(2);
+                }
+            },
+            x => {
+                melden(Stufe::Fehler, &format!("--mojo kennt {x} nicht."));
+                return ExitCode::from(2);
+            }
+        }
+        i += 1;
+    }
+    let bericht = mojo::lauf(&mojo::Echt, &mojo::pruefungen(), fix);
+    let jetzt = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let j = bericht.als_json(jetzt);
+    if json {
+        println!("{j}");
+    } else {
+        print!("{}", mojo::als_text(&bericht));
+    }
+    mojo::laut_melden(&bericht);
+    mojo::ablegen(&j, datei.as_deref());
+    ExitCode::from(bericht.exitcode())
 }
 
 fn main() -> ExitCode {
@@ -199,6 +245,7 @@ fn main() -> ExitCode {
                 ExitCode::from(2)
             }
         },
+        Some("--mojo") => mojo_befehl(&args[1..]),
         Some("--ping") => {
             let pfad = PathBuf::from(args.get(1).map(String::as_str).unwrap_or(SOCKET));
             match dienst::anfragen(&pfad, &serde_json::json!({"op": "ping"})) {

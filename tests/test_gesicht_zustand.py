@@ -1,4 +1,4 @@
-"""Gesicht und Zustand (DESIGN Regel 4d).
+"""Gesicht und Zustand (DESIGN: Regel „Sprechgesicht“).
 
 Geprueft wird die echte Bibliothek und der echte Renderer, nicht ein Nachbau:
 

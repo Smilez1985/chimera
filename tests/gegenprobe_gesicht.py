@@ -1,4 +1,4 @@
-"""Gegenprobe zu test_gesicht_zustand.py (DESIGN Regel 4d).
+"""Gegenprobe zu test_gesicht_zustand.py (DESIGN: Regel „Sprechgesicht“).
 
 Stellt je einen alten oder falschen Zustand her; der Test muss rot werden.
 Eine Mutation, bei der er gruen bleibt, ist eine Luecke im Test.
