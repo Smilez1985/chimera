@@ -242,11 +242,15 @@ source_entscheiden() {
 source_commit_lesen() {
 	[ -d "$1/.git" ] || return 0
 	have_cmd git || return 0
-	_sc_c="$(git -C "$1" rev-parse --short=7 HEAD 2>/dev/null)" || return 0
+	# Der Installer laeuft als root, der Baum gehoert often dem Nutzer: git
+	# verweigert dann mit "detected dubious ownership" -- und zwar still, weil
+	# die Ausgabe verworfen wird. Am Pi 2.11. so: kein Commit erkannt, Schritt 55
+	# konnte kein Binary waehlen. safe.directory gilt nur fuer diesen Aufruf.
+	_sc_c="$(git -c safe.directory="$1" -C "$1" rev-parse --short=7 HEAD 2>/dev/null)" || return 0
 	case "$_sc_c" in ''|*[!0-9a-f]*) return 0 ;; esac
 	# status schweigt bei einem Fehler genauso wie bei "sauber": den
 	# Exitcode pruefen, nicht nur die Ausgabe.
-	_sc_s="$(git -C "$1" status --porcelain -- rust VERSION 2>/dev/null)" || return 0
+	_sc_s="$(git -c safe.directory="$1" -C "$1" status --porcelain -- rust VERSION 2>/dev/null)" || return 0
 	[ -z "$_sc_s" ] || return 0
 	printf '%s' "$_sc_c"
 }
