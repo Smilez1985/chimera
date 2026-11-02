@@ -3440,6 +3440,32 @@ selbst**, nicht in einem Aufrufparameter — damit sie bei jedem Lauf gilt.
    laufen alle Dienste wieder, die vorher liefen, und der Sitzungs-Socket ist
    aktiv; `oom_score_adj` einer neuen SSH-Sitzung ist negativ.
 
+### Regel „Fortschritt“ — Ein Balken, der den echten Stand zeigt
+
+Vorgabe smilez (2.11.): „ein funktionierender Fortschrittsbalken, der den echten
+Fortschritt anhand der Installer-Stufen anzeigt (alle Stufen bis Abschluss =
+100 %, geteilt durch die Anzahl)." Und: **das Wort „Updating…" steht über dem
+Balken.**
+
+Warum ein eigener Prozess (`installer/lib/py/fortschritt.py`): Die Klammer hält
+den Dienst an, bevor Dateien getauscht werden. Genau in dieser Zeit will man
+den Fortschritt sehen — der Dienst kann das Panel also nicht bedienen.
+Der Zeichner liest eine Datei (`/run/chimera-setup/stand`, Inhalt
+`<fertig> <gesamt>`), zeichnet nur bei Änderung und endet über eine Marke.
+
+**Gemessen (2.11.), was die Regel begründet:**
+- Mit laufendem Zeichner meldet die Anzeige-Erkennung „Leitungen belegt" —
+  der Zeichner hält SPI. Die Schritte 40, 46 und 50 bekommen das Panel
+  deshalb frei (`fortschritt_halt` vor dem Schritt, Neustart danach).
+- Nach dem Selbstneustart aus `source/` beginnt der Lauf wieder bei Modul 1.
+  Der Balken darf dabei **nicht** zurückspringen: Der Stand wird nie kleiner
+  als der in der Datei (Vorgabe an `fortschritt_start` und `fortschritt_setze`).
+- `gesamt` 0 heißt fertig, nicht Division durch Null.
+
+**Grenzen:** Bei `--only` und beim Boot-Abgleich gibt es keinen Balken (nichts
+zu verteilen, bzw. der Dienst läuft weiter). Ohne Anzeige oder ohne Python wird
+das gemeldet, nicht verschwiegen.
+
 ### Regel „ACP“ — Chimera ist ein Agent für Editoren, erreichbar über eine Transportschicht am Gateway
 
 Vorgabe smilez (2.11.): ACP ist eine **Pflicht-Schnittstelle**. Gemeint ist der

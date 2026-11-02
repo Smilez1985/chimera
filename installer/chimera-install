@@ -83,6 +83,7 @@ export CHIMERA_DOWNGRADE="${CHIMERA_DOWNGRADE:-false}" CHIMERA_MIT="${CHIMERA_MI
 . "$HERE/lib/source.sh"
 . "$HERE/lib/python.sh"
 . "$HERE/lib/helfer.sh"
+. "$HERE/lib/fortschritt.sh"
 if [ "$HELFER_AUFTRAG" = 1 ]; then
 	helfer_env_lesen
 	# Laufzettel: Der Helfer meldet selbst, dass er laeuft und wie er endet.
@@ -185,6 +186,17 @@ if [ "${CHIMERA_KLAMMER:-0}" = 1 ] && [ -f "$(_klammer_datei)" ]; then
 	info "Offene Klammer aus dem Neustart uebernommen -- Dienste werden am Ende wieder gestartet."
 fi
 
+# Fortschrittsanzeige: Jede Stufe zaehlt gleich viel (Vorgabe smilez, 2.11.).
+# Sie laeuft nur in einem vollen Lauf, in dem die Dienste angehalten sind --
+# dann ist das Panel frei und der Dienst kann es ohnehin nicht bedienen.
+# Bei --only gibt es nichts zu verteilen, beim Boot-Abgleich bleibt der Dienst an.
+_FORT_VORHANDEN=0
+if [ "$_KLAMMER" = 1 ] && [ -z "$ONLY" ] && [ "$HARDWARE" != 1 ]; then
+	_FORT_VORHANDEN=1
+	_FORT_GESAMT_VORLAUF="$(steps_list | wc -l | tr -d ' ')"
+	fortschritt_start "$_FORT_GESAMT_VORLAUF"
+fi
+
 for mod in $(steps_list); do
 	name="$(basename "$mod" .sh)"
 
@@ -209,10 +221,29 @@ for mod in $(steps_list); do
 
 	# Betriebsart wird an das Modul durchgereicht; Module, die sie nicht
 	# kennen, ignorieren sie.
+	# Schritte, die das Panel selbst brauchen, bekommen es frei: Sonst meldet
+	# die Anzeige-Erkennung "Leitungen belegt" (am Pi 2.11. gemessen).
+	_FORT_PAUSIERT=0
+	case "$name" in
+		40-*|46-*|50-*)
+			if [ "$_FORT_VORHANDEN" = 1 ]; then
+				fortschritt_halt
+				_FORT_PAUSIERT=1
+			fi ;;
+	esac
 	set +e
 	CHIMERA_MODE="$MODE" CHIMERA_LOGFILE="$CHIMERA_LOGFILE" CHIMERA_KLAMMER="$_KLAMMER" sh "$mod"
 	rc=$?
 	set -e
+
+	if [ "$_FORT_PAUSIERT" = 1 ]; then
+		fortschritt_start "$_FORT_GESAMT_VORLAUF" "$RAN"
+		_FORT_PAUSIERT=0
+	fi
+
+	if [ "$_FORT_VORHANDEN" = 1 ]; then
+		fortschritt_setze "$RAN"
+	fi
 
 	if [ "$rc" -eq 4 ]; then
 		# I8: source/ wurde erneuert. Ab jetzt arbeitet der Installer aus
@@ -233,6 +264,9 @@ for mod in $(steps_list); do
 		# arbeitet unter dem angehaltenen Dienst weiter und muss ihn danach
 		# wieder starten -- sonst bliebe der Merker liegen und niemand
 		# protokollierte den Start.
+		# Anhalten, aber den Stand behalten: Der neue Prozess setzt den Balken
+		# fort, statt bei 0 zu beginnen.
+		fortschritt_halt
 		CHIMERA_LOGFILE_FORTSETZEN="$CHIMERA_LOGFILE"; export CHIMERA_LOGFILE_FORTSETZEN
 		[ "$_KLAMMER" = 1 ] && { CHIMERA_KLAMMER=1; export CHIMERA_KLAMMER; }
 		if [ "$HELFER_AUFTRAG" = 1 ]; then
@@ -270,6 +304,10 @@ for mod in $(steps_list); do
 		exit "$rc"
 	fi
 done
+
+if [ "$_FORT_VORHANDEN" = 1 ]; then
+	fortschritt_stop
+fi
 
 if [ "$_KLAMMER" = 1 ]; then
 	klammer_aus || { [ "$FAILED" -eq 0 ] && { FAILED=1; FIRST_RC=1; }; }

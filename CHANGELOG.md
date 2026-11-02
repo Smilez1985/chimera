@@ -19,6 +19,8 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 
 - **Anzeige:** Der Installer setzt vor dem Anhalten der Dienste das Gesicht `UPDATE` (bernsteinfarben, fokussierte Augen, Sternchen); das Bild bleibt bis zum Dienststart stehen.
 - **Sitzung:** Neue Operation `gesicht` am Sitzungs-Socket — die Anzeige lässt sich ansprechen, ohne die Sitzung zu bedienen.
+- **Anzeige:** Fortschrittsbalken während des Installer-Laufs — eine Stufe gleich viel, „Updating…" darüber; der Stand überlebt den Selbstneustart und springt nicht zurück.
+- **Anzeige:** Die Schritte 40/46/50 bekommen das Panel frei, damit die Anzeige-Erkennung nicht „Leitungen belegt" meldet.
 ### Hinzugefügt
 - **Gateway:** Rust-Grundlage `rust/` mit dem Programm `chimera-tor`; die CI baut es statisch für aarch64 und legt es mit SHA-256 als Artefakt und auf `entwicklung` als Prerelease `rust-<commit>` ab.
 - **Installer:** Neues Modul 55 lädt das Gateway-Binary `chimera-tor` zum Commit der Quelle (`rust-<commit>`), prüft SHA-256 und Version und legt es nach `/opt/chimera/bin`; Rückbau 55 entfernt es.

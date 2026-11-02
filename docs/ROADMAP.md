@@ -55,6 +55,9 @@ zram wird nicht angefasst, wenn es läuft.
       Operation `gesicht` am Sitzungs-Socket; der Installer setzt es, bevor die
       Dienste gehen (`installer/lib/py/gesicht.py`). Das Panel wird nicht
       geleert, das Bild bleibt bis zum Dienststart stehen.
+- [x] **Fortschrittsbalken:** echte Stufen (fertig/gesamt), „Updating…"
+      darüber, eigener Zeichner, Pause um die Panel-Schritte. Am Pi belegt:
+      0 → 1 → 7 → 8 → 9 von 12 ohne Rücksprung; Anzeige-Erkennung ohne Befund.
 - [ ] **„Updated“-Gesicht: Nachweis am Gerät:** Einmal mit laufendem Dienst
       ausführen und am Display ablesen. Bisher nur im Test belegt (Socket-Antwort
       und Protokollzeile), nicht am Panel. Der Installer setzt am Anfang ein
