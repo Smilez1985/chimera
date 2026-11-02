@@ -10,6 +10,13 @@ erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 
 ## [Unreleased]
 
+### Behoben
+- **Start:** `chimera.service` hängt jetzt an seinem Sitzungs-Socket (`Requires=`, `After=`). Der Zustand „Dienst läuft ohne Sitzungs-Socket“ kann nicht mehr entstehen; ein Neustart bringt beide in der richtigen Reihenfolge hoch.
+- **Installer:** Die Klammer nimmt den Zustand vor dem Anhalten auf und stoppt Dienste vor Sockets — ein Dienst, den ein Socket mitnimmt, verschwindet nicht mehr aus der Liste und wird wieder gestartet.
+- **Installer:** Klammer und Protokoll überleben den Selbstneustart aus `source/`; der abgekoppelte Helfer bekommt wieder `--helfer` und schreibt „fertig“.
+- **Installer:** `systemd-run` läuft mit `--no-block`; ein Lauf mit Befund gilt nicht mehr als Startfehler, und die Meldung eines gescheiterten Starts enthält den Grund.
+- **Installer:** Schritte starten während der Klammer keine Dienste und führen den Dienstnachweis nicht mehr mitten im Lauf.
+
 ### Hinzugefügt
 - **Gateway:** Rust-Grundlage `rust/` mit dem Programm `chimera-tor`; die CI baut es statisch für aarch64 und legt es mit SHA-256 als Artefakt und auf `entwicklung` als Prerelease `rust-<commit>` ab.
 - **Installer:** Neues Modul 55 lädt das Gateway-Binary `chimera-tor` zum Commit der Quelle (`rust-<commit>`), prüft SHA-256 und Version und legt es nach `/opt/chimera/bin`; Rückbau 55 entfernt es.

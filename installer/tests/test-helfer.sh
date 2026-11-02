@@ -65,6 +65,13 @@ lauf() {
 
 		systemd-run() {
 			printf 'systemd-run %s\n' "$*" >>"$F/spur"
+			# Name belegt (kommt am Pi nach einem Abbruch vor): erster Versuch
+			# scheitert, nach reset-failed geht er.
+			if [ -f "$F/sr-immer-fehler" ]; then return 1; fi
+			if [ -f "$F/sr-fehler-erstes" ]; then
+				rm -f "$F/sr-fehler-erstes"
+				return 1
+			fi
 			# Wie der echte Helfer: Laufzettel schreiben (er sagt, wie es ausging).
 			printf 'zustand=fertig\npid=\nrc=%s\nstart=0\nende=0\n' "$(cat "$F/rc")" \
 				>"$CHIMERA_HELFER_STATUS"
@@ -92,7 +99,16 @@ lauf() {
 					return $? ;;
 				"is-active $2") grep -qx "$2" "$F/lauf" && echo active || echo inactive ;;
 				"stop $2")
-					grep -vx "$2" "$F/lauf" >"$F/l2" || true; mv "$F/l2" "$F/lauf" ;;
+					grep -vx "$2" "$F/lauf" >"$F/l2" || true; mv "$F/l2" "$F/lauf"
+					# Wie die echte Unit: chimera.service hat
+					# Requires=chimera-sitzung.socket. Faellt der Socket, faellt
+					# der Dienst mit. Genau das liess am Pi 2.11. den Dienst aus
+					# der Klammer-Liste verschwinden.
+					case "$2" in
+						chimera-sitzung.socket)
+							grep -vx chimera.service "$F/lauf" >"$F/l3" || true
+							mv "$F/l3" "$F/lauf" ;;
+					esac ;;
 				"start $2"|"start --no-block")
 					_u="${2#--no-block }"; [ "$2" = "--no-block" ] && _u="$3"
 					grep -qx "$_u" "$F/startfehler" && return 1
@@ -122,6 +138,7 @@ check "Helfer: Exitcode des Laufs kommt an (42)" "$(cat "$F/rc-aus")" "42"
 check "Helfer: systemd-run benutzt" "$(grep -c '^systemd-run' "$F/spur")" 1
 hat "Helfer: eigener Unit-Name" "$F/unit-args" "--unit=chimera-installhelper"
 hat "Helfer: transient, wird nach dem Lauf entfernt" "$F/unit-args" "--collect"
+hat "Helfer: kehrt sofort zurueck (--no-block)" "$F/unit-args" "--no-block"
 hat "Helfer: als oneshot (Exitcode kommt an)" "$F/unit-args" "--service-type=oneshot"
 hat "Helfer: Schalter fuer den Helfer selbst" "$F/unit-args" "CHIMERA_HELFER=1"
 hat "Helfer: Umgebung ueber eine Datei, nicht ueber die Befehlszeile" "$F/unit-args" "CHIMERA_HELFER_ENV="
@@ -165,10 +182,16 @@ printf 'chimera.service\nchimera-tor.service\nchimera-tor.socket\nchimera-sitzun
 lauf klammer_an
 check "Klammer an: rc 0" "$(cat "$F/rc-aus")" 0
 check "Klammer an: nichts laeuft mehr" "$(grep -c . "$F/lauf" || true)" 0
-# Reihenfolge: Timer und Sockets zuerst, die Dienste zuletzt.
-check "Klammer an: Reihenfolge (Timer, Sockets, Dienste, Gateway)" \
+# Reihenfolge: Timer, dann die Dienste, die Sockets zuletzt. Ein Socket nimmt
+# ueber Requires seinen Dienst mit; andersherum bliebe ein Dienst ohne Socket
+# zurueck (am Pi 2.11. genau so passiert).
+check "Klammer an: Reihenfolge (Timer, Dienste, Gateway, Sockets zuletzt)" \
 	"$(grep '^systemctl stop' "$F/spur" | awk '{print $3}' | tr '\n' ' ')" \
-	"chimera-mojo.timer chimera-tor.socket chimera-sitzung.socket chimera.service chimera-tor.service "
+	"chimera-mojo.timer chimera.service chimera-tor.service chimera-tor.socket chimera-sitzung.socket "
+hat "Klammer an: Zustand wird vor dem Anhalten aufgenommen" "$F/aus" "Zustand vor dem Lauf:"
+hat "Klammer an: Dienst steht in der Liste, obwohl der Socket ihn mitnimmt" \
+	"$F/aus" "laufen nach dem Lauf wieder: chimera-mojo.timer chimera.service chimera-tor.service"
+hat "Klammer an: jeder Halt wird mit Exitcode protokolliert" "$F/aus" "chimera.service angehalten (rc="
 check "Klammer an: nicht laufende Einheiten werden nicht angefasst" \
 	"$(grep -c 'stop chimera-logabgleich.timer' "$F/spur" || true)" 0
 
@@ -181,6 +204,8 @@ check "Klammer aus: Reihenfolge (Sockets vor Diensten)" \
 hat_nicht "Klammer aus: Gateway nicht direkt gestartet" "$F/spur" "systemctl start chimera-tor.service"
 check "Klammer aus: alles wieder aktiv" "$(sort "$F/lauf" | tr '\n' ' ')" \
 	"chimera-mojo.timer chimera-sitzung.socket chimera-tor.socket chimera.service "
+hat "Klammer aus: Start wird protokolliert" "$F/aus" "chimera.service: gestartet (rc=0)"
+hat "Klammer aus: Nachweis als Tabelle" "$F/aus" "Zustand nach dem Lauf:"
 
 # --- 6. Klammer: Start scheitert -> Befund -------------------------------
 feld klammerfehler
@@ -223,6 +248,43 @@ feld noetig
 hat "Klammer noetig: nichts geaendert -> 1" "$F/ergebnis" "rc_nichts=1"
 hat "Klammer noetig: neuer Quellstand -> 0" "$F/ergebnis" "rc_neu=0"
 hat "Klammer noetig: fehlendes Paket -> 0" "$F/ergebnis" "rc_paket=0"
+
+# --- 7. Helfer: belegter Unit-Name -> ein Wiederholungsversuch -----------
+feld wiederholung
+: >"$F/sr-fehler-erstes"
+SR_RC=0 lauf helfer_starten /pfad/chimera-install --only 99
+check "Wiederholung: rc des zweiten Versuchs (42 aus dem Lauf)" "$(cat "$F/rc-aus")" 42
+check "Wiederholung: zwei Versuche" "$(grep -c '^systemd-run' "$F/spur" || true)" 2
+hat "Wiederholung: Unit-Name vorher freigegeben" "$F/spur" "systemctl reset-failed chimera-installhelper"
+
+feld wiederholung-fehl
+: >"$F/sr-fehler-erstes"
+: >"$F/sr-immer-fehler"
+SR_RC=0 lauf helfer_starten /pfad/chimera-install --only 99
+check "Wiederholung: scheitert auch der zweite, rc 2" "$(cat "$F/rc-aus")" 2
+hat "Wiederholung: Meldung mit Grund" "$F/aus" "startete nicht (systemd-run)"
+
+# --- 7z. Helfer: Aufrufer liest den Zettel vor der ersten Meldung --------
+# Der Helfer traegt seine PID erst kurz nach dem Start ein. Der Aufrufer darf
+# das nicht als Absturz werten (am Pi 2.11. genau so passiert).
+feld frueh
+printf 'zustand=laufend\npid=\nrc=\nstart=0\nende=0\n' >"$F/zettel.status"
+( sleep 2; printf 'zustand=laufend\npid=%s\nrc=\nstart=0\nende=0\n' "$$" >"$F/zettel.status";
+  sleep 2; printf 'zustand=fertig\npid=\nrc=0\nstart=0\nende=1\n' >"$F/zettel.status" ) &
+SR_RC=0 lauf helfer_abwarten
+check "Fruehe Abfrage: rc 0 statt Absturz" "$(cat "$F/rc-aus")" 0
+hat "Fruehe Abfrage: als beendet gemeldet" "$F/aus" "Helfer beendet mit Exitcode 0"
+
+# --- 7a. Helfer: Abbruch ohne "fertig" -> laut, rc 2 ---------------------
+# Geprueft wird helfer_abwarten: Der Zettel sagt "laufend", der Prozess ist weg.
+feld hartabbruch
+sleep 30 & _hp=$!
+printf 'zustand=laufend\npid=%s\nrc=\nstart=0\nende=0\n' "$_hp" >"$F/zettel.status"
+kill "$_hp" 2>/dev/null
+wait "$_hp" 2>/dev/null || true
+lauf helfer_abwarten
+check "Hartabbruch: rc 2" "$(cat "$F/rc-aus")" 2
+hat "Hartabbruch: benannt" "$F/aus" "ohne Ergebnis"
 
 # --- 8. Umgebung wird im Helfer gelesen und entfernt ---------------------
 feld lesen

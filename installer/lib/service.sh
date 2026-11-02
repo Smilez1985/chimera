@@ -456,6 +456,14 @@ service_einrichten() {
 	log ""
 
 	log "Nachweis"
+	if [ "${CHIMERA_KLAMMER:-0}" = 1 ]; then
+		# Die Klammer haelt den Dienst absichtlich angehalten und startet ihn
+		# nach dem Lauf in der richtigen Reihenfolge (Sockets zuerst). Ein
+		# Nachweis jetzt wuerde nur das Anhalten messen -- und der Lauf brach
+		# hier am Pi mit Exitcode 2 ab (2.11.). Den Nachweis fuehrt die Klammer.
+		info "Klammer laeuft -- Nachweis folgt nach dem Start am Ende des Laufs."
+		return 0
+	fi
 	if [ "$_se_gestartet" = 1 ]; then
 		info "warte ${CHIMERA_DIENST_WARTEN} s ..."
 		sleep "$CHIMERA_DIENST_WARTEN"

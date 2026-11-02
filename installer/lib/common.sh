@@ -100,6 +100,15 @@ log_open() {
 		CHIMERA_LOG_DIR="./logs"
 		mkdir -p "$CHIMERA_LOG_DIR" 2>/dev/null || return 1
 	}
+	# Fortsetzung nach einem Selbstneustart: dasselbe Protokoll weiterfuehren,
+	# statt ein zweites zu beginnen. Sonst steht der Start (Klammer) in einer
+	# anderen Datei als der Lauf, den er umklammert.
+	if [ -n "${CHIMERA_LOGFILE_FORTSETZEN:-}" ] && [ -f "$CHIMERA_LOGFILE_FORTSETZEN" ]; then
+		CHIMERA_LOGFILE="$CHIMERA_LOGFILE_FORTSETZEN"
+		_CHIMERA_LOG_EIGEN=1
+		_log_raw "=== chimera $_lo_name -- Fortsetzung nach Neustart, $(date '+%Y-%m-%d %H:%M:%S') ==="
+		return 0
+	fi
 	CHIMERA_LOGFILE="$CHIMERA_LOG_DIR/${_lo_name}-$(date +%Y%m%d-%H%M%S).log"
 	: >"$CHIMERA_LOGFILE" 2>/dev/null || { CHIMERA_LOGFILE=""; return 1; }
 	# Nur wer das Protokoll geoeffnet hat, gleicht es am Ende ab. Ein

@@ -80,19 +80,14 @@ mutation umgebung-vergessen \
 	's|--setenv="CHIMERA_HELFER_ENV=\$_hs_env" ||' \
 	"Helfer: Umgebung ueber eine Datei"
 
-# M8: Zweiter Aufruf startet einen zweiten Lauf.
-mutation zweiter-lauf \
-	's|^\tif helfer_aktiv; then$|	if false; then|' \
-	"Wiederaufruf: kein zweiter systemd-run"
-
 # M9: Der Exitcode des Helfers wird ignoriert.
 mutation exitcode-ignoriert \
-	's|^\tinfo "Helfer beendet mit Exitcode \$_hw_rc."$|	info "Helfer beendet."|;s|^\treturn "\$_hw_rc"$|	return 0|' \
+	's|^\t\t\tinfo "Helfer beendet mit Exitcode \$_hw_rc."$|\t\t\tinfo "Helfer beendet."|;s|^\t\t\treturn "\$_hw_rc" ;;$|\t\t\treturn 0 ;;|' \
 	"Helfer: Exitcode des Laufs kommt an (42)"
 
 # M10: Start scheitert, wird aber als Erfolg gemeldet.
 mutation startfehler-still \
-	's|^\t\terr "Der Helfer startete nicht (systemd-run)."$|	:|' \
+	's|^\t\t\terr "Der Helfer startete nicht (systemd-run): \${_hs_fehl:-ohne Meldung}"$|\t\t\t:|' \
 	"Start scheitert: benannt"
 
 # M11: Die Umgebungsdatei ist fuer alle lesbar.
@@ -102,7 +97,7 @@ mutation envdatei-offen \
 
 # M12: Die Klammer haelt nichts an.
 mutation klammer-ohne-stop \
-	's|^\t\tsystemctl stop "\$_ka_u" >/dev/null 2>&1 \|\| {|\t\ttrue \&\& {|' \
+	's|^\t\tsystemctl stop "\$_ka_u" >/dev/null 2>&1 \|\| _ka_rc=\$?$|\t\ttrue|' \
 	"Klammer an: nichts laeuft mehr"
 
 # M13: Die Klammer startet in falscher Reihenfolge (Dienste vor Sockets).
@@ -116,8 +111,10 @@ mutation klammer-startet-alles \
 	"Klammer aus: Reihenfolge (Sockets vor Diensten)"
 
 # M15: Ein Dienst, der nach dem Lauf nicht laeuft, gilt als Erfolg.
+# Die Zusage hat zwei Waechter (je Start und die Tabelle am Ende); die Mutation
+# schaltet beide aus, sonst misst sie nur den einen und der Test bliebe gruen.
 mutation nachweis-fehlt \
-	's|err "laeuft nach dem Lauf nicht: \$_ke_u"; _ke_befund=1;|: ;|' \
+	's|^\t\tif \[ "\$_ke_st" = active \]; then$|\t\tif true; then|;s|^\t\t\[ "\$_ke_st" = active \] \|\| {$|\t\ttrue \|\| {|' \
 	"Klammer aus: stummer Start -> rc 1"
 
 # M16: Fremde Variablen werden uebernommen.
@@ -136,10 +133,10 @@ mutation gateway-direkt \
 	's|KLAMMER_DIENSTE:=chimera.service}|KLAMMER_DIENSTE:=chimera.service chimera-tor.service}|' \
 	"Klammer aus: Gateway nicht direkt gestartet"
 
-# M20: Der Helfer schreibt keinen Laufzettel -> der Aufrufer wartet ins Leere.
-mutation kein-zettel \
-	's|^\thelfer_zettel_schreiben laufend "" "" "$(date +%s)"$|\t:|' \
-	"Helfer: Exitcode des Laufs kommt an (42)"
+# M20: Kein zweiter Versuch, wenn der Unit-Name belegt ist.
+mutation keine-wiederholung \
+	's|^\t\tif ! _hs_fehl="$(systemd-run|\t\tif false \&\& _hs_fehl="$(systemd-run|' \
+	"Wiederholung: zwei Versuche"
 
 # M21: Ein zweiter Aufruf startet trotz laufendem Lauf neu.
 mutation zettel-ignoriert \
@@ -149,7 +146,7 @@ mutation zettel-ignoriert \
 # M22: Ein Laufzettel ohne "fertig" gilt als Erfolg.
 mutation hartabbruch-still \
 	's|^\t\t\terr "Der Helfer endete ohne Ergebnis (Hartabbruch?) -- Protokoll pruefen."$|\t\t\t:|' \
-	"Helfer: Exitcode des Laufs kommt an (42)"
+	"Hartabbruch: benannt"
 
 printf '\nErgebnis: %s ok, %s fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -102,6 +102,10 @@ ARGS_NEU=""
 [ "$MODE" = check ] && ARGS_NEU="$ARGS_NEU --check"
 [ -n "$ONLY" ] && ARGS_NEU="$ARGS_NEU --only $ONLY"
 [ "$HARDWARE" = 1 ] && ARGS_NEU="$ARGS_NEU --hardware"
+# Auch der Helferauftrag muss den Neustart ueberleben. Ohne --helfer laeuft der
+# neue Prozess als gewoehnlicher Lauf und schreibt den Laufzettel nie zu Ende --
+# der Aufrufer wartet dann auf "fertig", das nie kommt (am Pi 2.11. so).
+[ "$HELFER_AUFTRAG" = 1 ] && ARGS_NEU="$ARGS_NEU --helfer"
 
 steps_list() {
 	# Nummerisch sortiert, damit 10 vor 90 kommt.
@@ -174,6 +178,13 @@ if helfer_laeuft && [ "$MODE" = run ] && [ "$HARDWARE" != 1 ]; then
 	fi
 fi
 
+# Der Neustart per exec hat eine offene Klammer hinterlassen: Der neue Prozess
+# schliesst sie am Ende, statt sie zu vergessen (Merker liegt im Laufverzeichnis).
+if [ "${CHIMERA_KLAMMER:-0}" = 1 ] && [ -f "$(_klammer_datei)" ]; then
+	_KLAMMER=1
+	info "Offene Klammer aus dem Neustart uebernommen -- Dienste werden am Ende wieder gestartet."
+fi
+
 for mod in $(steps_list); do
 	name="$(basename "$mod" .sh)"
 
@@ -218,7 +229,17 @@ for mod in $(steps_list); do
 		log_close 0 >/dev/null
 		CHIMERA_NEU_GESTARTET=1; export CHIMERA_NEU_GESTARTET
 		# shellcheck disable=SC2086
-		exec sh "$_neu" $ARGS_NEU
+		# Klammer und Protokoll muessen den Neustart ueberleben: Der neue Prozess
+		# arbeitet unter dem angehaltenen Dienst weiter und muss ihn danach
+		# wieder starten -- sonst bliebe der Merker liegen und niemand
+		# protokollierte den Start.
+		CHIMERA_LOGFILE_FORTSETZEN="$CHIMERA_LOGFILE"; export CHIMERA_LOGFILE_FORTSETZEN
+		[ "$_KLAMMER" = 1 ] && { CHIMERA_KLAMMER=1; export CHIMERA_KLAMMER; }
+		if [ "$HELFER_AUFTRAG" = 1 ]; then
+			CHIMERA_HELFER=1 exec sh "$_neu" $ARGS_NEU
+		else
+			exec sh "$_neu" $ARGS_NEU
+		fi
 	elif [ "$rc" -eq 0 ]; then
 		_log_raw "Modul $name: ok"
 	elif [ "$rc" -eq 3 ]; then

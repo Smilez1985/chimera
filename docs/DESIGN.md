@@ -3381,12 +3381,38 @@ selbst**, nicht in einem Aufrufparameter — damit sie bei jedem Lauf gilt.
    richtigen Reihenfolge. **Gemessene Reihenfolge** (der Fehler vom 31.10.):
    Sockets **vor** den Diensten starten, sonst verweigert systemd den Socket
    („Socket service already active, refusing“).
-   - Anhalten: `chimera-mojo.timer`, `chimera-sitzung.socket`,
-     `chimera-tor.socket`, `chimera-tor.service`, `chimera.service`.
-   - Starten: `chimera-tor.socket`, `chimera-sitzung.socket`, `chimera.service`,
-     `chimera-tor.service` (nur wenn er vorher lief), `chimera-mojo.timer`.
+   - **Erst messen, dann anhalten.** Der Zustand wird vollständig aufgenommen,
+     bevor der erste Halt geschieht. Grund (am Pi 2.11. gemessen): `chimera.service`
+     hat `Requires=chimera-sitzung.socket`. Wer den Socket zuerst stoppt, nimmt
+     den Dienst mit — der Dienst stand danach nicht mehr in der Liste, wurde
+     nie wieder gestartet, und die Klammer meldete trotzdem „Dienste wieder
+     gestartet“. Stiller Erfolg.
+   - Anhalten: `chimera-mojo.timer` und weitere Timer, **dann die Dienste**
+     (`chimera.service`, `chimera-tor.service`), **zuletzt die Sockets**.
+     Dienste vor Sockets, damit kein Dienst ohne Socket zurückbleibt.
+   - Starten: `chimera-tor.socket`, `chimera-sitzung.socket` (Sockets zuerst),
+     dann `chimera.service`, die Timer, zuletzt das Gateway über den Socket
+     wecken (`chimera-tor --ping`) — es startet nicht direkt, es braucht
+     `LISTEN_FDS`.
    - Gestartet wird, was **vorher lief** oder was danach laufen soll; nicht
      blind alles.
+   - **Jeder Schritt wird protokolliert und geprüft:** Zustand vor dem Lauf
+     (aktiv/eingeschaltet je Einheit), jeder Halt und jeder Start mit
+     Exitcode, danach eine Zustandstabelle. Weicht das Ergebnis ab, ist der Lauf
+     ein Befund — nicht „Dienste wieder gestartet“ auf Verdacht.
+   - **Die Klammer prüft sich selbst, sie verlässt sich nicht auf `set -e`.**
+     Ein einzelner fehlschlagender Befehl darf den Start nicht mitten im
+     Wiederanlaufen abbrechen (am Pi: Exitcode 2 nach dem Dienststart).
+   - **Der Selbstneustart per `exec` trägt Klammer und Protokoll weiter.** Der
+     Installer startet sich nach erneuertem `source/` neu; dabei müssen
+     `--helfer`, der Helferauftrag, die offene Klammer und die Protokolldatei
+     mitgehen. Sonst schreibt der neue Prozess nie „fertig“, die Klammer bleibt
+     offen, und der Start steht in einer anderen Datei als der Lauf.
+   - **`systemd-run` braucht `--no-block`.** Ohne das wartet der Aufruf auf den
+     oneshot und meldet dessen Exitcode als Startfehler — ein Lauf mit Befund
+     sah dadurch wie „Helfer startete nicht“ aus (am Pi gemessen).
+   - **Schritte starten während der Klammer keine Dienste** (`CHIMERA_KLAMMER=1`);
+     auch der Nachweis „Dienst läuft“ gehört ans Ende, nicht in den Schritt.
    - Kein Anhalten bei `--dry-run`, `--check`, `--list` und **nicht** bei
      `--hardware` (beim Boot läuft noch nichts, und der Dienst startet danach).
 5. **SSH ist eine eigene, geschützte Sache.** Der Installer fasst weder Netz noch

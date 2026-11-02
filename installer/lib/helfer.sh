@@ -31,6 +31,11 @@
 # das Gateway beim ersten Aufruf. Am Pi gemessen: nach einem direkten Start
 # stand chimera-tor.service auf inactive.
 : "${KLAMMER_SOCKETDIENSTE:=chimera-tor.service}"
+# Der Pfad des Gateway-Sockets steht sonst nur in lib/gateway.sh (Schritt 99).
+# Die Klammer braucht ihn auch nach einem Neustart, wenn dieser Schritt nicht
+# geladen ist -- sonst bricht sie unter `set -u` ab (am Pi 2.11.:
+# "CHIMERA_TOR_SOCKET: parameter not set", Exitcode 2).
+: "${CHIMERA_TOR_SOCKET:=/run/chimera/tor.sock}"
 
 # Umgebungsvariablen, die der Lauf von aussen bekommt und die der Helfer erben
 # soll. Feste Liste: Was hier nicht steht, hat im Helfer seine Vorgabe.
@@ -148,13 +153,13 @@ helfer_starten() {
 	# Der Name kann von einem frueheren Lauf belegt sein ("Unit ... was already
 	# loaded") -- etwa nach einem Abbruch. Einmal freigeben und erneut versuchen.
 	_hs_fehl=""
-	if ! _hs_fehl="$(systemd-run --unit="$CHIMERA_HELFER_UNIT" --collect --quiet --service-type=oneshot \
+	if ! _hs_fehl="$(systemd-run --unit="$CHIMERA_HELFER_UNIT" --collect --no-block --service-type=oneshot \
 		--description="Chimera -- Installer (abgekoppelt)" \
 		--setenv="CHIMERA_HELFER=1" --setenv="CHIMERA_HELFER_ENV=$_hs_env" \
 		/bin/sh "$_hs_prog" --helfer "$@" 2>&1)"; then
 		systemctl reset-failed "$CHIMERA_HELFER_UNIT" >/dev/null 2>&1 || true
 		_hs_fehl=""
-		if ! _hs_fehl="$(systemd-run --unit="$CHIMERA_HELFER_UNIT" --collect --quiet --service-type=oneshot \
+		if ! _hs_fehl="$(systemd-run --unit="$CHIMERA_HELFER_UNIT" --collect --no-block --service-type=oneshot \
 			--description="Chimera -- Installer (abgekoppelt)" \
 			--setenv="CHIMERA_HELFER=1" --setenv="CHIMERA_HELFER_ENV=$_hs_env" \
 			/bin/sh "$_hs_prog" --helfer "$@" 2>&1)"; then
@@ -164,6 +169,13 @@ helfer_starten() {
 			return 2
 		fi
 	fi
+	# --no-block: ohne das wartet systemd-run, bis der oneshot fertig ist, und
+	# meldet dessen Exitcode als eigenen Fehlschlag. Ein Lauf mit Befund (rc 1)
+	# sah dadurch wie "Helfer startete nicht" aus, und abgekoppelt war er nie
+	# (am Pi 2.11. gemessen: 20 s Blockade, dann "Job ... failed").
+	# Ohne --quiet: systemd-run meldet bei einem Fehlschlag nur dann etwas
+	# ("Job for ... failed"), sonst kaeme die Ursache leer an -- am Pi 2.11. so
+	# gesehen: "startete nicht: ohne Meldung".
 	info "Lauf laeuft abgekoppelt als $CHIMERA_HELFER_UNIT -- eine getrennte SSH-Sitzung beendet ihn nicht."
 	helfer_abwarten
 }
@@ -171,8 +183,24 @@ helfer_starten() {
 # Warten, bis die Unit fertig ist, und ihren Exitcode zurueckgeben.
 helfer_abwarten() {
 	# Warten, bis der Laufzettel "fertig" sagt oder der Prozess verschwunden ist.
-	while helfer_zettel_laeuft; do
-		sleep 2
+	# Der Aufrufer hat den Zettel als "laufend" ohne PID hinterlegt; die PID
+	# schreibt der Helfer selbst, kurz nachdem systemd-run mit --no-block
+	# zurueckkehrt. Wer sofort liest, haelt den Lauf fuer abgestuerzt (am Pi
+	# 2.11. gesehen). Deshalb: bis zu 15 s auf die erste Meldung warten.
+	_hw_warte=0
+	while :; do
+		if helfer_zettel_laeuft; then
+			_hw_warte=0
+			sleep 2
+			continue
+		fi
+		if [ "$(helfer_zettel_wert zustand)" = laufend ] && \
+			[ -z "$(helfer_zettel_wert pid)" ] && [ "$_hw_warte" -lt 15 ]; then
+			_hw_warte=$((_hw_warte+1))
+			sleep 1
+			continue
+		fi
+		break
 	done
 	case "$(helfer_zettel_wert zustand)" in
 		fertig)
@@ -232,23 +260,53 @@ klammer_noetig() {
 }
 
 klammer_an() {
+	# Die Klammer prueft jeden Schritt selbst und meldet ehrlich. Ein einzelner
+	# fehlschlagender Befehl darf sie nicht mitten im Anhalten abbrechen --
+	# am Pi 2.11. endete der Start so mit Exitcode 2, ohne dass der Merker
+	# geschrieben oder der Dienst gestartet wurde.
+	_ka_alt_e=0
+	case $- in *e*) _ka_alt_e=1; set +e ;; esac
 	if is_dry_run; then
 		info "[wuerde anhalten] $KLAMMER_TIMER $KLAMMER_SOCKETS $KLAMMER_DIENSTE"
 		return 0
 	fi
 	: >"$(_klammer_datei)" 2>/dev/null || {
 		err "Klammer-Datei nicht schreibbar: $(_klammer_datei)"; return 2; }
+
+	# 1. Zustand VOR dem Anhalten aufnehmen. Erst messen, dann anhalten.
+	# Mit Requires=chimera-sitzung.socket nimmt ein Socket seinen Dienst beim
+	# Stoppen mit. Wird zuerst gestoppt und dann gemessen, fehlt der Dienst in
+	# der Liste und startet nach dem Lauf nie wieder -- am 2.11. am Pi so
+	# passiert: "Dienste wieder gestartet" gemeldet, chimera blieb aus.
+	info "Zustand vor dem Lauf:"
+	for _ka_u in $KLAMMER_TIMER $KLAMMER_DIENSTE $KLAMMER_SOCKETDIENSTE $KLAMMER_SOCKETS; do
+		_ka_aktiv="$(systemctl is-active "$_ka_u" 2>/dev/null || true)"
+		_ka_ein="$(systemctl is-enabled "$_ka_u" 2>/dev/null || true)"
+		info "  $_ka_u: aktiv=${_ka_aktiv:-unbekannt} eingeschaltet=${_ka_ein:-unbekannt}"
+		if [ "$_ka_aktiv" = active ]; then
+			printf '%s\n' "$_ka_u" >>"$(_klammer_datei)"
+		fi
+	done
+	_ka_liste=" $(tr '\n' ' ' <"$(_klammer_datei)") "
+	if [ -z "$(echo "$_ka_liste" | tr -d ' ')" ]; then
+		info "Es lief nichts -- der Lauf fasst keine Dienste an."
+		return 0
+	fi
+
+	# 2. Anhalten: Timer, Dienste, dann Sockets. Ein Socket nimmt ueber
+	# Requires seinen Dienst mit; andersherum bliebe ein Dienst ohne Socket
+	# zurueck, und genau das ist der Zustand, den es nicht geben darf.
 	_ka_befund=0
-	# Zuerst weg, was nach dem Lauf neu startet. Das Gateway steht in
-	# KLAMMER_SOCKETDIENSTE, es wird angehalten wie ein Dienst.
-	for _ka_u in $KLAMMER_TIMER $KLAMMER_SOCKETS $KLAMMER_DIENSTE $KLAMMER_SOCKETDIENSTE; do
-		systemctl is-active --quiet "$_ka_u" 2>/dev/null || continue
-		echo "$_ka_u" >>"$(_klammer_datei)"
-		systemctl stop "$_ka_u" >/dev/null 2>&1 || {
-			err "systemctl stop $_ka_u schlug fehl -- es wird nichts geschrieben."; _ka_befund=1; }
+	info "Anhalten:"
+	for _ka_u in $KLAMMER_TIMER $KLAMMER_DIENSTE $KLAMMER_SOCKETDIENSTE $KLAMMER_SOCKETS; do
+		case "$_ka_liste" in *" $_ka_u "*) ;; *) continue ;; esac
+		_ka_rc=0
+		systemctl stop "$_ka_u" >/dev/null 2>&1 || _ka_rc=$?
 		if systemctl is-active --quiet "$_ka_u" 2>/dev/null; then
-			err "laeuft noch: $_ka_u -- es wird nichts geschrieben."
+			err "  $_ka_u laeuft nach dem Anhalten weiter (rc=$_ka_rc)."
 			_ka_befund=1
+		else
+			info "  $_ka_u angehalten (rc=$_ka_rc)"
 		fi
 	done
 	if [ "$_ka_befund" != 0 ]; then
@@ -258,11 +316,16 @@ klammer_an() {
 		return 2
 	fi
 	info "Dienste angehalten, laufen nach dem Lauf wieder: $(tr '\n' ' ' <"$(_klammer_datei)")"
+	[ "$_ka_alt_e" = 1 ] && set -e
 	return 0
 }
 
 klammer_aus() {
-	[ -f "$(_klammer_datei)" ] || return 0
+	# Wie in klammer_an: jeder Schritt wird geprueft und gemeldet; ein einzelner
+	# Fehlschlag bricht den Start nicht ab.
+	_ke_alt_e=0
+	case $- in *e*) _ke_alt_e=1; set +e ;; esac
+	[ -f "$(_klammer_datei)" ] || { [ "$_ke_alt_e" = 1 ] && set -e; return 0; }
 	if is_dry_run; then
 		info "[wuerde starten] was vorher lief"
 		rm -f "$(_klammer_datei)"
@@ -271,18 +334,27 @@ klammer_aus() {
 	_ke_lief=" $(tr '\n' ' ' <"$(_klammer_datei)") "
 	rm -f "$(_klammer_datei)"
 	_ke_befund=0
-	# Sockets zuerst (sie halten den Anschluss), dann der Agent, dann das
-	# Gateway. Andersherum verweigert systemd den Socket, weil sein Dienst schon
-	# laeuft (am 31.10. so passiert).
+	info "Start nach dem Lauf (vorher lief:$_ke_lief):"
+
+	# Reihenfolge: Sockets zuerst, dann die Dienste, dann die Timer. Andersherum
+	# verweigert systemd den Socket, weil sein Dienst schon laeuft ("Socket
+	# service already active, refusing"; am 31.10. und 2.11. so passiert).
 	for _ke_u in $KLAMMER_SOCKETS $KLAMMER_DIENSTE $KLAMMER_TIMER; do
 		case "$_ke_lief" in *" $_ke_u "*) ;; *) continue ;; esac
 		if systemctl is-active --quiet "$_ke_u" 2>/dev/null; then
-			info "laeuft schon: $_ke_u"
+			info "  $_ke_u: laeuft schon"
 			continue
 		fi
 		systemctl reset-failed "$_ke_u" >/dev/null 2>&1 || true
-		systemctl start "$_ke_u" >/dev/null 2>&1 || {
-			err "systemctl start $_ke_u schlug fehl."; _ke_befund=1; }
+		_ke_rc=0
+		systemctl start "$_ke_u" >/dev/null 2>&1 || _ke_rc=$?
+		_ke_st="$(systemctl is-active "$_ke_u" 2>/dev/null || true)"
+		if [ "$_ke_st" = active ]; then
+			info "  $_ke_u: gestartet (rc=$_ke_rc)"
+		else
+			err "  $_ke_u: Start fehlgeschlagen (rc=$_ke_rc, Zustand ${_ke_st:-unbekannt})"
+			_ke_befund=1
+		fi
 	done
 
 	# Das Gateway laeuft nicht von selbst: Es wird beim ersten Aufruf durch den
@@ -292,49 +364,55 @@ klammer_aus() {
 		_ke_prog="$CHIMERA_OPT/bin/chimera-tor"
 		if [ -x "$_ke_prog" ]; then
 			if "$_ke_prog" --ping "$CHIMERA_TOR_SOCKET" >/dev/null 2>&1; then
-				info "Gateway ueber den Socket geweckt: $_ke_u"
+				info "  $_ke_u: ueber den Socket geweckt"
 			else
-				err "Gateway antwortet nach dem Lauf nicht ($_ke_u, Socket $CHIMERA_TOR_SOCKET)."
+				err "  $_ke_u: antwortet nach dem Lauf nicht (Socket $CHIMERA_TOR_SOCKET)."
 				_ke_befund=1
 			fi
 		else
 			warn "Gateway-Programm fehlt ($_ke_prog) -- Wecken uebersprungen."
 		fi
 	done
+
 	# Sicherheitsnetz: Der Sitzungs-Socket muss lauschen, sobald der Dienst
-	# laeuft -- unabhaengig davon, wie er vor dem Lauf stand. Am 31.10. und am
-	# 2.11. blieb er aus ("Socket service already active, refusing"), und der
-	# Dienst lief 22 Stunden ohne ihn.
-	# Nur, wenn der Socket auch eingeschaltet ist: Ein bewusst abgeschalteter
-	# bleibt aus (Vorgabe: nichts anfassen, was der Nutzer so eingerichtet hat).
+	# laeuft -- unabhaengig davon, wie er vor dem Lauf stand. Nur, wenn er auch
+	# eingeschaltet ist: Ein bewusst abgeschalteter bleibt aus.
 	for _kn_s in $KLAMMER_SOCKETS; do
 		systemctl is-active --quiet "$_kn_s" 2>/dev/null && continue
 		[ "$(systemctl is-enabled "$_kn_s" 2>/dev/null)" = enabled ] || {
-			info "Socket $_kn_s ist aus und nicht eingeschaltet -- bleibt so."
+			info "  $_kn_s: aus und nicht eingeschaltet -- bleibt so."
 			continue; }
 		if systemctl is-active --quiet "$CHIMERA_DIENST" 2>/dev/null; then
 			warn "$_kn_s laesst sich nicht starten, solange $CHIMERA_DIENST laeuft -- Dienst wird dafuer angehalten."
 			systemctl stop "$CHIMERA_DIENST" >/dev/null 2>&1 || true
 		fi
 		if systemctl start "$_kn_s" >/dev/null 2>&1; then
-			info "Socket nachgezogen: $_kn_s"
+			info "  $_kn_s: nachgezogen"
 		else
-			err "Socket $_kn_s nicht startbar."
+			err "  $_kn_s: nicht startbar."
 			_ke_befund=1
 		fi
 		systemctl is-active --quiet "$CHIMERA_DIENST" 2>/dev/null || \
 			systemctl start "$CHIMERA_DIENST" >/dev/null 2>&1 || {
-				err "Dienst nach dem Socket-Start nicht startbar."; _ke_befund=1; }
+				err "  Dienst nach dem Socket-Start nicht startbar."; _ke_befund=1; }
 	done
 
-	# Nachweis: Ein Dienst, der gleich wieder stirbt, ist kein Erfolg.
-	for _ke_u in $KLAMMER_SOCKETS $KLAMMER_DIENSTE; do
+	# Nachweis als Tabelle: Ein Dienst, der gleich wieder stirbt, ist kein Erfolg.
+	info "Zustand nach dem Lauf:"
+	for _ke_u in $KLAMMER_TIMER $KLAMMER_SOCKETS $KLAMMER_DIENSTE; do
+		_ke_st="$(systemctl is-active "$_ke_u" 2>/dev/null || true)"
+		info "  $_ke_u: ${_ke_st:-unbekannt}"
 		case "$_ke_lief" in *" $_ke_u "*) ;; *) continue ;; esac
-		systemctl is-active --quiet "$_ke_u" 2>/dev/null || {
-			err "laeuft nach dem Lauf nicht: $_ke_u"; _ke_befund=1; }
+		[ "$_ke_st" = active ] || {
+			err "  laeuft nach dem Lauf nicht: $_ke_u"; _ke_befund=1; }
 	done
 	# Beim Gateway ist der Socket der Nachweis; der Dienst startet erst mit dem
 	# ersten Aufruf und darf danach auch wieder enden (Socket-Aktivierung).
-	[ "$_ke_befund" = 0 ] && info "Dienste wieder gestartet."
+	if [ "$_ke_befund" = 0 ]; then
+		info "Dienste wieder gestartet."
+	else
+		err "Nach dem Lauf laeuft nicht alles, was vorher lief."
+	fi
+	[ "$_ke_alt_e" = 1 ] && set -e
 	return "$_ke_befund"
 }
