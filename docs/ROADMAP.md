@@ -43,10 +43,14 @@ zram wird nicht angefasst, wenn es läuft.
       Angelegt wird nur, wenn es fehlt.
 - [x] **SSH-Schutz:** Drop-in `ssh.service.d/10-chimera-oom.conf` mit
       `OOMScoreAdjust=-900` (Sitzungsprozesse hatten `oom_score_adj=0`).
-- [ ] **Transiente Unit klären:** Am Pi meldet `systemd-run` Erfolg, die Unit
-      gilt aber als `inactive`, während ihr Prozess läuft („Failed to open
-      /run/systemd/transient/…“). Der Abbruch der Verbindung ist deshalb **noch
-      nicht belegt** — erst klären, dann behaupten.
+- [x] **Transiente Unit geklärt (2.11.):** Die Unit ist über `systemctl` nicht
+      abfragbar („Failed to open /run/systemd/transient/…“), **läuft aber**. Das
+      ist eine Eigenheit der transienten Unit, kein Fehler — deshalb der
+      Laufzettel in `/run/chimera-installhelper.status`. Die eigentliche Ursache
+      der „startete nicht“-Meldungen war eine andere: `systemd-run` ohne
+      `--no-block` wartet auf den `oneshot` und meldet dessen Exitcode als
+      Startfehler. Belegt: Verbindungsabbruch nach 9 s, Helfer lief durch,
+      Zettel `fertig`, Dienste aktiv, Web 200.
 - [ ] **„Updated“-Gesicht vor dem Anhalten:** Der Installer setzt am Anfang ein
       Gesicht, das den Update-Zustand zeigt, und der Bildschirminhalt bleibt bis
       zum Dienststart bzw. Neustart stehen (Panel nicht leeren, Backlight an).

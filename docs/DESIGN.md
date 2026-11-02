@@ -3427,7 +3427,14 @@ selbst**, nicht in einem Aufrufparameter — damit sie bei jedem Lauf gilt.
    und man neu verbindet —, dann **hängt sich der neue Aufruf an den laufenden
    Lauf** und liefert dessen Exitcode. Einen zweiten Lauf gibt es nie, aber der
    Lauf ist nach einer Trennung jederzeit wieder erreichbar.
-7. **Gegenprobe:** Ein Lauf mit einem scheiternden Schritt liefert dessen
+7. **Testattrappen bilden die Unit nach, nicht nur den Befehl.** Die Attrappe
+   von `systemctl` in `test-helfer.sh` muss `Requires=` nachbilden: Stoppt man
+   `chimera-sitzung.socket`, nimmt systemd `chimera.service` mit. Ohne das war
+   der Test grün, während am Gerät der Dienst aus blieb (2.11.). Ebenso gilt:
+   Prüfbäume gehören **nicht** nach `/tmp` — ein Neustart räumt sie weg, und der
+   Test misst dann nichts (`cd: Datei nicht gefunden`), ohne rot zu werden.
+   Prüfbäume liegen unter `/opt/chimera-pruef`.
+8. **Gegenprobe:** Ein Lauf mit einem scheiternden Schritt liefert dessen
    Exitcode zurück; ein Abbruch der aufrufenden Sitzung beendet den Helfer
    nicht; ein zweiter Aufruf während eines Laufs wird abgewiesen; nach dem Lauf
    laufen alle Dienste wieder, die vorher liefen, und der Sitzungs-Socket ist
