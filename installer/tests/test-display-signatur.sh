@@ -134,6 +134,73 @@ if display_get whisplay name >/dev/null 2>&1; then echo "rc0"; else echo "rc1"; 
 EOF
 check "display_get ohne Python: rc 1" "$(sh "$W/ohnepy.sh" 2>/dev/null)" "rc1"
 
+# --- Leitungen belegt: Befund lesen (ohne Hardware pruefbar) ----------------
+#
+# Die Erkennung meldet "belegt", wenn der laufende Dienst die Pins haelt.
+# Das ist eine Aussage ueber die Messung, nicht ueber das Panel -- Schritt 40
+# wertet es deshalb nicht als Befund, sondern uebernimmt den festgehaltenen
+# Typ (mit Nachweis, siehe unten).
+cat >"$W/belegt.sh" <<'EOF'
+#!/bin/sh
+. "$HERE/lib/common.sh"
+. "$HERE/lib/display.sh"
+DISPLAY_BEFUND="$1"
+if display_leitungen_belegt; then echo "belegt"; else echo "frei"; fi
+EOF
+check "Befund mit belegten Leitungen -> belegt" \
+	"$(sh "$W/belegt.sh" '{"belegt":["whisplay"],"gewaehlt":null}' 2>/dev/null)" "belegt"
+check "Befund ohne belegte Leitungen -> frei" \
+	"$(sh "$W/belegt.sh" '{"belegt":[],"gewaehlt":"whisplay"}' 2>/dev/null)" "frei"
+check "ohne Befund -> frei (keine Annahme)" "$(sh "$W/belegt.sh" '' 2>/dev/null)" "frei"
+
+# --- Festgehaltener Typ gilt nur MIT Nachweis --------------------------------
+#
+# state/anzeige ist ein Merker, keine Messung. Uebernommen wird er nur, wenn
+# der Nachweis aus display.json JETZT zutrifft -- sonst waere ein Panelwechsel
+# unsichtbar (und ein Merker wuerde luegen).
+SRC2="$W/src2"
+cp -r "$SRC" "$SRC2"
+mkdir -p "$SRC2/chimera/displays/immerda" "$SRC2/chimera/displays/nieda"
+printf '%s\n' '{"typ":"immerda","name":"Attrappe immer da","breite":240,"hoehe":280,"farben":"rgb565","bildrate":0,"darstellung":"animiert","pins":{},"busse":[],"deps":{"pip":[],"apt":[]},"erkennung":[],"pruefe":"true"}' \
+	>"$SRC2/chimera/displays/immerda/display.json"
+printf '%s\n' '{"typ":"nieda","name":"Attrappe nie da","breite":240,"hoehe":280,"farben":"rgb565","bildrate":0,"darstellung":"animiert","pins":{},"busse":[],"deps":{"pip":[],"apt":[]},"erkennung":[],"pruefe":"false"}' \
+	>"$SRC2/chimera/displays/nieda/display.json"
+cat >"$W/nachgew.sh" <<'EOF'
+#!/bin/sh
+. "$HERE/lib/common.sh"
+. "$HERE/lib/module.sh"
+. "$HERE/lib/display.sh"
+CHIMERA_DISPLAY_SRC="$2"; export CHIMERA_DISPLAY_SRC
+if t="$(display_typ_nachgewiesen "$1")"; then printf '%s\n' "$t"; else echo "KEIN"; fi
+EOF
+NA="$(mktemp -d "$CHIMERA_TESTDIR/anzeige.XXXXXX" 2>/dev/null || echo "$W/anzeigedir")"
+mkdir -p "$NA"
+nachgew() { CHIMERA_ROOT="$R" HERE="${3:-$HERE}" sh "$W/nachgew.sh" "$1" "${2:-$SRC2}" 2>/dev/null; }
+
+printf 'immerda\n' >"$NA/anzeige"
+check "Nachweis trifft -> Typ uebernommen" "$(nachgew "$NA/anzeige")" "immerda"
+printf 'nieda\n' >"$NA/anzeige"
+check "Nachweis trifft nicht -> kein Typ" "$(nachgew "$NA/anzeige")" "KEIN"
+printf 'kenneichnicht\n' >"$NA/anzeige"
+check "unbekannter Typ -> kein Typ" "$(nachgew "$NA/anzeige")" "KEIN"
+printf 'immerda\n' >"$NA/anzeige"
+check "fehlende Zustandsdatei -> kein Typ" "$(nachgew "$NA/gibtsnicht")" "KEIN"
+
+# Gegenprobe: Nachweis entfernt -> der Merker gilt wieder blind, der Test
+# oben muss rot werden. (Ein Regressionstest ohne Gegenprobe misst nichts.)
+INST2="$W/inst2"
+mkdir -p "$INST2/lib"
+cp "$HERE/lib/common.sh" "$HERE/lib/module.sh" "$INST2/lib/" 2>/dev/null || true
+cp "$HERE/lib/display.sh" "$INST2/lib/display.sh"
+sed -i 's|sh -c "$_dtn_p" >/dev/null 2>&1 \|\| return 1|true|' "$INST2/lib/display.sh"
+if cmp -s "$INST2/lib/display.sh" "$HERE/lib/display.sh"; then
+	bad "Gegenprobe (Nachweis) nicht vorbereitet -- Mutation griff nicht"
+else
+	ok "Gegenprobe (Nachweis) vorbereitet"
+fi
+printf 'nieda\n' >"$NA/anzeige"
+check "Gegenprobe: ohne Nachweis gilt der Merker blind" "$(nachgew "$NA/anzeige" "$SRC2" "$INST2")" "nieda"
+
 # --- Gegenprobe: "eingerichtet" waehlt doch (die alte Haltung) --------------
 MUT="$W/src"
 cp -r "$SRC" "$MUT"

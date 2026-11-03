@@ -311,6 +311,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Schritt 40 machte aus einem laufenden Dienst einen Befund.** Die
+  Anzeige-Erkennung kann nicht messen, solange der Dienst SPI hält, und
+  meldete „Leitungen belegt" — Schritt 40 wertete das als „keine Anzeige
+  gewählt" (rc 1, gelbe LED) und kam nie zur Ton-Einrichtung. Jetzt gilt der
+  in `state/anzeige` festgehaltene Typ, wenn sein eigener Nachweis zutrifft
+  (`display_typ_nachgewiesen`); ohne Nachweis bleibt es ein Befund. Am Pi
+  belegt: rc 0 im selben Zustand, in dem der alte Code rc 1 lieferte.
 - **`NoisyRenderer.run()` stürzte in der zweiten Zeile ab.** Es las
   `TARGET_FPS` und `FRAME_TIME` als Modulglobale; die gab es nie, nur als
   Attribute. Unentdeckt, weil die Tests `render()` und `show()` aufriefen,

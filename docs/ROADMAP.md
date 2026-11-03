@@ -72,10 +72,13 @@ zram wird nicht angefasst, wenn es läuft.
       `chimera-mojo-fortsetzung.service` (einmal nach dem Start), Rückfall bei
       wirkungslosem Neustart, Sperre nach zwei Versuchen (DESIGN, Regel
       „Neustart mit Fortsetzung und Rückfall").
-- [ ] **Modul 40: laufender Dienst ist kein Befund.** Meldet „Leitungen
+- [x] **Modul 40: laufender Dienst ist kein Befund.** Meldet „Leitungen
       gehalten", wenn die Ton-Prüfung fehlschlägt und Schritt 40 deshalb in die
       Erkennung läuft, obwohl die Anzeige eingerichtet ist und der Dienst sie
       bedient. Fix: eingerichtete Anzeige + laufender Dienst = gesund.
+      *Erledigt 3.11.: Typ aus `state/anzeige` gilt bei belegten Leitungen,
+      wenn sein Nachweis zutrifft (Am Pi: rc 0, Gegenprobe rc 1). Der grüne
+      LED-Abschluss im VOLLEN Lauf steht noch aus.*
 - [ ] **Grüner LED-Abschluss am Gerät:** hängt an Modul 40 (letzter Lauf
       endet mit Befund, deshalb gelb).
 - [ ] **pip: nur Fehlendes, ohne `--upgrade`.** Zurückgestellt: Die Änderung

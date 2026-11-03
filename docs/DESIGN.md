@@ -1672,6 +1672,17 @@ E-Paper-Pi; alle Treiber liegen auf ihr. Daraus folgt:
   in ein Gerät mit UPS HAT (C) (INA219 an 0x43) ist der Akku die neue
   Quelle; der Boot-Abgleich zieht auch dafür das passende Installermodul
   nach. Bisher nannte diese Tabelle nur den PiSugar.
+- **„Leitungen belegt" ist eine Aussage über die Messung, kein Befund über
+  das Panel.** Läuft der Dienst, hält er SPI; die Erkennung kann dann nicht
+  messen und sagt das auch so (Feld `belegt`, nicht „kein Panel"). Schritt 40
+  übernimmt in diesem Fall den Typ aus `state/anzeige` — aber nur, wenn dessen
+  eigener Nachweis (`pruefe` aus `display.json`) **jetzt** zutrifft. Kein
+  Nachweis, kein Typ: ein Merker ist keine Messung (Regel 10g). Am Pi
+  (3.11.2026) endete Schritt 40 mit rc 1 und gelber LED, obwohl Anzeige und
+  Dienst nachweislich liefen; die Ton-Einrichtung kam dadurch nie zum Zug.
+  Mit der Übernahme: rc 0, danach greift der frühe Ausstieg „bereits
+  eingerichtet und nachweisbar". Gegenprobe am Gerät: ohne den Fix im selben
+  Zustand wieder rc 1 (Leitungen belegt), mit Fix rc 0.
 
 ### Architekturregel 7 — Ein Prozess, ein Framebuffer
 

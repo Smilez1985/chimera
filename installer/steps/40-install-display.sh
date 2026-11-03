@@ -103,7 +103,30 @@ else
 	display_detect >/dev/null 2>&1 || true
 	display_belege | while IFS= read -r _db_z; do info "  $_db_z"; done
 	TYP="${DISPLAY_TYP:-}"
-	if [ -n "$TYP" ]; then
+	# Laeuft der Dienst, haelt er SPI -- die Erkennung kann das Panel dann
+	# nicht sehen und meldet "Leitungen belegt". Das ist kein Befund ueber
+	# die Anzeige, sondern einer ueber die Messung. Am Pi (03.11.2026)
+	# endete Schritt 40 deshalb mit rc 1 und gelber LED, obwohl Anzeige und
+	# Dienst nachweislich liefen -- und die Ton-Pruefung danach nie mehr
+	# zum Zug kam.
+	#
+	# Uebernommen wird nur, was BELEGT ist: der in state/anzeige
+	# festgehaltene Typ, und nur wenn sein eigener Nachweis (`pruefe` aus
+	# display.json) jetzt zutrifft. Kein Nachweis, kein Typ -- geraten wird
+	# nie (Regel 10g).
+	if [ -z "$TYP" ] && display_leitungen_belegt; then
+		_fb_datei="$(rootpath "$CHIMERA_STATE")/anzeige"
+		if _fb_typ="$(display_typ_nachgewiesen "$_fb_datei")"; then
+			TYP="$_fb_typ"
+			DISPLAY_QUELLE="state/anzeige, nachgewiesen"
+			info "Leitungen belegt -- der Dienst laeuft, die Erkennung kann nicht messen."
+			info "Anzeige aus $_fb_datei uebernommen: $TYP"
+			info "Nachweis: $(display_get "$TYP" pruefe)"
+		fi
+	fi
+	if [ -n "$TYP" ] && [ -n "${DISPLAY_QUELLE:-}" ]; then
+		info "Erkannt: $TYP ($DISPLAY_QUELLE)"
+	elif [ -n "$TYP" ]; then
 		info "Erkannt: $TYP ($(display_quelle))"
 	else
 		warn "Keine Anzeige gewaehlt: ${DISPLAY_QUELLE:-Erkennung nicht moeglich}"

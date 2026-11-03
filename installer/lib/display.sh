@@ -181,6 +181,34 @@ for t in d.get("belegt", []):
     print(f"[belegt] {t}: Leitungen gehalten -- Dienst laeuft?")'
 }
 
+# Hat die letzte Erkennung das Panel NICHT gesehen, weil der laufende Dienst
+# die Leitungen haelt? (Befund-Feld "belegt" nicht leer.) Dann ist "nichts
+# erkannt" keine Aussage ueber die Hardware, sondern ueber die Messung --
+# der Unterschied muss beim Aufrufer ankommen, statt als Befund zu gelten.
+display_leitungen_belegt() {
+	[ -n "${DISPLAY_BEFUND:-}" ] || return 1
+	_dlb_py="$(display_python)" || return 1
+	printf '%s' "$DISPLAY_BEFUND" | "$_dlb_py" -c \
+		'import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d.get("belegt") else 1)' 2>/dev/null
+}
+
+# Welcher Anzeigetyp steht in einer Zustandsdatei (state/anzeige), und trifft
+# sein eigener Nachweis JETZT zu? Ausgabe: der Typ (rc 0) oder nichts (rc 1).
+# Kein Nachweis, kein Typ -- ein gemerkter Name allein ist keine Messung.
+display_typ_nachgewiesen() {
+	_dtn_f="$1"
+	[ -n "$_dtn_f" ] && [ -f "$_dtn_f" ] || return 1
+	_dtn_typ="$(cat "$_dtn_f" 2>/dev/null || true)"
+	[ -n "$_dtn_typ" ] || return 1
+	display_profil_lesbar "$_dtn_typ" || return 1
+	_dtn_p="$(display_get "$_dtn_typ" pruefe)"
+	[ -n "$_dtn_p" ] || return 1
+	sh -c "$_dtn_p" >/dev/null 2>&1 || return 1
+	printf '%s\n' "$_dtn_typ"
+}
+
 # Ist I2C ueberhaupt an? Ohne das ist die Codec-Pruefung blind, und dieser
 # Unterschied muss sichtbar bleiben.
 #
