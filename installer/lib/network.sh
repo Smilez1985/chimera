@@ -145,6 +145,88 @@ network_wait() {
 #    ein halbes Archiv, das beim naechsten Lauf fuer fertig gehalten wird.
 #  * **Das Ergebnis pruefen, nicht den Exitcode.** Eine leere Datei mit
 #    Exitcode 0 ist ein Fehlschlag (Regel 10j).
+# Ist ueberhaupt Netz da? TCP, nicht ICMP: ICMP ist in der Sandbox gesperrt
+# und auf manchen Netzen gefiltert. Ein offener TCP-Port ist die ehrlichere
+# Aussage (Vorbild rag4ll bg-pull-models.py).
+: "${CHIMERA_NETZ_PROBE:=8.8.8.8:53 1.1.1.1:443}"
+
+network_erreichbar() {
+	for _ne_ziel in $CHIMERA_NETZ_PROBE; do
+		_ne_host="${_ne_ziel%%:*}"
+		_ne_port="${_ne_ziel##*:}"
+		# network_reachable statt network_wait: Die Probe soll leise sein und
+		# nicht selbst minutenlang warten.
+		network_reachable "$_ne_host" "$_ne_port" && return 0
+	done
+	return 1
+}
+
+# Mojo um eine Netz-Reparatur bitten: Es prueft und repariert, was es kennt
+# (Dienste, Sockets, Karte, Speicher -- und seit 3.11. auch das Netz).
+# Kein stilles Scheitern: Was Mojo nicht konnte, wird gemeldet.
+# WLAN neu starten -- die Reihenfolge ist die der Wahrscheinlichkeit: erst
+# sanft (Neuverbinden), dann der Dienst, dann die Schnittstelle.
+# Ziel: nach dem Neustart ist das Netz wieder da, nicht nur "Befehl abgesetzt".
+: "${CHIMERA_WLAN_IF:=wlan0}"
+wlan_neu_starten() {
+	_wl_if="${CHIMERA_WLAN_IF}"
+	warn "WLAN neu starten ($_wl_if) ..."
+	if have_cmd nmcli; then
+		nmcli radio wifi off >/dev/null 2>&1 || true
+		sleep 1
+		nmcli radio wifi on >/dev/null 2>&1 || true
+	elif have_cmd wpa_cli; then
+		wpa_cli -i "$_wl_if" reconfigure >/dev/null 2>&1 || true
+	fi
+	for _wl_u in wpa_supplicant.service "wpa_supplicant@$_wl_if.service" \
+	            "ifup@$_wl_if.service" networking.service; do
+		systemctl is-active --quiet "$_wl_u" 2>/dev/null || continue
+		systemctl restart "$_wl_u" >/dev/null 2>&1 || true
+	done
+	if have_cmd ip; then
+		ip link set "$_wl_if" up >/dev/null 2>&1 || true
+	fi
+	if have_cmd ifup; then
+		ifup "$_wl_if" >/dev/null 2>&1 || true
+	fi
+	# Nachsehen, nicht hoffen: bis zu 20 s auf das Netz warten.
+	_wl_n=0
+	while [ "$_wl_n" -lt 10 ]; do
+		_wl_n=$((_wl_n + 1))
+		sleep 2
+		if network_erreichbar; then
+			info "WLAN ist wieder da (nach $((_wl_n * 2)) s)."
+			return 0
+		fi
+	done
+	warn "WLAN nach 20 s noch nicht erreichbar."
+	return 1
+}
+
+mojo_netz_reparieren() {
+	_mo_bin="${CHIMERA_OPT:-/opt/chimera}/bin/chimera-tor"
+	if [ ! -x "$_mo_bin" ]; then
+		warn "Mojo nicht vorhanden ($_mo_bin) -- Netz wird nicht repariert."
+		return 1
+	fi
+	warn "Mojo: Netzwerkstack neu starten und WLAN verbinden ..."
+	if "$_mo_bin" --mojo --fix --bereich netz >/dev/null 2>&1; then
+		info "Mojo: Netz-Reparatur durchgelaufen."
+		return 0
+	fi
+	# Der Bereich "netz" kann von aelteren Binaries noch unbekannt sein --
+	# dann die ganze Pruefung, statt gar nichts zu tun.
+	if "$_mo_bin" --mojo --fix >/dev/null 2>&1 && network_erreichbar; then
+		info "Mojo: Reparatur durchgelaufen (vollstaendige Pruefung)."
+		return 0
+	fi
+	# Mojo hat (noch) keinen Netz-Bereich: Dann macht der Installer es selbst.
+	# Sobald `--bereich netz` existiert, greift der Zweig oben und diese
+	# Notloesung bleibt unbenutzt.
+	warn "Mojo konnte das Netz nicht reparieren -- WLAN wird direkt neu gestartet."
+	wlan_neu_starten
+}
+
 network_fetch() {
 	_nl_url="$1"
 	_nl_ziel="$2"
@@ -188,6 +270,7 @@ network_fetch() {
 
 	_nl_teil="$_nl_ziel.teil"
 	_nl_n=0
+	_nl_404=0
 
 	while [ "$_nl_n" -lt "$_nl_versuche" ]; do
 		_nl_n=$((_nl_n + 1))
@@ -228,10 +311,60 @@ network_fetch() {
 			return 0
 		fi
 
+		# Eine Antwort ist keine Stoerung: 404/410/403 wiederholt niemand.
+		# curl -f meldet HTTP-Fehler als Exitcode 22; welcher Code es war,
+		# sagt eine einzelne Kopfabfrage.
+		if [ "$_nl_rc" = 22 ] && have_cmd curl; then
+			_nl_code="$(curl -sS -o /dev/null -w '%{http_code}' --head \
+				--connect-timeout 10 --max-time 20 "$_nl_url" 2>/dev/null || true)"
+			case "$_nl_code" in
+				404|410)
+					# Eine 404 kann auch luegen: Captive Portal, kaputter
+					# Proxy, halb totes WLAN. Also nicht glauben, sondern
+					# pruefen -- und wenn es klemmt, Mojo reparieren lassen.
+					warn "Nicht vorhanden (HTTP $_nl_code) -- pruefe erst die Verbindung."
+					if network_erreichbar; then
+						warn "  Netz ist da -- ein Wiederholungsversuch."
+					else
+						warn "  Kein Netz -- Mojo wird eingeschaltet."
+						mojo_netz_reparieren || true
+					fi
+					_nl_404=$((_nl_404 + 1))
+					if [ "$_nl_404" -ge 3 ]; then
+						err "Auch nach $_nl_404 Versuchen nicht vorhanden: $_nl_url"
+						err "  Das ist jetzt ein Befund, kein Netzfehler."
+						rm -f "$_nl_teil"
+						return 1
+					fi
+					sleep 2
+					continue ;;
+				403)
+					err "Zugriff verweigert (HTTP 403): $_nl_url"
+					err "  Auch das wiederholt sich nicht von selbst."
+					rm -f "$_nl_teil"
+					return 1 ;;
+			esac
+			warn "HTTP-Fehler $_nl_code bei $_nl_url -- neuer Versuch."
+		fi
+
 		# Hier NICHT schweigen. Ein stiller Wiederholungsversuch sieht von
 		# aussen aus wie ein Haenger.
 		warn "Download unterbrochen (Exitcode $_nl_rc)."
 		[ -s "$_nl_teil" ] && warn "  $(wc -c <"$_nl_teil") Byte sind da, es wird fortgesetzt."
+
+		# Nach einem Timeout erst nachsehen, ob ueberhaupt Netz da ist --
+		# sonst haemmert der Abruf gegen eine Wand und meldet nach 20
+		# Versuchen dasselbe (Vorbild: _ping_ok vor dem Wiederholen).
+		case "$_nl_rc" in
+			6|7|28)
+				_nl_warte=3
+				while [ "$_nl_warte" -le 30 ] && ! network_erreichbar; do
+					warn "  kein Netz (Probe: $CHIMERA_NETZ_PROBE) -- warte ${_nl_warte}s"
+					sleep "$_nl_warte"
+					_nl_warte=$((_nl_warte * 2))
+				done
+				;;
+		esac
 		sleep 3
 	done
 
