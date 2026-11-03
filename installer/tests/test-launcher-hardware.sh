@@ -45,9 +45,21 @@ mkbaum() {
 	MARKEN="$BAUM/logs/marken.txt"
 }
 
+# Den Laeufer fahren. Setzt RCL und OUTL.
+#
+# CHIMERA_HELFER=1: Der Laeufer koppelt einen echten Lauf ab (eigene Unit per
+# systemd-run, Design-Regel "Installerhelfer"). Hier soll aber die
+# Modulschleife geprueft werden, nicht die Abkopplung -- ohne systemd-run
+# brach der Aufruf deshalb mit rc 2 ab, und im CI lief nichts (Befund 3.11.:
+# "--hardware nicht benannt"). Mit dem Schalter ist der Testbaum das, was er
+# ohnehin nachbildet: der Prozess, der die Arbeit ausfuehrt.
+# CHIMERA_OPT zeigt ins Testverzeichnis, damit die Klammer-Pruefung keinen
+# echten Baum (/opt/chimera) sieht und nichts anzuhalten versucht.
 fahr() {
 	set +e
-	OUTL="$(env CHIMERA_LOG_DIR="$(dirname "$MARKEN")" sh "$BAUM/chimera-install" "$@" 2>&1)"
+	OUTL="$(env CHIMERA_HELFER=1 CHIMERA_OPT="$W/opt" \
+	             CHIMERA_LOG_DIR="$(dirname "$MARKEN")" \
+	             sh "$BAUM/chimera-install" "$@" 2>&1)"
 	RCL=$?
 	set -e
 }

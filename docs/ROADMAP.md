@@ -89,14 +89,16 @@ zram wird nicht angefasst, wenn es läuft.
       „12 Modul(e), ohne Fehler"). Zu entscheiden (smilez): `entwicklung` in
       den Push-Trigger aufnehmen, oder den Rust-Job an einen Pfadfilter
       (`rust/**`) hängen und das Prerelease nur dann erwarten.
-- [ ] **CI ist auf `entwicklung` rot, seit mindestens 31.10.** Beim Anstoßen
-      am 3.11. fielen drei Installer-Tests: `test-helfer.sh`
-      (`line 66: syntax error: bad function name`, BusyBox),
-      `test-launcher-hardware.sh` („--hardware nicht benannt") und
-      `test-launcher-rc3.sh` („reboot fehlt in der Ausgabe", Gegenprobe
-      erwartet rc 3, bekam 2). Nicht durch die Anzeige-Änderung verursacht —
-      sie waren vorher schon rot, nur unsichtbar, weil der Push-Trigger sie
-      nicht auslöste.
+- [x] **CI ist auf `entwicklung` rot — behoben am 3.11. (Sitzung `d4427984`).**
+      Fünf rote Testdateien, alle mit Ursache: `test-helfer.sh`
+      (`bad function name`: Attrappe war eine Funktion mit Bindestrich — jetzt
+      ein Skript im PATH), `test-launcher-hardware.sh`,
+      `test-launcher-rc3.sh` und `test-source.sh` (liefen in die Abkopplung nach
+      `systemd-run`, das im CI-Runner fehlt: rc 2 vor dem ersten Modul — jetzt
+      `CHIMERA_HELFER=1` und `systemctl`-Attrappe), `test_cli_doku.py`
+      (Python 3.13 dedentet Docstrings, die Befehlsliste der `displays`-Hilfe
+      verlor ihre Einrückung). Nichts davon war durch die Anzeige-Änderung
+      verursacht; sie waren nur unsichtbar, solange der Push-Trigger fehlte.
 - [ ] **pip: nur Fehlendes, ohne `--upgrade`.** Zurückgestellt: Die Änderung
       machte zwei Tests von `test-python-env.sh` rot; der erprobte Stand bleibt,
       bis die Ursache geklärt ist (das venv hatte `numpy 2.5.4` statt `1.26.4`).

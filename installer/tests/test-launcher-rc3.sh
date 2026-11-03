@@ -111,9 +111,17 @@ EOF
 }
 
 # Den Laeufer fahren. Setzt RCL und OUTL.
+#
+# CHIMERA_HELFER=1: Ein echter Lauf koppelt sich in eine eigene Unit ab
+# (systemd-run, Regel "Installerhelfer"). Geprueft werden soll hier die
+# Modulschleife, nicht die Abkopplung -- ohne systemd-run brach der Aufruf mit
+# rc 2 ab, im CI lief gar kein Modul (Befund 3.11.: "reboot fehlt", rc 2 statt
+# 3). CHIMERA_OPT zeigt ins Testverzeichnis, damit die Klammer-Pruefung keinen
+# echten Baum sieht.
 fahr() {
 	set +e
-	OUTL="$(env CHIMERA_LOG_DIR="$(dirname "$MARKEN")" \
+	OUTL="$(env CHIMERA_HELFER=1 CHIMERA_OPT="$W/opt" \
+	             CHIMERA_LOG_DIR="$(dirname "$MARKEN")" \
 	             sh "$BAUM/chimera-install" "$@" 2>&1)"
 	RCL=$?
 	set -e

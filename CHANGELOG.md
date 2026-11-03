@@ -320,6 +320,24 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   die Farbe (neue LED-Quelle `installer`, Muster `sos`).
 
 ### Behoben
+- **Vier Installertests liefen im CI gar nicht** — sie meldeten Fehler, die
+  keiner waren. `test-helfer.sh` definierte seine `systemd-run`-Attrappe als
+  Shell-Funktion mit Bindestrich: in dash und BusyBox-ash ein Syntaxfehler,
+  die Datei wurde dort nie ausgeführt (0 statt 49 Prüfungen). Die Attrappe
+  ist jetzt ein Skript im PATH. `test-launcher-hardware.sh`,
+  `test-launcher-rc3.sh` und `test-source.sh` fuhren einen echten Lauf und
+  landeten damit in der Abkopplung nach systemd-run — im CI-Runner nicht
+  vorhanden, also rc 2 vor dem ersten Modul. Sie setzen nun `CHIMERA_HELFER=1`
+  (die Lage des Prozesses, der die Arbeit ausführt) und eine
+  `systemctl`-Attrappe; geprüft wird, was sie prüfen wollen. Alle vier sind in
+  dash und BusyBox-ash grün, die Gegenproben `counter-check-helfer` und
+  `counter-check-source` werden weiterhin rot.
+- **Die Hilfe von `python3 -m chimera.displays --help` sah unter Python 3.13
+  anders aus.** Ab 3.13 entfernt der Interpreter die Einrückung aus
+  `__doc__` (Docstrings werden dedentet); die Befehlsliste verlor ihre vier
+  Leerzeichen und war damit für Werkzeuge, die sich daran orientieren, nicht
+  mehr zu erkennen. Die Hilfe wird jetzt ausdrücklich eingerückt und ist in
+  3.11 und 3.13 Zeichen für Zeichen gleich.
 - **Schritt 40 machte aus einem laufenden Dienst einen Befund.** Die
   Anzeige-Erkennung kann nicht messen, solange der Dienst SPI hält, und
   meldete „Leitungen belegt" — Schritt 40 wertete das als „keine Anzeige

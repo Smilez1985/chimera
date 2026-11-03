@@ -105,12 +105,25 @@ if [ "${1:-}" = -u ] && [ $# -eq 1 ]; then echo 0; else exec %s "$@"; fi
 	"$_echt_id" >"$W/bin/id"
 chmod +x "$W/bin/id"
 SPUR="$W/spur"; export SPUR
+# `systemctl` als Attrappe: Der Laeufer fragt beim Anhalten der Dienste nach
+# ihrem Zustand. Hier laeuft nichts, also meldet die Attrappe "inactive".
+# Ohne sie brach der Lauf mit "systemctl nicht gefunden" ab (Befund 3.11.).
+printf '#!/bin/sh
+case "$1" in is-active) exit 3 ;; esac
+exit 0
+' >"$W/bin/systemctl"
+chmod +x "$W/bin/systemctl"
 installer() {
 	_st="$1"; shift
 	: >"$SPUR"
 	set +e
+	# CHIMERA_HELFER=1: Ein echter Lauf koppelt sich in eine eigene Unit ab
+	# (systemd-run, Regel "Installerhelfer"). Geprueft wird hier Schritt 00 und
+	# der Neustart daraus, nicht die Abkopplung -- ohne den Schalter brach der
+	# Aufruf im CI mit rc 2 ab, bevor ein Modul lief (Befund 3.11.). Der
+	# Schalter ist genau die Lage des Prozesses, der die Arbeit ausfuehrt.
 	PATH="$W/bin:$PATH" CHIMERA_ROOT="$R" CHIMERA_LOG_DIR="$W/logs" \
-	CHIMERA_QUELLE_URL="$QUELLE" \
+	CHIMERA_QUELLE_URL="$QUELLE" CHIMERA_HELFER=1 \
 		sh "$_st/installer/chimera-install" "$@" >"$W/aus" 2>&1
 	echo $? >"$W/rc"
 	set -e

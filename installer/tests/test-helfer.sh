@@ -2,9 +2,13 @@
 # Tests fuer lib/helfer.sh -- abgekoppelter Installerhelfer und die Klammer um
 # den Lauf (DESIGN, Regel "Installerhelfer").
 #
-# Geprueft wird die echte Bibliothek; `systemctl` und `systemd-run` stehen als
-# SHELL-FUNKTIONEN bereit. Ob systemd die transiente Unit wirklich annimmt,
-# prueft der Geraetetest am Pi, nicht dieser Test.
+# Geprueft wird die echte Bibliothek; `systemctl` steht als SHELL-FUNKTION
+# bereit, `systemd-run` als SKRIPT in einem PATH-Verzeichnis. Grund: `systemd-run`
+# enthaelt einen Bindestrich, und ein Funktionsname mit Bindestrich ist in
+# dash/BusyBox-ash ein Syntaxfehler ("bad function name") -- die Datei wurde
+# dort gar nicht erst ausgefuehrt. Als Skript ist der Aufruf in allen Shells
+# derselbe. Ob systemd die transiente Unit wirklich annimmt, prueft der
+# Geraetetest am Pi, nicht dieser Test.
 #
 # CHIMERA_HELFER_LIB ueberstimmt die Bibliothek (counter-check-helfer.sh).
 
@@ -61,24 +65,34 @@ lauf() {
 		# nach common.sh: es setzt CHIMERA_RUNLOG auf seinen eigenen Vorgabewert
 		CHIMERA_RUNLOG="$F/run"; CHIMERA_LOG_DIR="$F/run"
 		CHIMERA_OPT="$F/opt"; CHIMERA_TOR_SOCKET="$F/tor.sock"
-		CHIMERA_HELFER_STATUS="$F/zettel.status"
 
-		systemd-run() {
-			printf 'systemd-run %s\n' "$*" >>"$F/spur"
-			# Name belegt (kommt am Pi nach einem Abbruch vor): erster Versuch
-			# scheitert, nach reset-failed geht er.
-			if [ -f "$F/sr-immer-fehler" ]; then return 1; fi
-			if [ -f "$F/sr-fehler-erstes" ]; then
-				rm -f "$F/sr-fehler-erstes"
-				return 1
-			fi
-			# Wie der echte Helfer: Laufzettel schreiben (er sagt, wie es ausging).
-			printf 'zustand=fertig\npid=\nrc=%s\nstart=0\nende=0\n' "$(cat "$F/rc")" \
-				>"$CHIMERA_HELFER_STATUS"
-			# Argumente der Unit festhalten, um sie im Test zu pruefen.
-			printf '%s\n' "$*" >"$F/unit-args"
-			return "${SR_RC:-0}"
-		}
+		# systemd-run als Skript: ein Funktionsname mit Bindestrich ist in
+		# dash/BusyBox-ash verboten. Das Skript liest seine Angaben aus der
+		# Umgebung (CHIMERA_MOCK_F, CHIMERA_HELFER_STATUS, SR_RC).
+		mkdir -p "$F/bin"
+		cat >"$F/bin/systemd-run" <<'MOCK'
+#!/bin/sh
+F="$CHIMERA_MOCK_F"
+printf 'systemd-run %s\n' "$*" >>"$F/spur"
+# Name belegt (kommt am Pi nach einem Abbruch vor): erster Versuch scheitert,
+# nach reset-failed geht er.
+if [ -f "$F/sr-immer-fehler" ]; then exit 1; fi
+if [ -f "$F/sr-fehler-erstes" ]; then
+	rm -f "$F/sr-fehler-erstes"
+	exit 1
+fi
+# Wie der echte Helfer: Laufzettel schreiben (er sagt, wie es ausging).
+printf 'zustand=fertig\npid=\nrc=%s\nstart=0\nende=0\n' "$(cat "$F/rc")" \
+	>"$CHIMERA_HELFER_STATUS"
+# Argumente der Unit festhalten, um sie im Test zu pruefen.
+printf '%s\n' "$*" >"$F/unit-args"
+exit "${SR_RC:-0}"
+MOCK
+		chmod 755 "$F/bin/systemd-run"
+		PATH="$F/bin:$PATH"; export PATH
+		SR_RC="${SR_RC:-0}"; export SR_RC
+		CHIMERA_MOCK_F="$F"; export CHIMERA_MOCK_F
+		CHIMERA_HELFER_STATUS="$F/zettel.status"; export CHIMERA_HELFER_STATUS
 		systemctl() {
 			printf 'systemctl %s\n' "$*" >>"$F/spur"
 			case "$1 ${2:-}" in
