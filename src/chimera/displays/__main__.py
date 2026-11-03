@@ -20,9 +20,31 @@ from dataclasses import asdict
 
 from . import registry
 
+def hilfe_text() -> str:
+    """Die Hilfe so, wie sie in jeder Python-Fassung aussieht.
+
+    Bis 3.12 stand die Einrückung des Docstrings mit in ``__doc__``; ab 3.13
+    entfernt der Interpreter sie (Docstrings werden dedentet). Ein Test, der
+    die Befehlsliste an vier Leerzeichen erkennt, fand unter 3.13 deshalb
+    nichts mehr -- die Hilfe selbst war in Ordnung. Darum wird hier
+    ausdrücklich gedentet und die Befehlszeilen wieder eingerückt: gleiche
+    Ausgabe unter 3.11 und 3.13, unabhängig davon, was der Interpreter tut.
+    """
+    zeilen = (__doc__ or "").strip().splitlines()
+    if not zeilen:
+        return ""
+    # Die erste Zeile steht ohne Einrückung; der Block darunter trägt in 3.11
+    # noch seine vier Leerzeichen, in 3.13 keine mehr. Gemessen wird die
+    # kleinste Einrückung des Blocks, dann wird auf vier gesetzt.
+    rest = zeilen[1:]
+    ein = min((len(z) - len(z.lstrip()) for z in rest if z.strip()), default=0)
+    return "\n".join([zeilen[0]] + ["    " + z[ein:] if z.strip() else z
+                                    for z in rest])
+
+
 def main(argv: list[str]) -> int:
     if not argv or argv[0] in ("-h", "--help"):
-        print(__doc__.strip())
+        print(hilfe_text())
         return 0
     cmd, rest = argv[0], argv[1:]
     if cmd == "erkennen":
