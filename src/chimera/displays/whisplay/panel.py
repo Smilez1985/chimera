@@ -13,7 +13,7 @@ import threading
 import time
 from pathlib import Path
 
-from ..base import Panel, Profil, to_rgb565
+from ..base import Panel, Profil, aenderungsrechtecke, ausschnitt, to_rgb565
 from ..gpio import Leitungen
 from ..softpwm import SoftPWM
 from ..st7789 import DISPON, INVON, MADCTL, SLPOUT, St7789
@@ -57,6 +57,9 @@ class WhisplayPanel(Panel):
         p = profil()
         self.profil = p
         self.width, self.height = p.breite, p.hoehe
+        # Zähler für die Messung (3.11.: der Leerlauf kostete einen Kern).
+        self._letztes_bild: bytes | None = None
+        self.bilder = self.teilbilder = self.unveraendert = 0
         self.fps = int(fps) if fps is not None else int(p.bildrate)
         pins = p.pins
         self._st = St7789(St7789Profil(
@@ -98,8 +101,31 @@ class WhisplayPanel(Panel):
     # --- Panel ---------------------------------------------------------------
 
     def show(self, image) -> None:
+        """Bild ausgeben — und zwar nur, was sich geändert hat.
+
+        Der Panelspeicher behält seinen Inhalt (DESIGN Regel 7), also genügt
+        ein Fenster auf die geänderten Stellen. Ein unverändertes Bild kostet
+        damit **keinen einzigen** Schreibaufruf; vorher gingen 17 volle Bilder
+        je Sekunde über den Bus, auch wenn das Gesicht stillstand (am Pi
+        gemessen 3.11.: 572 `write()`/s, 28 % eines Kerns im Leerlauf).
+        """
         self.pruefe_groesse(image)
-        self._st.schreibe_bild(to_rgb565(image))
+        rgb = to_rgb565(image)
+        letztes = self._letztes_bild
+        self.bilder += 1
+        if letztes is not None and len(letztes) == len(rgb):
+            rechtecke = aenderungsrechtecke(letztes, rgb, self.width, self.height)
+            if not rechtecke:
+                self.unveraendert += 1
+                return
+            for x, y, w, h in rechtecke:
+                self._st.schreibe_bild(
+                    ausschnitt(rgb, self.width, x, y, w, h), x, y, w, h)
+                self.teilbilder += 1
+        else:
+            self._st.schreibe_bild(rgb, 0, 0, self.width, self.height)
+            self.teilbilder += 1
+        self._letztes_bild = rgb
 
     def backlight(self, percent: int, *, grund: str = "") -> None:
         p = max(0, min(100, int(percent)))

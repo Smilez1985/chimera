@@ -102,9 +102,83 @@ def to_rgb565(image) -> bytes:
     return bytes(out)
 
 
+def aenderungsrechtecke(alt, neu, breite: int, hoehe: int) -> list[tuple[int, int, int, int]]:
+    """Wo unterscheiden sich zwei RGB565-Bilder? → ``[(x, y, w, h), …]``.
+
+    Der Panelspeicher eines ST7789 behält seinen Inhalt, solange niemand ihn
+    überschreibt (DESIGN Regel 7). Also muss nur das übertragen werden, was
+    sich geändert hat — ein stehendes Gesicht kostet dann **nichts**. Am Pi
+    gemessen (3.11.): 572 `write()` je Sekunde auf `/dev/spidev0.0`, rund 17
+    volle Bilder/s ohne Änderung, 28 % eines Kerns im Leerlauf.
+
+    Geschnitten wird in **Streifen zusammenhängender Zeilen**; je Streifen ist
+    das Rechteck die Spanne der geänderten Spalten. Das ist der Kompromiss
+    zwischen „ein Rechteck für alles" (überträgt viel Unverändertes) und
+    „ein Rechteck je Bildpunkt" (kostet je Fenster vier Befehle).
+    """
+    if len(alt) != breite * hoehe * 2 or len(neu) != breite * hoehe * 2:
+        raise ValueError(f"RGB565: {len(alt)} / {len(neu)} Byte, "
+                         f"erwartet {breite * hoehe * 2}")
+    if alt == neu:
+        return []
+
+    np = _numpy()
+    if np is not None:
+        a = np.frombuffer(alt, dtype=np.uint8).reshape(hoehe, breite, 2)
+        b = np.frombuffer(neu, dtype=np.uint8).reshape(hoehe, breite, 2)
+        anders = a != b
+        zeilen = np.flatnonzero(anders.any(axis=(1, 2)))
+        rechtecke: list[tuple[int, int, int, int]] = []
+        for streifen in _streifen(zeilen.tolist()):
+            oben, unten = streifen[0], streifen[-1]
+            # Spalten: über Zeilen UND die zwei Bytes je Bildpunkt reduzieren,
+            # sonst wäre das Ergebnis ein Byte-Offset statt einer Spalte.
+            spalten = np.flatnonzero(anders[oben:unten + 1].any(axis=(0, 2)))
+            links, rechts = int(spalten[0]), int(spalten[-1])
+            rechtecke.append((links, oben, rechts - links + 1, unten - oben + 1))
+        return rechtecke
+
+    # Ohne numpy: zeilenweise vergleichen, je Streifen die ganze Breite.
+    # Langsamer, aber dasselbe Ergebnis in der Fläche -- und der Rückfall
+    # meldet sich nicht als „schnell".
+    mv_alt, mv_neu = memoryview(alt), memoryview(neu)
+    zeile = breite * 2
+    anders = [y for y in range(hoehe)
+              if mv_alt[y * zeile:(y + 1) * zeile] != mv_neu[y * zeile:(y + 1) * zeile]]
+    return [(0, s[0], breite, s[-1] - s[0] + 1) for s in _streifen(anders)]
+
+
+def _streifen(zeilen: list[int]) -> list[list[int]]:
+    """Zusammenhängende Zeilennummern zu Streifen bündeln."""
+    if not zeilen:
+        return []
+    streifen = [[zeilen[0]]]
+    for y in zeilen[1:]:
+        if y == streifen[-1][-1] + 1:
+            streifen[-1].append(y)
+        else:
+            streifen.append([y])
+    return streifen
+
+
+def ausschnitt(rgb, breite: int, x: int, y: int, w: int, h: int) -> bytes:
+    """Ein Rechteck aus einem RGB565-Puffer schneiden (zeilenweise kopiert)."""
+    zeile = breite * 2
+    if x == 0 and w == breite:
+        return bytes(rgb[y * zeile:(y + h) * zeile])
+    np = _numpy()
+    if np is not None:
+        a = np.frombuffer(rgb, dtype=np.uint8).reshape(-1, zeile)
+        return a[y:y + h, x * 2:(x + w) * 2].tobytes()
+    mv = memoryview(rgb)
+    aus = bytearray()
+    for yy in range(y, y + h):
+        aus += mv[yy * zeile + x * 2: yy * zeile + (x + w) * 2]
+    return bytes(aus)
+
+
 class Panel:
     """Gemeinsame Oberfläche für die Bildausgabe."""
-
     width: int = 240
     height: int = 280
     #: Wie oft dieses Panel gezeichnet werden will (Regel 7a). ``0`` heißt
