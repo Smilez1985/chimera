@@ -113,10 +113,10 @@ schlägt den Neustartwunsch.
 | 00 | `source` | lokale SSOT-Kopie `source/`; der Läufer startet daraus neu (Baustein 2) |
 | 10 | `check-system` | Board und Betriebssystem erkennen, Whisplay-Revision, Speicher, Platz |
 | 20 | `install-packages` | Systempakete |
-| 25 | `speicher` | zram (75 %) und Auslagerungsdatei, gestaffelt nach Kartengröße (§4b) |
+| 25 | `speicher` | zram (75 %) und Auslagerungsdatei, gestaffelt nach Kartengröße (siehe „Modul 50 — Python-Umgebung") |
 | 30 | `install-headers` | Header beschaffen — **der schwierige Teil** (§3) |
 | 40 | `install-display` | Anzeige erkennen und festhalten, neutrale Busse, Ton zur Laufzeit (§4) |
-| 50 | `python` | venv, Abhängigkeiten **mit Versionsprüfung** (requirements + Anzeigemodul), Nachweis (§4b) |
+| 50 | `python` | venv, Abhängigkeiten **mit Versionsprüfung** (requirements + Anzeigemodul), Nachweis (siehe „Modul 50 — Python-Umgebung") |
 | 60 | `overlay` *(geplant)* | Gerätebaum-Overlay, kollidierende abschalten (§5) |
 | 70 | `alsa` *(geplant)* | Audio-Konfiguration |
 | 80 | `models` *(geplant)* | sherpa-onnx-Modelle laden und prüfen |
@@ -129,7 +129,7 @@ alles umzubenennen.
 
 ---
 
-## 2a. Boarderkennung (Modul 10)
+### Boarderkennung (Modul 10)
 
 Chimera soll auf **Pi Zero 2 W und Radxa Zero 3W** laufen, und der
 Installer soll das Board selbst erkennen. Ein Nutzer, der ein Flag setzen
@@ -400,7 +400,7 @@ Gemessen chimera-pi 11.10.2026: nach Reboot ohne Karte → Schritt 40 lädt
 `dtparam i2s=on` + `dtoverlay whisplay-soundcard`, Karte nach ~2 s,
 Mixer 80/80, rc 0 in 23 s; zweiter Lauf „bereits eingerichtet", rc 0.
 
-### 4a. Modul 25 — Speicher (zram und Auslagerungsdatei)
+### Modul 25 — Speicher (zram und Auslagerungsdatei)
 
 Die Logik steht in `installer/lib/speicher.sh`, geprueft in
 `tests/test-speicher.sh` (Werkzeuge als Shell-Funktionen) und auf
@@ -435,7 +435,7 @@ uebernommen, nicht nachgebaut:
   der Sicherung, `zramswap` neu. Das Paket nimmt Rueckbau 20 (`neu`, nur
   auf Wunsch).
 
-### 4a-m. Modul 46 — Mikrofone messen
+### Modul 46 — Mikrofone messen
 
 Welche Mikrofone einer Anzeige brauchbar sind, wird **gemessen, nicht
 festgelegt**: Ein Defekt an einem Board darf nicht zur Einstellung für alle
@@ -462,7 +462,7 @@ Gemessen am chimera-pi: `rechts` mit dem Grund „links: klirrt“ (Oberwellen
 links +2 bis −3 dB, rechts −23 bis −47 dB). Ein zweiter Lauf misst nicht
 neu, und `arecord -D chimera_mikro` nimmt auf.
 
-### 4a-r. Modul 55 — Rust-Binary (`chimera-tor`)
+### Modul 55 — Rust-Binary (`chimera-tor`)
 
 Holt das Gateway-Binary (DESIGN Regel 14) und legt es nach
 `/opt/chimera/bin/chimera-tor` (root, 755). Er startet nichts.
@@ -482,7 +482,7 @@ Holt das Gateway-Binary (DESIGN Regel 14) und legt es nach
 - **Rückbau:** `uninstaller/steps/55-remove-rust.sh` entfernt, was im
   Manifest steht (Modul `55-rust`).
 
-### 4a-s. Modul 99 — Gateway (Nutzer, Socket, Dienst)
+### Modul 99 — Gateway (Nutzer, Socket, Dienst)
 
 Richtet `chimera-tor` als Dienst ein (DESIGN Regel 5n). Läuft **nach** 98,
 weil der Socket der Gruppe des Agent-Dienstes gehört. Die Logik steht in
@@ -507,7 +507,7 @@ weil der Socket der Gruppe des Agent-Dienstes gehört. Die Logik steht in
   Anbieter selbst; die Sperre jetzt trennte ihn vom Ollama-Server.
 - **Rückbau:** `uninstaller/steps/99-remove-gateway.sh` (Modul `99-gateway`).
 
-### 4b. Modul 50 — Python-Umgebung (venv)
+### Modul 50 — Python-Umgebung (venv)
 
 Chimera ist ein Python-Dauerprozess. Debian hält `/usr/lib/python3` von
 apt ab und lehnt `pip` dort seit Trixie ab (PEP 668) — zu Recht. Zwei
@@ -585,7 +585,7 @@ exakt dieses Layout nach — der erste Testbaum trug die Struktur an der
 falschen Stelle, der echte Lauf wäre an `requirements.txt fehlt`
 gescheitert, unentdeckt weil der Test grün war.
 
-### 4c. Modul 98 — Dienst (Dienstnutzer und systemd-Unit)
+### Modul 98 — Dienst (Dienstnutzer und systemd-Unit)
 
 **Boot-Abgleich (11.10.2026, DESIGN 6e-Ergänzung).** Schritt 98 legt
 neben der Dienst-Unit `chimera-hardware.service` an: `Type=oneshot`,
@@ -717,7 +717,7 @@ Radxa der Normalfall), gibt es keinen Datenträger zum Ausbauen; die
 Rettung führt über Maskrom-Modus und `rkdeveloptool` an einem PC. Modul 10
 stellt deshalb fest, ob ein wechselbarer Rettungsweg existiert, und Modul
 60 verlangt auf eMMC-Systemen eine ausdrückliche Bestätigung, bevor es
-Bootdateien anfasst (`docs/HARDWARE.md` §3a).
+Bootdateien anfasst (`docs/HARDWARE.md`, „eMMC ändert das Risiko beim Radxa").
 
 Abschalten heißt **umbenennen**, nicht löschen (`.disabled`-Suffix), damit
 die Deinstallation den Ausgangszustand wiederherstellen kann.
@@ -796,7 +796,7 @@ Zeile nicht belegen kann, hat eine Änderung gebaut, die niemand installiert.
 | 98 Dienst | `chimera.service` (+ Drop-in), `chimera-sitzung.socket`, `chimera-hardware.service`, `chimera-logabgleich.service`/`.timer`, Dienstnutzer, `/etc/chimera/.env` | Dienst, Statuszeile, Hardware-Abgleich |
 | 99 Gateway | Nutzer `chimera-tor`, `chimera-tor.socket`/`.service`, `chimera-sitzung.socket`-Rechte | Gateway |
 
-### 9a. Die Falle, die das erzwingt (4.11.2026)
+### Warum das so streng ist — der Vorfall vom 4.11.2026
 
 Die vier Commits vom 3.11. (`bbc66fb`, `c99b362`, `9f3ed3b`, `fbef797`)
 lagen **nur per `scp`** in `/opt/chimera/productive/code`. In
@@ -815,7 +815,7 @@ Daraus folgen zwei Regeln:
 2. **Nach grünem Funktionstest wird committet und eingespielt** — nicht
    „später". Ein Stand, der nur auf dem Gerät liegt, ist kein Stand.
 
-### 9b. Nachweis
+### Nachweis: Quellbaum, eingespielter Stand, Commit
 
 `tools/abgleich.sh` (auf dem Gerät) vergleicht Quellbaum, eingespielten
 Stand und den festgehaltenen Commit:

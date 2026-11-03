@@ -130,7 +130,7 @@ def _gateway_hat_telegram() -> bool:
         return False
 
 def dienst(chi, stop: threading.Event | None = None, env=None) -> int:
-    """Als systemd-Dienst laufen (INSTALLER.md §4c).
+    """Als systemd-Dienst laufen (INSTALLER.md, Abschnitt „Modul 98 — Dienst").
 
     Ohne Terminal: Das Gespräch im Terminal endet an der ersten leeren
     Eingabe, und unter systemd ist stdin leer — der Dienst wäre sofort

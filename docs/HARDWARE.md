@@ -10,7 +10,7 @@ Stand: 2026-09-29.
 
 **Chimera unterstützt zwei Boards: Raspberry Pi Zero 2 W und Radxa Zero 3W**,
 jeweils mit Whisplay HAT (V2) und **DietPi** als Betriebssystem. Der
-Installer erkennt das Board selbst (`docs/INSTALLER.md` §2a).
+Installer erkennt das Board selbst (`docs/INSTALLER.md`, Abschnitt „Boarderkennung").
 
 Chimera ist **headless** — kein Desktop, keine grafische Oberfläche.
 Höchstens eine schlanke Web-Oberfläche für Einstellungen (§3).
@@ -20,7 +20,8 @@ den Radxa. Auf dem Pi funktioniert alles, während der Radxa unter DietPi
 erst einen Treiber-Bootstrap braucht (§3).
 
 Der Radxa bringt mehr Arbeitsspeicher (8 GB im vorhandenen Gerät), aber
-**kein lokales Sprachmodell** — dazu §1a. Sein Gewinn liegt woanders:
+**kein lokales Sprachmodell** — dazu der Abschnitt „Warum das Sprachmodell
+nicht auf das Gerät passt". Sein Gewinn liegt woanders:
 STT, TTS und Renderer teilen sich auf dem Zero 2 W einen sehr engen
 Rahmen; auf dem Radxa entfällt dieser Druck.
 
@@ -55,7 +56,7 @@ Zwei Konsequenzen, die man im Auge behalten muss:
 
 ---
 
-## 1a. Warum das Sprachmodell nicht auf das Gerät passt
+## Warum das Sprachmodell nicht auf das Gerät passt
 
 Naheliegende Hoffnung beim Radxa ZERO 3W mit 8 GB: ein kleines Modell
 lokal laufen lassen und ganz ohne Netz auskommen. Das geht nicht, und
@@ -254,7 +255,7 @@ und keinen Umbau. Das ist der Grund, es so zu bauen.
 
 ---
 
-## 3a. eMMC ändert das Risiko beim Radxa
+## eMMC ändert das Risiko beim Radxa
 
 Das vorhandene Radxa-Gerät hat **64 GB eMMC**, keine SD-Karte. Das klingt
 nach Komfort, verschärft aber den schlimmsten Fall erheblich.
@@ -291,4 +292,5 @@ Minuten Neuflashen, derselbe Fehlschlag auf dem eMMC kostet einen PC.
       irgendetwas gebaut wird
 - [ ] Freien Speicher unter Last messen (`free -m` mit laufendem Renderer)
 - [ ] Beim Radxa: `lsblk` — läuft das System vom eMMC? Gibt es einen
-      bootfähigen Wechseldatenträger als Rettungsweg? (§3a)
+      bootfähigen Wechseldatenträger als Rettungsweg? (siehe „eMMC ändert das
+      Risiko beim Radxa")

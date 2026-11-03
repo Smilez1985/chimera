@@ -5,7 +5,7 @@
 # laden, in dem `systemctl`, `useradd` und Co. als Shell-Funktionen
 # bereitstehen (wie bei lib/module.sh). Der Schritt 98 ruft nur auf.
 #
-# Grundsaetze (docs/INSTALLER.md 4c):
+# Grundsaetze (docs/INSTALLER.md, 'Modul 98 -- Dienst'):
 #   * Eigener Systemnutzer `chimera`, kein root. Der Agent hat ein
 #     Werkzeug, das Programme startet -- das soll nicht als root laufen.
 #   * Hardwaregruppen stehen in der Unit (SupplementaryGroups=), nicht per

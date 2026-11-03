@@ -16,7 +16,8 @@ Stand: 2026-09-29. Entwurf.
 openclawgotchi bringt eine Selbstveränderung mit, die den eigenen
 Quelltext ändert — ohne Sicherung, ohne Selbstprüfung, ohne Rückweg. Auf
 einem Gerät, dessen System auf eMMC liegt, gibt es bei einem misslungenen
-Eingriff nichts auszubauen (`docs/HARDWARE.md` §3a).
+Eingriff nichts auszubauen (`docs/HARDWARE.md`, „eMMC ändert das Risiko beim
+Radxa").
 
 Das Muster der PiHole-Routine ist das Gegenteil und deshalb die Vorlage:
 

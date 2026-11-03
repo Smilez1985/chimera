@@ -3,7 +3,7 @@
 #
 # Letzter Schritt: Er braucht das venv aus Schritt 50 und die .env, und
 # er startet das Ganze. Die Logik steht in lib/service.sh (pruefbar ohne
-# systemd), hier wird nur aufgerufen. Begruendung: docs/INSTALLER.md 4c.
+# systemd), hier wird nur aufgerufen. Begruendung: docs/INSTALLER.md, 'Modul 98 -- Dienst'.
 #
 # Exitcode:
 #   0  Dienst laeuft nachweislich (aktiv nach Wartezeit, keine Neustarts)

@@ -494,7 +494,7 @@ Kann parallel zu Phase 4 laufen; berührt den Renderer nicht.
 - [ ] Aufgabenzuordnung konfigurierbar: Gespräch → Anthropic,
       Mood-Erfindung und Zusammenfassen → Ollama
 - [ ] Aus dem eigenen Fork übernehmen (Ideen, nicht Code —
-      `docs/DESIGN.md` §4a): `/model`-Befehl zum Umschalten im Chat,
+      `docs/DESIGN.md`, „Sprachmodelle: Provider-Schicht"): `/model`-Befehl zum Umschalten im Chat,
       **persistente Modellwahl** über Neustarts, Platzhalter-Adresse als
       „nicht gesetzt" behandeln statt Verbindungsfehler, Installer fragt
       die Ollama-Adresse ab
@@ -502,7 +502,7 @@ Kann parallel zu Phase 4 laufen; berührt den Renderer nicht.
       kein Startabbruch
 - [ ] `.env.example` mit Platzhaltern für alle Anbieter
 
-## Phase 4d — Gateway in Rust (DESIGN §4c, Regel 14)
+## Phase 4d — Gateway in Rust (DESIGN „Gateway: der eine Weg nach draußen", Regel 14)
 
 Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
 
@@ -933,7 +933,7 @@ Plattformfrage, deshalb eigene Phase und nicht am Ende angehaengt.
 
 ### 8b — Modul 10 `preflight` + Boardprofile  ✅ erster Wurf steht
 Liefert sofort Nutzen: klaert die offenen Fragen zum Zielgeraet.
-**Von Anfang an mit beiden Boards im Blick** (`docs/INSTALLER.md` §2a) —
+**Von Anfang an mit beiden Boards im Blick** (`docs/INSTALLER.md`, Abschnitt „Boarderkennung") —
 sonst bedeutet Portieren spaeter ein Durchsuchen aller Module.
 - [x] Board und Betriebssystem **getrennt** erkennen (zwei Achsen: derselbe
       Chip unter DietPi und unter Radxa-Debian sind zwei Faelle)
@@ -992,7 +992,7 @@ debuggt man den Modulbau gegen eine Baustelle und weiss bei jedem Fehler
 nicht, ob es der Treiber oder der eigene Code war.
 Wenn 8b richtig gebaut ist, ist die Portierung im Wesentlichen **ein
 ausgefuellter Profileintrag plus Header-Stufe 2/3**.
-Analyse in `docs/INSTALLER.md` §2a und §3.
+Analyse in `docs/INSTALLER.md`, Abschnitte „Boarderkennung" und „Modul 30 — Kernel-Headers".
 
 - [ ] Radxa-Profileintrag ausfuellen (SPI3 CS0, Overlay-Ziel `/boot/dtbo`,
       kollidierende Overlays, Bootmethode je Distribution)
@@ -1038,7 +1038,7 @@ Entwurf in `docs/SELBSTUPDATE.md`, Vorlage ist die PiHole-Routine.
 
 - **Web-Oberfläche** — jetzt Phase 4d (Modul-Plattform, 5m).
   Schlank, lokaler Port, kein Framework. Chimera muss ohne sie vollständig
-  einsatzfähig bleiben (`docs/DESIGN.md` §11a). Gehört in eine eigene Phase
+  einsatzfähig bleiben (`docs/DESIGN.md`, „Headless"). Gehört in eine eigene Phase
   nach dem ersten Release.
 - **Mood-Aufräumen:** Wenn der Agent dauerhaft speichern darf, wächst die
   Bibliothek unbegrenzt. LRU über `last_used`? Obergrenze?

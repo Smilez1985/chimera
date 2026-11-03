@@ -9,7 +9,8 @@ Stand: 2026-09-29. Entwurf.
 ---
 
 > **Ab 16.10.2026:** Die Anbieterschicht zieht in das Gateway (Rust) um,
-> siehe `DESIGN.md` §4c (Regeln 5k–5n, 5b in der Fassung für das Gateway)
+> siehe `DESIGN.md`, „Gateway: der eine Weg nach draußen" (Regeln 5k–5n, 5b
+> in der Fassung für das Gateway)
 > und §14. Was hier steht, bleibt das Verhalten. Was sich ändert, ist der
 > Prozess, der es ausführt: Der Dienst selbst hat danach kein Netz und keine
 > Schlüssel mehr. Die Automatik „größtes Modell fürs Gespräch“ entfällt und

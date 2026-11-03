@@ -409,7 +409,7 @@ gleichzeitig in den Speicher:
     VAD+KWS ~25 · Agent+Telegram ~80  =  ~495 MB
 
 Das Sprachmodell fehlt darin komplett — und passt auch mit Auslagerung
-nicht hinein (§4a, Regel 5). Was Auslagerung sehr wohl leistet, ist der
+nicht hinein („Sprachmodelle: Provider-Schicht", Regel 5). Was Auslagerung sehr wohl leistet, ist der
 Rest: Renderer, Spracherkennung und Sprachsynthese gleichzeitig
 vorzuhalten, ohne dass der Speicher ausgeht. Dazu Regel 5e.
 
@@ -448,7 +448,7 @@ Hersteller traut der Platine die Last selbst nicht zu.
 
 ---
 
-## 4a. Sprachmodelle: Provider-Schicht
+## Sprachmodelle: Provider-Schicht
 
 Chimera soll **mehrere Anbieter gleichzeitig** kennen: Anthropic per
 Abo-Anmeldung, Ollama im eigenen Netz, dazu beliebige weitere über
@@ -483,7 +483,8 @@ keine Änderung am Router.
 
 ### Architekturregel 5b — Anthropic-Anmeldung wie im OpenMinis-PR
 
-> Ausführung für das Gateway, Punkt für Punkt nach PR #407: §4c,
+> Ausführung für das Gateway, Punkt für Punkt nach PR #407:
+> „Gateway: der eine Weg nach draußen",
 > „Architekturregel 5b, Fassung für das Gateway“.
 
 Anthropic wird auf demselben Weg eingebunden wie in
@@ -834,7 +835,7 @@ fälschlich abgeschaltetes gutes Mikrofon fiele niemandem auf.
 
 ---
 
-## 4b. Schnittstellen zum Nutzer
+## Schnittstellen zum Nutzer
 
 Chimera hat **zwei gleichwertige Wege** hinein, nicht einen mit Anhängsel:
 
@@ -868,7 +869,7 @@ Die Liste steht in der Umgebung, nicht im Repo (§13).
 
 Für die Web-Oberfläche gilt die Ausnahme „Ersteinrichtung“ in Regel 5u.
 
-## 4c. Gateway: der eine Weg nach draußen
+## Gateway: der eine Weg nach draußen
 
 Entschieden am 16.10.2026. Ersetzt den Ansatz, dass jeder Anbieter und
 Telegram im Dienst selbst eine Verbindung öffnen. Vorbild ist der
@@ -2148,7 +2149,7 @@ Alle vier sind unabhängig voneinander und einzeln testbar.
 
 ---
 
-## 8b. Gedächtnis und Sitzungen
+## Gedächtnis und Sitzungen
 
 Entschieden am 16.10.2026. Ersetzt das Verdichten in `agent/loop.py` (`_compact()`), das kürzt, wenn die Zusammenfassung scheitert, und den Verlauf nur im Speicher hält.
 
@@ -2441,7 +2442,7 @@ neu installieren". Ein `git pull` plus Installer-Lauf muss genügen.
 
 ---
 
-## 10a. Installer
+## Installer
 
 Der Installer trägt die Plattformfrage: Er löst das Beschaffen der
 Kernel-Headers und das Einhängen des Overlays, nicht der Nutzer. Entwurf,
@@ -2545,7 +2546,8 @@ die Boarderkennung nur auf dem Gerät prüfbar, das man gerade nicht hat.
 Ein Gerät, das sich selbst aktualisiert, muss sich selbst zurückholen
 können. openclawgotchis `patch_self.py` ändert den eigenen Quelltext ohne
 Sicherung und ohne Selbstprüfung — auf einem System vom eMMC, wo es
-keinen Rettungsweg gibt (`docs/HARDWARE.md` §3a), ist das nicht vertretbar.
+keinen Rettungsweg gibt (`docs/HARDWARE.md`, „eMMC ändert das Risiko beim
+Radxa"), ist das nicht vertretbar.
 
 Stattdessen die Reihenfolge, die sich andernorts bewährt hat:
 
@@ -2819,7 +2821,8 @@ wirkt kaputt, obwohl nur eine Datei schuld ist.
 **Heute ist Chimera nicht betroffen.** Beim Start wird nur die
 mitgelieferte `data/moods-builtin.json` geladen (`app.py`). Sie ist Teil
 des Repos und nicht vom Modell erzeugt. `Registry.save()` hat in `src/`
-keinen Aufrufer, `faces/` (Regel 8b) und `active_model.json` (§4a) stehen
+keinen Aufrufer, `faces/` (Regel 8b) und `active_model.json` („Sprachmodelle:
+Provider-Schicht") stehen
 nur in diesem Dokument, der Gesprächsverlauf liegt nur im Arbeitsspeicher.
 Die Regel gilt **ab dem ersten gespeicherten Zustand, den der Start
 liest**. Der wichtigste Fall werden vom Modell angelegte Gesichter sein:
@@ -3278,7 +3281,7 @@ Chimera muss ohne sie vollständig einsatzfähig sein, konfigurierbar über
 
 - **Raspberry Pi Zero 2 W (512 MB)** — Entwicklungsziel
 - **Radxa Zero 3W** — Portierungsziel, mehr Reserven
-- **DietPi** auf beiden, headless (§11a)
+- **DietPi** auf beiden, headless (Abschnitt „Headless")
 Begründung und Grenzen in `docs/HARDWARE.md`.
 - **Whisplay HAT V2 — ausschließlich.** Auf V1 führt die Button-Leitung
   5 V; ein Tastendruck kann das Board stromlos schalten. Herstellerwarnung.
