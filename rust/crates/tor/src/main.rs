@@ -35,8 +35,8 @@ chimera-tor -- Gateway von Chimera
                           [--recht R]... [--ziel VERZ]   Web-Modul aus der Vorlage anlegen (Regel 5v)
   chimera-tor --module-pruefen VERZ   Web-Modul pruefen, Pruefsumme nennen (JSON)
   chimera-tor --module-vorlage   die Variablen der Vorlage (VARIABLEN.md) ausgeben
-  chimera-tor --mojo [--fix] [--json] [--datei PFAD]   Dienste und Sockets pruefen, Ursache nennen;
-                          mit --fix die sanften Reparaturen, danach Nachpruefung (Regel Mojo).
+  chimera-tor --mojo [--miracle] [--json] [--datei PFAD]   Dienste und Sockets pruefen, Ursache nennen;
+                          mit --miracle die sanften Reparaturen, danach Nachpruefung (Regel Mojo).
                           Exitcode 0 sauber, 1 Warnung, 2 Fehler";
 
 fn pruefen() -> serde_json::Value {
@@ -71,15 +71,25 @@ fn modul_neu(a: &[String]) -> Result<PathBuf, String> {
     modul_vorlage::anlegen(&e, &ziel)
 }
 
-/// `--mojo`: pruefen (und mit `--fix` sanft reparieren), Bericht ausgeben,
+/// `--mojo`: pruefen (und mit `--miracle` sanft reparieren), Bericht ausgeben,
 /// den Bericht auch als Datei ablegen (Vorgabe `state/mojo-letzter.json`).
 fn mojo_befehl(a: &[String]) -> ExitCode {
     let (mut fix, mut json, mut datei) = (false, false, None::<PathBuf>);
     let mut bereich: Option<String> = None;
+    let mut oracle = false;
+    let mut miracle = false;
     let mut i = 0;
     while i < a.len() {
         match a[i].as_str() {
-            "--fix" => fix = true,
+            // Oracle findet (misst und legt das Ergebnis ab), Miracle repariert.
+            "--oracle" => {
+                oracle = true;
+                fix = false;
+            }
+            "--miracle" => {
+                miracle = true;
+                fix = true;
+            }
             "--json" => json = true,
             "--bereich" => match a.get(i + 1) {
                 Some(b) => {
@@ -118,6 +128,32 @@ fn mojo_befehl(a: &[String]) -> ExitCode {
             return ExitCode::from(2);
         }
     }
+    // Miracle greift auf das letzte Oracle-Ergebnis zurueck, wenn es nicht
+    // aelter als 6 Stunden ist. Fehlt es (oder ist es alt), laeuft Oracle
+    // zuerst -- Miracle prueft dann selbst, statt blind zu reparieren.
+    if miracle {
+        let pfad = datei.clone().unwrap_or_else(mojo::oracle_pfad);
+        match mojo::oracle_lesen(&pfad) {
+            Some(alt) => {
+                let ok = alt.get("exitcode").and_then(|v| v.as_u64()).unwrap_or(1) == 0;
+                if ok {
+                    melden(
+                        Stufe::Info,
+                        "Miracle: Oracle hat nichts gefunden (Ergebnis juenger als 6 h) -- nichts zu tun.",
+                    );
+                    return ExitCode::from(0);
+                }
+                melden(
+                    Stufe::Info,
+                    "Miracle: Oracle-Ergebnis ist juenger als 6 h -- es wird darauf aufgebaut.",
+                );
+            }
+            None => melden(
+                Stufe::Info,
+                "Miracle: kein gueltiges Oracle-Ergebnis (fehlt oder aelter als 6 h) -- Oracle laeuft zuerst.",
+            ),
+        }
+    }
     let bericht = mojo::lauf(&mojo::Echt, &pruefungen, fix);
     let jetzt = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -130,7 +166,10 @@ fn mojo_befehl(a: &[String]) -> ExitCode {
         print!("{}", mojo::als_text(&bericht));
     }
     mojo::laut_melden(&bericht);
+    // Jeder Lauf legt sein Ergebnis ab und ueberschreibt das vorherige --
+    // so gilt immer der letzte Oracle-Stand, hoechstens 6 Stunden lang.
     mojo::ablegen(&j, datei.as_deref());
+    let _ = oracle;
     ExitCode::from(bericht.exitcode())
 }
 

@@ -320,11 +320,11 @@ done
 if [ "$FIRST_RC" -ge 2 ] && [ -x "$(rootpath "$CHIMERA_OPT")/bin/chimera-tor" ]; then
 	if have_cmd systemd-run; then
 		systemd-run --unit=chimera-mojo-install --collect --no-block --quiet \
-			"$(rootpath "$CHIMERA_OPT")/bin/chimera-tor" --mojo --fix \
+			"$(rootpath "$CHIMERA_OPT")/bin/chimera-tor" --mojo --miracle \
 			>/dev/null 2>&1 && info "Mojo steigt ein (chimera-mojo-install)." || \
 			warn "Mojo konnte nicht gestartet werden."
 	else
-		"$(rootpath "$CHIMERA_OPT")/bin/chimera-tor" --mojo --fix >/dev/null 2>&1 || true
+		"$(rootpath "$CHIMERA_OPT")/bin/chimera-tor" --mojo --miracle >/dev/null 2>&1 || true
 	fi
 fi
 

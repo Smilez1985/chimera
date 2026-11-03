@@ -1,7 +1,7 @@
 //! Mojo: Dienste und Sockets pruefen, die Ursache nennen, sanft reparieren,
 //! nachpruefen, laut melden (DESIGN, Regel "Mojo"; Recherche docs/research/MOJO.md).
 //!
-//! Eine Regelmaschine, kein Modell. Ohne `--fix` wird nichts veraendert. Jeder
+//! Eine Regelmaschine, kein Modell. Ohne `--miracle` wird nichts veraendert. Jeder
 //! Befund ab Warnung nennt seine **Ursache** mit Beleg und den **Weg**; findet
 //! Mojo keine, sagt es "Ursache nicht bestimmbar" und liefert die Rohdaten.
 //! Nach jeder Reparatur laufen dieselben Pruefungen noch einmal: kehrt derselbe
@@ -467,7 +467,7 @@ pub trait System {
 /// in einer Stunde setzt Mojo sie aus (sonst Neustart-Sturm: die Reparatur startet
 /// die Unit, sie scheitert, OnFailure ruft Mojo, ...).
 pub const BUDGET: u32 = 2;
-/// Hoechste Stufe, die `--fix` von allein ausfuehrt: 1 (Neustart) und 2 (Pakete nachladen).
+/// Hoechste Stufe, die `--miracle` von allein ausfuehrt: 1 (Neustart) und 2 (Pakete nachladen).
 pub const TIER_MAX: u8 = 2;
 /// Nach einer Reparatur so lange warten, bevor nachgeprueft wird. Ein Dienst vom
 /// Typ simple gilt direkt nach dem Start als aktiv, auch wenn er gleich stirbt.
@@ -1311,10 +1311,38 @@ pub fn als_text(b: &Bericht) -> String {
 
 /// Den Bericht als Datei ablegen (atomar). Schlaegt das fehl, steht es im
 /// Protokoll: ein Bericht, der nirgends landet, ist stiller Misserfolg.
+/// Wie lange ein Oracle-Ergebnis gilt. Aelter heisst: neu messen.
+pub const ORACLE_TTL: Duration = Duration::from_secs(6 * 3600);
+
+/// Wo das letzte Oracle-Ergebnis liegt (Vorgabe; `--datei` ueberstimmt).
+pub fn oracle_pfad() -> std::path::PathBuf {
+    std::path::PathBuf::from(
+        std::env::var("CHIMERA_STATE_DIR").unwrap_or_else(|_| "/opt/chimera/state".into()),
+    )
+    .join("mojo-oracle.json")
+}
+
+/// Ergebnis lesen: `Some(json)` nur, wenn es nicht aelter als `ORACLE_TTL` ist.
+/// Ein altes Ergebnis wird als alt erkannt und nicht benutzt -- es wird auch
+/// nicht stillschweigend geloescht, das erledigt der naechste Oracle-Lauf.
+pub fn oracle_lesen(pfad: &std::path::Path) -> Option<Value> {
+    let text = std::fs::read_to_string(pfad).ok()?;
+    let wert: Value = serde_json::from_str(&text).ok()?;
+    let zeit = wert.get("zeit")?.as_u64()?;
+    let jetzt = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+    if jetzt.saturating_sub(zeit) > ORACLE_TTL.as_secs() {
+        return None;
+    }
+    Some(wert)
+}
+
 pub fn ablegen(bericht: &Value, pfad: Option<&std::path::Path>) {
     use gemein::protokoll::{melden, Stufe};
     let ziel = pfad.map(std::path::PathBuf::from).unwrap_or_else(|| {
-        std::path::PathBuf::from(std::env::var("CHIMERA_STATE_DIR").unwrap_or_else(|_| "/opt/chimera/state".into())).join("mojo-letzter.json")
+        oracle_pfad()
     });
     let mut text = match serde_json::to_vec_pretty(bericht) {
         Ok(t) => t,

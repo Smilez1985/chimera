@@ -35,7 +35,7 @@ ConditionPathExists=$(mojo_programm)
 
 [Service]
 Type=oneshot
-ExecStart=$(mojo_programm) --mojo --fix --datei $CHIMERA_STATE/mojo-letzter.json
+ExecStart=$(mojo_programm) --mojo --miracle --datei $CHIMERA_STATE/mojo-letzter.json
 # Laut: ein Befund ab Fehler laesst die Unit scheitern und erscheint damit in
 # systemctl --failed und im Journal (Exitcode 2). Warnungen (1) gelten als Erfolg.
 SuccessExitStatus=1

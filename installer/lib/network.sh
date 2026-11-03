@@ -210,13 +210,13 @@ mojo_netz_reparieren() {
 		return 1
 	fi
 	warn "Mojo: Netzwerkstack neu starten und WLAN verbinden ..."
-	if "$_mo_bin" --mojo --fix --bereich netz >/dev/null 2>&1; then
+	if "$_mo_bin" --mojo --miracle --bereich netz >/dev/null 2>&1; then
 		info "Mojo: Netz-Reparatur durchgelaufen."
 		return 0
 	fi
 	# Der Bereich "netz" kann von aelteren Binaries noch unbekannt sein --
 	# dann die ganze Pruefung, statt gar nichts zu tun.
-	if "$_mo_bin" --mojo --fix >/dev/null 2>&1 && network_erreichbar; then
+	if "$_mo_bin" --mojo --miracle >/dev/null 2>&1 && network_erreichbar; then
 		info "Mojo: Reparatur durchgelaufen (vollstaendige Pruefung)."
 		return 0
 	fi

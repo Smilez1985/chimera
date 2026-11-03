@@ -142,8 +142,8 @@ only process with network access.
 | `--ziel VERZ` | (bei `--module-neu`) Zielverzeichnis, Vorgabe `.`. / Target directory, default `.`. |
 | `--module-pruefen VERZ` | Web-Modul prüfen und die SHA-256-Prüfsumme nennen (JSON). / Check a web module and print its SHA-256 checksum. |
 | `--module-vorlage` | Die Variablen der Vorlage ausgeben. / Print the template variables. |
-| `--mojo` | Dienste, Sockets, gescheiterte Units, Speicherkarte (SD) und Arbeitsspeicher (RAM) prüfen; jeder Befund nennt Ursache, Beleg und Weg. Ohne `--fix` ändert es nichts. Exitcode 0 sauber, 1 Warnung, 2 Fehler. / Check services, sockets, failed units, SD card and RAM; every finding names cause, evidence and fix. Changes nothing without `--fix`. |
-| `--fix` | (mit `--mojo`) Sanfte Reparaturen ausführen (Neustart, Socket nachziehen, fehlende Python-Pakete nachladen), danach nachprüfen; höchstens 2 wirkungslose Versuche je Gegenstand und Stunde. / (with `--mojo`) Run the gentle repairs, then re-check. |
+| `--mojo` | Dienste, Sockets, gescheiterte Units, Speicherkarte (SD) und Arbeitsspeicher (RAM) prüfen; jeder Befund nennt Ursache, Beleg und Weg. Ohne `--miracle` ändert es nichts. Exitcode 0 sauber, 1 Warnung, 2 Fehler. / Check services, sockets, failed units, SD card and RAM; every finding names cause, evidence and fix. Changes nothing without `--miracle`. |
+| `--miracle` | (mit `--mojo`) Sanfte Reparaturen ausführen (Neustart, Socket nachziehen, fehlende Python-Pakete nachladen), danach nachprüfen; höchstens 2 wirkungslose Versuche je Gegenstand und Stunde. / (with `--mojo`) Run the gentle repairs, then re-check. |
 | `--json` | (mit `--mojo`) Bericht als JSON ausgeben. / (with `--mojo`) Print the report as JSON. |
 | `--datei PFAD` | (mit `--mojo`) Bericht zusätzlich als Datei ablegen (Vorgabe `state/mojo-letzter.json`). / (with `--mojo`) Also store the report as a file. |
 | `-h`, `--help` | Hilfe. / Help. |

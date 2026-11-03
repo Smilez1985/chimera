@@ -3032,7 +3032,7 @@ Installerlauf inaktiv geblieben war.
    Prüfungen aus und fragt nie ein Sprachmodell. Es läuft offline und braucht
    weder Netz noch Anbieter.
 2. **Oracle und Miracle.** Ohne Flag **liest** es nur und ändert nichts.
-   `--fix` führt die Reparaturen der Stufe 1 aus. `--json` schreibt den Bericht
+   `--miracle` führt die Reparaturen der Stufe 1 aus. `--json` schreibt den Bericht
    maschinenlesbar (Weboberfläche, Skripte).
 3. **Jeder Befund nennt seine Ursache** (smilez, 1.11.), auch „nicht
    reparierbar“. Eine Ursache ist **gemessen und belegt**, nie geraten, und
@@ -3096,7 +3096,7 @@ Installerlauf inaktiv geblieben war.
    `wpa_supplicant@wlan0`, `ifup@wlan0`, `networking` neu starten, zuletzt
    `ip link set wlan0 up` und `ifup wlan0`. Jeder Schritt darf fehlen; das
    Ergebnis zählt, nicht der Exitcode eines Befehls.
-   Aufruf gezielt mit `--mojo --fix --bereich netz` — der Installer fragt so
+   Aufruf gezielt mit `--mojo --miracle --bereich netz` — der Installer fragt so
    nur das Netz ab, statt bei jedem Netzproblem den ganzen Systemcheck zu
    fahren. Ein unbekannter Bereich ist ein Fehler, kein stilles Nichts-Tun.
 10. **Der Installer nutzt das** (`installer/lib/network.sh`): Bei HTTP 404
@@ -3139,7 +3139,7 @@ Installerlauf inaktiv geblieben war.
 **Gegenprobe (Regel 9):** Einen Wegwerf-Dienst mit denselben Neustartwerten, der
 immer scheitert; der Bericht muss nach der Aufgabe `error` mit
 `unreparierbar` zeigen, die Befunddatei muss existieren und die Zeile auf der
-Karte muss stehen. Dazu den Socket von Hand stoppen: `--fix` muss ihn
+Karte muss stehen. Dazu den Socket von Hand stoppen: `--miracle` muss ihn
 nachziehen, und die Nachprüfung muss `ok` zeigen.
 
 ## 11. Headless
@@ -3516,7 +3516,7 @@ gelb, bei Abschluss leuchtet sie grün, bei einem Befund ruhig gelb, bei einem
 echten Fehler blinkt sie rot SOS (drei kurz, drei lang, drei kurz). Ein Befund
 (rc 1) ist **kein** Fehler — sonst wäre nach jedem Lauf mit fehlendem
 Gateway-Binary alles rot.
-Bei einem Fehler ab rc 2 steigt **Mojo** ein (`chimera-tor --mojo --fix`,
+Bei einem Fehler ab rc 2 steigt **Mojo** ein (`chimera-tor --mojo --miracle`,
 abgekoppelt als `chimera-mojo-install`).
 Jede Backlight-Änderung wird mit Grund protokolliert („Hintergrundlicht: N %
 (Grund)"), und der Zeichner schreibt eine Spur nach

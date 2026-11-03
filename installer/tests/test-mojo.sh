@@ -113,7 +113,7 @@ hat "daemon-reload nach neuen Units" "$F/spur" "systemctl daemon-reload"
 
 # --- 2. Lauf-Unit ---------------------------------------------------------
 L="$R/$U/chimera-mojo.service"
-hat "Lauf: ruft mojo mit --fix" "$L" "ExecStart=/opt/chimera/bin/chimera-tor --mojo --fix"
+hat "Lauf: ruft mojo mit --miracle" "$L" "ExecStart=/opt/chimera/bin/chimera-tor --mojo --miracle"
 hat "Lauf: legt den Bericht auf die Karte (state/)" "$L" "--datei /opt/chimera/state/mojo-letzter.json"
 hat "Lauf: Warnung (Exitcode 1) ist kein Scheitern" "$L" "SuccessExitStatus=1"
 hat "Lauf: Fehler (Exitcode 2) laesst die Unit scheitern" "$L" "Type=oneshot"

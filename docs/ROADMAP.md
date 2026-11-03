@@ -533,7 +533,7 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
 Recherche: `docs/research/MOJO.md`. Rust im Gateway (Regel 14), Installer
 daneben. Jede Stufe für sich lauffähig, am Pi mit einer echten Störung belegt.
 
-- [ ] **`chimera-tor --mojo [--fix] [--json]`:** Befund, Schwere, Stufe,
+- [ ] **`chimera-tor --mojo [--miracle] [--json]`:** Befund, Schwere, Stufe,
       `impl Pruefung` plus Zeile in `pruefungen()`, Nachprüfung nach jeder
       Reparatur, `unreparierbar` bei wiederkehrendem Code, Sperre gegen zwei
       gleichzeitige Reparaturen, Schwärzung der Ausgabe, Befunddatei

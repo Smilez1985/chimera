@@ -37,7 +37,7 @@ Ein **Gesundheitsprüfer mit Reparaturstufen**, in der Art von `brew doctor` ode
 | Merkmal | Wortlaut / Verhalten |
 |---|---|
 | Regelmaschine | Feste Prüfungen mit festem Code, **fragt nie ein Modell**; deterministisch, offline, sofort |
-| Zwei Modi | *Oracle* schaut nur (Vorgabe, ohne Flag), *Miracle* (`--fix`, Synonym `--miracle`) repariert |
+| Zwei Modi | *Oracle* schaut nur (Vorgabe, ohne Flag), *Miracle* (`--miracle`) repariert |
 | Befund | `Severity` (ok, info, warn, error), Subsystem, stabiler Code, Meldung, Hinweis, optionale Reparatur, Stufe |
 | Stufen | 1 sanft und lokal (Dateirechte, Aufräumen, Dienstneustart), 2 Komponente neu, 3 voller Installer oder Wiederherstellung; ohne ausdrücklichen Wunsch läuft nur Stufe 1 |
 | Idempotenz | Jede Reparatur ist zweimal ausführbar, ohne dass etwas passiert |
@@ -218,10 +218,10 @@ Reparatur von Hand: Dienst stoppen, Socket starten, Dienst starten. Das ist eine
 
 ## 5. Folgerungen für den Bau
 
-1. **`chimera-tor --mojo [--fix] [--json]`** im Gateway: Prüfungen als
+1. **`chimera-tor --mojo [--miracle] [--json]`** im Gateway: Prüfungen als
    `impl Pruefung` plus eine Zeile in `pruefungen()` (wie bei den Sonden),
    Befund mit Code, Schwere, Stufe, Reparatur.
-2. **Nachprüfung als Wahrheit**: `--fix` führt Stufe 1 aus, prüft erneut, meldet
+2. **Nachprüfung als Wahrheit**: `--miracle` führt Stufe 1 aus, prüft erneut, meldet
    `unreparierbar`, wenn derselbe Code zurückkehrt.
 3. **Meldeunit** `chimera-mojo@.service` per `OnFailure=` an `chimera`,
    `chimera-tor` und `chimera-hardware`; trennt Zwischenfehler von Aufgabe.
@@ -252,12 +252,12 @@ Reparatur von Hand: Dienst stoppen, Socket starten, Dienst starten. Das ist eine
 ## English summary
 
 Mojo (from smilez' rag4ll and llm_cross-compiler_framework) is a rule-based
-health checker with tiered repairs: *Oracle* only reads, *Miracle* (`--fix`)
+health checker with tiered repairs: *Oracle* only reads, *Miracle* (`--miracle`)
 repairs. A finding has a severity, subsystem, stable code and fix tier. The key
 mechanism is the **re-check after a repair**: if the same code reappears, the
 repair did not hold and the finding is reported as not repairable — exactly the
 retry-then-fail-loudly chain Chimera needs. Chimera adopts it in Rust inside the
-gateway (`chimera-tor --mojo [--fix]`), with a failure unit
+gateway (`chimera-tor --mojo [--miracle]`), with a failure unit
 (`OnFailure=chimera-mojo@%N.service`) and a timer. Measured on the Pi Zero 2 W
 (systemd 257): `OnFailure=` fires on **every** failed start, not only when the
 start limit is reached, so the unit must tell intermediate failures from giving

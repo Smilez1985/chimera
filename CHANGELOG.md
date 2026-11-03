@@ -106,7 +106,7 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
 - **Anzeige:** Fortschrittsbalken während des Installer-Laufs — eine Stufe gleich viel, „Updating…" darüber; der Stand überlebt den Selbstneustart und springt nicht zurück.
 - **Anzeige:** LED zeigt den Verlauf — gelb blinkend während des Updates, grün bei Abschluss, ruhig gelb bei Befund, rot SOS bei Fehler.
 - **Anzeige:** Jede Backlight-Änderung wird mit Grund protokolliert; der Zeichner schreibt eine Spur (`/run/chimera-setup/zeichner.log`).
-- **Installer:** Bei einem Fehler ab rc 2 startet Mojo (`--mojo --fix`) abgekoppelt als `chimera-mojo-install`.
+- **Installer:** Bei einem Fehler ab rc 2 startet Mojo (`--mojo --miracle`) abgekoppelt als `chimera-mojo-install`.
 - **Gateway:** Rust-Grundlage `rust/` mit dem Programm `chimera-tor`; die CI baut es statisch für aarch64 und legt es mit SHA-256 als Artefakt und auf `entwicklung` als Prerelease `rust-<commit>` ab.
 - **Installer:** Neues Modul 55 lädt das Gateway-Binary `chimera-tor` zum Commit der Quelle (`rust-<commit>`), prüft SHA-256 und Version und legt es nach `/opt/chimera/bin`; Rückbau 55 entfernt es.
 - **Gateway:** `chimera-tor --dienst` bedient einen Unix-Socket (`ping`, `status`); `--ping` fragt ein laufendes Gateway ab.
