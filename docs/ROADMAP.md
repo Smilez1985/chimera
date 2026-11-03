@@ -79,8 +79,24 @@ zram wird nicht angefasst, wenn es läuft.
       *Erledigt 3.11.: Typ aus `state/anzeige` gilt bei belegten Leitungen,
       wenn sein Nachweis zutrifft (Am Pi: rc 0, Gegenprobe rc 1). Der grüne
       LED-Abschluss im VOLLEN Lauf steht noch aus.*
-- [ ] **Grüner LED-Abschluss am Gerät:** hängt an Modul 40 (letzter Lauf
-      endet mit Befund, deshalb gelb).
+- [ ] **Grüner LED-Abschluss am Gerät.** Modul 40 ist erledigt (voller Lauf
+      3.11.: `Modul 40-install-display: ok`). Ursache für das Gelb war zuletzt
+      **Modul 55**: Fehlte das Prerelease `rust-<commit>`, endet der Lauf mit
+      Befund (rc 1). Zum Commit `db8870a` fehlte es, weil die CI auf
+      `entwicklung` **nicht bei jedem Push** läuft (`on.push.branches: [main]`
+      in `.github/workflows/tests.yml`); Releases entstehen dort nur per
+      `workflow_dispatch`. Nach dem Anstoßen war der Lauf fehlerfrei (rc 0,
+      „12 Modul(e), ohne Fehler"). Zu entscheiden (smilez): `entwicklung` in
+      den Push-Trigger aufnehmen, oder den Rust-Job an einen Pfadfilter
+      (`rust/**`) hängen und das Prerelease nur dann erwarten.
+- [ ] **CI ist auf `entwicklung` rot, seit mindestens 31.10.** Beim Anstoßen
+      am 3.11. fielen drei Installer-Tests: `test-helfer.sh`
+      (`line 66: syntax error: bad function name`, BusyBox),
+      `test-launcher-hardware.sh` („--hardware nicht benannt") und
+      `test-launcher-rc3.sh` („reboot fehlt in der Ausgabe", Gegenprobe
+      erwartet rc 3, bekam 2). Nicht durch die Anzeige-Änderung verursacht —
+      sie waren vorher schon rot, nur unsichtbar, weil der Push-Trigger sie
+      nicht auslöste.
 - [ ] **pip: nur Fehlendes, ohne `--upgrade`.** Zurückgestellt: Die Änderung
       machte zwei Tests von `test-python-env.sh` rot; der erprobte Stand bleibt,
       bis die Ursache geklärt ist (das venv hatte `numpy 2.5.4` statt `1.26.4`).
