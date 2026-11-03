@@ -113,6 +113,34 @@ class Chimera:
         from .bot.telegram import from_env
         return from_env(self.session, on_state=self._on_state)
 
+    def _led_melden(self, zustand: str, sekunden: float = 3.0) -> bool:
+        """Einen Installer-Ausgang auf die LED legen.
+
+        Gedacht fuer den Fall, in dem der Installer nichts zu tun hatte: Dann
+        laeuft der Dienst weiter und haelt die Pins -- der Installer kann die
+        LED nicht selbst setzen, er sagt es dem Dienst (Vorgabe smilez, 3.11.:
+        "wenn kein Update gefunden wurde, muss es trotzdem gruen werden").
+
+        Jeder Ausgang hat Farbe **und** Muster (``INSTALLER_ZUSTAENDE``); die
+        Laufzeit ist die Anzeigedauer, danach faellt die LED auf den
+        Grundzustand zurueck (Regel 7c: kurze Laufzeit statt Loeschen).
+        """
+        from .display.led import INSTALLER_ZUSTAENDE
+        eintrag = INSTALLER_ZUSTAENDE.get(zustand)
+        if self.led is None or eintrag is None:
+            return False
+        farbe, muster = eintrag
+        import time as _t
+        jetzt = int(_t.monotonic() * 1000)
+        try:
+            self.led.melden("installer", jetzt_ms=jetzt,
+                            laufzeit_ms=int(max(0.5, sekunden) * 1000),
+                            farbe=farbe, muster=muster)
+        except (KeyError, ValueError):
+            log.warning("LED-Zustand %r nicht meldbar", zustand)
+            return False
+        return True
+
     def _gesicht_setzen(self, name: str) -> bool:
         """Einen Ausdruck setzen, ohne die Sitzung zu bedienen.
 
@@ -287,6 +315,9 @@ def build(*, probe_network: bool = True, home: Path | None = None,
     # "gesicht"): Damit setzt der Installer das Update-Gesicht, bevor er die
     # Dienste anhaelt.
     session.gesicht_setzen = chi._gesicht_setzen
+    # Und die LED (Operation "led"): Damit meldet der Installer auch dann
+    # seinen Ausgang, wenn er den Dienst gar nicht angehalten hat.
+    session.led_melden = chi._led_melden
     # Die Taste, wenn das Panel eine hat (Whisplay). Ein Panel ohne Taste
     # hat die Methode nicht -- dann gibt es nichts zu verdrahten.
     if panel is not None and hasattr(panel, "bei_taste"):

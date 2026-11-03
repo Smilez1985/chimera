@@ -93,6 +93,27 @@ _p = [MUSTER["puls"](t, (200, 200, 200))[0] for t in range(0, 1600, 100)]
 check("puls: aendert sich ueber die Zeit", len(set(_p)) > 3, True)
 check("puls: nie ganz aus", min(_p) > 0, True)
 
+print("== Installer-Ausgaenge: ein Ausgang, eine Anzeige ==")
+# Vorgabe smilez (3.11.): ein Lauf, der nichts zu tun hatte, ist ein Erfolg --
+# und jeder Ausgang hat seine eigene Farbe UND sein eigenes Muster.
+from chimera.display.led import INSTALLER_ZUSTAENDE  # noqa: E402
+check("fuenf Ausgaenge", sorted(INSTALLER_ZUSTAENDE),
+      ["befund", "fehler", "neustart", "nichts", "ok"])
+check("alle Ausgaenge haben verschiedene (Farbe, Muster)",
+      len({v for v in INSTALLER_ZUSTAENDE.values()}), len(INSTALLER_ZUSTAENDE))
+check("nichts zu tun ist gruen wie Erfolg, aber anderer Code",
+      (INSTALLER_ZUSTAENDE["nichts"][0] == INSTALLER_ZUSTAENDE["ok"][0],
+       INSTALLER_ZUSTAENDE["nichts"][1] != INSTALLER_ZUSTAENDE["ok"][1]),
+      (True, True))
+check("Fehler nutzt das SOS-Muster", INSTALLER_ZUSTAENDE["fehler"][1], "sos")
+check("Neustart ist blau", INSTALLER_ZUSTAENDE["neustart"][0], (0, 120, 255))
+# SOS zeitlich: 200 an / 200 aus (dreimal), 600 an / 200 aus (dreimal).
+check("sos: erstes kurzes Zeichen an", MUSTER["sos"](0, (1, 2, 3)), (1, 2, 3))
+check("sos: dazwischen dunkel", MUSTER["sos"](250, (1, 2, 3)), (0, 0, 0))
+check("sos: langes Zeichen an", MUSTER["sos"](1400, (1, 2, 3)), (1, 2, 3))
+check("sos: danach Pause", MUSTER["sos"](5000, (1, 2, 3)), (0, 0, 0))
+check("sos: wiederholt sich im Zyklus", MUSTER["sos"](6300, (1, 2, 3)), (1, 2, 3))
+
 print("== Abstandsregel (Regel 7c) ==")
 from chimera.arbiter import Arbiter  # noqa: E402
 check("Katalog haelt Abstaende >= 10", Arbiter.abstaende_pruefen(ledmod.QUELLEN), [])

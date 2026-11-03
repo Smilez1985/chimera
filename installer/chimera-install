@@ -331,17 +331,23 @@ fi
 if [ "$_FORT_VORHANDEN" = 1 ]; then
 	# Ergebnis ans Abschlusszeichen: gruen bei Erfolg, rot SOS bei Befund oder
 	# Fehler (Vorgabe smilez, 2.11.).
-	if [ "$FAILED" -eq 0 ] && [ "$NEUSTART" -eq 0 ]; then
-		fortschritt_ergebnis ok
-	elif [ "$FIRST_RC" -le 1 ] && [ "$NEUSTART" -eq 0 ]; then
-		# Befund (rc 1): geschafft, aber etwas fehlt -- gelb, nicht rot.
-		fortschritt_ergebnis befund
+	# Vier Ausgaenge, vier Bilder -- ein ausstehender Neustart ist kein
+	# Fehler, und ein Befund ist keiner (Vorgabe smilez, 3.11.).
+	if [ "$FAILED" -ne 0 ]; then
+		if [ "$FIRST_RC" -le 1 ]; then
+			fortschritt_ergebnis befund
+		else
+			fortschritt_ergebnis fehler
+		fi
+	elif [ "$NEUSTART" -eq 1 ]; then
+		fortschritt_ergebnis neustart
 	else
-		fortschritt_ergebnis fehler
+		fortschritt_ergebnis ok
 	fi
 	fortschritt_stop
 fi
 
+_HATTE_KLAMMER="$_KLAMMER"
 if [ "$_KLAMMER" = 1 ]; then
 	klammer_aus || { [ "$FAILED" -eq 0 ] && { FAILED=1; FIRST_RC=1; }; }
 	_KLAMMER=0
@@ -375,6 +381,44 @@ else
 		warn "Ausserdem steht ein Neustart aus (wird erst nach Fehlern gemeldet)."
 	ENDE_RC="$FIRST_RC"
 fi
+# --- Abschluss an die LED -------------------------------------------------
+#
+# Jeder Ausgang bekommt seine eigene Anzeige (Vorgabe smilez, 3.11.): ein
+# Lauf, der nichts zu tun hatte, ist ein Erfolg und muss auch so aussehen --
+# sonst leuchtet nach jedem "alles aktuell" gar nichts.
+#
+#   ok        gruen, fest               eingerichtet, alles neu
+#   nichts    gruen, langsam blinkend   geprueft, nichts zu tun
+#   befund    gelb, fest                geschafft, etwas fehlt
+#   neustart  blau, blinkend            wirkt erst nach dem Start
+#   fehler    rot, SOS                  abgebrochen
+#
+# Laeuft der Dienst (Fall "nichts zu tun"), haelt er die Leitungen der LED --
+# dann kann der Installer sie nicht selbst setzen, er meldet den Ausgang
+# ueber den Sitzungs-Socket, und der Renderer setzt die Farbe in seinem Takt.
+if [ "$MODE" = run ] && [ "$HELFER_AUFTRAG" = 1 ]; then
+	if [ "$FAILED" -ne 0 ]; then
+		if [ "$FIRST_RC" -le 1 ]; then _led_zustand=befund; else _led_zustand=fehler; fi
+	elif [ "$NEUSTART" -eq 1 ]; then
+		_led_zustand=neustart
+	elif [ "$_HATTE_KLAMMER" = 1 ]; then
+		_led_zustand=ok
+	else
+		_led_zustand=nichts
+	fi
+	_led_py="$(_fort_py 2>/dev/null || true)"
+	_led_skript="$_HERE/lib/py/led.py"
+	_led_sock="${CHIMERA_SITZUNG_SOCKET:-/run/chimera/sitzung.sock}"
+	[ -n "$_led_sock" ] || _led_sock="$(rootpath /run/chimera/sitzung.sock)"
+	if [ -n "$_led_py" ] && [ -f "$_led_skript" ]; then
+		if "$_led_py" "$_led_skript" "$(rootpath "$_led_sock")" "$_led_zustand" >>"$CHIMERA_LOGFILE" 2>&1; then
+			log "Anzeige: LED: $_led_zustand"
+		else
+			info "Anzeige: LED nicht gemeldet (kein Dienst am Socket) -- Ausgang: $_led_zustand"
+		fi
+	fi
+fi
+
 if [ "$HELFER_AUFTRAG" = 1 ]; then
 	helfer_zettel_schreiben fertig "" "$ENDE_RC" "$_hel_start"
 fi

@@ -42,6 +42,7 @@ QUELLEN: dict[str, int] = {
     "taste":          50,  # Tastendruck quittiert: weiß, schnell blinkend
     "agentenstatus":  40,  # denkt: Glow, pulsierend
     "akku":           30,  # Akku unter Schwelle: gelb, langsam blinkend
+    "installer":      20,  # Installer-Lauf beendet: Farbe und Muster je Ausgang
     "mood":           10,  # Grundzustand: Glow des Gesichts, gedimmt
 }
 
@@ -83,6 +84,24 @@ def blink_schnell(t_ms: int, farbe: Farbe) -> Farbe:
 def atmen(t_ms: int, farbe: Farbe) -> Farbe:
     return puls(t_ms, farbe, periode_ms=2400, min_f=0.3)
 
+def sos(t_ms: int, farbe: Farbe) -> Farbe:
+    """Notzeichen: kurz-kurz-kurz, lang-lang-lang, kurz-kurz-kurz.
+
+    Eigener Code statt schnellem Blinken: Ein Fehler soll am Gerät erkennbar
+    sein, ohne dass jemand die Farbe im Kopf mit einer Bedeutung belegt
+    (Vorgabe smilez, 3.11.: jeder Ausgang seine eigene Farbe **und** sein
+    eigenes Muster). Zyklus 6,3 s -- ein Durchgang, dann Pause.
+    """
+    t = t_ms % 6300
+    # (an, pause) in ms, wie im Installer: 200/200, 600/200.
+    for an, pause in ((200, 200),) * 3 + ((600, 200),) * 3 + ((200, 200),) * 3:
+        if t < an:
+            return farbe
+        t -= an + pause
+        if t < 0:
+            return (0, 0, 0)
+    return (0, 0, 0)
+
 MUSTER: dict[str, Callable[[int, Farbe], Farbe]] = {
     "fest": fest,
     "gedimmt": gedimmt,
@@ -91,6 +110,7 @@ MUSTER: dict[str, Callable[[int, Farbe], Farbe]] = {
     "blink_langsam": blink_langsam,
     "blink_schnell": blink_schnell,
     "atmen": atmen,
+    "sos": sos,
 }
 
 # Darstellung je Quelle: (Farbe oder None = Glow des Gesichts, Muster).
@@ -103,9 +123,23 @@ DARSTELLUNG: dict[str, tuple[Farbe | None, str]] = {
     "taste":        ((255, 255, 255), "blink_schnell"),
     "agentenstatus": (None, "puls"),
     "akku":         ((255, 200, 0), "blink_langsam"),
+    # Der Installer meldet seinen Ausgang ueber den Sitzungs-Socket; Farbe
+    # und Muster kommen aus ZUSTAENDE (unten) und ueberschreiben diese Vorgabe.
+    "installer":    ((0, 210, 70), "fest"),
     "mood":         (None, "gedimmt"),
 }
 
+
+#: Ausgaenge eines Installer-Laufs -> (Farbe, Muster). Ein Ausgang, eine
+#: Anzeige: „nichts zu tun" ist ein Erfolg und darf nicht wie ein Fehler
+#: aussehen -- und nicht wie ein frisches Update (Vorgabe smilez, 3.11.).
+INSTALLER_ZUSTAENDE: dict[str, tuple[Farbe, str]] = {
+    "ok":       ((0, 210, 70), "fest"),            # eingerichtet, alles neu
+    "nichts":   ((0, 210, 70), "blink_langsam"),   # geprueft, nichts zu tun
+    "befund":   ((255, 180, 0), "fest"),           # geschafft, etwas fehlt
+    "neustart": ((0, 120, 255), "blink"),          # eingerichtet, wirkt nach Start
+    "fehler":   ((230, 30, 30), "sos"),            # abgebrochen
+}
 
 class LedVerwalter:
     """Hält die LED-Wünsche und setzt den Gewinner auf das Panel.

@@ -206,6 +206,20 @@ class SitzungsServer:
                     else:
                         antwort({"ok": False,
                                  "fehler": f"Gesicht {name} nicht gesetzt"})
+                elif op == "led":
+                    # Abschluss des Installers auf die LED legen. Der Dienst
+                    # haelt die Pins -- der Installer kann das Panel nicht
+                    # selbst anfassen, wenn er nichts zu tun hatte.
+                    zustand = str(q.get("zustand", "")).strip()
+                    sekunden = float(q.get("sekunden", 3) or 3)
+                    bruecke = getattr(self.session, "led_melden", None)
+                    if bruecke is None:
+                        antwort({"ok": False, "fehler": "keine LED-Bruecke"})
+                    elif bruecke(zustand, sekunden):
+                        antwort({"ok": True, "led": zustand})
+                    else:
+                        antwort({"ok": False,
+                                 "fehler": f"LED-Zustand {zustand!r} nicht gesetzt"})
                 elif op == "anmelden":
                     seit = int(q.get("seit", 0))
                     angemeldet.append(abo)

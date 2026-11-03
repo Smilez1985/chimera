@@ -310,6 +310,15 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   `python3-dev` aus dem venv; die Anzeigetypen `st7789` und `epaper` der
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
+### Hinzugefügt
+- **LED meldet jeden Ausgang des Installer-Laufs.** Bisher gab es ein
+  Abschlusszeichen nur, wenn der Lauf die Dienste angehalten hatte — ein Lauf
+  ohne Änderung („alles aktuell") zeigte gar nichts. Jetzt: `ok` grün fest,
+  `nichts` grün langsam blinkend, `befund` gelb fest, `neustart` blau blinkend,
+  `fehler` rot SOS. Liegt der Dienst still auf den Leitungen, meldet der
+  Installer über den Sitzungs-Socket (neue Operation `led`), der Renderer setzt
+  die Farbe (neue LED-Quelle `installer`, Muster `sos`).
+
 ### Behoben
 - **Schritt 40 machte aus einem laufenden Dienst einen Befund.** Die
   Anzeige-Erkennung kann nicht messen, solange der Dienst SPI hält, und

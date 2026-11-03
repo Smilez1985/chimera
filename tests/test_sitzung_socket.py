@@ -186,6 +186,27 @@ y.senden(op="gesicht", name="GIBTSNICHT")
 check("gesicht: unbekannter Name ein Fehler", y.lesen().get("ok"), False)
 y.s.close()
 
+print("== LED über den Socket (Abschluss des Installers) ==")
+# Vorgabe smilez (3.11.): Auch ein Lauf, der nichts zu tun hatte, meldet
+# seinen Ausgang -- der Dienst haelt die Pins, also setzt er die LED.
+gemeldet = []
+sess.led_melden = lambda zustand, sekunden=3.0: (gemeldet.append((zustand, sekunden)), True)[1]
+z = Client(pfad)
+z.senden(op="led", zustand="nichts")
+_a = z.lesen()
+check("led: bestaetigt", _a.get("ok"), True)
+check("led: Ausgang kommt an", gemeldet, [("nichts", 3.0)])
+z.senden(op="led", zustand="ok", sekunden=5)
+check("led: Sekunden kommen an", z.lesen().get("ok"), True)
+check("led: eigene Dauer", gemeldet[-1], ("ok", 5.0))
+sess.led_melden = None
+z.senden(op="led", zustand="ok")
+check("led: ohne Bruecke ein Fehler", z.lesen().get("ok"), False)
+sess.led_melden = lambda zustand, sekunden=3.0: False
+z.senden(op="led", zustand="gibtsnicht")
+check("led: unbekannter Ausgang ein Fehler", z.lesen().get("ok"), False)
+z.s.close()
+
 print("== Besitz und Aufräumen ==")
 check("Rechte 660", oct(os.stat(pfad).st_mode & 0o777), "0o660")
 try:

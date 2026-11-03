@@ -3522,11 +3522,29 @@ Der Zeichner liest eine Datei (`/run/chimera-setup/stand`, Inhalt
   sieht nach Neustarts aus, ist aber nur die Anzeige. Der Installer selbst
   startet sich **einmal** neu, und nur wenn `source/` sich geändert hat.
 
-**Licht und LED (Vorgabe smilez, 2.11.):** Während des Updates blinkt die LED
-gelb, bei Abschluss leuchtet sie grün, bei einem Befund ruhig gelb, bei einem
-echten Fehler blinkt sie rot SOS (drei kurz, drei lang, drei kurz). Ein Befund
-(rc 1) ist **kein** Fehler — sonst wäre nach jedem Lauf mit fehlendem
-Gateway-Binary alles rot.
+**Licht und LED (Vorgabe smilez, 2.11. und 3.11.):** Während des Updates blinkt
+die LED gelb. Danach bekommt **jeder Ausgang seine eigene Farbe und sein eigenes
+Muster** — die LED ist mehrfarbig, also wird sie auch so benutzt:
+
+| Ausgang | Anzeige | Bedeutung |
+|---|---|---|
+| `ok` | grün, fest (3 s) | eingerichtet, alles neu |
+| `nichts` | grün, langsam blinkend (6 s) | geprüft, nichts zu tun — **ein Erfolg** |
+| `befund` | gelb, fest (3 s) | geschafft, aber etwas fehlt (rc 1) |
+| `neustart` | blau, blinkend (6 s) | eingerichtet, wirkt erst nach dem Start (rc 3) |
+| `fehler` | rot, SOS (drei kurz, drei lang, drei kurz) | abgebrochen (ab rc 2) |
+
+Der Fall `nichts` ist der Grund für den eigenen Weg: Hatte der Lauf nichts zu
+tun, hält der Dienst die Leitungen — der Installer kann das Panel nicht selbst
+anfassen. Er meldet den Ausgang deshalb über den Sitzungs-Socket (Operation
+`led`, Client `installer/lib/py/led.py`), und der Renderer setzt die Farbe in
+seinem Takt (`LedVerwalter`, Quelle `installer`, Laufzeit = Anzeigedauer).
+Ohne diesen Weg leuchtete nach „alles aktuell" gar nichts — ein erfolgreicher
+Lauf hätte wie ein ausgefallener ausgesehen.
+
+Ein Befund (rc 1) ist **kein** Fehler — sonst wäre nach jedem Lauf mit
+fehlendem Gateway-Binary alles rot. Ein ausstehender Neustart (rc 3) ebenso
+wenig: er ist blau, nicht rot.
 Bei einem Fehler ab rc 2 steigt **Mojo** ein (`chimera-tor --mojo --miracle`,
 abgekoppelt als `chimera-mojo-install`).
 Jede Backlight-Änderung wird mit Grund protokolliert („Hintergrundlicht: N %

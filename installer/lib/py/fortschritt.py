@@ -56,6 +56,7 @@ def lies(datei: Path) -> tuple[int, int] | None:
 
 
 GELB = (255, 180, 0)
+BLAU = (0, 120, 255)
 GRUEN = (0, 210, 70)
 ROT = (230, 30, 30)
 AUS = (0, 0, 0)
@@ -69,24 +70,51 @@ def _led(panel, farbe) -> None:
         pass
 
 
-def led_abschluss(panel, ergebnis: str, spur=None) -> None:
-    """Abschlusszeichen: gruen aufleuchten, bei Fehler rot SOS.
+def _blinke(panel, farbe, *, periode: float, dauer: float) -> None:
+    """Farbe im Wechsel an/aus -- halbe Periode an, halbe aus."""
+    ende = time.monotonic() + dauer
+    an = True
+    while time.monotonic() < ende:
+        _led(panel, farbe if an else AUS)
+        time.sleep(periode / 2)
+        an = not an
 
-    Vorgabe smilez (2.11.): waehrend des Updates gelb blinken, bei Abschluss
-    gruen aufleuchten, bei Fehler rot SOS blinken.
+
+def led_abschluss(panel, ergebnis: str, spur=None) -> None:
+    """Abschlusszeichen der LED -- ein Ausgang, eine Anzeige.
+
+    Vorgabe smilez (2.11. und 3.11.): waehrend des Updates gelb blinkend,
+    danach je Ausgang eine eigene Farbe **und** ein eigenes Muster:
+
+      ok        gruen, fest               eingerichtet, alles neu
+      nichts    gruen, langsam blinkend   geprueft, nichts zu tun (Erfolg!)
+      befund    gelb, fest                geschafft, aber etwas fehlt
+      neustart  blau, blinkend            wirkt erst nach dem Start
+      fehler    rot, SOS                  abgebrochen
+
+    Ein Befund ist kein Fehler: sonst leuchtete die LED nach jedem Lauf rot,
+    in dem nur etwas fehlt (etwa das Gateway-Binary ohne Commit).
     """
-    # Drei Ausgaenge, nicht zwei: Ein Befund (rc 1) ist kein Fehler -- sonst
-    # leuchtet die LED nach jedem Lauf rot, in dem nur etwas fehlt (etwa das
-    # Gateway-Binary ohne Commit). Gelb ruhig heisst "geschafft, mit Hinweis".
-    if ergebnis in ("ok", "", "0"):
+    e = (ergebnis or "").strip().lower()
+    if e in ("ok", "", "0"):
         _spur(spur, "LED: gruen (Abschluss)")
         _led(panel, GRUEN)
         time.sleep(3.0)
         return
-    if ergebnis in ("befund", "hinweis"):
+    if e in ("nichts", "unveraendert", "unverändert"):
+        _spur(spur, "LED: gruen blinkend (nichts zu tun)")
+        _blinke(panel, GRUEN, periode=2.4, dauer=6.0)
+        _led(panel, AUS)
+        return
+    if e in ("befund", "hinweis"):
         _spur(spur, "LED: gelb ruhig (Abschluss mit Befund)")
         _led(panel, GELB)
         time.sleep(3.0)
+        return
+    if e in ("neustart", "reboot"):
+        _spur(spur, "LED: blau blinkend (Neustart noetig)")
+        _blinke(panel, BLAU, periode=0.8, dauer=6.0)
+        _led(panel, AUS)
         return
     # SOS: kurz-kurz-kurz, lang-lang-lang, kurz-kurz-kurz -- ein Durchgang.
     _spur(spur, "LED: rot SOS (Fehler)")
