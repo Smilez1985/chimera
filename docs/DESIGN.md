@@ -1868,6 +1868,55 @@ zeichnen will, setzt den Zustand; ausgegeben wird nur an einer Stelle.
 Das ist die Fassung von Regel 7 für den Fall, dass sie einmal jemand
 umgehen will.
 
+#### Die Bildrate hängt am Zustand, nicht an der Uhr (3.11.2026)
+
+Ein Panel mit 15 Bildern/s heißt nicht, dass 15 Bilder/s gezeichnet werden
+müssen. Am Pi gemessen (3.11., `chimera.service`):
+
+| Fassung | CPU im Leerlauf | `write()`/s | Bytes/s |
+|---|---|---|---|
+| volles Bild, 15/s | 28,4 % | 572 | 190 KB |
+| nur geänderte Bereiche, 15/s | 35,5 % | 577 | 383 KB |
+| **Ruhe 2/s, volle Rate als Blitz** | **10,8 %** | **134** | **86 KB** |
+
+Der Umbau auf geänderte Bereiche allein brachte **nichts** — und zwar aus
+einem messbaren Grund: In der Ruhe schwingt das Gesicht (`sway` 2,2 px), und
+weil die Schwingung das ganze Gesicht verschiebt, ist jedes Bild flächig
+anders. Über 20 Rahmen gemessen: 44 bis 60 % der Pixel je Bild, typisch ein
+Rechteck von 194×183. Ein Bildvergleich meldet dort immer „viel los"; mehr
+Schreibaufrufe als vorher war das Ergebnis.
+
+Deshalb gilt (Vorgabe smilez): **Der Zustand bestimmt die Bildrate.**
+
+- **Ruhe:** `RUHE_FPS` = 2 Bilder/s (Vorgabe, je Panel einstellbar; `0`
+  heißt „nicht zeichnen"). Das Schwingen bleibt sichtbar, weil es langsam
+  ist — 2,2 px über rund 125 s. Die Statuszeile tickt damit im
+  Sekundentakt, was sie ohnehin tut.
+- **Volle Rate** (`TARGET_FPS` des Panels) bei Blinzeln, Sprechen/Reden,
+  Partikeln, Takt/gehörtem Pegel, Bewegungsphysik (Hüpfen, Kopfschütteln)
+  und nach einem Zustandswechsel (`wecken(1.0)`).
+- Entschieden wird über den **Zustand**, nicht über den Bildvergleich: Der
+  Vergleich kann „Ruhe" nicht erkennen, weil das Schwingen jedes Bild
+  ändert.
+
+**Blinzeln hängt an der Uhr, nicht an der Bildzahl.** Vorher zählte die
+Blinzel-Engine Bilder (`next_blink = 45..130`, Dauer `3..7`). Bei 15
+Bildern/s war das alle 3–9 s ein Blinzeln von 0,2–0,47 s; bei 2 Bildern/s
+wäre derselbe Code alle 22–65 s und 1,5 s lang gewesen — ein eingefrorenes
+Gesicht. Abstand und Dauer sind jetzt Sekunden.
+
+**Die Ruhe-Schleife schläft genau bis zum Blinzelbeginn.** Ein fester
+Vorlauf von 0,6 s kostete je Blinzeln fast eine Sekunde voller Rate (am Pi
+gemessen: 14,6 % statt 10,8 %). Jetzt verkürzt die Schleife ihren Schlaf auf
+den Rest bis zum geplanten Blinzeln; ein Vorlauf von 0,02 s bleibt als
+Sicherheitsnetz. Während des Blinzelns läuft die volle Rate, danach fällt
+sie von selbst zurück — ein Nachlauf ist nicht nötig.
+
+**Restliche Leerlauf-Verbraucher (3.11. gemessen, offen):** vier Fäden mit
+je ~1,3 % — die Tastenschleife fragt alle 5 ms die Leitung ab (200 Weckrufe
+je Sekunde), und drei LED-Kanäle takten mit 100 Hz, weil der Glanzwert
+dazwischenliegt. Beides steht in `ROADMAP`.
+
 ---
 
 ## 6. Was von openclawgotchi bleibt

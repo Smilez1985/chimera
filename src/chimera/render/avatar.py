@@ -83,6 +83,19 @@ BRASS_DARK = (150, 106, 28)
 # 0.18 bei 15 FPS entspricht rund einer Drittelsekunde Nachlauf.
 AUDIO_SMOOTHING = 0.18
 
+# Blinzeln in Sekunden (siehe _init_zustand). Die Zahlen sind die alten
+# Bildwerte bei 15 Bildern/s, in Zeit umgerechnet: 45..130 Bilder = 3,0..8,7 s
+# Abstand, 3..7 Bilder = 0,20..0,47 s Dauer.
+BLINK_PAUSE_MIN = 3.0
+BLINK_PAUSE_MAX = 8.7
+BLINK_DAUER_MIN = 0.20
+BLINK_DAUER_MAX = 0.47
+# Wie lange vor dem geplanten Blinzeln die Schleife schon auf volle
+# Bildrate geht. Klein, weil die Ruhe-Schleife ohnehin genau bis zum
+# Blinzelbeginn schlaeft (siehe run()): Ein Vorlauf von 0,6 s kostete je
+# Blinzeln fast eine Sekunde voller Rate -- am Pi gemessen.
+BLINK_VORLAUF = 0.02
+
 
 class State:
     """Was der Renderer von aussen braucht.
@@ -354,7 +367,7 @@ class ParticleSystem:
 # ============================================================
 class NoisyRenderer:
     def __init__(self, state=None, panel=None, *, width=None, height=None,
-                 target_fps=None, thermal_path=None):
+                 target_fps=None, thermal_path=None, ruhe_fps=None):
         """Renderer aufsetzen.
 
         ``panel`` ist ein beliebiges Panel aus :mod:`chimera.display.panel`;
@@ -384,6 +397,23 @@ class NoisyRenderer:
             else target_fps
         self.TARGET_FPS = int(fps)
         self.FRAME_TIME = 1.0 / self.TARGET_FPS if self.TARGET_FPS else 0.0
+
+        # Ruhe-Bildrate (smilez, 3.11.): In Ruhe schwingt das Gesicht nur
+        # langsam (sway 2,2 px), aendert dabei aber jedes Bild flaechig --
+        # gemessen am Pi: 15 Bilder/s kosteten 29,7 % eines Kerns bei
+        # 577 Schreibaufrufen je Sekunde. Zwei Bilder je Sekunde reichen
+        # fuer das Schwingen; sobald etwas passiert (Blinzeln, Sprechen,
+        # Zustandswechsel), zeichnet die Schleife mit ``TARGET_FPS``.
+        # ``0`` heisst: in Ruhe gar nicht zeichnen (nur auf Anstoss) --
+        # Vorgabe ist 2.
+        if ruhe_fps is None:
+            ruhe_fps = getattr(self.panel, "ruhe_fps", 2)
+        self.RUHE_FPS = max(0, min(int(ruhe_fps), self.TARGET_FPS))
+        self.RUHE_FRAME_TIME = 1.0 / self.RUHE_FPS if self.RUHE_FPS else 0.0
+        # Bis zu diesem Zeitpunkt (monoton, s) laeuft die Schleife mit
+        # voller Bildrate -- gesetzt von ``wecken()`` bei Ereignissen, die
+        # der Renderer nicht selbst sieht.
+        self._wach_bis = 0.0
 
         # Bezugsgroesse fuer alles Geometrische. Noisy rechnete gegen eine
         # quadratische Flaeche; auf 240x280 ist die kurze Seite der
@@ -446,11 +476,18 @@ class NoisyRenderer:
 
     def _init_zustand(self):
         """Alles, was unabhaengig vom Ausgabeweg initialisiert wird."""
-        # Blink-Engine
-        self.blink_timer = 0
-        self.blink_duration = 0
+        # Blink-Engine -- in ZEIT, nicht in Bildern (smilez, 3.11.).
+        # Vorher zaehlte sie Bilder: ``next_blink = 45..130`` hiess bei
+        # 15 Bildern/s alle 3-9 s, bei 2 Bildern/s aber alle 22-65 s, und
+        # die Dauer ``3..7`` Bilder waere von 0,2 s auf 3,5 s gewachsen.
+        # Mit der Ruhe-Bildrate waere das Gesicht eingefroren -- deshalb
+        # haengen Abstand und Dauer jetzt an der Uhr.
+        self._jetzt = None            # letzter Zeitpunkt (monoton, s)
+        self.blink_beginn = 0.0
+        self.blink_ende = 0.0
         self.is_blinking = False
-        self.next_blink = random.randint(50, 150)
+        self.naechstes_blinzeln = None   # in _jetzt() gesetzt
+
 
         # Smooth Color Morphing
         self.current_body_color = DEFAULT_BODY["color"]
@@ -1999,24 +2036,33 @@ class NoisyRenderer:
         particles = rd["particles"]
         accessory = rd["accessory"]
 
-        # --- BLINK ENGINE ---
+        # --- BLINK ENGINE (in Zeit, nicht in Bildern) ---
+        # Siehe _init_zustand: Abstand und Dauer haengen an der Uhr, damit
+        # die Ruhe-Bildrate (2 Bilder/s) das Blinzeln nicht verschluckt.
+        self._jetzt = time.monotonic()
+        jetzt = self._jetzt
+        if self.naechstes_blinzeln is None:
+            self.naechstes_blinzeln = jetzt + random.uniform(BLINK_PAUSE_MIN,
+                                                             BLINK_PAUSE_MAX)
         blink_progress = 0.0
-        if self.is_blinking:
-            self.blink_timer += 1
-            half = self.blink_duration / 2
-            if self.blink_timer <= half:
-                blink_progress = self.blink_timer / half
-            else:
-                blink_progress = 1.0 - (self.blink_timer - half) / half
-            if self.blink_timer >= self.blink_duration:
-                self.is_blinking = False
-                self.next_blink = random.randint(45, 130)
+        if jetzt < self.blink_ende:
+            self.is_blinking = True
+            dauer = self.blink_ende - self.blink_beginn
+            anteil = (jetzt - self.blink_beginn) / dauer if dauer else 1.0
+            # 0 → 1 → 0: Auge zu in der ersten Haelfte, auf in der zweiten
+            blink_progress = 2.0 * anteil if anteil <= 0.5 \
+                else 2.0 * (1.0 - anteil)
         else:
-            self.next_blink -= 1
-            if self.next_blink <= 0:
+            self.is_blinking = False
+            if jetzt >= self.naechstes_blinzeln:
+                self.blink_beginn = jetzt
+                self.blink_ende = jetzt + random.uniform(BLINK_DAUER_MIN,
+                                                         BLINK_DAUER_MAX)
                 self.is_blinking = True
-                self.blink_timer = 0
-                self.blink_duration = random.randint(3, 7)
+                blink_progress = 0.0
+                self.naechstes_blinzeln = self.blink_ende + random.uniform(
+                    BLINK_PAUSE_MIN, BLINK_PAUSE_MAX)
+
 
         # --- THERMAL VISUALS ---
         thermal_droopy = 0.0
@@ -2361,6 +2407,53 @@ class NoisyRenderer:
                                   glow=tuple(self.current_glow_color))
         return img
 
+    def wecken(self, sekunden: float = 1.0) -> None:
+        """Volle Bildrate für die nächsten ``sekunden``.
+
+        Ein Ereignis, das der Renderer nicht selbst am Bild sieht (Sprechen
+        beginnt, Gesicht wird gesetzt), kommt von außen. Ohne diese Tür
+        bliebe es bei der Ruhe-Bildrate und die Bewegung wäre zäh.
+        """
+        bis = time.monotonic() + max(0.0, float(sekunden))
+        if bis > self._wach_bis:
+            self._wach_bis = bis
+
+    def _volle_rate(self) -> bool:
+        """Braucht dieses Bild die volle Bildrate?
+
+        Ruhe heisst: nur das langsame Schwingen (sway) aendert sich. Das
+        reicht mit ``RUHE_FPS`` Bildern je Sekunde. Sobald etwas passiert --
+        Blinzeln (mit Vorlauf, sonst verschluckt die Ruhe es), Sprechen,
+        Partikel, Takt, ein Zustandswechsel -- wird mit ``TARGET_FPS``
+        gezeichnet.
+
+        Bewusst **nicht** ueber den Bildvergleich entschieden: Das Schwingen
+        aendert jedes Bild flaechig (am Pi gemessen: 44-60 % Pixel), ein
+        Vergleich wuerde also immer "viel los" melden.
+        """
+        jetzt = time.monotonic()
+        if jetzt < self._wach_bis:
+            return True
+        if self.is_blinking:
+            return True
+        if (self.naechstes_blinzeln is not None
+                and jetzt + BLINK_VORLAUF >= self.naechstes_blinzeln):
+            return True
+        # Gehörter Pegel: Musik/Talk bedeutet Bewegung.
+        if self.smooth_loud > 0.02:
+            return True
+        rd = self._mood()
+        if str(rd.get("name", "")).upper() in ("TALK", "SPEAK"):
+            return True
+        if (rd.get("particles") or {}).get("type"):
+            return True
+        physics = rd.get("physics") or {}
+        for schluessel in ("bounce_amp", "headbang_amp", "shake_x", "shake_y",
+                           "stretch_w", "stretch_h"):
+            if physics.get(schluessel):
+                return True
+        return False
+
     def run(self, stop=None):
         """Zeichnen, bis ``stop`` gesetzt wird.
 
@@ -2383,14 +2476,36 @@ class NoisyRenderer:
                      "gezeichnet. run() ist hier nichts zu tun.")
             return
 
-        log.info("Renderer laeuft: %dx%d, %d Bilder/s",
-                 self.WIDTH, self.HEIGHT, self.TARGET_FPS)
+        log.info("Renderer laeuft: %dx%d, %d Bilder/s (Ruhe: %d)",
+                 self.WIDTH, self.HEIGHT, self.TARGET_FPS, self.RUHE_FPS)
 
         fps_counter = 0
         fps_timer = time.time()
+        letzte_mood = None
 
         try:
             while stop is None or not stop.is_set():
+                jetzt_mood = self._mood().get("name")
+                if jetzt_mood != letzte_mood:
+                    if letzte_mood is not None:
+                        # Ein Zustandswechsel ist ein Ereignis (Regel 7a):
+                        # kurz volle Rate, dann wieder Ruhe.
+                        self.wecken(1.0)
+                    letzte_mood = jetzt_mood
+
+                frame_time = self.FRAME_TIME if self._volle_rate() \
+                    else self.RUHE_FRAME_TIME
+
+                if frame_time <= 0:
+                    # Ruhe ohne Bildrate (``RUHE_FPS=0``): nicht zeichnen,
+                    # nur auf ein Ereignis warten. Wachet ein Zustandswechsel,
+                    # ein Blinzeln oder ``wecken()``, geht es oben weiter.
+                    if stop is not None:
+                        stop.wait(0.05)
+                    else:
+                        time.sleep(0.05)
+                    continue
+
                 t_start = time.time()
                 self.show()
 
@@ -2405,7 +2520,15 @@ class NoisyRenderer:
                     fps_timer = time.time()
 
                 elapsed = time.time() - t_start
-                sleep_time = self.FRAME_TIME - elapsed
+                sleep_time = frame_time - elapsed
+                # In der Ruhe nicht ueber ein geplantes Blinzeln hinweg
+                # schlafen: sonst waere es halb vorbei, bevor es ein Bild
+                # gibt (0,5 s Abstand, 0,2-0,47 s Dauer).
+                if (not self.is_blinking and self.naechstes_blinzeln
+                        is not None):
+                    rest = self.naechstes_blinzeln - time.monotonic()
+                    if 0 < rest < sleep_time:
+                        sleep_time = rest
                 if sleep_time > 0:
                     if stop is not None:
                         # Wartet, laesst sich aber sofort wecken -- sonst

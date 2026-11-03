@@ -77,13 +77,27 @@ zram wird nicht angefasst, wenn es läuft.
       zu sichernden Dateien** plus Reserve pruefen (Summe steht vor dem
       Kopieren fest, DESIGN-Regel „Neustart mit Fortsetzung"). Die 100 MB
       bleiben Untergrenze.
-- [ ] **Leerlauf-Last des Agenten:** `chimera.service` verbraucht im Leerlauf
-      28,4 % eines Kerns; ein Faden haengt zu ~22 % in `D` (E/A-Wartezeit,
-      Thread 1048, 3.11. gemessen). **Ursache eingegrenzt:** der Faden schreibt
-      auf `/dev/spidev0.0` (fd 5) — **572 `write()` je Sekunde**, das sind rund
-      17 volle Bilder je Sekunde ohne Aenderung. Auf einem Zero 2 W ist das ein
-      Viertel der Maschine fuer ein stehendes Gesicht. Naechster Schritt: nur
-      bei Aenderung zeichnen bzw. nur geaenderte Bereiche, dann messen.
+- [ ] **Leerlauf-Last des Agenten:** `chimera.service` verbrauchte im Leerlauf
+      **28,4 %** eines Kerns; ein Faden hing zu ~22 % in `D` und schrieb auf
+      `/dev/spidev0.0` — **572 `write()` je Sekunde**, rund 17 volle Bilder je
+      Sekunde ohne Änderung.
+      *3.11. gemessen und eingegrenzt:* Der Transport war es nicht. Der Umbau
+      auf geänderte Bereiche ließ die Last sogar auf 35,5 % steigen (577
+      `write()`/s), weil das schwingende Gesicht **jedes** Bild flächig ändert
+      (44–60 % der Pixel je Rahmen). Danach die Bildrate an den Zustand
+      gebunden (DESIGN, Regel 7a): Ruhe 2 Bilder/s, volle Rate nur beim
+      Blinzeln/Sprechen/Zustandswechsel. **Am Pi belegt:** 10,8 % eines Kerns,
+      134 `write()`/s, 86 KB/s — ein Drittel der Last, ein Viertel der
+      Schreibaufrufe. Offen bleiben die vier Nebenverbraucher (je ~1,3 %):
+      - [ ] **Tastenschleife:** fragt alle 5 ms die Leitung ab
+        (`taste_poll_s=0.005`, 200 Weckrufe je Sekunde). Ersatz: Kantenereignis
+        über `poll()`/`epoll` auf die GPIO-Leitung (`Leitungen` in
+        `displays/gpio.py` belegt schon einen FD; es fehlen
+        `event_buffer_size` und die `EDGE_*`-Flags).
+      - [ ] **LED-Kanäle:** drei Fäden takten mit 100 Hz, weil der Glanzwert
+        zwischen 0 und 100 liegt. Prüfen: niedrigere Frequenz oder ein Faden
+        für alle drei.
+
 - [x] **Neustart mit Fortsetzung:** Marker, Snapshot der geänderten Dateien,
       `chimera-mojo-fortsetzung.service` (einmal nach dem Start), Rückfall bei
       wirkungslosem Neustart, Sperre nach zwei Versuchen (DESIGN, Regel

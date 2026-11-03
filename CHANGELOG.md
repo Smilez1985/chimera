@@ -337,8 +337,26 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   `fehler` rot SOS. Liegt der Dienst still auf den Leitungen, meldet der
   Installer über den Sitzungs-Socket (neue Operation `led`), der Renderer setzt
   die Farbe (neue LED-Quelle `installer`, Muster `sos`).
+- **Ruhe-Bildrate** (`NoisyRenderer.RUHE_FPS`, Vorgabe 2 Bilder/s; `0` heißt
+  „nicht zeichnen"): Der Zustand bestimmt die Bildrate. Volle Rate nur bei
+  Blinzeln, Sprechen/Reden, Partikeln, Takt/gehörtem Pegel, Bewegungsphysik
+  und nach einem Zustandswechsel (`wecken(sekunden)`); sonst zeichnet die
+  Schleife mit der Ruhe-Rate. Am Pi gemessen: 35,5 % → 10,8 % eines Kerns,
+  577 → 134 `write()`/s, 383 → 86 KB/s. Test `test_bildrate.py` 25 ok,
+  Gegenprobe `gegenprobe_bildrate.py` 8 ok (sieben Mutationen).
+- **Blinzeln hängt an der Uhr, nicht an der Bildzahl:** Abstand 3,0–8,7 s,
+  Dauer 0,20–0,47 s (vorher 45–130 bzw. 3–7 Bilder, was nur bei 15 Bildern/s
+  stimmte). Die Ruhe-Schleife schläft genau bis zum Blinzelbeginn, statt mit
+  festem Vorlauf zu laufen — ein Vorlauf von 0,6 s kostete je Blinzeln fast
+  eine Sekunde voller Rate (14,6 % statt 10,8 %).
+
 
 ### Behoben
+- **Leerlauf-Last des Renderers.** Grund war nicht der Transport, sondern die
+  Bildrate: In der Ruhe schwingt das Gesicht, dadurch änderte sich jeder
+  Rahmen flächig (44–60 % der Pixel, gemessen über 20 Rahmen). Der Umbau auf
+  geänderte Bereiche brachte deshalb nichts (35,5 % statt 28,4 %, mehr
+  Schreibaufrufe als vorher). Mit der Ruhe-Bildrate fällt die Last auf 10,8 %.
 - **Vier Installertests liefen im CI gar nicht** — sie meldeten Fehler, die
   keiner waren. `test-helfer.sh` definierte seine `systemd-run`-Attrappe als
   Shell-Funktion mit Bindestrich: in dash und BusyBox-ash ein Syntaxfehler,
