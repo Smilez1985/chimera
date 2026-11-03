@@ -14,7 +14,11 @@ name: Tests
 
 on:
   push:
-    branches: [main]
+    # `entwicklung` ist der Arbeitszweig: Jeder Commit dort braucht Tests und
+    # das Rust-Prerelease `rust-<commit>`, sonst meldet Modul 55 beim
+    # Installieren einen Befund (Vorgabe smilez, 3.11.). Bis dahin entstanden
+    # Releases nur per Hand -- und rote Tests blieben wochenlang unbemerkt.
+    branches: [main, entwicklung]
   pull_request:
   workflow_dispatch:
 
