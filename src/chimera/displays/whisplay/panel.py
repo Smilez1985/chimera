@@ -45,6 +45,14 @@ INIT = (
 )
 
 
+#: Entprellung der Taste: So lange muss Ruhe sein, bevor der Pegel gilt.
+#: Am Geraet gemessen: Prellen bis 136 ms, Flanken im Millisekundentakt.
+TASTE_PRELL_RUHE_S = 0.08
+#: Notbremse: Nach so vielen Sekunden wird der zuletzt gelesene Pegel
+#: genommen, damit ein Dauerkontakt den Faden nicht endlos bindet.
+TASTE_PRELL_MAX_S = 0.30
+
+
 def profil() -> Profil:
     return Profil.aus_datei(HIER / "display.json")
 
@@ -184,6 +192,22 @@ class WhisplayPanel(Panel):
                     cb(jetzt == 1)
             time.sleep(self._taste_poll)
 
+    def _entprellter_pegel(self) -> int:
+        """Warten, bis das Prellen vorbei ist — dann den Pegel lesen.
+
+        Die Taste prellt am Geraet bis zu **136 ms** (23:07 gemessen: Flanken
+        im Millisekundentakt ueber 136 ms). Ein Sperrfenster nach der letzten
+        Flanke hilft dort nicht: Solange staendig neue kommen, rutscht jede
+        durch. Deshalb wird die Flut abgewartet (80 ms ohne neue Flanke, nach
+        hoechstens 300 ms wird abgebrochen) und danach der **echte Pegel**
+        gelesen. Gemeldet wird der Pegel, nicht die Flanke.
+        """
+        ende = time.monotonic() + TASTE_PRELL_MAX_S
+        while time.monotonic() < ende:
+            if not self._gpio.ereignisse(self._taste, timeout=TASTE_PRELL_RUHE_S):
+                break
+        return self._gpio.lies(self._taste)
+
     def _taste_ereignisse(self) -> None:
         """Auf Flanken der Taste warten — kostet im Leerlauf nichts.
 
@@ -191,17 +215,25 @@ class WhisplayPanel(Panel):
         nicht bis zur naechsten Tastenbewegung haengen laesst.
         """
         log.info("Taste: Kantenereignisse (keine Abfrage im Leerlauf)")
+        zustand = self._gpio.lies(self._taste)
         while self._taste_laeuft:
             try:
                 ereignisse = self._gpio.ereignisse(self._taste, timeout=0.5)
+                if not ereignisse:
+                    continue
+                neu = self._entprellter_pegel()
             except OSError:
                 break
-            for _offset, art in ereignisse:
-                cb = self._taste_cb
-                if cb is not None:
-                    cb(art == "steigend")
-            if not ereignisse and self._taste_laeuft:
-                continue
+            # Jede Flanke mitschreiben (DEBUG): Prellen oder "kommt gar
+            # nicht an" ist im Nachhinein nur daran zu trennen.
+            log.debug("Taste: Pegel %d (vorher %d) bei %.3f",
+                      neu, zustand, time.monotonic())
+            if neu == zustand:
+                continue          # nur Prellen, kein echter Uebergang
+            zustand = neu
+            cb = self._taste_cb
+            if cb is not None:
+                cb(neu == 1)
 
     def close(self) -> None:
         self._taste_laeuft = False

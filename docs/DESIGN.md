@@ -1832,6 +1832,16 @@ Fünf Modi, sechs Ereignisse: `halten_ende` ist kein eigener Modus, sondern
 das Gegenstück zu `halten` — ohne Ende taugt ein Halten nur zum Auslösen
 (Neustart), nicht zum Sprechen.
 
+**Entprellung über den Pegel, nicht über die Flanke.** Die Taste prellt am
+Gerät bis zu **136 ms** (23:07 gemessen: Flanken im Millisekundentakt,
+Ketten über 136 ms). Ein Sperrfenster nach der letzten Flanke hilft dort
+nicht — solange ständig neue kommen, rutscht jede durch. Deshalb weckt die
+Flanke nur den Faden; der wartet, bis 80 ms keine neue Flanke mehr kommt
+(Notbremse 300 ms), liest den **echten Pegel** (`lies()`) und meldet den
+Übergang nur, wenn er sich vom zuletzt gemeldeten unterscheidet. Prellserien,
+die zum alten Pegel zurückkehren, erzeugen damit kein Ereignis. Die
+30-ms-Sperre in `gesten.py` bleibt als zweite Stufe.
+
 **Sofortige Quittung, späte Bedeutung.** Der Druck quittiert in dem Moment,
 in dem er ankommt (LED `taste`, 720 ms) — ein Druck, der erst nach 0,8 s
 etwas zeigt, fühlt sich kaputt an. Die *Geste* wird erst danach erkannt und

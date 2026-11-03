@@ -103,6 +103,20 @@ except ValueError:
 check("ALLE nennt fünf Gesten", len(ALLE), 5)
 
 
+print("== 2b. Entprellen (am Gerät beobachtet: ein Druck wurde dreifach) ==")
+g = Gesten()
+g.taste(True, 0.0)
+check("erste Prell-Flanke wird verschluckt", g.taste(False, 0.005), [])
+check("zweite Prell-Flanke auch", g.taste(True, 0.010), [])
+check("das echte Loslassen zählt", g.taste(False, 0.30), [])
+check("… als genau ein kurzer Druck", g.tick(1.2), [KURZ])
+
+g = Gesten()
+for t in (0.0, 0.008, 0.016, 0.024):        # gepoltert, dann gehalten
+    g.taste(t % 0.016 == 0.0, t)
+check("gepoltert gehalten ergibt lang, nicht dreifach",
+      g.taste(False, 1.0), [LANG])
+
 print("== 3. Die Frist für den Taktgeber ==")
 g = Gesten()
 check("nichts geplant: keine Frist", g.frist(), None)

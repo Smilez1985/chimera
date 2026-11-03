@@ -352,6 +352,11 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   aufgehoben, nicht verworfen. Test `test_gpio_kanten.py` 23 ok, Gegenprobe
   8 ok. Am Pi: Gesamtlast 10,8 % → 9,5 %, Protokoll „Taste:
   Kantenereignisse“.
+- **Tastenentprellung über den Pegel:** Die Taste prellt am Gerät bis 136 ms;
+  Flankenketten wurden als mehrere Klicks gezählt (ein Druck ergab „dreifach").
+  Jetzt weckt die Flanke nur den Faden, der auf 80 ms Ruhe wartet und dann den
+  echten Pegel liest — gemeldet wird der Übergang, nicht die Flanke. Am Gerät
+  belegt: fünf Gesten, je eine Protokollzeile.
 - **Fünf Tastengesten** (`display/gesten.py`): kurz (<0,7 s), lang (0,7–2 s),
   halten (ab 2,0 s, während gehalten), `halten_ende` als Gegenstück (für
   Push-to-Talk), doppelt und dreifach im Klickfenster (0,8 s). Reine

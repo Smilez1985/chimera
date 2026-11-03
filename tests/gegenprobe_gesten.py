@@ -101,5 +101,11 @@ mutation("frist-ohne-fenster", DATEI,
          "        if self._klick_frist is not None:\n            pass",
          "nach kurzem Druck: Frist ist das Klickfenster")
 
+# M8: Keine Entprellung — ein Druck wird am Gerät zu „dreifach".
+mutation("ohne-entprellung", DATEI,
+         "        if self._letzte_flanke is not None and t - self._letzte_flanke < self.entprell_s:",
+         "        if False:",
+         "… als genau ein kurzer Druck")
+
 print(f"\nErgebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(0 if FAIL == 0 else 1)

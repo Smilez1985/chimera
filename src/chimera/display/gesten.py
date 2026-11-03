@@ -38,6 +38,10 @@ KURZ_MAX_S = 0.7
 HALTEN_AB_S = 2.0
 #: Fenster (s), in dem kurze Drücke zusammen gezählt werden.
 KLICK_FENSTER_S = 0.8
+#: Entprellung (s): Flanken, die dichter folgen, sind Mechanik, keine Absicht.
+#: Am Gerät gemessen (23:01) erzeugte ein Druck bis zu drei Flanken; die alte
+#: 5-ms-Abfrage hat das nebenbei verschluckt, Kantenereignisse nicht.
+ENTPRELL_S = 0.03
 
 KURZ = "kurz"
 LANG = "lang"
@@ -64,10 +68,13 @@ class Gesten:
 
     def __init__(self, *, kurz_max_s: float = KURZ_MAX_S,
                  halten_ab_s: float = HALTEN_AB_S,
-                 fenster_s: float = KLICK_FENSTER_S) -> None:
+                 fenster_s: float = KLICK_FENSTER_S,
+                 entprell_s: float = ENTPRELL_S) -> None:
         self.kurz_max_s = float(kurz_max_s)
         self.halten_ab_s = float(halten_ab_s)
         self.fenster_s = float(fenster_s)
+        self.entprell_s = float(entprell_s)
+        self._letzte_flanke: float | None = None
         if not self.kurz_max_s < self.halten_ab_s:
             raise ValueError("kurz_max_s muss kleiner als halten_ab_s sein")
         self._unten_seit: float | None = None
@@ -86,6 +93,7 @@ class Gesten:
         return self._klicks
 
     def zuruecksetzen(self) -> None:
+        self._letzte_flanke = None
         self._unten_seit = None
         self._halten_gemeldet = False
         self._klicks = 0
@@ -106,6 +114,13 @@ class Gesten:
 
     def taste(self, gedrueckt: bool, t: float) -> list[str]:
         """Eine Flanke melden. Rückgabe: erkannte Gesten (meist leer)."""
+        # Entprellen: Ein mechanischer Druck erzeugt mehrere Flanken in
+        # wenigen Millisekunden. Ohne diese Sperre wird aus einem Druck
+        # „dreifach" (am Gerät beobachtet).
+        if self._letzte_flanke is not None and t - self._letzte_flanke < self.entprell_s:
+            return []
+        self._letzte_flanke = t
+
         if gedrueckt:
             if self._unten_seit is not None:
                 return []          # Doppelmeldung/Prellen: schon unten

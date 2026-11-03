@@ -824,9 +824,10 @@ Offen bleibt:
       beenden/Gespräch öffnen, lang = Gespräch beginnen, halten =
       Push-to-Talk, doppelt = abbrechen, dreifach = zurück. Hängt am
       Audio-Prozess (Phase 5). Bis dahin: Protokoll und LED-Quittung.
-- [ ] **Gestentest am Gerät:** einmal jede der fünf Gesten drücken und mit
-      dem Protokoll (`Taste: Geste „…"`) vergleichen — die Erkennung ist
-      geprüft, die Tastenmechanik am Gerät noch nicht.
+- [x] **Gestentest am Gerät:** *Erledigt 3.11., 23:09* — kurz, lang, halten +
+      `halten_ende`, doppelt, dreifach; jede Geste genau eine Protokollzeile.
+      Dabei fiel das Prellen auf (Ketten bis 136 ms, ein Druck wurde
+      „dreifach") → Entprellung über den Pegel statt über die Flanke.
 - [ ] **Joystick (5-Wege) der neueren HAT-Revision** als Option prüfen:
       BOARD 32/33/31/29/37, active-low mit internem Pull-up, 20 ms
       Entprellung (HERKUNFT §4.2). Erst am Gerät feststellen, ob unsere
