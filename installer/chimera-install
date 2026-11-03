@@ -407,7 +407,7 @@ if [ "$MODE" = run ] && [ "$HELFER_AUFTRAG" = 1 ]; then
 		_led_zustand=nichts
 	fi
 	_led_py="$(_fort_py 2>/dev/null || true)"
-	_led_skript="$_HERE/lib/py/led.py"
+	_led_skript="$HERE/lib/py/led.py"
 	_led_sock="${CHIMERA_SITZUNG_SOCKET:-/run/chimera/sitzung.sock}"
 	[ -n "$_led_sock" ] || _led_sock="$(rootpath /run/chimera/sitzung.sock)"
 	if [ -n "$_led_py" ] && [ -f "$_led_skript" ]; then
