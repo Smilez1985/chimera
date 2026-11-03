@@ -65,6 +65,9 @@ zram wird nicht angefasst, wenn es läuft.
       jeder Lauf aus einem Zip mit dem Befund „kein Commit ⇒ kein Binary" endet
       (rc 1). Ein Lauf aus einem Git-Baum mit Commit muss grün zeigen — einmal
       ablesen, dann ist der Fall belegt.
+- [ ] **Bedarf messen:** CPU, RAM und freier Datentraeger, die Chimera im
+      Betrieb wirklich braucht (die 100 MB vor einem Snapshot sind eine
+      Vermutung). Messen am Pi unter Last, Zahlen ins DESIGN.
 - [ ] **Neustart mit Fortsetzung:** Marker, Snapshot der geänderten Dateien,
       `chimera-mojo-fortsetzung.service` (einmal nach dem Start), Rückfall bei
       wirkungslosem Neustart, Sperre nach zwei Versuchen (DESIGN, Regel

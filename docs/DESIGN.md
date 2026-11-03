@@ -3554,6 +3554,19 @@ Neustart, wird auf den Stand vor dem Neustart zurueckgerollt.
   stellt Mojo die Dateien aus dem Snapshot wieder her und meldet den Befund
   mit Ursache — statt ein zweites Mal zu starten.
 
+**Platz vor dem Snapshot:** Bevor etwas gesichert wird, wird der freie Platz
+geprueft — dieselbe Messung, die Oracle ohnehin macht (RAM, Karte, Cache). Ist
+zu wenig Platz, wird **kein** Snapshot angelegt und kein Neustart ausgeloest,
+sondern der Befund genannt. Der erste Richtwert sind **100 MB**; er ist eine
+Vermutung (smilez, 3.11.) und muss gemessen werden: wie viel CPU, RAM und
+freier Platz Chimera im Betrieb wirklich braucht. Ein voller Datentraeger ist
+selbst ein plausibler Grund, warum der Dienst nicht startet.
+
+**Historie 1:** Es bleibt **ein** Snapshot. Beim Anlegen wird der bisherige zu
+`mojo-snapshot-<zeit>.tgz` archiviert und das **zuvor** archivierte geloescht.
+So gibt es immer den letzten Stand und ein Archiv — nie eine Kette, die den
+Datentraeger fuellt.
+
 **Sperre gegen die Schleife:** hoechstens **zwei** Neustaubversuche je Marker;
 danach kein weiterer, sondern Bericht. Ein Neustart, der nichts aendert, darf
 sich nicht wiederholen — sonst ist das Geraet ohne Handeingriff unerreichbar.
