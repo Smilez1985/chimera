@@ -66,7 +66,15 @@ faelle = [
 tor = ROOT / "rust" / "target" / "release" / "chimera-tor"
 for kand in (Path("/root/chimera-target/release/chimera-tor"), tor,
              Path("/root/chimera-target/debug/chimera-tor")):
-    if kand.exists():
+    # Ein Pfad aus der Entwicklungsumgebung existiert auf einem fremden
+    # Rechner oft als Verzeichnis, das niemand lesen darf (CI: PermissionError
+    # auf /root). "Nicht lesbar" heisst hier "nicht vorhanden" -- ein Test
+    # darf an einem fremden Pfad nicht abstuerzen.
+    try:
+        da = kand.exists() and os.access(kand, os.R_OK)
+    except OSError:
+        da = False
+    if da:
         faelle.append(("chimera-tor", r"`chimera-tor`", [str(kand), "--help"], set()))
         break
 else:
