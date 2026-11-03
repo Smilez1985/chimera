@@ -1958,8 +1958,15 @@ sie von selbst zurück — ein Nachlauf ist nicht nötig.
 je ~1,3 % — die Tastenschleife (5-ms-Abfrage, erledigt) und drei
 LED-Kanäle. Die LED taktet jetzt mit **60 Hz statt 100** (`led_frequenz_hz`
 in `display.json`): 9,6 % → **8,1 %**. Der letzte größere Posten ist der
-Renderer selbst (Ruhe: 2 Bilder/s ≈ 5–6 %); offen ist ein gemeinsamer Faden
-für die drei LED-Kanäle (`ROADMAP`).
+Renderer selbst (Ruhe: 2 Bilder/s ≈ 5–6 %).
+
+**Ein Faden für die drei LED-Kanäle: gemessen und verworfen.** Die
+gemeinsame Kantenplanung spart 18 % der LED-Last, wenn alle drei Kanäle
+denselben Tastgrad haben (Weiß) — und kostet 20 % mehr, sobald sie
+verschieden sind (jede Farbe, also der Normalfall beim Glow). Bei ungleichen
+Tastgraden liegen die Kanten dichter als die Schläfchen getrennter Fäden.
+Zahlen und Aufbau: `docs/research/LED-TAKT.md`, Messwerkzeug
+`tools/pwm-vergleich.py`. Die drei Einzelfäden bleiben.
 
 ---
 

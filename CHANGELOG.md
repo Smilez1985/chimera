@@ -515,6 +515,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   nicht gemessen.
 
 ### Geprüft
+- **Ein Faden für die drei LED-Kanäle: gebaut, gemessen, verworfen**
+  (3.11., Pi Zero 2 W). Die gemeinsame Kantenplanung spart 18 % der
+  LED-Taktlast, wenn alle Kanäle denselben Tastgrad haben (Weiß), kostet
+  aber 20 % mehr, sobald sie verschieden sind — also bei jeder Farbe, dem
+  Normalfall beim Glow. Aufbau, Zahlen und die Lehre daraus stehen in
+  `docs/research/LED-TAKT.md`; nachmessen mit `tools/pwm-vergleich.py`.
+  Die drei Einzelfäden bleiben, der ROADMAP-Punkt ist damit zu.
 - **Neustart mit Fortsetzung am Gerät belegt** (3.11., 21:40, Pi Zero 2 W,
   Kernel 6.18.50): Installer aus `81c047b` schreibt und aktiviert
   `chimera-mojo-fortsetzung.service` (Manifest-Eintrag `dienst`); Marker

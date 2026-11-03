@@ -95,13 +95,15 @@ zram wird nicht angefasst, wenn es läuft.
         belegt („Taste: Kantenereignisse" im Protokoll), Gesamtlast 10,8 % →
         9,5 %. Rückfall auf die Abfrage, wenn der Kernel die Kanten nicht
         annimmt. Tests `test_gpio_kanten.py` 23 ok, Gegenprobe 8 ok.*
-      - [ ] **LED-Kanäle:** drei Fäden takten, weil der Glanzwert zwischen 0
-        und 100 liegt. *3.11.: Taktfrequenz von 100 auf **60 Hz** gesenkt
-        (`display.json` → `led_frequenz_hz`, am Pi 9,6 % → 8,1 %); smilez hat
-        am Gerät geprüft, dass es nicht flimmert.* Offen bleibt der größere
-        Schritt: **ein Faden für alle drei Kanäle** mit gemeinsamer
-        Kantenplanung — spart die ~2,6 %, die jetzt noch in den drei
-        Weckrufen je Periode stecken.
+      - [x] **LED-Kanäle:** *3.11.: Taktfrequenz von 100 auf **60 Hz**
+        gesenkt (`display.json` → `led_frequenz_hz`, am Pi 9,6 % → 8,1 %);
+        smilez hat am Gerät geprüft, dass es nicht flimmert. Der größere
+        Schritt — **ein Faden für alle drei Kanäle** mit gemeinsamer
+        Kantenplanung — wurde gebaut, am Pi verglichen und **verworfen**:
+        bei gleichem Tastgrad (Weiß) 18 % weniger, bei ungleichem (jede
+        Farbe) 20 % **mehr** als getrennte Fäden. Zahlen:
+        `docs/research/LED-TAKT.md`, Werkzeug `tools/pwm-vergleich.py`.*
+        Damit bleibt von den „vier Nebenverbrauchern" nichts offen.
 
 - [x] **Neustart mit Fortsetzung:** Marker, Snapshot der geänderten Dateien,
       `chimera-mojo-fortsetzung.service` (einmal nach dem Start), Rückfall bei
