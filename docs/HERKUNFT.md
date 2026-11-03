@@ -239,3 +239,180 @@ Kein Erbe, sondern der Grund für das Projekt:
   Label-Tabelle (§3.4)
 - **Mienenspiel beim Sprechen** (§4.1)
 - **Installer**, der die Treiberfrage löst
+
+---
+
+## 4. PiSugar Whisplay — HAT, Daemon und Chatbot
+
+Geprüft am 3.11.2026, weil die Hersteller-Repos inzwischen mehr enthalten
+als unser Nachbau vom 11.10.
+
+### 4.0 Welche Repos gemeint sind
+
+Ein Repo **`pisugar/whisplay-ai-studio` gibt es nicht** (die Organisation
+hat 31 Repos, keines heißt so; geprüft über die Org-Liste der API). Gemeint
+ist mit hoher Wahrscheinlichkeit **`PiSugar/whisplay-ai-chatbot`** — der
+Taschen-Chatbot auf Basis des HAT. Mitgeprüft, weil sie zum selben Gerät
+gehören: `PiSugar/Whisplay` (der Treiber), `whisplay-talk` und
+`whisplay-plus`. Alle als flacher Klon, Arbeitsordner außerhalb des Repos.
+
+### 4.1 Die Lizenzgrenze
+
+| Repo / Teil | Lizenz | Folge für uns (MIT) |
+|---|---|---|
+| `Whisplay` — `runtime/`, `daemon/`, `example/`, `script/` | **Apache-2.0** | Übernehmen erlaubt (Namensnennung, Änderungen kennzeichnen). Wir bauen trotzdem nach. |
+| `Whisplay` — `audio/whisplay-soundcard/src/**` (Kernelmodul, `whisplay-core.c`, `es8389.c`, **`whisplay-gain-lut.h`**) | **GPL-2.0-only** (SPDX-Kopfzeile je Datei) | **Keine Zeile.** Auch die Lautstärke-Tabelle nicht — sie ist Teil dieses Baums, nicht Apache. |
+| `whisplay-ai-chatbot` | **GPL-3.0** | **Kein Code, nur Muster.** |
+| `whisplay-talk` | **GPL-3.0** | dito (P2P-Sprechanlage, anderes Produkt). |
+| `whisplay-plus` | Apache-2.0 | anderes Gerät (2,8″ DSI, 480×640, Pi 3/4/5) — für uns nicht relevant. |
+
+Die Apache-Datei im Wurzelverzeichnis von `Whisplay` gilt **nicht** für den
+Kernelbaum darunter; das steht nur in den Dateiköpfen. Wer dort
+„Apache-2.0" liest und die LUT mitnimmt, verstößt gegen die Lizenz des
+Urhebers — und das fällt bei einem `LICENSE`-Scan nie auf.
+
+### 4.2 Der Treiber: Stand unseres Nachbaus
+
+Unser `src/chimera/displays/whisplay/` ist aus `runtime/whisplay.py`,
+Commit `c73051e6`, nachgebaut (Apache-2.0, im `display.json` vermerkt).
+Gegen den heutigen Stand (`2026-10-30`) sind es **+123 Zeilen**, und zwar
+genau drei Dinge:
+
+1. **MangoPi MQ Quad** als Plattform (Erkennung über die SDIO-Kennung
+   `0xd723`, eigene Pin-Tabelle, dynamische spidev-Suche über
+   `/sys/class/spidev/*/device/of_node`).
+2. **Joystick (5-Wege)** — optional per `enable_joystick`:
+   BOARD 32/33/31/29/37 = BCM 12/13/6/5/26, **active-low mit internem
+   Pull-up**, Entprellung 20 ms, Polling 5 ms wie die Taste.
+3. **Pull-up als Option** für Eingänge (`_request_input(..., pull_up)`).
+
+Alles andere — Einschaltfolge des ST7789, `+20`-Zeilen-Versatz, MADCTL
+`0xC0`, RGB-LED als invertiertes Soft-PWM, Backlight PWM/An-aus je Modell,
+Tastenpolling 5 ms — ist unverändert. Unser Nachbau ist also aktuell; zu
+tun ist nichts.
+
+Was für die **Radxa-Portierung** (`docs/HARDWARE.md` §1, bisher
+„nicht unterstützt") drinsteht und was nicht:
+
+- Pin-Tabellen je Board (BOARD-Pin → `(gpiochip, Zeile)`) für Radxa Zero 3W,
+  Cubie A7Z, Orange Pi Zero 2W/3W, MangoPi.
+- SPI-Bus je Board: **Radxa Zero 3W = SPI3, CS0**, Cubie A7Z = SPI1,
+  Orange Pi Zero 2W = SPI1, Zero 3W = SPI3; Takt außerhalb des Pi
+  **48 MHz** statt 100 MHz. Auf dem Pi 5 liegt der Chip auf `gpiochip4`.
+- **Ungeprüft auf unserem Gerät.** Das sind Herstellerangaben aus fremder
+  Hardware; übernommen wird daraus nur, was wir am Radxa selbst messen
+  (Regel 10g). Wert: Sie sagen uns, *wo* wir zuerst nachsehen.
+
+### 4.3 Der Daemon: warum wir ihn nicht übernehmen
+
+`daemon/` (Apache-2.0) ist die Gegenarchitektur zu unserer: Er hält LCD,
+LED, Backlight und Taste exklusiv, Apps reden über einen Unix-Socket
+(`/tmp/whisplay-daemon.sock`, zeilenweises JSON, Version 1) und malen in
+einen **mmap-Framebuffer** (240×280, RGB565, stride 480) — inklusive
+App-Registry, Fokus/Session-Token und Gesten (`quad_click` in 5 s,
+`long_press`).
+
+Das ist sauber gebaut und für ein Gerät mit mehreren Apps richtig. Für uns
+falsch: DESIGN Regel 7 sagt *kein Daemon, kein exklusiver Zugriff*. Unser
+Dienst besitzt Panel und LED selbst. Übernommen wird daraus nur die
+**Gesten-Semantik** für unsere eine Taste (kurz / lang / mehrfach), nicht
+der Transport.
+
+### 4.4 Ton: was uns fehlt und was wir nicht anfassen
+
+- **`asound.conf`** (Apache-2.0, außerhalb des Kernelbaums): `dmix`
+  (ipc_key 555555) und `dsnoop` (666666), `S16_LE`, **48 kHz, stereo**,
+  period 1024, buffer 4096, `speexrate_best`. Wir haben heute nur die
+  Karte und zwei Mixerwerte (Speaker/Mic = 80). Mehrere Prozesse, die
+  gleichzeitig aufnehmen und abspielen, sind damit bei uns noch nicht
+  abgesichert — relevant, sobald VAD und TTS nebeneinander laufen.
+- **Lautstärke-Tabelle** (`whisplay-gain-lut.h`): 101 Stützstellen, 0–100 %
+  → Codec-Register (WM8960-Kopfhörer 0–126, ES8389-DAC 108–218), aus einer
+  Messung des Herstellers. **GPL-2.0 — wird nicht kopiert.** Der Nutzen
+  ist ohnehin der Gedanke: eine *wahrgenommene* Kurve statt linearer
+  Registerwerte. Diese Kurve bauen wir selbst (Messung oder Formel), sie
+  steht in `ROADMAP` bei „Lautstärkeverwaltung".
+- **Kernelmodul** (`whisplay-core.c`, `es8389.c`): GPL-2.0, wird als
+  Overlay geladen, nicht von uns gebaut. Bleibt so.
+
+### 4.5 Sprachverarbeitung — die Muster, die wir nachbauen
+
+Der Chatbot ist GPL-3.0, also **Muster, keine Zeilen**. Interessant ist
+nicht die Engine-Auswahl (Vosk/Whisper/faster-whisper bzw.
+Piper/espeak-ng/Cloud — bei uns entscheidet das sherpa-onnx, `ROADMAP`
+Phase 5), sondern die Mechanik drumherum. Vier Dinge, die auf einem
+Zero 2 W den Unterschied machen:
+
+1. **Aufnahme mit Energie-VAD statt fester Zeit.** `sox … silence 1 0.1
+   <start>% 1 <ende>s <ende>%`: Aufnahme beginnt bei Pegel `start`, endet
+   nach 1,5 s unterhalb von `ende = start × 0,5`; zusätzlich eine harte
+   Höchstdauer. Kein Modell, kein Speicher, ~0 CPU.
+2. **Nachgeführter Geräuschpegel.** Alle 30 s 0,35 s aufnehmen, RMS×100 als
+   Prozent, Schwelle = Pegel + 1, geklemmt auf 2–60, geglättet mit 0,7
+   (alter Wert) / 0,3 (neuer). Das ist die Größe, die oben in `start`
+   eingesetzt wird — die Schwelle wandert also mit dem Raum, statt bei
+   jedem Nutzer falsch zu sein. ~30 Zeilen, kein Modell.
+   **Grenze:** Das ist ein Pegelmesser, kein Spracherkenner. Für „ist da
+   Stimme?" bleibt Silero VAD die bessere Wahl; der Pegel taugt als
+   Startwert, als VU-Anzeige und als Rückfall, wenn das Modell fehlt.
+3. **Satzstrom statt fertiger Antwort.** Der LLM-Text wird beim Eintreffen
+   an Satzzeichen zerlegt (`。！？!?，,` und `.` nur vor Leerraum/Ende),
+   kurze Sätze zu ≤ 60 Zeichen zusammengefasst, der Rest bleibt liegen.
+   Jeder Satz geht **sofort** an die TTS; bis zu **5** Synthesen
+   gleichzeitig, Wiedergabe **in Reihenfolge**, ein leerer Ton wird einmal
+   wiederholt, ein Watchdog bricht bei „Dauer + 2 s" ab. Das ist genau der
+   Punkt „Sprachausgabe stückweise erzeugen" aus `ROADMAP` (Mienenspiel
+   beim Sprechen) — und die einzige Antwort auf RTF > 1.
+4. **Text vor der TTS reinigen.** URLs → „link", Markdown-/Symbolzeichen
+   weg, Emoji weg, doppelte Satzzeichen zusammenfassen. Klingt nach
+   Detail, ist der Unterschied zwischen „Sternchen Sternchen" und einem
+   Satz.
+
+Dazu zwei Kleinigkeiten mit Signalwirkung:
+
+- **ALSA-Besitz ist exklusiv.** Vor jeder Aufnahme wird der
+  Wiedergabeprozess beendet und **500 ms** gewartet, bis das Gerät wirklich
+  frei ist; danach wird er neu gestartet. Wir werden dasselbe brauchen,
+  sobald Aufnahme und Ausgabe im selben Dienst laufen.
+- **Weckton** aus drei `sox synth`-Tönen (720/980/1320 Hz, zusammen
+  0,36 s, mit Fade) — billiger und verlässlicher als eine Audiodatei.
+
+Nicht übernehmen: die Wolke. Dort ist ASR/TTS/LLM standardmäßig ein
+Cloud-Dienst (Gemini, OpenAI, Volcengine, Tencent). Unser Rahmen ist
+lokal (Architekturregel 5); die Cloud-Pfade sind für uns nur Beleg, dass
+die Schnittstellen austauschbar sind.
+
+### 4.6 Was das für Rust heißt
+
+Ehrlich: **die Sprachverarbeitung gehört nicht nach Rust.** Die Rechenlast
+steckt in sherpa-onnx (C++), der Rest ist Prozess- und Warteschlangen-
+Verwaltung — das ist bei Python richtig, weil der Agent dort schon lebt.
+Ein Rust-Dienst dazwischen kostet eine Schnittstelle und bringt nichts.
+
+Rust lohnt an zwei anderen Stellen:
+
+- **Soft-PWM.** Backlight mit 1 kHz kostet uns bei 50 % rund 9 % eines
+  Kerns (`ROADMAP`: „Software-PWM bei Zwischenwerten"). Der Hersteller
+  löst das nicht besser — er hat denselben Python-Takt. Ein kleiner
+  Rust-Helfer (eigener Thread, `SCHED_FIFO`, `nanosleep`) wäre die
+  billigere Variante; ob es sich lohnt, entscheidet eine Messung, nicht
+  das Gefühl.
+- **OPUS**, falls wir je Sprache über Telegram schicken: `whisplay-talk`
+  kodiert mit libopus über `ctypes` (GPL, also nur als Muster) — in Rust
+  wäre das ein `opus`-Crate ohne Fremdprozess.
+
+Ein eigener **Panel-Daemon** in Rust nach Herstellervorbild ist **nicht**
+vorgesehen: Er würde Regel 7 aufgeben, um ein Problem zu lösen, das wir
+nicht haben.
+
+### 4.7 Offene Punkte aus dieser Analyse
+
+1. **Joystick:** Hat unsere HAT-Revision die fünf Schalter? Wenn ja, wäre
+   er ein Geschenk für die Bedienung (Menü, Lautstärke, PTT) — als Opt-in
+   im Panel, mit Pull-up und 20 ms Entprellung. Prüfen am Gerät, nicht
+   annehmen.
+2. **`asound.conf` mit dmix/dsnoop** in den Installer aufnehmen, bevor
+   Aufnahme und Ausgabe gleichzeitig laufen.
+3. **Lautstärkekurve** selbst bauen (0–100 % → Codec-Wert), nicht die
+   GPL-Tabelle.
+4. **Satzstrom-TTS** als eigenes Modul im Agenten, wenn Phase 5 beginnt.

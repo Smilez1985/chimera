@@ -258,6 +258,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   liest, die es aber nicht gibt. Statisch, ohne Ausführung.
 
 ### Geändert
+- **Herkunft um die PiSugar-Repos erweitert** (`HERKUNFT §4`): Lizenzgrenze
+  je Teilbaum, der Stand unseres Treiber-Nachbaus gegen den heutigen
+  Upstream (nur Joystick, Pull-up und MangoPi sind dazugekommen), und die
+  vier Sprachmuster, die nachgebaut werden statt kopiert. Ergebnis in
+  `ROADMAP`: Energie-VAD mit nachgeführtem Geräuschpegel, Satzstrom-TTS,
+  ALSA-Besitz, `dmix`/`dsnoop`, eigene Lautstärkekurve, Gesten der Taste.
 - **Unbekannte Boards brechen den Installer nicht mehr ab** (Regel 10k).
   Unbekannt heißt ungetestet, nicht unvereinbar: Wer Chimera auf einem
   Pi 4 versuchen will, darf das nach einer ehrlichen Warnung und einer

@@ -698,6 +698,19 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
 
 - [ ] sherpa-onnx auf der Zielhardware, Modelle laden
 - [ ] VAD (`silero_vad_v5`)
+- [ ] **Aufnahme mit Energie-VAD als Rückfall** (ohne Modell, ~0 CPU):
+      sox-`silence` mit Start-/Endschwelle, 1,5 s Stille beendet den Satz,
+      harte Höchstdauer; Schwelle aus dem **nachgeführten Geräuschpegel**
+      (0,35 s alle 30 s, RMS×100, +1, geklemmt 2–60, geglättet 0,7/0,3).
+      Muster aus dem Whisplay-Chatbot (GPL-3.0, nachgebaut — HERKUNFT §4.5).
+- [ ] **Satzstrom statt fertiger Antwort** (Voraussetzung für RTF > 1):
+      LLM-Text beim Eintreffen an Satzzeichen trennen, kurze Sätze zu
+      ≤ 60 Zeichen bündeln, jeden Satz sofort an die TTS, bis zu 5
+      Synthesen parallel, Wiedergabe **in Reihenfolge**, leerer Ton einmal
+      wiederholt, Watchdog „Dauer + 2 s". Text vorher für die TTS reinigen
+      (URLs, Markdown, Emoji). Muster: HERKUNFT §4.5.
+- [ ] **ALSA-Besitz**: vor der Aufnahme den Wiedergabeprozess beenden und
+      ~500 ms warten, bis das Gerät frei ist; danach neu starten.
 - [ ] STT: **fp32-Variante zuerst messen**, nicht die int8 (bisher war
       `nemo-fast-conformer-ctc-en-de-es-fr-int8` vorgesehen), Latenz messen
 - [ ] TTS: **`low`/fp32 zuerst**, dann `medium`/fp32 zum Vergleich
@@ -763,11 +776,23 @@ Offen bleibt:
       richtig: Am Pi nach der Änderung von `SPEAK` ansehen und mit dem
       Dienstprotokoll abgleichen (Ausdruck, Statuszeile, LED).
 - [ ] Button: Gesten (kurz / lang / mehrfach) und Bedeutung (Wake-Word-
-      Ersatz, DESIGN §3.4) — hängt am Audio-Prozess
+      Ersatz, DESIGN §3.4) — hängt am Audio-Prozess. Vorlage für die
+      Gesten-Semantik: Whisplay-Daemon (Apache-2.0) — kurz = weiter,
+      lang = starten, vier Klicks in 5 s = zurück (HERKUNFT §4.3).
+- [ ] **Joystick (5-Wege) der neueren HAT-Revision** als Option prüfen:
+      BOARD 32/33/31/29/37, active-low mit internem Pull-up, 20 ms
+      Entprellung (HERKUNFT §4.2). Erst am Gerät feststellen, ob unsere
+      Revision die Schalter hat — dann Opt-in im Panel, kein Zwang.
 - [ ] Software-PWM bei Zwischenwerten: Backlight 50 % kostet ~9 % eines
       Kerns (1 kHz-Takt in Python). Kandidat: Backlight nur an/aus oder
-      Takt senken, nach Sichtprüfung auf Flackern
-- [ ] Lautsprecher-Routing, Lautstärkeverwaltung
+      Takt senken, nach Sichtprüfung auf Flackern; zweiter Kandidat ein
+      kleiner Rust-Helfer (HERKUNFT §4.6).
+- [ ] Lautsprecher-Routing, Lautstärkeverwaltung — dabei **zwei** Dinge:
+      `asound.conf` mit `dmix`/`dsnoop` (48 kHz, S16, period 1024,
+      buffer 4096), damit Aufnahme und Ausgabe gleichzeitig gehen; und
+      eine **wahrgenommene Lautstärkekurve** 0–100 % → Codec-Wert. Die
+      Tabelle des Herstellers ist GPL-2.0 und wird nicht übernommen
+      (HERKUNFT §4.4) — eigene Messung oder Formel.
 - [ ] PiSugar-Akkustand als Mood-Eingang
 - [ ] **UPS HAT (C)** (Waveshare, INA219 an I2C 0x43) als zweite
       Akkuquelle: `src/chimera/power/`, Erkennung im Boot-Abgleich,
