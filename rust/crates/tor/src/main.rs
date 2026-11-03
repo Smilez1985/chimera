@@ -148,10 +148,30 @@ fn mojo_befehl(a: &[String]) -> ExitCode {
                     "Miracle: Oracle-Ergebnis ist juenger als 6 h -- es wird darauf aufgebaut.",
                 );
             }
-            None => melden(
-                Stufe::Info,
-                "Miracle: kein gueltiges Oracle-Ergebnis (fehlt oder aelter als 6 h) -- Oracle laeuft zuerst.",
-            ),
+            None => {
+                // Ohne Befund weiss Miracle nicht, was zu reparieren ist. Also
+                // laeuft Oracle JETZT -- als eigener Durchgang, dessen Ergebnis
+                // abgelegt wird. Erst danach wird repariert.
+                melden(
+                    Stufe::Info,
+                    "Miracle: kein gueltiges Oracle-Ergebnis (fehlt oder aelter als 6 h) -- Oracle laeuft zuerst.",
+                );
+                let vorlauf = mojo::lauf(&mojo::Echt, &pruefungen, false);
+                let jetzt = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                let vj = vorlauf.als_json(jetzt);
+                mojo::ablegen(&vj, datei.as_deref());
+                if vorlauf.exitcode() == 0 {
+                    melden(Stufe::Info, "Miracle: Oracle hat nichts gefunden -- nichts zu reparieren.");
+                    return ExitCode::from(0);
+                }
+                melden(
+                    Stufe::Info,
+                    "Miracle: Oracle hat Befunde -- jetzt wird repariert.",
+                );
+            }
         }
     }
     let bericht = mojo::lauf(&mojo::Echt, &pruefungen, fix);
