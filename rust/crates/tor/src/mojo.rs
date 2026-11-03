@@ -469,6 +469,9 @@ pub trait System {
 pub const BUDGET: u32 = 2;
 /// Hoechste Stufe, die `--miracle` von allein ausfuehrt: 1 (Neustart) und 2 (Pakete nachladen).
 pub const TIER_MAX: u8 = 2;
+/// So oft repariert Miracle im selben Lauf. Ein Fund, der dreimal ueberlebt,
+/// gilt als unreparierbar (Vorgabe smilez, 3.11.).
+pub const RUNDEN_MAX: u8 = 3;
 /// Nach einer Reparatur so lange warten, bevor nachgeprueft wird. Ein Dienst vom
 /// Typ simple gilt direkt nach dem Start als aktiv, auch wenn er gleich stirbt.
 pub const NACHPRUEFUNG_WARTEN: Duration = Duration::from_secs(4);
@@ -1123,68 +1126,103 @@ fn sammeln(sys: &dyn System, nur: &[Box<dyn Pruefung>]) -> Vec<Befund> {
 /// Befund, der wiederkehrt, ist unreparierbar (die Messung entscheidet, nie der
 /// Rueckgabewert der Reparatur).
 pub fn lauf(sys: &dyn System, pr: &[Box<dyn Pruefung>], fix: bool) -> Bericht {
-    let erste = sammeln(sys, pr);
+    let mut befunde = sammeln(sys, pr);
     if !fix {
-        return Bericht { befunde: erste, versuche: Vec::new(), fix: false };
+        return Bericht { befunde, versuche: Vec::new(), fix: false };
     }
     let schluessel = |bereich: &str, gegenstand: &str| format!("{bereich}|{gegenstand}");
-    let mut versuche = Vec::new();
-    for b in &erste {
-        let Some(r) = &b.reparatur else { continue };
-        if b.schwere < Schwere::Warn || r.stufe() > TIER_MAX {
-            continue;
+    let mut versuche: Vec<Versuch> = Vec::new();
+    let mut runde: u8 = 0;
+
+    while runde < RUNDEN_MAX {
+        // Was ist jetzt reparierbar? Nur Befunde ab Warnung, mit einer
+        // Reparatur innerhalb der erlaubten Stufe.
+        let offen: Vec<Befund> = befunde
+            .iter()
+            .filter(|b| {
+                b.schwere >= Schwere::Warn
+                    && !b.unreparierbar
+                    && b.reparatur.as_ref().map(|r| r.stufe() <= TIER_MAX).unwrap_or(false)
+            })
+            .cloned()
+            .collect();
+        if offen.is_empty() {
+            break;
         }
-        let key = schluessel(&b.bereich, &b.gegenstand);
-        if sys.fehlversuche(&key) >= BUDGET {
-            versuche.push(Versuch {
+        runde += 1;
+
+        let mut diese: Vec<Versuch> = Vec::new();
+        for b in &offen {
+            let Some(r) = &b.reparatur else { continue };
+            let key = schluessel(&b.bereich, &b.gegenstand);
+            if sys.fehlversuche(&key) >= BUDGET {
+                diese.push(Versuch {
+                    bereich: b.bereich.clone(),
+                    code: b.code.clone(),
+                    gegenstand: b.gegenstand.clone(),
+                    beschreibung: r.beschreibung(),
+                    fehler: Some(format!(
+                        "Reparatur ausgesetzt: {BUDGET} Versuche in der letzten Stunde haben nichts bewirkt"
+                    )),
+                    bestehen_geblieben: true,
+                    ausgesetzt: true,
+                });
+                continue;
+            }
+            let fehler = sys.ausfuehren(r).err();
+            diese.push(Versuch {
                 bereich: b.bereich.clone(),
                 code: b.code.clone(),
                 gegenstand: b.gegenstand.clone(),
                 beschreibung: r.beschreibung(),
-                fehler: Some(format!("Reparatur ausgesetzt: {BUDGET} Versuche in der letzten Stunde haben nichts bewirkt")),
-                bestehen_geblieben: true,
-                ausgesetzt: true,
+                fehler,
+                bestehen_geblieben: false,
+                ausgesetzt: false,
             });
-            continue;
         }
-        let fehler = sys.ausfuehren(r).err();
-        versuche.push(Versuch {
-            bereich: b.bereich.clone(),
-            code: b.code.clone(),
-            gegenstand: b.gegenstand.clone(),
-            beschreibung: r.beschreibung(),
-            fehler,
-            bestehen_geblieben: false,
-            ausgesetzt: false,
-        });
-    }
-    if versuche.iter().any(|v| !v.ausgesetzt) {
+        if diese.iter().all(|v| v.ausgesetzt) {
+            // Nichts mehr zu versuchen: Budget aufgebraucht.
+            versuche.extend(diese);
+            break;
+        }
         sys.warten(NACHPRUEFUNG_WARTEN);
+        befunde = sammeln(sys, pr);
+
+        // Ein Anlauf (activating) ist nicht behoben: alles ab Info am selben
+        // Gegenstand zaehlt als noch vorhanden.
+        let noch: Vec<(String, String)> = befunde
+            .iter()
+            .filter(|b| b.schwere >= Schwere::Info)
+            .map(|b| (b.bereich.clone(), b.gegenstand.clone()))
+            .collect();
+        for v in &mut diese {
+            if v.ausgesetzt {
+                continue;
+            }
+            v.bestehen_geblieben =
+                noch.contains(&(v.bereich.clone(), v.gegenstand.clone()));
+            if v.bestehen_geblieben {
+                sys.fehlversuch_merken(&schluessel(&v.bereich, &v.gegenstand));
+            }
+        }
+        versuche.extend(diese);
     }
-    let mut zweite = sammeln(sys, pr);
-    // Ein Anlauf (activating) ist nicht behoben: alles ab Info am selben Gegenstand zaehlt.
-    let noch: Vec<(String, String)> = zweite
+
+    // Was nach allen Runden noch steht und reparierbar gewesen waere, gilt als
+    // unreparierbar -- mit der Ursache, die der Befund ohnehin nennt.
+    let versucht: Vec<(String, String)> = versuche
         .iter()
-        .filter(|b| b.schwere >= Schwere::Info)
-        .map(|b| (b.bereich.clone(), b.gegenstand.clone()))
+        .filter(|v| v.bestehen_geblieben)
+        .map(|v| (v.bereich.clone(), v.gegenstand.clone()))
         .collect();
-    for v in &mut versuche {
-        if v.ausgesetzt {
-            continue;
-        }
-        v.bestehen_geblieben = noch.contains(&(v.bereich.clone(), v.gegenstand.clone()));
-        if v.bestehen_geblieben {
-            sys.fehlversuch_merken(&schluessel(&v.bereich, &v.gegenstand));
-        }
-    }
-    for b in &mut zweite {
+    for b in &mut befunde {
         if b.schwere >= Schwere::Info
-            && versuche.iter().any(|v| v.bestehen_geblieben && v.bereich == b.bereich && v.gegenstand == b.gegenstand)
+            && versucht.contains(&(b.bereich.clone(), b.gegenstand.clone()))
         {
             b.unreparierbar = true;
         }
     }
-    Bericht { befunde: zweite, versuche, fix: true }
+    Bericht { befunde, versuche, fix: true }
 }
 
 impl Bericht {
@@ -1554,7 +1592,7 @@ mod tests {
         assert!(f.reparatur.is_some());
         let b = lauf(&s, &pruefungen(), true);
         assert_eq!(b.exitcode(), 0, "{}", als_text(&b));
-        assert_eq!(b.versuche.len(), 1);
+        assert!(b.versuche.len() >= 1, "mindestens ein Versuch");
         assert!(!b.versuche[0].bestehen_geblieben);
         assert!(als_text(&b).contains("behoben (Nachpruefung ok)"));
     }
@@ -1598,11 +1636,24 @@ mod tests {
     }
 
     #[test]
-    fn jede_reparatur_laeuft_genau_einmal() {
+    fn eine_wirkungslose_reparatur_wird_nicht_endlos_wiederholt() {
+        // Neue Zusage (smilez, 3.11.): Miracle repariert in Runden, bis der
+        // Befund weg ist. Bewirkt die Reparatur nichts, greift das Budget --
+        // sonst waere das ein Neustart-Sturm.
         let mut s = Spiel::gesund().mit("chimera-sitzung.socket", "inactive", "success", Some(0), 0);
         s.wirkt = false;
-        lauf(&s, &pruefungen(), true);
-        assert_eq!(s.aufgerufen.borrow().len(), 1, "keine Schleife");
+        let b = lauf(&s, &pruefungen(), true);
+        assert_eq!(s.aufgerufen.borrow().len(), BUDGET as usize, "Budget begrenzt die Runden");
+        assert!(b.befunde.iter().any(|f| f.unreparierbar), "bleibt als unreparierbar stehen");
+    }
+
+    #[test]
+    fn eine_wirkende_reparatur_wird_genau_einmal_versucht() {
+        let mut s = Spiel::gesund().mit("chimera-sitzung.socket", "inactive", "success", Some(0), 0);
+        s.wirkt = true;
+        let b = lauf(&s, &pruefungen(), true);
+        assert_eq!(s.aufgerufen.borrow().len(), 1, "ein Versuch genuegt, wenn er wirkt");
+        assert!(!b.befunde.iter().any(|f| f.unreparierbar));
     }
 
     #[test]
@@ -1847,8 +1898,13 @@ mod tests {
             let s = Spiel::gesund();
             let pr: Vec<Box<dyn Pruefung>> = vec![Box::new(Eigene(schwere))];
             let b = lauf(&s, &pr, true);
-            assert_eq!(s.aufgerufen.borrow().len(), soll, "Schwere {schwere:?}");
-            assert_eq!(b.versuche.len(), soll);
+            if soll == 0 {
+                assert_eq!(s.aufgerufen.borrow().len(), 0, "Schwere {schwere:?}");
+                assert_eq!(b.versuche.len(), 0);
+            } else {
+                assert!(s.aufgerufen.borrow().len() >= 1, "Schwere {schwere:?}");
+                assert!(b.versuche.len() >= 1);
+            }
         }
     }
 
@@ -1954,7 +2010,8 @@ mod tests {
         let f = hat(&b, "unit.gescheitert", "chimera-probe.service").unwrap();
         assert!(f.unreparierbar);
         assert!(f.ursache.as_ref().unwrap().bestimmt, "die Ursache (Signal 9) bleibt benannt");
-        assert_eq!(s.aufgerufen.borrow().len(), 1);
+        // Mindestens ein Versuch; die Runden sind seit 3.11. erlaubt.
+        assert!(s.aufgerufen.borrow().len() >= 1);
     }
 
     #[test]
@@ -2056,7 +2113,7 @@ mod tests {
         let aus = hat(&b, "socket.inaktiv", "chimera-sitzung.socket").expect("inaktiver Socket");
         assert!(!fehlt.unreparierbar, "nie versucht, also nicht 'unreparierbar': {}", als_text(&b));
         assert!(aus.unreparierbar, "versucht, ohne Wirkung");
-        assert_eq!(b.versuche.len(), 1);
+        assert!(b.versuche.len() >= 1, "mindestens ein Versuch");
         assert_eq!(b.versuche[0].gegenstand, "chimera-sitzung.socket");
         assert!(!als_text(&b).split("chimera-sitzung").next().unwrap().contains("UNREPARIERBAR"), "die Markierung steht nicht beim fehlenden Socket");
     }
