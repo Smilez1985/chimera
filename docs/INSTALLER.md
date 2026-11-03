@@ -772,3 +772,55 @@ und Wiedergabe.
 Punkt 5 zuletzt, nicht weil es unwichtig ist, sondern weil man es sonst
 gegen eine Baustelle debuggt. Erst ein funktionierendes Chimera auf dem
 Zero 2 W, dann der Boardwechsel.
+---
+
+## 9. Was welches Modul aus dem Changelog einspielt
+
+Der Installer ist der **einzige** Weg, auf dem ein Stand auf ein Gerät
+kommt. Diese Tabelle ist die Zuordnung „Änderung → Modul"; sie wird bei
+jedem Commit mitgeführt, der etwas außerhalb von `src/` anfasst. Wer eine
+Zeile nicht belegen kann, hat eine Änderung gebaut, die niemand installiert.
+
+| Modul | Spielt ein | Changelog-Bereich |
+|---|---|---|
+| 00 Quelle | den ganzen Baum nach `/opt/chimera/source` (`quelle-commit`) | alle |
+| 10 Preflight | nichts — erfasst und urteilt nur | Boarderkennung, Regel 10k |
+| 20 Pakete | Systempakete (im Manifest mit „war vorher da") | Abhängigkeiten |
+| 25 Speicher | zram + Auslagerungsdatei (`lib/speicher.sh`) | Regel 5e |
+| 27 Mojo | `chimera-mojo.service`, `chimera-mojo@.service`, `chimera-mojo.timer`, `chimera-mojo-fortsetzung.service`, Drop-ins | Mojo, „Neustart mit Fortsetzung" |
+| 30 Header | passende `linux-headers-*` zum laufenden Kernel | Kernel-Modulbau |
+| 40 Anzeige/Ton | Busse, Overlays, Hersteller-Tonmodul, `/etc/asound.conf`, `config.txt` (mit Sicherung) | Anzeige, Ton |
+| 46 Mikrofon | Aufnahmepegel messen, ALSA-Karte | Mikrofon |
+| 50 Python | venv, Abhängigkeiten, **und den Code nach `/opt/chimera/productive/code`** (Prüfsumme gegen `source/`) | Python-Umgebung, **alle Code-Änderungen** |
+| 55 Rust | `chimera-tor` nach `/opt/chimera/bin` aus dem Prerelease `rust-<commit>` | Gateway, Mojo |
+| 98 Dienst | `chimera.service` (+ Drop-in), `chimera-sitzung.socket`, `chimera-hardware.service`, `chimera-logabgleich.service`/`.timer`, Dienstnutzer, `/etc/chimera/.env` | Dienst, Statuszeile, Hardware-Abgleich |
+| 99 Gateway | Nutzer `chimera-tor`, `chimera-tor.socket`/`.service`, `chimera-sitzung.socket`-Rechte | Gateway |
+
+### 9a. Die Falle, die das erzwingt (4.11.2026)
+
+Die vier Commits vom 3.11. (`bbc66fb`, `c99b362`, `9f3ed3b`, `fbef797`)
+lagen **nur per `scp`** in `/opt/chimera/productive/code`. In
+`/opt/chimera/source` stand `81c047b`. Beim nächsten Start kopierte
+`chimera-hardware.service` → `chimera-install --hardware` den Quellbaum
+über `productive` und **rollte damit vier Commits zurück**. Der Dienst lief,
+die Tests waren grün, das Protokoll zeigte brav „Dienst bereit" — nur der
+Code war alt. Aufgefallen ist es nur, weil im Protokoll die Zeile
+„(Ruhe: 2)" fehlte.
+
+Daraus folgen zwei Regeln:
+
+1. **Kein `scp` in `productive/code`.** Ein Stand kommt über
+   `chimera-install` (aus dem Klon) auf das Gerät, sonst überlebt er den
+   nächsten Boot nicht.
+2. **Nach grünem Funktionstest wird committet und eingespielt** — nicht
+   „später". Ein Stand, der nur auf dem Gerät liegt, ist kein Stand.
+
+### 9b. Nachweis
+
+`tools/abgleich.sh` (auf dem Gerät) vergleicht Quellbaum, eingespielten
+Stand und den festgehaltenen Commit:
+
+    sh tools/abgleich.sh --erwartet 25a973d
+
+Exitcode 0 = alles gleich; sonst benennt es jede abweichende Datei. Das
+läuft nach jedem Installerlauf und vor jeder Übergabe.

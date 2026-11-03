@@ -317,6 +317,11 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
 - **Installer:** Der Nachweis der Python-Umgebung sucht nicht mehr im Netz
   nach Anbietern und öffnet das Panel nicht mehr.
 
+- **Der Installer ist der einzige Weg auf ein Gerät** (DESIGN Regel 13):
+  Zuordnung „Changelog-Bereich → Modul" in `docs/INSTALLER.md` §9, neues
+  Werkzeug `tools/abgleich.sh` vergleicht Quellbaum, eingespielten Stand
+  und `state/quelle-commit`. Anlass: vier Commits lagen nur per `scp` in
+  `productive/code` und wurden beim nächsten Boot-Abgleich zurückgerollt.
 ### Entfernt
 - **Anzeige:** Herstellertreiber `whisplay.py` samt `spidev`/`gpiod`/
   `python3-dev` aus dem venv; die Anzeigetypen `st7789` und `epaper` der

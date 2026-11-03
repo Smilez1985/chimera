@@ -3302,6 +3302,29 @@ Nicht hinein gehören außerdem: **IP-Adressen aus privaten Netzen**, MAC-
 Adressen, Heimnetz-Hostnamen und private Mailadressen. Für Commits gilt
 ausschließlich die GitHub-noreply-Adresse.
 
+### Architekturregel 13 — Ein Stand kommt nur über den Installer auf ein Gerät
+
+Der Installer ist der einzige Weg, auf dem Code auf ein Gerät kommt:
+`chimera-install` liest aus `/opt/chimera/source`, Modul 50 kopiert den
+Baum nach `/opt/chimera/productive/code` und hält die Prüfsumme fest,
+Modul 00 schreibt `state/quelle-commit`.
+
+**Kopieren per `scp` in `productive/code` ist verboten.** Was dort von Hand
+landet, kennt `source/` nicht; der nächste Boot-Abgleich
+(`chimera-hardware.service` → `chimera-install --hardware`) kopiert
+`source/` darüber und rollt es zurück — im Betrieb lautlos, weil der
+Dienst mit dem alten Code weiterläuft (4.11.2026: vier Commits, bemerkt
+nur am fehlenden „(Ruhe: 2)" im Protokoll).
+
+**Nach grünem Funktionstest wird committet und eingespielt, in dieser
+Reihenfolge, im selben Arbeitsgang.** Ein Stand, der nur auf dem Gerät
+liegt, ist kein Stand; ein Commit, den kein Modul einspielt, ist ein
+offenes Ende (§9 in `docs/INSTALLER.md`).
+
+Nachweis: `tools/abgleich.sh --erwartet <commit>` auf dem Gerät —
+Quellbaum, eingespielter Stand und festgehaltener Commit müssen gleich
+sein.
+
 ### Architekturregel 13a — Vor jedem Push wird geprüft, und die Prüfung beweist ihre Sehfähigkeit
 
 „Vor jedem Push scannen" allein genügt nicht — ein Scan, dessen Umfang
