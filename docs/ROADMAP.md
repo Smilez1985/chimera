@@ -72,6 +72,12 @@ zram wird nicht angefasst, wenn es läuft.
       `chimera-mojo-fortsetzung.service` (einmal nach dem Start), Rückfall bei
       wirkungslosem Neustart, Sperre nach zwei Versuchen (DESIGN, Regel
       „Neustart mit Fortsetzung und Rückfall").
+      *Stand 3.11.: Marker, Snapshot, Rückfall, Sperre und die Verdrahtung in
+      `chimera-tor --mojo --fortsetzen` liegen im Code (14 Tests grün,
+      `cargo test -p chimera-tor` 256 ok); `chimera-mojo-fortsetzung.service`
+      schreibt der Installer (Schritt 27, `ConditionPathExists` auf den Marker,
+      im Manifest, Rückbau abgedeckt, 81 Tests grün). **Offen: am Gerät** —
+      Marker schreiben, `systemctl reboot`, Fortsetzung läuft, Marker weg.*
 - [x] **Modul 40: laufender Dienst ist kein Befund.** Meldet „Leitungen
       gehalten", wenn die Ton-Prüfung fehlschlägt und Schritt 40 deshalb in die
       Erkennung läuft, obwohl die Anzeige eingerichtet ist und der Dienst sie

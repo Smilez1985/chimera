@@ -119,9 +119,9 @@ mutation trockenlauf-schreibt \
 	's|^	if is_dry_run; then$|	if false; then|' \
 	"Trockenlauf rueckt systemctl nicht an"
 
-# M15: Rueckbau laesst den Zeitgeber laufen.
+# M15: Rueckbau laesst die Einheiten laufen.
 mutation rueckbau-zeit \
-	's|systemctl disable --now "\$CHIMERA_MOJO_ZEIT" >/dev/null 2>&1 \|\| true|true|' \
+	's|systemctl disable --now "\$_mr_u" >/dev/null 2>&1 \|\| true|true|' \
 	"Rueckbau schaltet den Zeitgeber ab"
 
 # M16: Rueckbau loescht ein Fremd-Drop-in mit (Verzeichnis samt Inhalt).
@@ -163,6 +163,41 @@ mutation lauf-ohne-kartenpfad-umgebung \
 mutation lauf-ohne-requirements \
 	's|^Environment=CHIMERA_REQUIREMENTS=.*$||' \
 	"Lauf: kennt die requirements.txt"
+
+# M24: Die Fortsetzung laeuft ohne Marker (bei jedem Boot, auch ohne Neustart).
+mutation fortsetzung-ohne-marker \
+	'/^mojo_fortsetzung_text/,/^}/ s|^ConditionPathExists=.*$||' \
+	"Fortsetzung: laeuft nur mit Marker"
+
+# M25: Die Fortsetzung setzt nicht fort (ruft den Lauf ohne --fortsetzen).
+mutation fortsetzung-ohne-auftrag \
+	's| --mojo --miracle --fortsetzen| --mojo --miracle|' \
+	"Fortsetzung: setzt den Lauf nach dem Neustart fort"
+
+# M26: Die Fortsetzung wird nie eingeschaltet (nach dem Reboot bleibt alles stehen).
+mutation fortsetzung-nicht-an \
+	's|systemctl enable "\$CHIMERA_MOJO_FORTSETZUNG" >/dev/null 2>&1 \|\| {|true \|\| {|' \
+	"Fortsetzung eingeschaltet"
+
+# M27: Die Fortsetzung startet mitten im Installerlauf.
+mutation fortsetzung-startet-sofort \
+	's|systemctl enable "\$CHIMERA_MOJO_FORTSETZUNG" >/dev/null 2>&1 \|\| {|systemctl enable --now "$CHIMERA_MOJO_FORTSETZUNG" >/dev/null 2>\&1 \|\| {|' \
+	"Fortsetzung wird beim Installieren NICHT gestartet"
+
+# M28: Die Fortsetzung laeuft vor den Diensten (vergleicht Befunde, die noch nicht stimmen).
+mutation fortsetzung-ohne-ordnung \
+	's|^After=local-fs.target \$CHIMERA_MOJO_DIENSTE$||' \
+	"Fortsetzung: ordnet sich nach den Diensten"
+
+# M29: Der Rueckbau laesst die Fortsetzung eingeschaltet.
+mutation rueckbau-fortsetzung \
+	's|for _mr_u in "\$CHIMERA_MOJO_ZEIT" "\$CHIMERA_MOJO_FORTSETZUNG"; do|for _mr_u in "$CHIMERA_MOJO_ZEIT"; do|' \
+	"Rueckbau schaltet die Fortsetzung ab"
+
+# M30: Der regulaere Lauf wartet nicht auf die Fortsetzung (zwei Laeufe am selben Marker).
+mutation lauf-ohne-ordnung \
+	'/^mojo_lauf_text/,/^}/ s|^After=\$CHIMERA_MOJO_FORTSETZUNG$||' \
+	"Lauf: wartet auf die Fortsetzung"
 
 printf '\nErgebnis: %s ok, %s fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

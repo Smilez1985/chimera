@@ -16,6 +16,10 @@
 : "${CHIMERA_MOJO_MELDUNG:=chimera-mojo@.service}"
 : "${CHIMERA_MOJO_LAUF:=chimera-mojo.service}"
 : "${CHIMERA_MOJO_ZEIT:=chimera-mojo.timer}"
+# Der Lauf nach einem von Mojo ausgeloesten Neustart (DESIGN, Regel "Neustart
+# mit Fortsetzung und Rueckfall"). Kein Zeitgeber: die Bedingung ist der Marker.
+: "${CHIMERA_MOJO_FORTSETZUNG:=chimera-mojo-fortsetzung.service}"
+: "${CHIMERA_MOJO_MARKER:=mojo-fortsetzen.json}"
 : "${CHIMERA_MOJO_GRUPPE:=systemd-journal}"
 # Die Dienste, die bei Fehlschlag melden.
 : "${CHIMERA_MOJO_DIENSTE:=chimera.service chimera-tor.service chimera-hardware.service}"
@@ -31,6 +35,11 @@ mojo_lauf_text() {
 [Unit]
 Description=Chimera -- Mojo: Dienste pruefen, Ursache nennen, sanft reparieren
 After=local-fs.target
+# Nach der Fortsetzung: Steht ein Marker (also wurde gerade neu gestartet),
+# laeuft erst die Fortsetzung durch -- zwei Laeufe gleichzeitig wuerden am
+# selben Marker und Snapshot arbeiten. Ohne Marker wird die Fortsetzung nur
+# uebersprungen, hier wartet also nichts.
+After=$CHIMERA_MOJO_FORTSETZUNG
 ConditionPathExists=$(mojo_programm)
 
 [Service]
@@ -106,6 +115,45 @@ WantedBy=timers.target
 EOF
 }
 
+# Fortsetzung nach einem Neustart: laeuft nur, wenn der Marker steht, und dann
+# genau einmal. ConditionPathExists= statt Zeitgeber -- ein Dauerlaeufer wuerde
+# bei jedem Boot pruefen, obwohl es meistens nichts fortzusetzen gibt.
+#
+# After= auf die Dienste: die Fortsetzung vergleicht Befunde, die sie nur dann
+# richtig sieht, wenn die Dienste ihren Start hinter sich haben. After= ordnet
+# nur, es zieht nichts ins Hochfahren -- scheitert ein Dienst, laeuft die
+# Fortsetzung trotzdem und meldet genau das.
+mojo_fortsetzung_text() {
+	cat <<EOF
+# Von chimera-install angelegt (Schritt 27). Aenderungen gehen beim
+# naechsten Installerlauf verloren -- eigene Werte in ein Drop-in.
+[Unit]
+Description=Chimera -- Mojo: nach dem Neustart weitermachen und pruefen
+ConditionPathExists=$CHIMERA_STATE/$CHIMERA_MOJO_MARKER
+After=local-fs.target $CHIMERA_MOJO_DIENSTE
+
+[Service]
+Type=oneshot
+ExecStart=$(mojo_programm) --mojo --miracle --fortsetzen --datei $CHIMERA_STATE/mojo-letzter.json
+# Wie beim Lauf: Warnung ist kein Scheitern, erst ab Fehler wird die Unit rot.
+SuccessExitStatus=1
+SupplementaryGroups=$CHIMERA_MOJO_GRUPPE
+Environment=CHIMERA_STATE_DIR=$CHIMERA_STATE
+Environment=CHIMERA_LOG_KARTE=$CHIMERA_LOGS_PRODUCTIVE
+Environment=CHIMERA_REQUIREMENTS=$CHIMERA_SOURCE/requirements.txt
+TimeoutStartSec=900
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=read-only
+ProtectSystem=strict
+# Der Marker und der Snapshot liegen in state/, zurueckgerollt wird dorthin.
+ReadWritePaths=$CHIMERA_STATE -$CHIMERA_LOGS_PRODUCTIVE
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
 # Drop-in je Dienst: OnFailure= auf die Meldeunit, mit dem Namen des Dienstes.
 # %N, nicht %n: am Pi gemessen haengt %n ein zweites ".service" an
 # (der Dienstname mit doppelter Endung), den die Meldeunit nie als Dienst
@@ -141,6 +189,7 @@ mojo_einrichten() {
 	service_datei "$_mo_dir/$CHIMERA_MOJO_LAUF" "$(mojo_lauf_text)" || return 2
 	service_datei "$_mo_dir/$CHIMERA_MOJO_MELDUNG" "$(mojo_meldung_text)" || return 2
 	service_datei "$_mo_dir/$CHIMERA_MOJO_ZEIT" "$(mojo_zeit_text)" || return 2
+	service_datei "$_mo_dir/$CHIMERA_MOJO_FORTSETZUNG" "$(mojo_fortsetzung_text)" || return 2
 	for _mo_d in $CHIMERA_MOJO_DIENSTE; do
 		service_datei "$(mojo_dropin_pfad "$_mo_dir" "$_mo_d")" "$(mojo_dropin_text)" || return 2
 	done
@@ -149,6 +198,7 @@ mojo_einrichten() {
 	if is_dry_run; then
 		info "[wuerde] systemctl daemon-reload"
 		info "[wuerde] systemctl enable --now $CHIMERA_MOJO_ZEIT"
+		info "[wuerde] systemctl enable $CHIMERA_MOJO_FORTSETZUNG"
 		return 0
 	fi
 	[ "$_mo_neu" = 1 ] && systemctl daemon-reload
@@ -163,6 +213,16 @@ mojo_einrichten() {
 		manifest_has dienst "$CHIMERA_MOJO_ZEIT" || manifest_record dienst "$CHIMERA_MOJO_ZEIT" aktiviert
 	fi
 
+	# Nach dem Neustart: einmal einschalten, nicht jetzt starten. Ein Start
+	# mitten im Installerlauf haette nichts fortzusetzen und wuerde nur einen
+	# Zustand pruefen, der sich gerade aendert.
+	if ! manifest_has dienst "$CHIMERA_MOJO_FORTSETZUNG" || \
+	   ! systemctl is-enabled --quiet "$CHIMERA_MOJO_FORTSETZUNG" 2>/dev/null; then
+		systemctl enable "$CHIMERA_MOJO_FORTSETZUNG" >/dev/null 2>&1 || {
+			err "systemctl enable $CHIMERA_MOJO_FORTSETZUNG schlug fehl."; return 2; }
+		manifest_has dienst "$CHIMERA_MOJO_FORTSETZUNG" || manifest_record dienst "$CHIMERA_MOJO_FORTSETZUNG" aktiviert
+	fi
+
 	# Nachweis (Regel "Wer prueft, muss etwas sehen koennen"): Die Drop-ins muessen
 	# wirken. systemd sagt es selbst, nicht nur die Datei auf der Platte.
 	_mo_bad=0
@@ -175,26 +235,30 @@ mojo_einrichten() {
 		esac
 	done
 	systemctl is-active --quiet "$CHIMERA_MOJO_ZEIT" 2>/dev/null || { warn "Zeitgeber $CHIMERA_MOJO_ZEIT ist nicht aktiv."; _mo_bad=1; }
+	# Die Fortsetzung ist absichtlich meist inaktiv (ConditionPathExists= nicht
+	# erfuellt) -- gezaehlt wird, dass sie eingeschaltet ist.
+	systemctl is-enabled --quiet "$CHIMERA_MOJO_FORTSETZUNG" 2>/dev/null || { warn "$CHIMERA_MOJO_FORTSETZUNG ist nicht eingeschaltet."; _mo_bad=1; }
 	[ "$_mo_bad" = 0 ] || return 1
 	return 0
 }
 
 mojo_rueckbau() {
 	_mr_befund=0
-	if manifest_has dienst "$CHIMERA_MOJO_ZEIT"; then
+	for _mr_u in "$CHIMERA_MOJO_ZEIT" "$CHIMERA_MOJO_FORTSETZUNG"; do
+		manifest_has dienst "$_mr_u" || continue
 		if is_dry_run; then
-			info "[wuerde] systemctl disable --now $CHIMERA_MOJO_ZEIT"
+			info "[wuerde] systemctl disable --now $_mr_u"
 		elif have_cmd systemctl; then
-			systemctl disable --now "$CHIMERA_MOJO_ZEIT" >/dev/null 2>&1 || true
-			if [ "$(systemctl is-active "$CHIMERA_MOJO_ZEIT" 2>/dev/null)" = active ]; then
-				warn "laeuft noch: $CHIMERA_MOJO_ZEIT"; _mr_befund=1
+			systemctl disable --now "$_mr_u" >/dev/null 2>&1 || true
+			if [ "$(systemctl is-active "$_mr_u" 2>/dev/null)" = active ]; then
+				warn "laeuft noch: $_mr_u"; _mr_befund=1
 			else
-				info "gestoppt und abgeschaltet: $CHIMERA_MOJO_ZEIT"
+				info "gestoppt und abgeschaltet: $_mr_u"
 			fi
 		else
-			warn "systemctl fehlt -- $CHIMERA_MOJO_ZEIT nicht abschaltbar."; _mr_befund=1
+			warn "systemctl fehlt -- $_mr_u nicht abschaltbar."; _mr_befund=1
 		fi
-	fi
+	done
 	_mr_f="${TMPDIR:-/tmp}/.chimera-rm-mojo.$$"
 	manifest_list_von datei 27-mojo | cut -f1 >"$_mr_f"
 	_mr_weg=0

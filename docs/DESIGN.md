@@ -3571,7 +3571,11 @@ Neustart, wird auf den Stand vor dem Neustart zurueckgerollt.
 
 **Der Ablauf:**
 - Vor dem Neustart legt Mojo einen **Marker** ab (`state/mojo-fortsetzen.json`):
-  Zeitpunkt, Runde, Anzahl bisheriger Neustarts, Liste der geaenderten Dateien.
+  Zeitpunkt, Runde, Anzahl bisheriger Neustarts, **Grund** (lesbar, für
+  Protokoll und Bericht), die **Befunde** (`bereich|gegenstand`), die den
+  Neustart verlangt haben, und die Liste der geaenderten Dateien mit
+  Pruefsumme. Grund und Befunde stehen im Marker, weil der zweite Lauf sie
+  sonst nicht mehr kennt — der Bericht des ersten ist nach dem Reboot weg.
 - **Snapshot nur der geaenderten Dateien** (Kopie plus Pruefsumme), nicht des
   ganzen Systems. Was nicht angefasst wurde, muss auch nicht zurueck.
 - `systemctl reboot`.
@@ -3591,8 +3595,12 @@ Vermutung (smilez, 3.11.) und muss gemessen werden: wie viel CPU, RAM und
 freier Platz Chimera im Betrieb wirklich braucht. Ein voller Datentraeger ist
 selbst ein plausibler Grund, warum der Dienst nicht startet.
 
-**Historie 1:** Es bleibt **ein** Snapshot. Beim Anlegen wird der bisherige zu
-`mojo-snapshot-<zeit>.tgz` archiviert und das **zuvor** archivierte geloescht.
+**Historie 1:** Es bleibt **ein** Snapshot. Er ist ein **Verzeichnis**
+(`state/mojo-snapshot/` mit `stand.tsv` — Pfad, Pruefsumme, Nummer — und den
+Kopien unter ihrer Nummer), **kein Archiv**. Bewusst: Zurueckrollen ist damit
+ein Kopieren mit Pruefsummenvergleich, ohne Entpacken und ohne Abhaengigkeit
+von einem Packprogramm. Beim Anlegen wird der bisherige Snapshot zu
+`mojo-snapshot-<zeit>/` verschoben und das **zuvor** verschobene geloescht.
 So gibt es immer den letzten Stand und ein Archiv — nie eine Kette, die den
 Datentraeger fuellt.
 

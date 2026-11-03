@@ -130,6 +130,29 @@ hat_nicht "Lauf: nicht ProtectHome=yes" "$L" "ProtectHome=yes"
 hat_nicht "Lauf: nicht als Agent-Nutzer" "$L" "User=chimera"
 hat "Lauf: kein Neustart der eigenen Rechte" "$L" "NoNewPrivileges=yes"
 hat "Lauf: genug Zeit fuer das Nachladen von Python-Paketen" "$L" "TimeoutStartSec=900"
+# Zwei Laeufe gleichzeitig wuerden am selben Marker und Snapshot arbeiten.
+hat "Lauf: wartet auf die Fortsetzung (kein zweiter Lauf am selben Marker)" "$L" "After=chimera-mojo-fortsetzung.service"
+
+# --- 2b. Fortsetzung nach einem Neustart (DESIGN, Regel "Neustart mit
+# Fortsetzung und Rueckfall"): Der Installer-Teil ist die halbe Regel -- ohne
+# diese Unit bleibt nach dem Reboot alles stehen.
+FS="$R/$U/chimera-mojo-fortsetzung.service"
+[ -f "$FS" ] && ok "Fortsetzung: Unit geschrieben" || bad "Fortsetzung: Unit geschrieben -- fehlt"
+hat "Fortsetzung: laeuft nur mit Marker" "$FS" "ConditionPathExists=/opt/chimera/state/mojo-fortsetzen.json"
+hat "Fortsetzung: setzt den Lauf nach dem Neustart fort" "$FS" "ExecStart=/opt/chimera/bin/chimera-tor --mojo --miracle --fortsetzen"
+hat "Fortsetzung: legt den Bericht auf die Karte" "$FS" "--datei /opt/chimera/state/mojo-letzter.json"
+hat "Fortsetzung: einmalig, kein Dauerlaeufer" "$FS" "Type=oneshot"
+hat "Fortsetzung: zieht sich aus multi-user.target" "$FS" "WantedBy=multi-user.target"
+hat "Fortsetzung: schreibt nur nach state/ und ins Kartenprotokoll" "$FS" "ReadWritePaths=/opt/chimera/state -$KARTE"
+hat "Fortsetzung: Warnung ist kein Scheitern" "$FS" "SuccessExitStatus=1"
+hat "Fortsetzung: liest das Journal ueber die Gruppe" "$FS" "SupplementaryGroups=systemd-journal"
+hat_nicht "Fortsetzung: kein Zeitgeber (die Bedingung ist der Marker)" "$FS" "Timer]"
+# Nach den Diensten: die Fortsetzung vergleicht Befunde, die erst nach deren
+# Start stimmen. After= ordnet nur -- scheitert ein Dienst, laeuft sie trotzdem.
+hat "Fortsetzung: ordnet sich nach den Diensten" "$FS" "After=local-fs.target chimera.service chimera-tor.service chimera-hardware.service"
+hat "Fortsetzung eingeschaltet" "$F/spur" "systemctl enable chimera-mojo-fortsetzung.service"
+hat_nicht "Fortsetzung wird beim Installieren NICHT gestartet" "$F/spur" "enable --now chimera-mojo-fortsetzung"
+hat "Fortsetzung im Manifest" "$R/opt/chimera/state/manifest.tsv" "dienst	chimera-mojo-fortsetzung.service	aktiviert"
 
 # --- 3. Meldeunit trennt Zwischenfehler von der Aufgabe -------------------
 M="$R/$U/chimera-mojo@.service"
@@ -147,12 +170,15 @@ check "Zweitlauf rc 0" "$(cat "$F/rc")" 0
 hat_nicht "Zweitlauf schaltet nicht erneut ein" "$F/spur" "enable --now"
 check "Manifest: Zeitgeber genau einmal" "$(grep -c 'dienst	chimera-mojo.timer' "$R/opt/chimera/state/manifest.tsv")" 1
 check "Manifest: Drop-in genau einmal" "$(grep -c 'chimera.service.d/10-mojo.conf' "$R/opt/chimera/state/manifest.tsv")" 1
+check "Manifest: Fortsetzung genau einmal" "$(grep -c 'dienst	chimera-mojo-fortsetzung.service' "$R/opt/chimera/state/manifest.tsv")" 1
+check "Zweitlauf schaltet die Fortsetzung nicht erneut ein" "$(grep -cF 'systemctl enable chimera-mojo-fortsetzung.service' "$F/spur")" 0
 
 # --- 5. Von Hand abgeschalteter Zeitgeber ---------------------------------
 : >"$F/aus"
 : >"$F/spur"
 lauf mojo_einrichten
 hat "Zeitgeber aus trotz Manifest: wird wieder eingeschaltet" "$F/spur" "enable --now chimera-mojo.timer"
+hat "Fortsetzung aus trotz Manifest: wird wieder eingeschaltet" "$F/spur" "systemctl enable chimera-mojo-fortsetzung.service"
 rm -f "$F/aus"
 
 # --- 6. Trockenlauf -------------------------------------------------------
@@ -208,7 +234,8 @@ lauf mojo_einrichten
 lauf mojo_rueckbau
 check "Rueckbau rc 0" "$(cat "$F/rc")" 0
 hat "Rueckbau schaltet den Zeitgeber ab" "$F/spur" "disable --now chimera-mojo.timer"
-for d in chimera-mojo.service chimera-mojo@.service chimera-mojo.timer; do
+hat "Rueckbau schaltet die Fortsetzung ab" "$F/spur" "disable --now chimera-mojo-fortsetzung.service"
+for d in chimera-mojo.service chimera-mojo@.service chimera-mojo.timer chimera-mojo-fortsetzung.service; do
 	[ ! -e "$R/$U/$d" ] && ok "Rueckbau entfernt $d" || bad "Rueckbau entfernt $d -- blieb stehen"
 done
 [ ! -e "$R/$U/chimera.service.d/10-mojo.conf" ] && ok "Rueckbau entfernt das Drop-in" || bad "Rueckbau entfernt das Drop-in -- blieb stehen"

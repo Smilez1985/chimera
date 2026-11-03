@@ -3,7 +3,9 @@
 #
 # Was Schritt 27 hinterlaesst, steht im Manifest:
 #   dienst  chimera-mojo.timer (aktiviert)
+#   dienst  chimera-mojo-fortsetzung.service (aktiviert, laeuft nur mit Marker)
 #   datei   /etc/systemd/system/chimera-mojo{.service,.timer,@.service}
+#   datei   /etc/systemd/system/chimera-mojo-fortsetzung.service
 #   datei   /etc/systemd/system/<dienst>.service.d/10-mojo.conf
 #
 # Exitcode: 0 in Ordnung, 1 Befund.

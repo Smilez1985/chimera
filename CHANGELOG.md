@@ -258,6 +258,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   liest, die es aber nicht gibt. Statisch, ohne Ausführung.
 
 ### Geändert
+- **Der Snapshot vor einem Neustart ist ein Verzeichnis, kein Archiv**
+  (`state/mojo-snapshot/` mit `stand.tsv` und den Kopien unter ihrer Nummer).
+  Zurückrollen ist damit ein Kopieren mit Prüfsummenvergleich — kein
+  Entpacken, keine Abhängigkeit von einem Packprogramm. `DESIGN` nennt jetzt
+  auch die Marker-Felder `grund` und `befunde`: der zweite Lauf kennt den
+  Bericht des ersten nicht mehr.
 - **Herkunft um die PiSugar-Repos erweitert** (`HERKUNFT §4`): Lizenzgrenze
   je Teilbaum, der Stand unseres Treiber-Nachbaus gegen den heutigen
   Upstream (nur Joystick, Pull-up und MangoPi sind dazugekommen), und die
@@ -317,6 +323,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Hinzugefügt
+- **Mojo macht nach einem Neustart weiter.** `chimera-mojo-fortsetzung.service`
+  läuft einmal nach dem Start — nur wenn der Marker `state/mojo-fortsetzen.json`
+  steht (`ConditionPathExists`, kein Zeitgeber), geordnet **nach** den Diensten,
+  und ruft `chimera-tor --mojo --miracle --fortsetzen`. Im Manifest, im
+  Rückbau abgedeckt, Nachweis über `is-enabled` (die Unit ist absichtlich meist
+  inaktiv). Test `test-mojo.sh` 81 ok, sieben neue Mutationen in
+  `counter-check-mojo.sh`.
 - **LED meldet jeden Ausgang des Installer-Laufs.** Bisher gab es ein
   Abschlusszeichen nur, wenn der Lauf die Dienste angehalten hatte — ein Lauf
   ohne Änderung („alles aktuell") zeigte gar nichts. Jetzt: `ok` grün fest,
