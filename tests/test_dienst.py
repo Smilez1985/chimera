@@ -107,7 +107,18 @@ check("Sitzungs-Socket gebunden", _os.path.exists(_pfad), True)
 try:
     _c = _so.socket(_so.AF_UNIX); _c.settimeout(3); _c.connect(_pfad)
     _c.sendall(b'{"op":"ping"}\n')
-    _antwort = b'"ok": true' in _c.recv(200)
+    # Zeilenprotokoll: bis zum Zeilenende lesen. Ein einzelnes recv(200) kann
+    # mitten in der Zeile zurückkommen -- im CI am 3.11. so passiert: Socket
+    # gebunden, Antwort unterwegs, aber zerteilt, und der Test meldete einen
+    # Fehler, den es nicht gab (3.11. rot, 3.13. im selben Lauf gruen).
+    _puffer = b""
+    _frist = time.monotonic() + 3
+    while b"\n" not in _puffer and time.monotonic() < _frist:
+        _teil = _c.recv(4096)
+        if not _teil:
+            break
+        _puffer += _teil
+    _antwort = b'"ok": true' in _puffer
     _c.close()
 except OSError:
     _antwort = False
