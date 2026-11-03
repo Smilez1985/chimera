@@ -58,6 +58,11 @@ class Profil:
     hinweis: str = ""
     quelle: dict = field(default_factory=dict)     # Herkunft des Treibers (Doku)
     ton: dict = field(default_factory=dict)        # Laufzeit-Overlays für Ton
+    #: Taktfrequenz der Software-PWM für die RGB-LED (Hz). Sie ist eine
+    #: Eigenschaft des Moduls: Bei 100 Hz kosteten drei Kanäle zusammen
+    #: ~3,9 % eines Kerns im Leerlauf, bei 60 Hz ~3,0 % (am Pi gemessen,
+    #: 3.11.2026). 60 Hz trägt weiterhin, ist aber billiger.
+    led_frequenz_hz: float = 100.0
     roh: dict = field(default_factory=dict)
 
     @classmethod
@@ -75,7 +80,8 @@ class Profil:
             mindestabstand_s=float(d.get("mindestabstand_s", 0)),
             pins=dict(d.get("pins", {})), deps=dict(d.get("deps", {})),
             erkennung=list(d.get("erkennung", [])), hinweis=str(d.get("hinweis", "")),
-            quelle=dict(d.get("quelle", {})), ton=dict(d.get("ton", {})), roh=d,
+            quelle=dict(d.get("quelle", {})), ton=dict(d.get("ton", {})),
+            led_frequenz_hz=float(d.get("led_frequenz_hz", 100)), roh=d,
         )
 
 

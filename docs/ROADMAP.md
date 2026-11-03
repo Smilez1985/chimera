@@ -95,9 +95,13 @@ zram wird nicht angefasst, wenn es läuft.
         belegt („Taste: Kantenereignisse" im Protokoll), Gesamtlast 10,8 % →
         9,5 %. Rückfall auf die Abfrage, wenn der Kernel die Kanten nicht
         annimmt. Tests `test_gpio_kanten.py` 23 ok, Gegenprobe 8 ok.*
-      - [ ] **LED-Kanäle:** drei Fäden takten mit 100 Hz, weil der Glanzwert
-        zwischen 0 und 100 liegt. Prüfen: niedrigere Frequenz oder ein Faden
-        für alle drei.
+      - [ ] **LED-Kanäle:** drei Fäden takten, weil der Glanzwert zwischen 0
+        und 100 liegt. *3.11.: Taktfrequenz von 100 auf **60 Hz** gesenkt
+        (`display.json` → `led_frequenz_hz`, am Pi 9,6 % → 8,1 %); smilez hat
+        am Gerät geprüft, dass es nicht flimmert.* Offen bleibt der größere
+        Schritt: **ein Faden für alle drei Kanäle** mit gemeinsamer
+        Kantenplanung — spart die ~2,6 %, die jetzt noch in den drei
+        Weckrufen je Periode stecken.
 
 - [x] **Neustart mit Fortsetzung:** Marker, Snapshot der geänderten Dateien,
       `chimera-mojo-fortsetzung.service` (einmal nach dem Start), Rückfall bei
@@ -824,6 +828,12 @@ Offen bleibt:
       beenden/Gespräch öffnen, lang = Gespräch beginnen, halten =
       Push-to-Talk, doppelt = abbrechen, dreifach = zurück. Hängt am
       Audio-Prozess (Phase 5). Bis dahin: Protokoll und LED-Quittung.
+- [ ] **Push-to-Talk über `halten`/`halten_ende`** — *zurückgestellt 3.11.,
+      solange es kein Audio-Modul gibt.* Die Geste ist fertig und am Gerät
+      belegt (Klammer `halten` → `halten_ende`), es fehlt der Verbraucher:
+      Aufnahme starten (Mikrofon, VAD) und stoppen (Transkription). Sobald
+      der Audio-Prozess steht, ist es ein Aufrufpaar — die Erkennung muss
+      dafür nicht angefasst werden.
 - [x] **Gestentest am Gerät:** *Erledigt 3.11., 23:09* — kurz, lang, halten +
       `halten_ende`, doppelt, dreifach; jede Geste genau eine Protokollzeile.
       Dabei fiel das Prellen auf (Ketten bis 136 ms, ein Druck wurde

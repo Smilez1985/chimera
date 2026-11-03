@@ -352,6 +352,10 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   aufgehoben, nicht verworfen. Test `test_gpio_kanten.py` 23 ok, Gegenprobe
   8 ok. Am Pi: Gesamtlast 10,8 % → 9,5 %, Protokoll „Taste:
   Kantenereignisse“.
+- **LED-Taktfrequenz je Anzeige einstellbar** (`display.json` →
+  `led_frequenz_hz`, Vorgabe 100 Hz, Whisplay 60 Hz). Drei Kanäle takten
+  damit billiger: am Pi 9,6 % → **8,1 %** eines Kerns im Leerlauf. Am Gerät
+  geprüft, dass 60 Hz nicht flimmern.
 - **Tastenentprellung über den Pegel:** Die Taste prellt am Gerät bis 136 ms;
   Flankenketten wurden als mehrere Klicks gezählt (ein Druck ergab „dreifach").
   Jetzt weckt die Flanke nur den Faden, der auf 80 ms Ruhe wartet und dann den

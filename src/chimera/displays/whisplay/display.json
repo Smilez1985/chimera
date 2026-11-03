@@ -6,6 +6,7 @@
   "farben": "rgb565",
   "bildrate": 15,
   "darstellung": "animiert",
+  "led_frequenz_hz": 60,
   "hinweis": "LCD, LED und Taste laufen ohne Herstellercode. Nur der Ton braucht das Kernelmodul des Herstellers (Overlay whisplay-soundcard), das zur Laufzeit geladen wird.",
   "pins": {
     "gpiochip": "/dev/gpiochip0",

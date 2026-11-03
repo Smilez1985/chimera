@@ -63,6 +63,27 @@ budget = 1000 / 15
 ok(f"Umrechnung {ms:.1f} ms je Bild (Budget {budget:.0f} ms, hier schnellere Hardware als der Pi)")
 ok("deutlich unter dem Budget") if ms < budget / 4 else bad(f"zu langsam: {ms:.1f} ms")
 
+
+print("== LED-Taktfrequenz kommt aus der Anzeigebeschreibung ==")
+from chimera.displays.base import Profil  # noqa: E402
+import json as _json, tempfile as _tf, os as _os  # noqa: E402
+_basis = {"typ": "x", "name": "x", "breite": 240, "hoehe": 280,
+          "farben": "rgb565", "bildrate": 15, "darstellung": "animiert"}
+with _tf.NamedTemporaryFile("w", suffix=".json", delete=False) as _f:
+    _json.dump(dict(_basis), _f)
+    _pfad_ohne = _f.name
+with _tf.NamedTemporaryFile("w", suffix=".json", delete=False) as _f:
+    _json.dump(dict(_basis, led_frequenz_hz=60), _f)
+    _pfad_mit = _f.name
+try:
+    check("ohne Angabe: 100 Hz", Profil.aus_datei(Path(_pfad_ohne)).led_frequenz_hz, 100.0)
+    check("mit Angabe: 60 Hz", Profil.aus_datei(Path(_pfad_mit)).led_frequenz_hz, 60.0)
+    _w = Profil.aus_datei(Path(__file__).resolve().parent.parent /
+                          "src/chimera/displays/whisplay/display.json")
+    check("Whisplay sagt 60 Hz", _w.led_frequenz_hz, 60.0)
+finally:
+    _os.unlink(_pfad_ohne); _os.unlink(_pfad_mit)
+
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(1 if FAIL else 0)

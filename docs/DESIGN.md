@@ -1954,10 +1954,12 @@ den Rest bis zum geplanten Blinzeln; ein Vorlauf von 0,02 s bleibt als
 Sicherheitsnetz. Während des Blinzelns läuft die volle Rate, danach fällt
 sie von selbst zurück — ein Nachlauf ist nicht nötig.
 
-**Restliche Leerlauf-Verbraucher (3.11. gemessen, offen):** vier Fäden mit
-je ~1,3 % — die Tastenschleife fragt alle 5 ms die Leitung ab (200 Weckrufe
-je Sekunde), und drei LED-Kanäle takten mit 100 Hz, weil der Glanzwert
-dazwischenliegt. Beides steht in `ROADMAP`.
+**Restliche Leerlauf-Verbraucher (3.11. gemessen):** Zuerst vier Fäden mit
+je ~1,3 % — die Tastenschleife (5-ms-Abfrage, erledigt) und drei
+LED-Kanäle. Die LED taktet jetzt mit **60 Hz statt 100** (`led_frequenz_hz`
+in `display.json`): 9,6 % → **8,1 %**. Der letzte größere Posten ist der
+Renderer selbst (Ruhe: 2 Bilder/s ≈ 5–6 %); offen ist ein gemeinsamer Faden
+für die drei LED-Kanäle (`ROADMAP`).
 
 ---
 

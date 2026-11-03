@@ -109,7 +109,8 @@ class WhisplayPanel(Panel):
         self._bl_pwm = (SoftPWM(lambda v: self._gpio.setze(self._bl, v), frequenz_hz=1000, aktiv_low=True)
                         if backlight_pwm else None)
         self._led = {
-            k: SoftPWM(lambda v, k=k: self._gpio.setze(k, v), frequenz_hz=100, aktiv_low=True)
+            k: SoftPWM(lambda v, k=k: self._gpio.setze(k, v),
+                       frequenz_hz=p.led_frequenz_hz, aktiv_low=True)
             for k in (self._r, self._g, self._b)}
         for pwm in self._led.values():
             pwm.start(0)
