@@ -68,16 +68,19 @@ zram wird nicht angefasst, wenn es läuft.
 - [ ] **Bedarf messen:** CPU, RAM und freier Datentraeger, die Chimera im
       Betrieb wirklich braucht (die 100 MB vor einem Snapshot sind eine
       Vermutung). Messen am Pi unter Last, Zahlen ins DESIGN.
-- [ ] **Neustart mit Fortsetzung:** Marker, Snapshot der geänderten Dateien,
+- [x] **Neustart mit Fortsetzung:** Marker, Snapshot der geänderten Dateien,
       `chimera-mojo-fortsetzung.service` (einmal nach dem Start), Rückfall bei
       wirkungslosem Neustart, Sperre nach zwei Versuchen (DESIGN, Regel
       „Neustart mit Fortsetzung und Rückfall").
-      *Stand 3.11.: Marker, Snapshot, Rückfall, Sperre und die Verdrahtung in
-      `chimera-tor --mojo --fortsetzen` liegen im Code (14 Tests grün,
-      `cargo test -p chimera-tor` 256 ok); `chimera-mojo-fortsetzung.service`
-      schreibt der Installer (Schritt 27, `ConditionPathExists` auf den Marker,
-      im Manifest, Rückbau abgedeckt, 81 Tests grün). **Offen: am Gerät** —
-      Marker schreiben, `systemctl reboot`, Fortsetzung läuft, Marker weg.*
+      *Erledigt 3.11.: Marker, Snapshot, Rückfall und Sperre in
+      `chimera-tor --mojo --fortsetzen` (14 Tests, `cargo test -p chimera-tor`
+      256 ok); `chimera-mojo-fortsetzung.service` schreibt der Installer
+      (Schritt 27, 82 Tests, Gegenprobe 32). **Am Pi belegt** (3.11., 21:40):
+      Installer aus `81c047b` → Unit eingeschaltet und im Manifest; Marker
+      geschrieben, `systemctl reboot` → Fortsetzung lief nach dem Start
+      (9 ok, 0 warn), meldete „der Neustart hat gewirkt … Marker entfernt",
+      Marker danach weg. Ohne Marker: „skipped, unmet condition check",
+      `Result=success` — kein Befund bei jedem Boot.*
 - [x] **Modul 40: laufender Dienst ist kein Befund.** Meldet „Leitungen
       gehalten", wenn die Ton-Prüfung fehlschlägt und Schritt 40 deshalb in die
       Erkennung läuft, obwohl die Anzeige eingerichtet ist und der Dienst sie

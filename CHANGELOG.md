@@ -474,6 +474,14 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   nicht gemessen.
 
 ### Geprüft
+- **Neustart mit Fortsetzung am Gerät belegt** (3.11., 21:40, Pi Zero 2 W,
+  Kernel 6.18.50): Installer aus `81c047b` schreibt und aktiviert
+  `chimera-mojo-fortsetzung.service` (Manifest-Eintrag `dienst`); Marker
+  geschrieben, `systemctl reboot` → die Fortsetzung lief nach dem Start,
+  meldete „der Neustart hat gewirkt … Marker entfernt" und entfernte den
+  Marker. Ohne Marker meldet systemd „skipped, unmet condition check" mit
+  `Result=success` — beim nächsten Boot also kein Befund. Alle fünf Units
+  danach aktiv.
 302 Tests, alle grün: 64 Agent, 68 Mood, 46 Installer, 41 Anbieter,
 35 Skills und Gedächtnis, 21 Übergänge, 16 Renderer, 11 Anzeige. Jeder Regressionstest hat eine Gegenprobe. Die
 Anbieterschicht und die Agent-Schleife wurden zusätzlich gegen einen
