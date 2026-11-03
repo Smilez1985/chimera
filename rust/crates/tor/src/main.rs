@@ -8,6 +8,7 @@ mod dienst;
 mod modul_vorlage;
 mod mojo;
 mod netzsuche;
+mod neustart;
 mod ollama;
 mod sitzung;
 mod status;
@@ -78,6 +79,7 @@ fn mojo_befehl(a: &[String]) -> ExitCode {
     let mut bereich: Option<String> = None;
     let mut oracle = false;
     let mut miracle = false;
+    let mut fortsetzen = false;
     let mut i = 0;
     while i < a.len() {
         match a[i].as_str() {
@@ -88,6 +90,12 @@ fn mojo_befehl(a: &[String]) -> ExitCode {
             }
             "--miracle" => {
                 miracle = true;
+                fix = true;
+            }
+            // Der Lauf nach einem Neustart (DESIGN, Regel "Neustart mit
+            // Fortsetzung und Rueckfall"): Der Marker sagt, was vorher stand.
+            "--fortsetzen" => {
+                fortsetzen = true;
                 fix = true;
             }
             "--json" => json = true,
@@ -131,7 +139,7 @@ fn mojo_befehl(a: &[String]) -> ExitCode {
     // Miracle greift auf das letzte Oracle-Ergebnis zurueck, wenn es nicht
     // aelter als 6 Stunden ist. Fehlt es (oder ist es alt), laeuft Oracle
     // zuerst -- Miracle prueft dann selbst, statt blind zu reparieren.
-    if miracle {
+    if miracle && !fortsetzen {
         let pfad = datei.clone().unwrap_or_else(mojo::oracle_pfad);
         match mojo::oracle_lesen(&pfad) {
             Some(alt) => {
@@ -190,7 +198,158 @@ fn mojo_befehl(a: &[String]) -> ExitCode {
     // so gilt immer der letzte Oracle-Stand, hoechstens 6 Stunden lang.
     mojo::ablegen(&j, datei.as_deref());
     let _ = oracle;
+
+    // Nach einem Neustart: erst vergleichen, dann entscheiden. Kein zweiter
+    // Neustart, wenn derselbe Befund noch steht (DESIGN, Regel "Neustart mit
+    // Fortsetzung und Rueckfall").
+    if fortsetzen {
+        return fortsetzung_abschluss(&zustand_dir(), &bericht, jetzt);
+    }
+    // Sonst: Verlangt ein stehengebliebener Befund einen Neustart, wird er
+    // jetzt vorbereitet -- mit Marker, Platzpruefung und Sperre.
+    if fix {
+        neustart_vorbereiten(&mojo::Echt, &zustand_dir(), &bericht, jetzt);
+    }
     ExitCode::from(bericht.exitcode())
+}
+
+/// Wo Mojo seinen Zustand ablegt (`CHIMERA_STATE_DIR`, sonst wie im Installer).
+fn zustand_dir() -> PathBuf {
+    PathBuf::from(
+        std::env::var("CHIMERA_STATE_DIR").unwrap_or_else(|_| "/opt/chimera/state".into()),
+    )
+}
+
+/// Schluessel eines Befunds: Bereich und Gegenstand, wie im Bericht.
+fn befund_schluessel(b: &mojo::Befund) -> String {
+    format!("{}|{}", b.bereich, b.gegenstand)
+}
+
+/// Braucht ein stehengebliebener Befund einen Neustart? Dann Marker schreiben,
+/// die geaenderten Dateien sichern und neu starten. `Some((exitcode, meldung))`
+/// heisst: es wurde etwas gemeldet (Neustart eingeleitet oder verweigert).
+fn neustart_vorbereiten(
+    sys: &dyn mojo::System,
+    state: &std::path::Path,
+    bericht: &mojo::Bericht,
+    jetzt: u64,
+) {
+    let offen: Vec<&mojo::Befund> = bericht
+        .befunde
+        .iter()
+        .filter(|b| {
+            b.schwere >= mojo::Schwere::Warn
+                && b.unreparierbar
+                && b.ursache.as_ref().map(|u| u.neustart_hilft).unwrap_or(false)
+        })
+        .collect();
+    if offen.is_empty() {
+        return;
+    }
+    let mut marker = neustart::marker_lesen(state).unwrap_or_else(|| {
+        neustart::Marker::neu(jetzt, mojo::RUNDEN_MAX, "", Vec::new(), Vec::new())
+    });
+    if let Err(grund) = neustart::darf_neustarten(&marker) {
+        melden(Stufe::Fehler, &format!("Neustart unterlassen: {grund}"));
+        return;
+    }
+    // Nur die geaenderten Dateien. Heute aendert keine Reparatur eine Datei
+    // (alle vier starten Dienste oder laden Pakete) -- die Liste ist deshalb
+    // leer, und ein Rueckfall stellt dann nichts wieder her. Das ist kein
+    // fehlender Baustein, sondern derzeit die Wahrheit; sobald eine Reparatur
+    // eine Datei anfasst, traegt sie hier ihren Pfad ein.
+    let dateien: Vec<String> = Vec::new();
+    let stand = match neustart::snapshot_anlegen(state, &dateien, sys.platz_frei_mb("/"), jetzt) {
+        Ok(s) => s,
+        Err(grund) => {
+            melden(Stufe::Fehler, &format!("Neustart unterlassen: {grund}"));
+            return;
+        }
+    };
+    marker.runde = mojo::RUNDEN_MAX;
+    marker.grund = offen[0]
+        .ursache
+        .as_ref()
+        .map(|u| u.text.clone())
+        .unwrap_or_else(|| "Befund nennt einen Neustart".into());
+    marker.befunde = offen.iter().map(|b| befund_schluessel(b)).collect();
+    marker.dateien = stand;
+    marker.neustarts += 1;
+    marker.zeit = jetzt;
+    if let Err(e) = neustart::marker_schreiben(state, &marker) {
+        melden(Stufe::Fehler, &format!("Neustart unterlassen: Marker nicht schreibbar: {e}"));
+        return;
+    }
+    match sys.neustart_ausloesen() {
+        Ok(()) => melden(
+            Stufe::Warnung,
+            &format!(
+                "Neustart eingeleitet (Grund: {}, {} Befund(e), Versuch {}/{}). Nach dem Start laeuft die Fortsetzung.",
+                marker.grund,
+                marker.befunde.len(),
+                marker.neustarts,
+                neustart::NEUSTARTS_MAX
+            ),
+        ),
+        Err(e) => {
+            // Ohne Neustart kein Marker: Ein liegengebliebener Marker wuerde
+            // beim naechsten Start eine Fortsetzung vortaeuschen.
+            neustart::marker_loeschen(state);
+            melden(Stufe::Fehler, &format!("Neustart gescheitert: {e}"));
+        }
+    }
+}
+
+/// Der Lauf nach dem Neustart: hat er gewirkt? Wenn nicht, zurueckrollen und
+/// laut melden -- statt ein zweites Mal zu starten.
+fn fortsetzung_abschluss(
+    state: &std::path::Path,
+    bericht: &mojo::Bericht,
+    jetzt: u64,
+) -> ExitCode {
+    let Some(marker) = neustart::marker_lesen(state) else {
+        melden(Stufe::Warnung, "Fortsetzung ohne Marker -- es gab keinen Neustart. Lauf als normaler Durchgang gewertet.");
+        return ExitCode::from(bericht.exitcode());
+    };
+    let noch: Vec<String> = bericht
+        .befunde
+        .iter()
+        .filter(|b| b.schwere >= mojo::Schwere::Warn)
+        .map(befund_schluessel)
+        .collect();
+    match neustart::fortsetzung(&marker, &noch) {
+        neustart::Ausgang::Erledigt => {
+            neustart::marker_loeschen(state);
+            melden(
+                Stufe::Info,
+                &format!(
+                    "Fortsetzung: der Neustart hat gewirkt (Grund war: {}, vor {} s). Marker entfernt.",
+                    marker.grund,
+                    jetzt.saturating_sub(marker.zeit)
+                ),
+            );
+            ExitCode::from(bericht.exitcode())
+        }
+        neustart::Ausgang::Rueckfall => {
+            let stelle = if marker.dateien.is_empty() {
+                "keine Datei war geaendert -- nichts zurueckzurollen".to_string()
+            } else {
+                match neustart::zurueckrollen(state) {
+                    Ok(p) => format!("{} Datei(en) zurueckgerollt: {}", p.len(), p.join(", ")),
+                    Err(e) => format!("Rueckrollen gescheitert: {e}"),
+                }
+            };
+            neustart::marker_loeschen(state);
+            melden(
+                Stufe::Fehler,
+                &format!(
+                    "Fortsetzung: derselbe Befund steht nach dem Neustart noch (Grund war: {}). {stelle}. Kein zweiter Neustart -- hier muss ein Mensch ran.",
+                    marker.grund
+                ),
+            );
+            ExitCode::from(bericht.exitcode().max(2))
+        }
+    }
 }
 
 fn main() -> ExitCode {

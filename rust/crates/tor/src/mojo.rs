@@ -461,6 +461,11 @@ pub trait System {
     /// Wie oft eine Reparatur fuer diesen Gegenstand in der letzten Stunde nichts bewirkt hat.
     fn fehlversuche(&self, schluessel: &str) -> u32;
     fn fehlversuch_merken(&self, schluessel: &str);
+    /// Das Geraet neu starten. Der Vorgabewert verweigert den Neustart: Ein Test,
+    /// der ihn nicht ausdruecklich erlaubt, darf kein Geraet durchstarten.
+    fn neustart_ausloesen(&self) -> Result<(), String> {
+        Err("Neustart im Test nicht erlaubt".into())
+    }
 }
 
 /// Gleiche Reparatur, gleicher Gegenstand: nach so vielen wirkungslosen Versuchen
@@ -693,6 +698,16 @@ impl System for Echt {
                 let dienst_neu = sc(&["start", dienst]);
                 sock.and(dienst_neu)
             }
+        }
+    }
+
+    fn neustart_ausloesen(&self) -> Result<(), String> {
+        // `systemctl reboot` kehrt zurueck, sobald der Neustart eingereiht ist;
+        // auf das Herunterfahren warten wir nicht (das erledigt die Unit).
+        match befehl("systemctl", &["reboot"], FRIST) {
+            Some((true, _)) => Ok(()),
+            Some((false, aus)) => Err(format!("systemctl reboot: {}", aus.trim())),
+            None => Err("systemctl reboot: keine Antwort".into()),
         }
     }
 }
