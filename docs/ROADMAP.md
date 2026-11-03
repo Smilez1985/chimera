@@ -65,9 +65,25 @@ zram wird nicht angefasst, wenn es läuft.
       jeder Lauf aus einem Zip mit dem Befund „kein Commit ⇒ kein Binary" endet
       (rc 1). Ein Lauf aus einem Git-Baum mit Commit muss grün zeigen — einmal
       ablesen, dann ist der Fall belegt.
-- [ ] **Bedarf messen:** CPU, RAM und freier Datentraeger, die Chimera im
-      Betrieb wirklich braucht (die 100 MB vor einem Snapshot sind eine
-      Vermutung). Messen am Pi unter Last, Zahlen ins DESIGN.
+- [x] **Bedarf messen:** CPU, RAM und freier Datentraeger, die Chimera im
+      Betrieb wirklich braucht. *Erledigt 3.11. am Pi (Zahlen im DESIGN,
+      Regel „Neustart mit Fortsetzung"): RAM 462 MB, 359 MB verfuegbar;
+      Karte 95 GB frei; `source/` 3 MB, `state/` 40 KB, `productive/` 107 MB;
+      `chimera.service` 47 MB RSS und **28,4 % eines Kerns im Leerlauf**;
+      `chimera-tor --dienst` 1,6 MB / 0,2 %; Mojo-Pruefung 528 ms und 6 MB
+      Spitze. Die 100 MB vor einem Snapshot sind damit eine Untergrenze, kein
+      Bedarf.*
+- [ ] **Platzpruefung vor dem Snapshot:** Statt fester 100 MB die **Groesse der
+      zu sichernden Dateien** plus Reserve pruefen (Summe steht vor dem
+      Kopieren fest, DESIGN-Regel „Neustart mit Fortsetzung"). Die 100 MB
+      bleiben Untergrenze.
+- [ ] **Leerlauf-Last des Agenten:** `chimera.service` verbraucht im Leerlauf
+      28,4 % eines Kerns; ein Faden haengt zu ~22 % in `D` (E/A-Wartezeit,
+      Thread 1048, 3.11. gemessen). **Ursache eingegrenzt:** der Faden schreibt
+      auf `/dev/spidev0.0` (fd 5) — **572 `write()` je Sekunde**, das sind rund
+      17 volle Bilder je Sekunde ohne Aenderung. Auf einem Zero 2 W ist das ein
+      Viertel der Maschine fuer ein stehendes Gesicht. Naechster Schritt: nur
+      bei Aenderung zeichnen bzw. nur geaenderte Bereiche, dann messen.
 - [x] **Neustart mit Fortsetzung:** Marker, Snapshot der geänderten Dateien,
       `chimera-mojo-fortsetzung.service` (einmal nach dem Start), Rückfall bei
       wirkungslosem Neustart, Sperre nach zwei Versuchen (DESIGN, Regel

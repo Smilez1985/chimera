@@ -3590,10 +3590,30 @@ Neustart, wird auf den Stand vor dem Neustart zurueckgerollt.
 **Platz vor dem Snapshot:** Bevor etwas gesichert wird, wird der freie Platz
 geprueft — dieselbe Messung, die Oracle ohnehin macht (RAM, Karte, Cache). Ist
 zu wenig Platz, wird **kein** Snapshot angelegt und kein Neustart ausgeloest,
-sondern der Befund genannt. Der erste Richtwert sind **100 MB**; er ist eine
-Vermutung (smilez, 3.11.) und muss gemessen werden: wie viel CPU, RAM und
-freier Platz Chimera im Betrieb wirklich braucht. Ein voller Datentraeger ist
-selbst ein plausibler Grund, warum der Dienst nicht startet.
+sondern der Befund genannt. Ein voller Datentraeger ist selbst ein plausibler
+Grund, warum der Dienst nicht startet.
+
+**Gemessen (3.11., Pi Zero 2 W, Kernel 6.18.50, Dienste laufen):** Der
+Richtwert **100 MB** bleibt, ist aber eine **Untergrenze**, keine Schaetzung
+des Bedarfs — er entspricht etwa einer Produktivumgebung (`productive/` samt
+venv: 107 MB). Die Messung:
+
+| Posten | Wert |
+|---|---|
+| Arbeitsspeicher | 462 MB gesamt, 359 MB verfuegbar (Dienste laufen), 103 MB belegt |
+| Auslagerung (zram + Datei) | 16,7 GB bereit, 0 belegt |
+| Datentraeger | 117 GB, 18 GB belegt, 95 GB frei |
+| `source/` / `state/` / `productive/` | 3 MB / 40 KB / 107 MB |
+| `chimera.service` (Agent) | 47 MB RSS, **28,4 % eines Kerns im Leerlauf** |
+| `chimera-tor --dienst` | 1,6 MB RSS, 0,2 % |
+| Mojo-Pruefung (`--mojo --oracle`) | 528 ms, **6 MB** Spitze, Exitcode 0 |
+
+Daraus folgt fuer den Snapshot: nicht „100 MB frei", sondern **die Groesse der
+zu sichernden Dateien plus Reserve** pruefen — die steht vor dem Kopieren fest
+(Summe der Dateigroessen aus der Liste). 100 MB bleiben die Untergrenze fuer
+den Fall, dass die Liste leer ist oder die Groesse unbekannt. Der Leerlauf von
+28 % eines Kerns ist ein eigener Befund (ein Faden haengt zu ~22 % in `D`,
+also in E/A-Wartezeit) und steht in `ROADMAP`.
 
 **Historie 1:** Es bleibt **ein** Snapshot. Er ist ein **Verzeichnis**
 (`state/mojo-snapshot/` mit `stand.tsv` — Pfad, Pruefsumme, Nummer — und den
