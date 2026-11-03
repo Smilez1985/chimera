@@ -291,6 +291,17 @@ Alles andere — Einschaltfolge des ST7789, `+20`-Zeilen-Versatz, MADCTL
 Tastenpolling 5 ms — ist unverändert. Unser Nachbau ist also aktuell; zu
 tun ist nichts.
 
+**Eine bewusste Abweichung (3.11.2026): Die Taste wird nicht mehr
+abgefragt.** Die Vorlage liest die Leitung alle 5 ms
+(`BUTTON_POLL_INTERVAL_SEC`) — auf einem Zero 2 W sind das 200 `ioctl`s je
+Sekunde für einen Taster, der meistens nicht gedrückt ist; am Gerät
+gemessen 1,3 % eines Kerns im Leerlauf. Unser Treiber fordert stattdessen
+**Kantenereignisse** an (`event_buffer_size` + `GPIO_V2_LINE_FLAG_EDGE_*`,
+Kernel-ABI v2, das wir ohnehin sprechen) und wartet im Kern auf die Flanke.
+Am Pi belegt: „Taste: Kantenereignisse (keine Abfrage im Leerlauf)“ im
+Protokoll, Gesamtlast 10,8 % → 9,5 %. Fällt die Anforderung durch (alter
+Kernel), greift die Abfrage als Rückfall — ohne Sonderweg im Aufrufer.
+
 Was für die **Radxa-Portierung** (`docs/HARDWARE.md` §1, bisher
 „nicht unterstützt") drinsteht und was nicht:
 
@@ -317,6 +328,16 @@ falsch: DESIGN Regel 7 sagt *kein Daemon, kein exklusiver Zugriff*. Unser
 Dienst besitzt Panel und LED selbst. Übernommen wird daraus nur die
 **Gesten-Semantik** für unsere eine Taste (kurz / lang / mehrfach), nicht
 der Transport.
+
+*Stand 3.11.2026:* Die Semantik ist übernommen und um zwei Punkte
+erweitert — `BUTTON_LONG_PRESS_SEC = 0.7` unverändert, das Klickfenster
+aber **0,8 s statt `QUAD_CLICK_WINDOW_SEC = 3.0`** (bei uns hängt an einem
+kurzen Druck eine Aktion, die nicht drei Sekunden auf ihre Bestätigung
+warten darf), und das **Halten hat ein Ende** (`halten` / `halten_ende` für
+Push-to-Talk), weil der Daemon nur einmal je Loslassen handelte. Die
+Erkennung selbst ist Eigenbau (`display/gesten.py`, reine Zustandsmaschine
+nach DESIGN Regel 7d) — der Daemon verzahnt seine Gesten mit App-Fokus und
+Framebuffer, davon ist nichts übertragbar.
 
 ### 4.4 Ton: was uns fehlt und was wir nicht anfassen
 

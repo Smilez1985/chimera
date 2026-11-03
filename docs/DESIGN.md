@@ -1811,6 +1811,38 @@ Agent nie. Dazu kam Pillows eingebaute Schrift (rund 10 px). Deshalb:
   Blitze in 720 ms). Ein fester Weißton hob sich am Gerät nicht vom blauen
   Grundglow ab, man sah nur „heller“.
 
+#### Fünf Absichten auf einer Taste (3.11.2026)
+
+Die Seitentaste ist **eine** Leitung mit Flanken. Was gemeint ist, entsteht
+aus dem zeitlichen Verlauf; die Erkennung steht in `display/gesten.py` und
+ist eine **reine Zustandsmaschine** (Regel 7d) — sie bekommt die Zeit
+übergeben und schläft nicht. Ein Faden (`GestenTakt`) wartet auf die jeweils
+nächste Frist und weckt sie.
+
+| Geste | Bedingung | gedacht für |
+|---|---|---|
+| `kurz` | losgelassen vor 0,7 s | Umgebungshören beenden, Gespräch öffnen (§3.4) |
+| `lang` | 0,7–2,0 s gehalten, beim Loslassen gemeldet | Gespräch beginnen |
+| `halten` | ab 2,0 s **während** des Haltens | Push-to-Talk: Aufnahme an |
+| `halten_ende` | Loslassen nach `halten` | Push-to-Talk: Aufnahme aus |
+| `doppelt` | zwei kurze Drücke im Klickfenster | abbrechen |
+| `dreifach` | drei und mehr kurze Drücke | zurück |
+
+Fünf Modi, sechs Ereignisse: `halten_ende` ist kein eigener Modus, sondern
+das Gegenstück zu `halten` — ohne Ende taugt ein Halten nur zum Auslösen
+(Neustart), nicht zum Sprechen.
+
+**Sofortige Quittung, späte Bedeutung.** Der Druck quittiert in dem Moment,
+in dem er ankommt (LED `taste`, 720 ms) — ein Druck, der erst nach 0,8 s
+etwas zeigt, fühlt sich kaputt an. Die *Geste* wird erst danach erkannt und
+protokolliert; ihre Wirkung wartet auf den Audio-Prozess (ROADMAP Phase 5).
+
+**Zwei Abweichungen von der Vorlage** (PiSugar `whisplay-daemon`,
+HERKUNFT §4.3): Das Klickfenster ist **0,8 s** statt 3,0 s — bei der Vorlage
+zählte es vier Klicks für „zurück“, bei uns hängt an einem kurzen Druck eine
+Aktion, die nicht drei Sekunden auf ihre Bestätigung warten darf. Und das
+Halten hat bei uns ein **Ende**; der Daemon handelte nur einmal je Loslassen.
+
 ### Architekturregel 7d — Wer anzeigt, besitzt die Zeit
 
 Muster sind **reine Funktionen** `f(t, wert) -> wert`: Pulsieren, Blinken,

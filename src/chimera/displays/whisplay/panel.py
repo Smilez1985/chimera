@@ -70,9 +70,24 @@ class WhisplayPanel(Panel):
         # Backlight und LED: LOW = an. Anfangswert 1 = aus, bis der PWM läuft.
         self._bl, self._r, self._g, self._b, self._taste = (
             pins["backlight"], pins["led_r"], pins["led_g"], pins["led_b"], pins["taste"])
-        self._gpio = Leitungen(pins["gpiochip"], verbraucher="chimera-whisplay-led").request(
-            ausgaenge={self._bl: 1, self._r: 1, self._g: 1, self._b: 1},
-            eingaenge={self._taste: None})
+        # Die Taste mit Kantenereignissen belegen (3.11.): Die Abfrage alle
+        # 5 ms kostete 200 ioctls je Sekunde und 1,3 % eines Kerns im
+        # Leerlauf. Kann der Kernel das nicht (alter Stand, anderes Panel),
+        # faellt der Aufbau auf die Abfrage zurueck statt zu scheitern.
+        ausgaenge = {self._bl: 1, self._r: 1, self._g: 1, self._b: 1}
+        try:
+            self._gpio = Leitungen(
+                pins["gpiochip"], verbraucher="chimera-whisplay-led").request(
+                    ausgaenge=ausgaenge,
+                    eingaenge={self._taste: None},
+                    kanten={self._taste: "beide"})
+            self._taste_kanten = True
+        except (OSError, ValueError):
+            self._gpio = Leitungen(
+                pins["gpiochip"], verbraucher="chimera-whisplay-led").request(
+                    ausgaenge=ausgaenge,
+                    eingaenge={self._taste: None})
+            self._taste_kanten = False
         try:
             self._st.einschalten()
         except Exception:
@@ -151,6 +166,11 @@ class WhisplayPanel(Panel):
         self._taste_cb = callback
 
     def _taste_schleife(self) -> None:
+        if self._taste_kanten:
+            self._taste_ereignisse()
+            return
+        log.info("Taste: Abfrage alle %.0f ms (keine Kantenereignisse)",
+                 self._taste_poll * 1000)
         letzter = self._gpio.lies(self._taste)
         while self._taste_laeuft:
             try:
@@ -163,6 +183,25 @@ class WhisplayPanel(Panel):
                 if cb is not None:
                     cb(jetzt == 1)
             time.sleep(self._taste_poll)
+
+    def _taste_ereignisse(self) -> None:
+        """Auf Flanken der Taste warten — kostet im Leerlauf nichts.
+
+        ``timeout`` begrenzt den Warteschritt, damit ``close()`` den Faden
+        nicht bis zur naechsten Tastenbewegung haengen laesst.
+        """
+        log.info("Taste: Kantenereignisse (keine Abfrage im Leerlauf)")
+        while self._taste_laeuft:
+            try:
+                ereignisse = self._gpio.ereignisse(self._taste, timeout=0.5)
+            except OSError:
+                break
+            for _offset, art in ereignisse:
+                cb = self._taste_cb
+                if cb is not None:
+                    cb(art == "steigend")
+            if not ereignisse and self._taste_laeuft:
+                continue
 
     def close(self) -> None:
         self._taste_laeuft = False

@@ -184,6 +184,11 @@ class Panel:
     #: Wie oft dieses Panel gezeichnet werden will (Regel 7a). ``0`` heißt
     #: „nur auf Anstoß" — dann zeichnet der Renderer nicht von selbst.
     fps: int = 15
+    #: Wie oft in der Ruhe gezeichnet wird (Regel 7a, Ergänzung 3.11.2026):
+    #: ``fps`` gilt, wenn etwas passiert (Blinzeln, Sprechen); für ein
+    #: schwingendes Gesicht genügen wenige Bilder. ``0`` heißt „in Ruhe
+    #: nicht zeichnen". Ein E-Ink-Panel erbt ``fps = 0`` und damit auch hier 0.
+    ruhe_fps: int = 2
     profil: Profil | None = None
     #: Warum dieses Panel so ist, wie es ist — gefüllt, wenn etwas nicht
     #: ging (Regel 8a: „läuft blind" und „ist kaputt" muss ablesbar sein).

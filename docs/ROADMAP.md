@@ -89,11 +89,12 @@ zram wird nicht angefasst, wenn es läuft.
       Blinzeln/Sprechen/Zustandswechsel. **Am Pi belegt:** 10,8 % eines Kerns,
       134 `write()`/s, 86 KB/s — ein Drittel der Last, ein Viertel der
       Schreibaufrufe. Offen bleiben die vier Nebenverbraucher (je ~1,3 %):
-      - [ ] **Tastenschleife:** fragt alle 5 ms die Leitung ab
-        (`taste_poll_s=0.005`, 200 Weckrufe je Sekunde). Ersatz: Kantenereignis
-        über `poll()`/`epoll` auf die GPIO-Leitung (`Leitungen` in
-        `displays/gpio.py` belegt schon einen FD; es fehlen
-        `event_buffer_size` und die `EDGE_*`-Flags).
+      - [x] **Tastenschleife:** fragte alle 5 ms die Leitung ab (200 Weckrufe
+        je Sekunde, ~1,3 % eines Kerns). *Erledigt 3.11.: Kantenereignisse
+        (`request(kanten=…)`, `ereignisse()`, `EDGE_RISING/FALLING`); am Pi
+        belegt („Taste: Kantenereignisse" im Protokoll), Gesamtlast 10,8 % →
+        9,5 %. Rückfall auf die Abfrage, wenn der Kernel die Kanten nicht
+        annimmt. Tests `test_gpio_kanten.py` 23 ok, Gegenprobe 8 ok.*
       - [ ] **LED-Kanäle:** drei Fäden takten mit 100 Hz, weil der Glanzwert
         zwischen 0 und 100 liegt. Prüfen: niedrigere Frequenz oder ein Faden
         für alle drei.
@@ -814,10 +815,18 @@ Offen bleibt:
 - [ ] Das Display zeigt einen Zustand erst nach dem Neustart des Dienstes
       richtig: Am Pi nach der Änderung von `SPEAK` ansehen und mit dem
       Dienstprotokoll abgleichen (Ausdruck, Statuszeile, LED).
-- [ ] Button: Gesten (kurz / lang / mehrfach) und Bedeutung (Wake-Word-
-      Ersatz, DESIGN §3.4) — hängt am Audio-Prozess. Vorlage für die
-      Gesten-Semantik: Whisplay-Daemon (Apache-2.0) — kurz = weiter,
-      lang = starten, vier Klicks in 5 s = zurück (HERKUNFT §4.3).
+- [x] Button: Gesten — *Erkennung erledigt 3.11. (`display/gesten.py`):
+      kurz (<0,7 s), lang (0,7–2 s), halten (≥2 s, mit `halten_ende` für
+      Push-to-Talk), doppelt, dreifach. Reine Zustandsmaschine (Regel 7d),
+      `GestenTakt` weckt zur Frist; Sofortquittung per LED beim Drücken.
+      Tests `test_gesten.py` 29 ok, Gegenprobe 8 ok.*
+- [ ] **Bedeutung der Gesten** (DESIGN §3.4): kurz = Umgebungshören
+      beenden/Gespräch öffnen, lang = Gespräch beginnen, halten =
+      Push-to-Talk, doppelt = abbrechen, dreifach = zurück. Hängt am
+      Audio-Prozess (Phase 5). Bis dahin: Protokoll und LED-Quittung.
+- [ ] **Gestentest am Gerät:** einmal jede der fünf Gesten drücken und mit
+      dem Protokoll (`Taste: Geste „…"`) vergleichen — die Erkennung ist
+      geprüft, die Tastenmechanik am Gerät noch nicht.
 - [ ] **Joystick (5-Wege) der neueren HAT-Revision** als Option prüfen:
       BOARD 32/33/31/29/37, active-low mit internem Pull-up, 20 ms
       Entprellung (HERKUNFT §4.2). Erst am Gerät feststellen, ob unsere

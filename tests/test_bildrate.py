@@ -88,6 +88,17 @@ check("Ruhe-Zeit", round(r.RUHE_FRAME_TIME, 3), 0.5)
 r0 = NoisyRenderer(State(), ZaehlPanel(), target_fps=1, thermal_path="")
 check("Ruhe wird nie schneller als das Panel", r0.RUHE_FPS, 1)
 
+# Die Ruhe-Rate ist eine Eigenschaft des Panels (Regel 7a) — wer sie nicht
+# setzt, bekommt die Vorgabe der Basisklasse.
+from chimera.displays.base import Panel as _Panel  # noqa: E402
+check("Panel traegt die Ruhe-Rate", _Panel.ruhe_fps, 2)
+
+class StillPanel(ZaehlPanel):
+    ruhe_fps = 0
+
+r_null = NoisyRenderer(State(), StillPanel(), thermal_path="")
+check("Panel ohne Ruhe-Rate: nicht zeichnen", r_null.RUHE_FPS, 0)
+
 r00 = NoisyRenderer(State(), ZaehlPanel(), ruhe_fps=0, thermal_path="")
 check("Ruhe 0 heißt: nicht zeichnen", r00.RUHE_FRAME_TIME, 0.0)
 

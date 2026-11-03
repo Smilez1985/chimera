@@ -198,11 +198,13 @@ genau wie ein neues Board im Installer (Regel 10c).
       registry.py    Ordner = Modul: typen(), profil(typ), oeffne(typ)
       erkennen.py    Klassen pflicht/eindeutig/eingerichtet, Befund als JSON
       ton.py         Laufzeit-Overlays laden, Mixer setzen, ALSA nachweisen
-      gpio.py        GPIO-Chardev ABI v2 (ctypes), LeitungBelegt
+      gpio.py        GPIO-Chardev ABI v2 (ctypes), LeitungBelegt,
+                     Kantenereignisse (EDGE_*, ereignisse())
       spi.py         spidev write + 3-Draht-Lesen (eine ioctl-Nachricht)
       st7789.py      Kern: Einschaltfolge, Fenster, schreibe_bild, kennung_lesen
       softpwm.py     Software-PWM (Backlight, LED)
       i2c.py         SMBus-Quick-Write ohne i2c-tools, i2c-dev nachladen
+      gesten.py      Tastengesten (kurz/lang/halten/doppelt/dreifach)
       whisplay/      display.json + panel.py (LCD, LED, Backlight, Taste)
       keine/         Rückfall: zählt Bilder, zeigt nichts
 

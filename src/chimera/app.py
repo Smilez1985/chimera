@@ -67,6 +67,11 @@ class Chimera:
     led: object = None
     notes: list[str] = field(default_factory=list)
     _painter: threading.Thread | None = field(default=None, repr=False)
+    # Tastengesten (5 Modi auf einer Taste): Die Erkennung ist eine reine
+    # Zustandsmaschine (Regel 7d), der Taktgeber weckt sie zur richtigen
+    # Zeit. Beides nur vorhanden, wenn das Panel eine Taste hat.
+    gesten: object = None
+    _gesten_takt: object = field(default=None, repr=False)
     _stop_paint: threading.Event = field(
         default_factory=threading.Event, repr=False)
 
@@ -203,20 +208,43 @@ class Chimera:
         return da
 
     def _on_taste(self, gedrueckt: bool) -> None:
-        """Seitentaste der Anzeige (Whisplay). Quittiert per LED; was ein
-        Druck BEDEUTET (Wake-Word-Ersatz, DESIGN §3.4), haengt am
-        Audio-Prozess -- der ist noch nicht gebaut (ROADMAP Phase 5).
-        Bis dahin: sichtbar quittieren und protokollieren, nicht schweigen."""
-        if not gedrueckt:
-            return
-        log.info("Taste gedrueckt")
-        if self.led is not None:
-            import time as _t
+        """Flanke der Seitentaste -- hier wird daraus eine Geste.
+
+        Die Taste kennt nur unten/oben; was gemeint ist (kurz, lang, halten,
+        doppelt, dreifach), entscheidet :class:`chimera.display.gesten.Gesten`
+        aus dem zeitlichen Verlauf (Regel 7d). Bedeutung der Gesten: DESIGN
+        §3.4 -- ein Druck beendet das Umgebungshoeren und beginnt das
+        Gespraech; Push-to-Talk haengt an ``halten``/``halten_ende`` und
+        wartet auf den Audio-Prozess (ROADMAP Phase 5). Bis dahin: sichtbar
+        quittieren und protokollieren, nicht schweigen.
+        """
+        import time as _t
+        # Sofort quittieren: Ein Druck, der 0,8 s lang nichts zeigt (so
+        # lange braucht die Entscheidung "kurz"), fuehlt sich kaputt an.
+        # Die Geste kommt danach -- sie sagt, WAS gemeint war.
+        if gedrueckt and self.led is not None:
             # Muster "quittung" (dunkel -> weiss -> dunkel): Ein fester
             # Weisston hob sich am Geraet nicht vom blauen Grundglow ab --
             # smilez sah nur "heller, bleibt blau" (11.10.2026).
             self.led.melden("taste", jetzt_ms=int(_t.monotonic() * 1000),
                             laufzeit_ms=TASTE_QUITTUNG_MS)
+        if self.gesten is None:
+            return
+        for geste in self.gesten.taste(bool(gedrueckt), _t.monotonic()):
+            self._geste(geste)
+        if self._gesten_takt is not None:
+            self._gesten_takt.anstoss()
+
+    def _geste(self, art: str) -> None:
+        """Eine erkannte Geste melden -- und spaeter ausfuehren.
+
+        Die Bedeutung haengt an DESIGN §3.4: kurz beendet das
+        Umgebungshoeren, lang beginnt das Gespraech, halten ist
+        Push-to-Talk (``halten_ende`` beendet es), doppelt und dreifach
+        sind fuer Abbrechen/Zurueck vorgesehen. Bis der Audio-Prozess
+        steht (ROADMAP Phase 5), wird protokolliert, nicht geschwiegen.
+        """
+        log.info("Taste: Geste \u201e%s\u201c", art)
 
     # --- Anzeige ----------------------------------------------------------
 
@@ -251,6 +279,9 @@ class Chimera:
 
     def stop_display(self, timeout: float = 2.0) -> None:
         """Den Renderer anhalten und das Panel freigeben."""
+        if self._gesten_takt is not None:
+            self._gesten_takt.stop()
+            self._gesten_takt = None
         self._stop_paint.set()
         if self._painter is not None:
             self._painter.join(timeout)
@@ -321,8 +352,14 @@ def build(*, probe_network: bool = True, home: Path | None = None,
     # Die Taste, wenn das Panel eine hat (Whisplay). Ein Panel ohne Taste
     # hat die Methode nicht -- dann gibt es nichts zu verdrahten.
     if panel is not None and hasattr(panel, "bei_taste"):
+        from .display.gesten import Gesten, GestenTakt
+        chi.gesten = Gesten()
         panel.bei_taste(chi._on_taste)
-        notes.append("Taste: verdrahtet (quittiert per LED)")
+        # Der Taktgeber entscheidet faellige Gesten (kurz erst am Ende des
+        # Klickfensters, halten waehrend des Drueckens) -- ein Faden, der
+        # auf die Frist wartet und sonst schlaeft.
+        chi._gesten_takt = GestenTakt(chi.gesten, chi._geste).start()
+        notes.append("Taste: verdrahtet (kurz/lang/halten/doppelt/dreifach)")
     return chi
 
 #: Die mitgelieferte Mood-Bibliothek.

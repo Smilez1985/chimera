@@ -344,6 +344,20 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Schleife mit der Ruhe-Rate. Am Pi gemessen: 35,5 % → 10,8 % eines Kerns,
   577 → 134 `write()`/s, 383 → 86 KB/s. Test `test_bildrate.py` 25 ok,
   Gegenprobe `gegenprobe_bildrate.py` 8 ok (sieben Mutationen).
+- **Taste ohne Abfrage im Takt:** `Leitungen.request(kanten=…)` fordert
+  Kantenereignisse an (`event_buffer_size`, `GPIO_V2_LINE_FLAG_EDGE_RISING/
+  FALLING`), `ereignisse()` wartet im Kern auf die Flanke. Die Tastenschleife
+  fragte vorher alle 5 ms ab (200 `ioctl`s je Sekunde, ~1,3 % eines Kerns);
+  ohne Kanten greift die Abfrage als Rückfall. Fremde Ereignisse werden
+  aufgehoben, nicht verworfen. Test `test_gpio_kanten.py` 23 ok, Gegenprobe
+  8 ok. Am Pi: Gesamtlast 10,8 % → 9,5 %, Protokoll „Taste:
+  Kantenereignisse“.
+- **Fünf Tastengesten** (`display/gesten.py`): kurz (<0,7 s), lang (0,7–2 s),
+  halten (ab 2,0 s, während gehalten), `halten_ende` als Gegenstück (für
+  Push-to-Talk), doppelt und dreifach im Klickfenster (0,8 s). Reine
+  Zustandsmaschine nach Regel 7d; `GestenTakt` wartet auf die Frist und weckt
+  sie. Der Druck quittiert sofort per LED, die erkannte Geste geht ins
+  Protokoll. Test `test_gesten.py` 29 ok, Gegenprobe 8 ok.
 - **Blinzeln hängt an der Uhr, nicht an der Bildzahl:** Abstand 3,0–8,7 s,
   Dauer 0,20–0,47 s (vorher 45–130 bzw. 3–7 Bilder, was nur bei 15 Bildern/s
   stimmte). Die Ruhe-Schleife schläft genau bis zum Blinzelbeginn, statt mit
