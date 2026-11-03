@@ -65,6 +65,10 @@ zram wird nicht angefasst, wenn es läuft.
       jeder Lauf aus einem Zip mit dem Befund „kein Commit ⇒ kein Binary" endet
       (rc 1). Ein Lauf aus einem Git-Baum mit Commit muss grün zeigen — einmal
       ablesen, dann ist der Fall belegt.
+- [ ] **Neustart mit Fortsetzung:** Marker, Snapshot der geänderten Dateien,
+      `chimera-mojo-fortsetzung.service` (einmal nach dem Start), Rückfall bei
+      wirkungslosem Neustart, Sperre nach zwei Versuchen (DESIGN, Regel
+      „Neustart mit Fortsetzung und Rückfall").
 - [ ] **pip: nur Fehlendes, ohne `--upgrade`.** Zurückgestellt: Die Änderung
       machte zwei Tests von `test-python-env.sh` rot; der erprobte Stand bleibt,
       bis die Ursache geklärt ist (das venv hatte `numpy 2.5.4` statt `1.26.4`).

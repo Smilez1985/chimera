@@ -3527,6 +3527,43 @@ nicht nachvollziehbar — jede Pause und jedes `close()` schaltet es aus.
 zu verteilen, bzw. der Dienst läuft weiter). Ohne Anzeige oder ohne Python wird
 das gemeldet, nicht verschwiegen.
 
+### Regel „Neustart mit Fortsetzung und Rueckfall“
+
+Vorgabe smilez (3.11.): Mojo darf einen Neustart ausloesen, wenn eine Reparatur
+ihn verlangt — und **muss danach von selbst weitermachen**. Scheitert der
+Neustart, wird auf den Stand vor dem Neustart zurueckgerollt.
+
+**Wann neu gestartet wird (zwei Ausloeser, beide bestaetigt):**
+1. **Nach dem Nachladen** eines Pakets oder Kernelmoduls, das erst nach dem
+   Start wirkt. Die Reparatur weiss das — kein Raetselraten.
+2. **Wenn ein Befund nach drei Runden unreparierbar bleibt** und seine Ursache
+   „Neustart hilft" traegt. Das ist eine Vermutung, deshalb **hoechstens
+   einmal**.
+
+**Der Ablauf:**
+- Vor dem Neustart legt Mojo einen **Marker** ab (`state/mojo-fortsetzen.json`):
+  Zeitpunkt, Runde, Anzahl bisheriger Neustarts, Liste der geaenderten Dateien.
+- **Snapshot nur der geaenderten Dateien** (Kopie plus Pruefsumme), nicht des
+  ganzen Systems. Was nicht angefasst wurde, muss auch nicht zurueck.
+- `systemctl reboot`.
+- Nach dem Start laeuft **einmal** `chimera-mojo-fortsetzung.service`
+  (`ConditionPathExists=` auf den Marker, kein Dauerlaeufer) und ruft
+  `chimera-tor --mojo --miracle --fortsetzen` auf: Runden zaehlen weiter,
+  Marker am Ende weg.
+- **Rueckfall:** Bringt der Neustart nichts (dieselben Befunde bleiben),
+  stellt Mojo die Dateien aus dem Snapshot wieder her und meldet den Befund
+  mit Ursache — statt ein zweites Mal zu starten.
+
+**Sperre gegen die Schleife:** hoechstens **zwei** Neustaubversuche je Marker;
+danach kein weiterer, sondern Bericht. Ein Neustart, der nichts aendert, darf
+sich nicht wiederholen — sonst ist das Geraet ohne Handeingriff unerreichbar.
+
+**Grenzen (bewusst):** Der Snapshot deckt **geaenderte Dateien**, nicht das
+Dateisystem. Ein halb geschriebenes Paket, ein voller Datentraeger oder ein
+zerstoerter Bootloader sind damit nicht rueckholbar; dafuer gibt es die
+Sicherung des Installers, nicht Mojo. Und ein Reboot wird **nie** ohne Marker
+ausgeloest.
+
 ### Regel „ACP“ — Chimera ist ein Agent für Editoren, erreichbar über eine Transportschicht am Gateway
 
 Vorgabe smilez (2.11.): ACP ist eine **Pflicht-Schnittstelle**. Gemeint ist der
