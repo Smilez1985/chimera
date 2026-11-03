@@ -3088,7 +3088,24 @@ Installerlauf inaktiv geblieben war.
 8. **Die Prüfungen sind erweiterbar mit einer Stelle:** `impl Pruefung` plus
    eine Zeile in `pruefungen()` (wie die Sonden in `status.rs`); ein Test je
    Prüfung mit Gegenprobe.
-9. **Die ersten Prüfungen:** Dienste `chimera`, `chimera-tor`,
+9. **Das Netz ist ein eigener Bereich** (Vorgabe smilez, 3.11.): Mojo prüft,
+   ob überhaupt Netz da ist — TCP-Probe auf `8.8.8.8:53` und `1.1.1.1:443`,
+   nicht ICMP (das ist in manchen Netzen gefiltert). Fehlt es, ist die
+   Reparatur **WLAN neu starten**: `nmcli radio wifi off/on`, dann
+   `wpa_cli -i wlan0 reconfigure`, dann — nur wenn sie laufen —
+   `wpa_supplicant@wlan0`, `ifup@wlan0`, `networking` neu starten, zuletzt
+   `ip link set wlan0 up` und `ifup wlan0`. Jeder Schritt darf fehlen; das
+   Ergebnis zählt, nicht der Exitcode eines Befehls.
+   Aufruf gezielt mit `--mojo --fix --bereich netz` — der Installer fragt so
+   nur das Netz ab, statt bei jedem Netzproblem den ganzen Systemcheck zu
+   fahren. Ein unbekannter Bereich ist ein Fehler, kein stilles Nichts-Tun.
+10. **Der Installer nutzt das** (`installer/lib/network.sh`): Bei HTTP 404
+    wird erst geprüft, ob Netz da ist; ist es weg, steigt Mojo ein
+    (`--bereich netz`, sonst die vollständige Prüfung), danach folgt ein
+    neuer Versuch. Erst nach drei Runden ist es ein Befund. Grund (am Pi
+    2.11.): 20 Versuche à 4,5 s = 91 Sekunden Stillstand im Fortschrittsbalken,
+    wenn der Dateiname im Release nicht stimmt.
+11. **Die ersten Prüfungen:** Dienste `chimera`, `chimera-tor`,
    `chimera-hardware` (failed, zu viele Neustarts); beide Sockets (inaktiv trotz
    aktiviert); Hardware-Erkennung; Protokoll auf der Karte schreibbar; Speicher
    (`MemAvailable`); Anbieter (Gateway erreichbar, Ollama erreichbar, ein Modell

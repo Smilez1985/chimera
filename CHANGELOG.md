@@ -18,6 +18,8 @@ Alles hier Genannte ist committet und geprüft. **Kein `[Unreleased]`-Block:**
 Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
+- **Mojo:** Neuer Bereich `netz` — TCP-Probe auf öffentliche Adressen; fehlt das Netz, startet Mojo das WLAN neu (`nmcli`/`wpa_cli`/`wpa_supplicant`/`ifup`). Gezielt abfragbar mit `--mojo --bereich netz`.
+- **Installer:** Bei HTTP 404 prüft der Abruf erst die Verbindung, wiederholt, und lässt bei Netzausfall Mojo das WLAN neu starten; nach drei Runden ist es ein benannter Befund statt 91 Sekunden Stillstand.
 ### Hinzugefügt
 **Anzeige**
 - **Prioritäts-Verwalter** (`chimera.arbiter`): löst auf, wer das
