@@ -75,11 +75,22 @@ fn modul_neu(a: &[String]) -> Result<PathBuf, String> {
 /// den Bericht auch als Datei ablegen (Vorgabe `state/mojo-letzter.json`).
 fn mojo_befehl(a: &[String]) -> ExitCode {
     let (mut fix, mut json, mut datei) = (false, false, None::<PathBuf>);
+    let mut bereich: Option<String> = None;
     let mut i = 0;
     while i < a.len() {
         match a[i].as_str() {
             "--fix" => fix = true,
             "--json" => json = true,
+            "--bereich" => match a.get(i + 1) {
+                Some(b) => {
+                    bereich = Some(b.clone());
+                    i += 1;
+                }
+                None => {
+                    melden(Stufe::Fehler, "--bereich braucht einen Namen (etwa netz).");
+                    return ExitCode::from(2);
+                }
+            },
             "--datei" => match a.get(i + 1) {
                 Some(p) => {
                     datei = Some(PathBuf::from(p));
@@ -97,7 +108,17 @@ fn mojo_befehl(a: &[String]) -> ExitCode {
         }
         i += 1;
     }
-    let bericht = mojo::lauf(&mojo::Echt, &mojo::pruefungen(), fix);
+    // --bereich netz: nur diese Pruefung. Der Installer fragt so gezielt nach
+    // dem Netz, statt bei jedem Netzproblem den ganzen Systemcheck zu fahren.
+    let mut pruefungen = mojo::pruefungen();
+    if let Some(b) = &bereich {
+        pruefungen.retain(|p| p.bereich() == b);
+        if pruefungen.is_empty() {
+            melden(Stufe::Fehler, &format!("--bereich {b}: keine solche Pruefung."));
+            return ExitCode::from(2);
+        }
+    }
+    let bericht = mojo::lauf(&mojo::Echt, &pruefungen, fix);
     let jetzt = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())

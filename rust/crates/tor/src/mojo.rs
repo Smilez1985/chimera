@@ -99,6 +99,8 @@ pub enum Reparatur {
     /// Fehlende Python-Pakete nachladen (Installer Schritt 50), danach `unit` neu starten.
     PaketeNachladen { unit: String },
     SocketNachziehen { socket: String, dienst: String },
+    /// WLAN neu starten (Vorgabe smilez, 3.11.): Verbindung, Dienst, Schnittstelle.
+    WlanNeuStarten { schnittstelle: String },
 }
 
 impl Reparatur {
@@ -106,7 +108,9 @@ impl Reparatur {
     /// (ganzer Installer) gibt es hier nicht; sie liefe nur auf ausdruecklichen Wunsch.
     pub fn stufe(&self) -> u8 {
         match self {
-            Reparatur::ResetUndStart { .. } | Reparatur::SocketNachziehen { .. } => 1,
+            Reparatur::ResetUndStart { .. }
+            | Reparatur::SocketNachziehen { .. }
+            | Reparatur::WlanNeuStarten { .. } => 1,
             Reparatur::PaketeNachladen { .. } => 2,
         }
     }
@@ -116,6 +120,9 @@ impl Reparatur {
             Reparatur::PaketeNachladen { unit } => format!("{unit}: fehlende Python-Pakete nachladen (Installer Schritt 50), dann neu starten"),
             Reparatur::SocketNachziehen { socket, dienst } => {
                 format!("{dienst} anhalten, {socket} starten, {dienst} wieder starten")
+            }
+            Reparatur::WlanNeuStarten { schnittstelle } => {
+                format!("WLAN {schnittstelle}: neu verbinden, Dienst neu starten, Schnittstelle hochfahren")
             }
         }
     }
@@ -447,6 +454,10 @@ pub trait System {
     /// Inhalt der `requirements.txt` (Quelle der Python-Umgebung), `None` wenn nicht lesbar.
     fn requirements(&self) -> Option<String>;
     fn warten(&self, dauer: Duration);
+    /// Ist das Netz erreichbar? Vorgabe: ja -- Tests sollen nicht ins Netz.
+    fn netz_erreichbar(&self) -> bool {
+        true
+    }
     /// Wie oft eine Reparatur fuer diesen Gegenstand in der letzten Stunde nichts bewirkt hat.
     fn fehlversuche(&self, schluessel: &str) -> u32;
     fn fehlversuch_merken(&self, schluessel: &str);
@@ -612,6 +623,9 @@ impl System for Echt {
         units_aus_failed(&aus)
     }
 
+    fn netz_erreichbar(&self) -> bool {
+        netz_erreichbar()
+    }
     fn ausfuehren(&self, r: &Reparatur) -> Result<(), String> {
         let sc = |args: &[&str]| -> Result<(), String> {
             match befehl("systemctl", args, FRIST_LANG) {
@@ -644,6 +658,30 @@ impl System for Echt {
                 }
                 let _ = sc(&["reset-failed", unit]);
                 sc(&["start", unit])
+            }
+            Reparatur::WlanNeuStarten { schnittstelle } => {
+                // Reihenfolge nach Wahrscheinlichkeit: sanft (neu verbinden), dann der
+                // Dienst, dann die Schnittstelle. Was fehlt, wird uebersprungen -- das
+                // Ergebnis zaehlt, nicht der Exitcode eines Befehls (Regel 10j).
+                let _ = befehl_still("nmcli", &["radio", "wifi", "off"], FRIST);
+                let _ = befehl_still("nmcli", &["radio", "wifi", "on"], FRIST);
+                let _ = befehl_still("wpa_cli", &["-i", schnittstelle, "reconfigure"], FRIST);
+                for unit in [
+                    "wpa_supplicant.service".to_string(),
+                    format!("wpa_supplicant@{schnittstelle}.service"),
+                    format!("ifup@{schnittstelle}.service"),
+                    "networking.service".to_string(),
+                ] {
+                    // Nur anfassen, was laeuft: Ein nicht vorhandener Dienst ist kein Fehler.
+                    if befehl_still("systemctl", &["is-active", "--quiet", &unit], FRIST)
+                        == Some(true)
+                    {
+                        let _ = sc(&["restart", &unit]);
+                    }
+                }
+                let _ = befehl_still("ip", &["link", "set", schnittstelle, "up"], FRIST);
+                let _ = befehl_still("ifup", &[schnittstelle], FRIST);
+                Ok(())
             }
             Reparatur::SocketNachziehen { socket, dienst } => {
                 // systemd verweigert den Start eines Sockets, dessen Dienst schon laeuft.
@@ -980,7 +1018,67 @@ impl Pruefung for Karte {
 
 /// **Hier eintragen**, wenn eine neue Pruefung dazukommt. Reihenfolge = Bericht.
 pub fn pruefungen() -> Vec<Box<dyn Pruefung>> {
-    vec![Box::new(Dienste), Box::new(Sockets), Box::new(Gescheitert), Box::new(Karte::aus_umgebung()), Box::new(Speicher)]
+    vec![
+        Box::new(Dienste),
+        Box::new(Sockets),
+        Box::new(Gescheitert),
+        Box::new(Karte::aus_umgebung()),
+        Box::new(Speicher),
+        Box::new(Netz),
+    ]
+}
+
+/// Wohin Mojo klopft, um "Netz da?" zu beantworten. TCP, nicht ICMP: ICMP ist
+/// in manchen Netzen gefiltert, ein offener Port ist die ehrlichere Aussage.
+pub const NETZ_PROBEN: &[&str] = &["8.8.8.8:53", "1.1.1.1:443"];
+/// Die Schnittstelle, die Mojo neu startet, wenn kein Netz da ist.
+pub const NETZ_SCHNITTSTELLE: &str = "wlan0";
+
+/// Ist das Netz erreichbar? Eine Probe genuegt.
+pub fn netz_erreichbar() -> bool {
+    use std::net::{TcpStream, ToSocketAddrs};
+    for ziel in NETZ_PROBEN {
+        let Ok(mut adressen) = ziel.to_socket_addrs() else { continue };
+        if let Some(adresse) = adressen.next() {
+            if TcpStream::connect_timeout(&adresse, Duration::from_secs(3)).is_ok() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+pub struct Netz;
+
+impl Pruefung for Netz {
+    fn bereich(&self) -> &'static str {
+        "netz"
+    }
+    fn pruefen(&self, sys: &dyn System) -> Vec<Befund> {
+        if sys.netz_erreichbar() {
+            return vec![Befund::gut(
+                "netz",
+                "netz.erreichbar",
+                "netz",
+                "Das Netz ist erreichbar",
+            )];
+        }
+        vec![Befund::problem(
+            Schwere::Error,
+            "netz",
+            "netz.nicht_erreichbar",
+            "netz",
+            &format!("Kein Netz: keine Antwort von {}", NETZ_PROBEN.join(" oder ")),
+            Ursache::neu(
+                "Die Netzverbindung steht nicht",
+                "TCP-Probe auf die oeffentlichen Adressen schlug fehl",
+                "WLAN neu verbinden; der naechste Abruf versucht es erneut",
+            ),
+            Some(Reparatur::WlanNeuStarten {
+                schnittstelle: NETZ_SCHNITTSTELLE.into(),
+            }),
+        )]
+    }
 }
 
 // ----------------------------------------------------------------- Lauf
@@ -1351,6 +1449,9 @@ mod tests {
             let ziel = match r {
                 Reparatur::ResetUndStart { unit } | Reparatur::PaketeNachladen { unit } => unit.as_str(),
                 Reparatur::SocketNachziehen { socket, .. } => socket.as_str(),
+                // Das Netz ist im Test kein Unit-Zustand: Die Probe wird ueber
+                // `netz_erreichbar` gesteuert, die Reparatur selbst wirkt dort.
+                Reparatur::WlanNeuStarten { .. } => "netz",
             };
             if self.wirkt_nicht_bei.contains(&ziel) {
                 return;
@@ -1371,6 +1472,9 @@ mod tests {
                         if let Some(z) = u.get_mut(socket) {
                             z.aktiv = "active".into();
                         }
+                    }
+                    Reparatur::WlanNeuStarten { .. } => {
+                        // Kein Unit-Zustand: Im Spiel bleibt das Netz, wie es war.
                     }
                 }
             }
@@ -2019,6 +2123,16 @@ mod tests {
         assert_eq!(Reparatur::ResetUndStart { unit: "x".into() }.stufe(), 1);
         assert_eq!(Reparatur::SocketNachziehen { socket: "x".into(), dienst: "y".into() }.stufe(), 1);
         assert_eq!(Reparatur::PaketeNachladen { unit: "x".into() }.stufe(), 2);
+        assert_eq!(
+            Reparatur::WlanNeuStarten { schnittstelle: "wlan0".into() }.stufe(),
+            1
+        );
+        // Das Netz ist ein eigener Bereich — der Installer fragt ihn gezielt
+        // mit `--mojo --bereich netz`.
+        assert!(
+            pruefungen().iter().any(|p| p.bereich() == "netz"),
+            "Pruefung fuer den Bereich netz fehlt"
+        );
         assert_eq!(TIER_MAX, 2, "Stufe 3 (ganzer Installer) laeuft nie von allein");
     }
 
