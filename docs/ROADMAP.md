@@ -40,6 +40,14 @@ zram wird nicht angefasst, wenn es läuft.
       von PyPI), harte Zeitgrenzen, Rückfall auf pip. Vorbedingung ist erfüllt:
       die Tests von `test-python-env.sh` laufen seit 4.11. ohne Netz
       (Attrappen-Wheels, `PIP_NO_INDEX`, mit vergiftetem Proxy belegt).
+      **Gemessen (5.11., uv 0.13.7, aarch64):** `uv pip download` gibt es
+      nicht („unrecognized subcommand"), und `uv pip install --dry-run` löst
+      zwar auf, lädt die Wheels aber **nicht** (eigener Cache danach 1,3 MB,
+      keine `.whl`). Für das Vorab-Laden bleibt es deshalb bei `pip download`
+      — nur pip kann holen, ohne zu installieren. UV gehört in Modul 50
+      (Auflösen/Installieren, `--find-links` kennt es) und als Lock-Erzeuger
+      (`uv pip compile` → `requirements.txt`/`pylock.toml`). Offen: ob UV auf
+      dem Pi schneller ist als pip — messen, nicht annehmen.
 
 - [ ] **Vorab-Laden im Hintergrund** (DESIGN, Abschnitt „Warte-Schleife und
       Vorab-Laden"): **gebaut und am Gerät belegt** (`installer/lib/vorab.sh`,

@@ -360,6 +360,15 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Mood.
 
 ### Geändert
+- **UV als Vorab-Lader geprüft und verworfen — die Voraussetzungen fehlen
+  (gemessen 5.11., uv 0.13.7 auf aarch64, nicht vermutet):** `uv pip download`
+  existiert nicht („unrecognized subcommand 'download'"), und
+  `uv pip install --dry-run --cache-dir <frisch>` löst zwar auf („Would
+  download 1 package"), legt aber keine Wheel-Datei ab (Cache 1,3 MB, keine
+  `.whl`). Holen ohne Installieren kann nur pip — der Vorab-Lader bleibt
+  deshalb bei `pip download`. UV bleibt für Modul 50 vorgemerkt (löst auf,
+  kennt `--find-links`); ob es auf dem Pi schneller ist als pip, wird
+  gemessen, nicht angenommen.
 - **Vorab-Laden: idempotent, abbruchsicher, ohne eigenen apt-Weg.** Vier
   Änderungen, alle aus derselben Regel („installieren, nur was fehlt"):
   - **`apt` ist wieder draußen.** Es hat schon einen Eigentümer
