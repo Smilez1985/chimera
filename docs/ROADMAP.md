@@ -42,14 +42,25 @@ zram wird nicht angefasst, wenn es läuft.
       (Attrappen-Wheels, `PIP_NO_INDEX`, mit vergiftetem Proxy belegt).
 
 - [ ] **Vorab-Laden im Hintergrund** (DESIGN, Abschnitt „Warte-Schleife und
-      Vorab-Laden"): **P1 und P2 sind gebaut** (`installer/lib/vorab.sh`,
-      `installer/chimera-prefetch`, Start vor der Modulschleife; Marken
-      `.teil`/`.done` nur nach Prüfung, `.fehler` mit Grund; apt-.deb über
-      `apt-get install --download-only`, Wheels über `pip download` und
-      `--find-links` in Schritt 50; `DPkg::Lock::Timeout` auf beiden Seiten).
-      **Offen:** P3 (weitere Marken: Whisplay-Klon, `rust-<commit>`),
-      P4 (Test mit echtem apt/pip — im Sandbox übersprungen, läuft in der CI),
-      P5 (Vorher/Nachher am Pi).
+      Vorab-Laden"): **P1, P2 und P4 sind gebaut** (`installer/lib/vorab.sh`,
+      `installer/chimera-prefetch` als eigene transiente Unit; Marken
+      `.teil`/`.done` nur nach Prüfung, `.fehler` mit Grund; Wheels über
+      `pip download` und `--find-links` in Schritt 50; Abschalter
+      `CHIMERA_PREFETCH_RAD=0`; `test-vorab.sh` 24 ok, apt- und pip-Weg laufen
+      in der CI wirklich — nachgesehen, 18 ok je Shell, nichts übersprungen).
+      **P5 ist gemessen** (Pi, 5.11., Commit `4f06a3c`): pip-Wheels 16 s für
+      22 MB (wirkt, überlappt), apt-debs 25 s für **null** Pakete — der
+      apt-Weg kann nicht überlappen, er streitet mit Modul 20/30 um dieselbe
+      Sperre.
+- [ ] **Entscheidung: `apt-debs` aus der Vorab-Liste nehmen?** Messung sagt ja
+      (kein Gewinn, 25 s Sperr-Warten auf bestücktem Gerät; auf einer
+      Erstinstallation wird die Zeit nur verschoben, nicht gespart). Der
+      pip-Teil bleibt. Zu entscheiden von smilez — die Begründung steht in
+      `DESIGN`, Abschnitt „Warte-Schleife und Vorab-Laden".
+- [ ] **P3 — weitere Marken** (Whisplay-Klon 13 MB/3 s, `rust-<commit>`
+      ~2 MB/1 s): nach der Messung **zurückgestellt**, der Aufwand einer
+      Marke ist größer als der Betrag. Wird nur wieder aufgegriffen, wenn die
+      Erstinstallation es verlangt.
 
 ## Phase ACP — Chimera als Agent für Editoren und IDEs (DESIGN: Regel „ACP“)
 

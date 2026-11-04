@@ -2695,6 +2695,27 @@ oder nach `apt-get clean` **mit** fehlenden Paketen. Solange das nicht
 gemessen ist, gilt der Nutzen als **unbelegt** (Regel 10g), nicht als
 bewiesen.
 
+**Messung am Pi, 5.11.2026, Commit `4f06a3c`** (Gerät bestückt, Marken
+vorher gelöscht):
+
+| Objekt | Wanduhr | Befund |
+|---|---|---|
+| `apt-debs` | 25 s (Marke 00:33:01, Start 00:32:36) | **0 Pakete zu holen** — alle „already the newest version". Die 25 s sind Warten auf die apt-Sperre neben Modul 20/30, nicht Netz |
+| `pip-wheels` | 16 s (Marke 00:33:17) | 22 MB: Pillow 13.0.0 + numpy 2.5.4, beide im Verzeichnis |
+| Lauf selbst | ~30 s, 12 Module ohne Fehler, LED ok | Modul 20: 1 s, Modul 50: 6 s (vorher 3 s) — kein Gewinn messbar |
+
+Daraus zwei Feststellungen, die vorher offen waren:
+
+1. **Der pip-Teil wirkt und überlappt** (16 s Netz, die aus Modul 50
+   herausfallen, wenn die Umgebung sie braucht).
+2. **Der apt-Teil kann nicht überlappen.** Er holt nicht nur, er *wartet
+   auch* auf dieselbe Sperre wie Modul 20/30. Wer zuerst drankommt, hält den
+   anderen auf: gewinnt der Vorab-Lader, wird Modul 20 um die Downloadzeit
+   später fertig — die Zeit ist nur verschoben, nicht gespart. Auf einem
+   bestückten Gerät ist sie ganz verloren (25 s für nichts).
+   **Empfehlung: `apt-debs` aus der Liste nehmen**, `pip-wheels` behalten.
+   Die Entscheidung liegt bei smilez (ROADMAP, Phase Installer).
+
 
 
 ### Architekturregel 10e — Jeder Lauf hinterlässt ein Protokoll

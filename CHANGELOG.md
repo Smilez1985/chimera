@@ -360,6 +360,15 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Mood.
 
 ### Geändert
+- **P5 gemessen (Pi, 5.11., `4f06a3c`) — der apt-Teil des Vorab-Ladens bringt
+  nichts.** Lauf mit gelöschten Marken: `pip-wheels` 16 s für 22 MB
+  (Pillow 13.0.0 + numpy 2.5.4), `apt-debs` 25 s für **0 Pakete** (alle schon
+  installiert) — die Zeit war Warten auf die apt-Sperre neben Modul 20/30.
+  Der apt-Weg kann nicht überlappen; auf einer Erstinstallation verschiebt er
+  die Downloadzeit nur von Modul 20 in den Vorab-Lader. Empfehlung und
+  Entscheidungspunkt in `DESIGN` und `ROADMAP` festgehalten. Moduldauern
+  dieses Laufs (20: 1 s, 50: 6 s) zeigen auf bestücktem Gerät keinen Gewinn;
+  das war auch nicht zu erwarten.
 - **Der Vorab-Lader läuft in einer eigenen transienten Unit**
   (`systemd-run --unit=chimera-prefetch --collect --service-type=oneshot`),
   nicht mehr als `nohup`-Kind des Installers. Am Pi 5.11. gemessen: Der
