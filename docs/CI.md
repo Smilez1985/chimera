@@ -20,11 +20,36 @@ laufen.
 |---|---|
 | `python` | Alle `tests/test_*.py` einzeln, auf Python 3.11 und 3.13. Dazu `tools/check-globals.py` über `src/`, `tests/`, `tools/`. |
 | `installer` | Alle `installer/tests/test-*.sh` unter **dash** und **BusyBox**, dazu Syntaxprüfung jedes Skripts. |
-| `rust` | Auf einem arm64-Runner: `cargo test`, `cargo deny` (Lizenzen nach Positivliste, RustSec), Release-Build für `aarch64-unknown-linux-musl`. Das Binary muss statisch sein, laufen und die Version aus `VERSION` nennen. Ergebnis mit SHA-256 als Artefakt `chimera-rust-aarch64-<commit>`; auf `entwicklung` zusätzlich als Prerelease `rust-<commit>` (anonym ladbar). |
+| `rust` | **Eigener Workflow** (`.github/workflows/rust.yml`), läuft nur bei Änderungen an `rust/**` oder `VERSION` — siehe unten. Auf einem arm64-Runner: `cargo test`, `cargo deny` (Lizenzen nach Positivliste, RustSec), Release-Build für `aarch64-unknown-linux-musl`. Das Binary muss statisch sein, laufen und die Version aus `VERSION` nennen. Ergebnis mit SHA-256 als Artefakt `chimera-rust-aarch64-<commit>`; auf `entwicklung` zusätzlich als Prerelease `rust-<commit>` (anonym ladbar). |
 | `trockenlauf` | Preflight und Modul 40 gegen ein erfundenes Wurzelverzeichnis (Regel 10d) — und die Prüfung, dass der Trockenlauf wirklich nichts anfasst. |
 
 Die Tests werden **einzeln** aufgerufen, nicht über einen Sammelbefehl:
 Ein Fehlschlag soll die übrigen nicht verdecken.
+
+### Der Rust-Job läuft nur bei echter Änderung
+
+Ein arm64-Runner, `cargo test`, `cargo deny` und ein Release-Build kosten
+Minuten und Token. Bei einem reinen Doku-Commit ändert sich am Binary
+nichts — das Ergebnis ist im Voraus bekannt, und Modul 55 hält über
+`state/rust-stand` (Commit, Hash des `rust/`-Baums, Version) ohnehin still.
+
+Deshalb liegt der Job in einem **eigenen Workflow mit Pfadfilter**
+(`rust/**`, `VERSION`, die Workflow-Datei selbst). Die Auswahl trifft
+GitHub **vor** dem Start des Runners; ein Vorschalt-Job in `tests.yml`
+hätte den Runner schon bezahlt. `VERSION` gehört dazu, weil das Binary seine
+Version im Namen trägt und eine neue `VERSION` die Stillhalte-Regel aufhebt.
+
+Ein Lauf dieses Workflows ist damit **immer** eine echte Änderung — deshalb
+veröffentlicht er das Prerelease `rust-<commit>` direkt (vorher war das an
+`workflow_dispatch` gebunden, und nach jedem Rust-Commit musste von Hand
+nachgestoßen werden; der Job baute dabei zweimal).
+
+Von Hand geht es weiterhin jederzeit — `workflow_dispatch` ignoriert
+Pfadfilter:
+
+```sh
+gh workflow run rust.yml --ref entwicklung
+```
 
 Der Syntaxlauf ist kein Formalismus. Ein Modul, das kein Test aufruft,
 fällt sonst erst auf dem Gerät auf — und dort womöglich mitten in einer

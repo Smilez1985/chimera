@@ -1,0 +1,136 @@
+name: Rust
+
+# Warum ein eigener Workflow (Vorgabe smilez, 4.11.): Der Rust-Job baut auf
+# einem arm64-Runner und veroeffentlicht ein Prerelease -- beides kostet
+# Minuten und Token. Bei einem reinen Doku-Commit aendert sich am Binary
+# nichts, das Ergebnis ist also im Voraus bekannt: Modul 55 haelt still,
+# solange `state/rust-stand` (Commit, Hash des rust/-Baums, Version) passt.
+#
+# Deshalb laeuft dieser Workflow nur, wenn sich `rust/` oder `VERSION`
+# geaendert hat. Die Auswahl trifft GitHub vor dem Start des Runners -- ein
+# Vorschalt-Job in tests.yml haette den Runner schon bezahlt.
+#
+# `VERSION` gehoert dazu: Das Binary traegt seine Version im Namen
+# (`chimera-tor <VERSION>`), und eine neue VERSION hebt die Stillhalte-Regel
+# in Modul 55 auf -- dann wird ein neues Binary gebraucht.
+#
+# `workflow_dispatch` ignoriert Pfadfilter: Von Hand laesst sich der Job
+# jederzeit anstossen (z. B. um das Prerelease zu einem Commit nachzuziehen).
+
+on:
+  push:
+    branches: [main, entwicklung]
+    paths:
+      - 'rust/**'
+      - 'VERSION'
+      - '.github/workflows/rust.yml'
+  pull_request:
+    paths:
+      - 'rust/**'
+      - 'VERSION'
+      - '.github/workflows/rust.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust (aarch64-musl)
+    # Nativer arm64-Runner: Tests laufen auf der Architektur des Ziels,
+    # und das gebaute Binary wird hier auch ausgefuehrt -- ein Artefakt,
+    # das nie gestartet wurde, ist eine Behauptung (DESIGN Regel 14).
+    runs-on: ubuntu-24.04-arm
+    # Nur dieser Job darf schreiben: er veroeffentlicht das Pre-Alpha-
+    # Binary als Prerelease (anonym ladbar, Artefakte sind es nicht).
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: rust
+    env:
+      ZIEL: aarch64-unknown-linux-musl
+      # cargo-deny als Release-Binary, an Version UND Pruefsumme gebunden
+      # (GLOBAL: Pruefsumme vor dem Ausfuehren).
+      DENY_V: "0.20.2"
+      DENY_SHA: 995c82be0defc7a025cae49a2aa2644ce8245c9a3318fc4103907c6a285e8c7d
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Werkzeugkette
+        run: |
+          set -eu
+          rustup toolchain install stable --profile minimal
+          rustup target add "$ZIEL"
+          # musl-gcc fuer Crates mit C-Anteil (spaeter ring ueber rustls).
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq musl-tools
+          rustc --version; cargo --version
+
+      - name: Tests
+        run: cargo test --locked --target "$ZIEL"
+
+      - name: Lizenzen und Schwachstellen (cargo deny)
+        run: |
+          set -eu
+          d="cargo-deny-${DENY_V}-aarch64-unknown-linux-musl"
+          curl -fsSL -o /tmp/deny.tgz \
+            "https://github.com/EmbarkStudios/cargo-deny/releases/download/${DENY_V}/${d}.tar.gz"
+          echo "${DENY_SHA}  /tmp/deny.tgz" | sha256sum -c -
+          tar -xzf /tmp/deny.tgz -C /tmp
+          /tmp/"$d"/cargo-deny --version
+          /tmp/"$d"/cargo-deny check
+
+      - name: Release-Build
+        run: cargo build --release --locked --target "$ZIEL"
+
+      - name: Binary pruefen und Pruefsumme
+        # Statisch heisst: kein Interpreter-Eintrag. Und das Binary muss
+        # laufen und die Version aus VERSION nennen, nicht irgendeine.
+        run: |
+          set -eu
+          b="target/$ZIEL/release/chimera-tor"
+          file "$b"
+          file "$b" | grep -q 'statically linked' || { echo "nicht statisch gelinkt"; exit 1; }
+          soll="$(tr -d ' \t\r\n' < ../VERSION)"
+          ist="$("$b" --version)"
+          [ "$ist" = "chimera-tor $soll" ] || { echo "Version: '$ist' statt '$soll'"; exit 1; }
+          "$b" --pruefen
+          mkdir -p ../ausgabe
+          cp "$b" ../ausgabe/chimera-tor-aarch64
+          cd ../ausgabe && sha256sum chimera-tor-aarch64 > chimera-tor-aarch64.sha256
+          cat chimera-tor-aarch64.sha256
+          ls -l
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chimera-rust-aarch64-${{ github.sha }}
+          path: ausgabe/
+          if-no-files-found: error
+
+      - name: Prerelease rust-<commit> (nur entwicklung, kein Versions-Tag)
+        # Der Installer holt das Binary ohne Anmeldung (DESIGN 14). Das Tag
+        # heisst rust-<kurzer commit>, nie vX.Y.Z: Pre-Alpha bleibt ungetaggt
+        # im Sinne der Release-Kanaele. Gleicher Commit = gleicher Name,
+        # ein erneuter Lauf ersetzt die Dateien, nicht das Tag.
+        #
+        # Seit 4.11. auch bei Push: Dieser Workflow laeuft nur noch, wenn
+        # `rust/` oder `VERSION` sich geaendert hat -- ein Lauf hier ist also
+        # immer eine echte Aenderung am Binary. Frueher war das Publizieren
+        # an `workflow_dispatch` gebunden; dann musste nach jedem Rust-Commit
+        # von Hand nachgestossen werden (und der Job baute zweimal).
+        if: github.ref == 'refs/heads/entwicklung'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          tag="rust-$(echo "$GITHUB_SHA" | cut -c1-7)"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" ../ausgabe/* --clobber
+          else
+            gh release create "$tag" ../ausgabe/* --prerelease \
+              --target "$GITHUB_SHA" --title "$tag" \
+              --notes "Pre-Alpha-Build von $GITHUB_SHA (aarch64-musl, statisch). Pruefsumme in chimera-tor-aarch64.sha256."
+          fi
+          gh release view "$tag" --json assets --jq '.assets[].name'
+

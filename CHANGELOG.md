@@ -426,6 +426,19 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
 - **Anbieter: `Connector` kennt jetzt `supports_tools`, `context_window`,
   `supports_streaming`, `cost_class` und `access`** — die Wahl eines Ziels
   entscheidet über Eigenschaften, nicht über einen Namen.
+- **CI: Der Rust-Job laeuft nur noch, wenn sich am Binary etwas aendert.**
+  Er liegt jetzt in `.github/workflows/rust.yml` mit Pfadfilter (`rust/**`,
+  `VERSION`, die Workflow-Datei selbst) statt in `tests.yml`. Anlass: Jeder
+  Doku-Commit startete einen arm64-Runner, baute `cargo test`, `cargo deny`
+  und das Release-Binary und legte ein Artefakt ab — fuer ein Ergebnis, das
+  im Voraus feststand (Modul 55 haelt ueber `state/rust-stand` ohnehin
+  still). Die Auswahl trifft GitHub **vor** dem Start des Runners; ein
+  Vorschalt-Job haette ihn schon bezahlt. `VERSION` gehoert in den Filter,
+  weil das Binary seine Version traegt. Weil ein Lauf damit immer eine echte
+  Aenderung ist, veroeffentlicht er das Prerelease `rust-<commit>` jetzt
+  direkt (vorher an `workflow_dispatch` gebunden, sodass nach jedem
+  Rust-Commit von Hand nachgestossen werden musste und der Job zweimal
+  baute). Von Hand bleibt `gh workflow run rust.yml --ref entwicklung`.
 - **Dokumentation: Verweise nennen den Abschnitt beim Namen.** 113
   Paragrafenverweise in sieben Dokumenten, im Quelltext und in den Werkzeugen
   zeigen auf Abschnittsnamen statt auf `§9` („`docs/INSTALLER.md`, Abschnitt
