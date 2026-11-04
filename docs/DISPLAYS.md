@@ -31,7 +31,7 @@ Daraus folgt, was ein Panel beschreiben muss:
 
 `refresh_hz` ist das entscheidende Feld: Es trennt **Bewegtbild** von
 **Standbild** und bestimmt damit, welche Darstellungsart überhaupt
-infrage kommt (§3).
+infrage kommt (Abschnitt „Darstellungsarten").
 
 ---
 
@@ -66,7 +66,7 @@ animieren. Sie kann aber ein **gutes Standbild** zeigen.
 
 ### Architekturregel 6d — Dieselben Moods, verschiedene Darstellungen
 
-Der Mood bleibt derselbe Datensatz (`docs/DESIGN.md` §3). Was sich ändert,
+Der Mood bleibt derselbe Datensatz (`docs/DESIGN.md`, Abschnitt „Mood-Assets: das Kernkonzept"). Was sich ändert,
 ist seine Umsetzung:
 
 | Art | für | was passiert |

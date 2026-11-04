@@ -17,7 +17,7 @@ Stand: 2026-10-11. Pre-Alpha.
 - [x] Debian-Fassung entschieden: **Trixie** (stable), nicht Forky
 - [ ] Hardware-Revision der vorhandenen Whisplay prüfen (**V2?**)
 - [ ] `uname -r`, `/lib/modules/$(uname -r)/build`, `modinfo snd-soc-wm8960`
-      auf dem Zielgerät notieren (Checkliste in `docs/HARDWARE.md` §4)
+      auf dem Zielgerät notieren (Checkliste in `docs/HARDWARE.md`, Abschnitt „Vor dem ersten Start prüfen")
 
 ---
 
@@ -314,7 +314,7 @@ Hardware ist vorhanden, also nicht blockiert.
       Sprachmodell auch per LED warnt (`anbieter_weg`) oder nur in der
       Statuszeile — bei bewusstem Betrieb ohne Modell wäre Dauerblinken
       störend.
-- [ ] **Akku in der Statuszeile** (DESIGN §5), sobald die Akkuquelle
+- [ ] **Akku in der Statuszeile** (DESIGN `docs/DESIGN.md`, Abschnitt „Renderer"), sobald die Akkuquelle
       (PiSugar / UPS HAT C) gebaut ist.
 - [x] **Mikrofonwahl durch Messung** (Modul 46): Jede Installation misst
       ihre Mikrofone und wählt die brauchbaren; Aufnahmegerät `chimera_mikro`.
@@ -453,7 +453,7 @@ Es ist ein Bündel aus Moods, Vorgaben, Namen und Herkunft.
 ## Phase 4 — Agent-Kopplung
 
 - [ ] openclawgotchi-Basis übernehmen (Skills, Memory, LLM, Telegram) —
-      Auswahl in `docs/HERKUNFT.md` §1.2, **Sicherheitsschicht des
+      Auswahl in `docs/HERKUNFT.md`, Abschnitt „Übernehmen", **Sicherheitsschicht des
       `execute_bash` unverändert mitnehmen**
 - [ ] Alten Display-Layer entfernen (Architekturregel 7)
 - [ ] Renderer als Dauer-Thread, Zustandsübergabe über Shared Memory
@@ -468,7 +468,7 @@ Sprachausgabe).
 
 ### E-Ink-Ausgabe auf Whisplay umbiegen
 
-Die Steuerbefehle bleiben, nur das Ziel wechselt (`docs/DESIGN.md` §6).
+Die Steuerbefehle bleiben, nur das Ziel wechselt (`docs/DESIGN.md`, Abschnitt „Was von openclawgotchi bleibt").
 
 - [ ] `FACE:` auf Mood-Datensätze statt Emoticons legen; generierte Moods
       zulassen
@@ -707,7 +707,7 @@ Ein- und Ausgabe — die kommt mit Phase 5.
 ## Phase 5a — Umgebungshören im Ruhezustand
 
 Setzt Phase 5 voraus (Audioaufnahme läuft bereits). Details in
-`docs/DESIGN.md` §3.4.
+`docs/DESIGN.md`, Abschnitt „Umgebungshören im Ruhezustand".
 
 - [ ] Tagger-Schicht, die Zipformer und CED gleich aussehen lässt —
       sherpa-onnx spricht beide unterschiedlich an. Das Modell ist eine
@@ -758,13 +758,13 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
       sox-`silence` mit Start-/Endschwelle, 1,5 s Stille beendet den Satz,
       harte Höchstdauer; Schwelle aus dem **nachgeführten Geräuschpegel**
       (0,35 s alle 30 s, RMS×100, +1, geklemmt 2–60, geglättet 0,7/0,3).
-      Muster aus dem Whisplay-Chatbot (GPL-3.0, nachgebaut — HERKUNFT §4.5).
+      Muster aus dem Whisplay-Chatbot (GPL-3.0, nachgebaut — HERKUNFT `docs/HERKUNFT.md`, Abschnitt „Sprachverarbeitung").
 - [ ] **Satzstrom statt fertiger Antwort** (Voraussetzung für RTF > 1):
       LLM-Text beim Eintreffen an Satzzeichen trennen, kurze Sätze zu
       ≤ 60 Zeichen bündeln, jeden Satz sofort an die TTS, bis zu 5
       Synthesen parallel, Wiedergabe **in Reihenfolge**, leerer Ton einmal
       wiederholt, Watchdog „Dauer + 2 s". Text vorher für die TTS reinigen
-      (URLs, Markdown, Emoji). Muster: HERKUNFT §4.5.
+      (URLs, Markdown, Emoji). Muster: HERKUNFT `docs/HERKUNFT.md`, Abschnitt „Sprachverarbeitung".
 - [ ] **ALSA-Besitz**: vor der Aufnahme den Wiedergabeprozess beenden und
       ~500 ms warten, bis das Gerät frei ist; danach neu starten.
 - [ ] STT: **fp32-Variante zuerst messen**, nicht die int8 (bisher war
@@ -775,7 +775,7 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
       Dialog, sonst blockiert die Ausgabe
 - [ ] TTS-Emotion an Mood koppeln (Architekturregel 4b)
 
-### Mienenspiel beim Sprechen (`docs/DESIGN.md` §4.1)
+### Mienenspiel beim Sprechen (`docs/DESIGN.md`, Abschnitt „Mienenspiel beim Sprechen")
 
 - [x] **Ausdruck für „spricht“** (Regel „Sprechgesicht“): `SPEAK` mit vier Mundphasen,
       `LISTEN` für „hört zu“, `IDLE` für den Ruhezustand, `wartet` nach jeder
@@ -797,7 +797,7 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
 
 ## Phase 6 — Agent-Härtung
 
-Die vier Muster aus `docs/DESIGN.md` §8 sind gebaut und verdrahtet.
+Die vier Muster aus `docs/DESIGN.md`, Abschnitt „Übernommene Muster aus OpenMinis (nachgebaut, nicht kopiert)" sind gebaut und verdrahtet.
 Offen bleibt:
 
 - [x] Rangordnung im Gedächtnis (nur lesbar gegen agentgeschrieben)
@@ -836,7 +836,7 @@ Offen bleibt:
       Push-to-Talk), doppelt, dreifach. Reine Zustandsmaschine (Regel 7d),
       `GestenTakt` weckt zur Frist; Sofortquittung per LED beim Drücken.
       Tests `test_gesten.py` 29 ok, Gegenprobe 8 ok.*
-- [ ] **Bedeutung der Gesten** (DESIGN §3.4): kurz = Umgebungshören
+- [ ] **Bedeutung der Gesten** (DESIGN `docs/DESIGN.md`, Abschnitt „Umgebungshören im Ruhezustand"): kurz = Umgebungshören
       beenden/Gespräch öffnen, lang = Gespräch beginnen, halten =
       Push-to-Talk, doppelt = abbrechen, dreifach = zurück. Hängt am
       Audio-Prozess (Phase 5). Bis dahin: Protokoll und LED-Quittung.
@@ -852,18 +852,18 @@ Offen bleibt:
       „dreifach") → Entprellung über den Pegel statt über die Flanke.
 - [ ] **Joystick (5-Wege) der neueren HAT-Revision** als Option prüfen:
       BOARD 32/33/31/29/37, active-low mit internem Pull-up, 20 ms
-      Entprellung (HERKUNFT §4.2). Erst am Gerät feststellen, ob unsere
+      Entprellung (HERKUNFT `docs/HERKUNFT.md`, Abschnitt „Der Treiber: Stand unseres Nachbaus"). Erst am Gerät feststellen, ob unsere
       Revision die Schalter hat — dann Opt-in im Panel, kein Zwang.
 - [ ] Software-PWM bei Zwischenwerten: Backlight 50 % kostet ~9 % eines
       Kerns (1 kHz-Takt in Python). Kandidat: Backlight nur an/aus oder
       Takt senken, nach Sichtprüfung auf Flackern; zweiter Kandidat ein
-      kleiner Rust-Helfer (HERKUNFT §4.6).
+      kleiner Rust-Helfer (HERKUNFT `docs/HERKUNFT.md`, Abschnitt „Was das für Rust heißt").
 - [ ] Lautsprecher-Routing, Lautstärkeverwaltung — dabei **zwei** Dinge:
       `asound.conf` mit `dmix`/`dsnoop` (48 kHz, S16, period 1024,
       buffer 4096), damit Aufnahme und Ausgabe gleichzeitig gehen; und
       eine **wahrgenommene Lautstärkekurve** 0–100 % → Codec-Wert. Die
       Tabelle des Herstellers ist GPL-2.0 und wird nicht übernommen
-      (HERKUNFT §4.4) — eigene Messung oder Formel.
+      (HERKUNFT `docs/HERKUNFT.md`, Abschnitt „Ton: was uns fehlt und was wir nicht anfassen") — eigene Messung oder Formel.
 - [ ] PiSugar-Akkustand als Mood-Eingang
 - [ ] **UPS HAT (C)** (Waveshare, INA219 an I2C 0x43) als zweite
       Akkuquelle: `src/chimera/power/`, Erkennung im Boot-Abgleich,

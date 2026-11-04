@@ -75,7 +75,7 @@ Fehlermeldungen. Kein Vorgabewert, keine Beispieldatei mit echten Werten.
 
 `Bot.__post_init__` verweigert den Start ohne erlaubte Absender. Ein
 offener Bot mit `execute_bash` dahinter wäre ein Fernzugang für jeden, der
-die Adresse kennt. **Das steht in keiner Regel** — Vorschlag dazu unter §3.
+die Adresse kennt. **Das steht in keiner Regel** — Vorschlag dazu unter Abschnitt „Die Regeln, die daraus wurden".
 
 ---
 
@@ -172,7 +172,7 @@ Renderer im Hauptprozess als Faden läuft (dann konkurriert er mit dem
 Agenten um die globale Sperre) oder getrennt — analog zu Regel 5g für
 Audio.
 
-**Entschieden, nach Recon in beiden Vorlagen** (`docs/RECHERCHE.md` §5,
+**Entschieden, nach Recon in beiden Vorlagen** (`docs/RECHERCHE.md` Abschnitt „Was diese Prüfung methodisch gezeigt hat",
 Regel 7): Die Vorlagen haben **verschiedene** Prozessmodelle, und zwar zu
 Recht — openclawgotchi startet für E-Ink einen Subprozess je Bild (~2 s je
 Bild, jedes teuer), Noisy hält für das LCD einen Dauer-Thread (15 Bilder/s).
@@ -221,7 +221,7 @@ Bisher nur im Code begründet:
 > erlaubter Absender. Ohne Liste startet sie nicht — kein Vorgabewert, kein
 > „offen, wenn leer". Begründung: Hinter der Tür steht ein Agent mit
 > Dateizugriff und Shell. Wer die Adresse kennt, hätte sonst das Gerät.
-> Die Liste steht in der Umgebung, nicht im Repo (§13).
+> Die Liste steht in der Umgebung, nicht im Repo (`docs/DESIGN.md`, Abschnitt „Keine Secrets im Repo").
 
 ### Vorschlag C — Wer den Zustand anzeigt, wird angeschlossen, nicht vermutet
 

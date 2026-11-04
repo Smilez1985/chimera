@@ -183,7 +183,7 @@ class Toolbox:
         """Den Ausdruck setzen — das ist `FACE:` aus openclawgotchi.
 
         Die Steuerbefehle bleiben erhalten, nur das Ziel wechselt
-        (`docs/HYBRID-PLAN.md` §3).
+        (`docs/HYBRID-PLAN.md`, Abschnitt „Die Nahtstelle").
         """
         if self.face is None:
             return "Keine Anzeige angeschlossen."

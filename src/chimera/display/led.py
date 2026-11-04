@@ -38,7 +38,7 @@ QUELLEN: dict[str, int] = {
     "hitze":          90,  # Temperaturwarnung: orange, pulsierend
     "anbieter_weg":   80,  # Sprachmodell nicht erreichbar: orange, blinkend
     "spricht":        70,  # Sprachausgabe läuft: Glow, atmend (Pegel kommt später)
-    "hoert":          60,  # Mikrofon offen / Wake-Word: blau, fest (DESIGN §3.4)
+    "hoert":          60,  # Mikrofon offen / Wake-Word: blau, fest (DESIGN `docs/DESIGN.md`, Abschnitt „Umgebungshören im Ruhezustand")
     "taste":          50,  # Tastendruck quittiert: weiß, schnell blinkend
     "agentenstatus":  40,  # denkt: Glow, pulsierend
     "akku":           30,  # Akku unter Schwelle: gelb, langsam blinkend

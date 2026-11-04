@@ -3,7 +3,7 @@
 Stand 3.11.2026, gemessen am **Pi Zero 2 W** (Kernel 6.18.50) mit der Whisplay
 über `/dev/gpiochip0`, laufender Dienst `chimera.service`, Commit `c99b362`.
 Folgerungen stehen in `docs/DESIGN.md` (Regel 7a, Abschnitt „Fünf Absichten
-auf einer Taste") und in `docs/HERKUNFT.md` §4.2/§4.3.
+auf einer Taste") und in `docs/HERKUNFT.md`, Abschnitte „Der Treiber: Stand unseres Nachbaus" und „Der Daemon: warum wir ihn nicht übernehmen".
 
 *Research: button bounce on the Whisplay HAT. English summary at the end.*
 
@@ -107,7 +107,7 @@ Fünf Gesten, fünf Zeilen, keine Fehlerkennung.
   Hängen, nicht die Fehlzählung. Wenn wieder Fehlerkennungen auftreten: erst
   das Pegel-Protokoll (`log.debug`) einschalten, dann die Ruhezeit erhöhen —
   nicht auf Verdacht.
-- **Zweite Whisplay-Revision** (mit Joystick, HERKUNFT §4.2) hat andere
+- **Zweite Whisplay-Revision** (mit Joystick, HERKUNFT `docs/HERKUNFT.md`, Abschnitt „Der Treiber: Stand unseres Nachbaus") hat andere
   Taster; dort ist die Ruhezeit erneut zu messen.
 - **Hardware-Entprellung** (RC-Glied) wäre die saubere Lösung, verlangt aber
   einen Lötkolben am Gerät — bei 80 ms Software-Ruhe nicht nötig.

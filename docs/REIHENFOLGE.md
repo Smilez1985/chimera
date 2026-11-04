@@ -88,6 +88,6 @@ Nach der Projektregel („Wer etwas ändert, das im Design beschrieben ist,
 - [ ] **Regel: Wer anzeigt, besitzt die Zeit** — Muster sind reine
       Funktionen `f(t, wert) -> wert`, ohne eigene Zeitgeber. Ergänzt
       Regel 7 (ein Prozess, ein Framebuffer) um die Zeitachse.
-- [ ] **§ Gesichter** im Design: Was ein Gesicht ist (Bündel aus Moods,
+- [ ] **Abschnitt „Gesichter"** im Design: Was ein Gesicht ist (Bündel aus Moods,
       Vorgaben, Herkunft), warum JSON, warum kein Python darin, welche
       Grenzen für ein erzeugendes Modell gelten.

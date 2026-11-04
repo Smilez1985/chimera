@@ -1,7 +1,7 @@
 """Die Brücke zwischen Agent und Gesicht.
 
 Damit `set_face` nicht ins Leere greift und der Agentzustand sichtbar wird
-(`docs/DESIGN.md` §7). Ohne diese Brücke wären Werkzeug und Renderer zwei
+(`docs/DESIGN.md`, Abschnitt „Zustand sichtbar machen"). Ohne diese Brücke wären Werkzeug und Renderer zwei
 Bausteine ohne Verbindung — gebaut, aber nicht verdrahtet (Regel 10h).
 
 Zwei Richtungen:

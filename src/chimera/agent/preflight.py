@@ -1,7 +1,7 @@
 """Werkzeugaufrufe prüfen und notfalls reparieren, bevor sie laufen.
 
 Muster aus OpenMinis, **nachgebaut statt übernommen** (dort GPL-3, hier
-MIT — `docs/HERKUNFT.md` §0).
+MIT — `docs/HERKUNFT.md`, Abschnitt „Die Lizenzgrenze").
 
 Zwei Aufgaben, in dieser Reihenfolge:
 

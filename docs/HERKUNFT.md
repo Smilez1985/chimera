@@ -25,11 +25,11 @@ wird, sind Lösungsmuster: Schwellwertschemata, Staffelungen, Reihenfolgen.
 Algorithmen sind nicht schutzfähig, Quelltext ist es.
 
 Praktisch heißt das: lesen, verstehen, zuklappen, aus dem Verständnis neu
-schreiben. Wer einen Baustein aus OpenMinis ergänzt, vermerkt ihn in §3
+schreiben. Wer einen Baustein aus OpenMinis ergänzt, vermerkt ihn in Abschnitt „Was Chimera selbst beisteuert"
 als *nachgebaut*.
 
 Bei openclawgotchi ist Kopieren erlaubt. Dass wir es trotzdem nur selten
-tun, ist eine technische Entscheidung (§1) — das Projekt ist für andere
+tun, ist eine technische Entscheidung (Abschnitt „openclawgotchi") — das Projekt ist für andere
 Hardware und ein anderes Prozessmodell gebaut.
 
 ---
@@ -84,8 +84,8 @@ Untergrenze.
 |---|---|
 | `llm/router.py` (82) | Kennt zwei Connectoren als feste Attribute und schaltet per Bool. Ein dritter Anbieter passt nicht hinein → **Registry** (Regel 5a) |
 | `llm/litellm_connector.py` (1513) | Enthält *alles*: Werkzeuge, Ausführung, Modellwahl, Zustand. Die Werkzeugliste ist gut, die Vermischung nicht → aufteilen |
-| `memory/summarize.py` (110) | Feste Grenze (`VERBATIM_COUNT = 5`) statt Staffelung nach Fenstergröße → siehe §3.3 |
-| `hardware/auto_mood.py` (137) | Wählt Stimmung nach `minute % len(moods)`. In Chimera entscheidet das Modell (§3.4 im Design) |
+| `memory/summarize.py` (110) | Feste Grenze (`VERBATIM_COUNT = 5`) statt Staffelung nach Fenstergröße → siehe `docs/DESIGN.md`, Abschnitt „Drei Stufen der Erzeugung" |
+| `hardware/auto_mood.py` (137) | Wählt Stimmung nach `minute % len(moods)`. In Chimera entscheidet das Modell (`docs/DESIGN.md`, Abschnitt „Umgebungshören im Ruhezustand") |
 | `harden.sh` | Gute Punkte (Watchdog, Dienste abschalten, Firewall, SSH), aber Swap mit festem Gigabyte → bei uns zram + Auslagerung (Regel 5e) |
 
 ### 1.4 Nicht übernehmen
@@ -236,8 +236,8 @@ Kein Erbe, sondern der Grund für das Projekt:
 - **Renderer aus Noisy**, auflösungsrelativ gemacht
 - **Übergänge** über alle Felder, weich und hart (Regel 6b)
 - **Umgebungshören mit Deutung durch das Modell** statt fester
-  Label-Tabelle (§3.4)
-- **Mienenspiel beim Sprechen** (§4.1)
+  Label-Tabelle (`docs/DESIGN.md`, Abschnitt „Umgebungshören im Ruhezustand")
+- **Mienenspiel beim Sprechen** (Abschnitt „Die Lizenzgrenze")
 - **Installer**, der die Treiberfrage löst
 
 ---
@@ -302,7 +302,7 @@ Am Pi belegt: „Taste: Kantenereignisse (keine Abfrage im Leerlauf)“ im
 Protokoll, Gesamtlast 10,8 % → 9,5 %. Fällt die Anforderung durch (alter
 Kernel), greift die Abfrage als Rückfall — ohne Sonderweg im Aufrufer.
 
-Was für die **Radxa-Portierung** (`docs/HARDWARE.md` §1, bisher
+Was für die **Radxa-Portierung** (`docs/HARDWARE.md`, Abschnitt „Entscheidung", bisher
 „nicht unterstützt") drinsteht und was nicht:
 
 - Pin-Tabellen je Board (BOARD-Pin → `(gpiochip, Zeile)`) für Radxa Zero 3W,

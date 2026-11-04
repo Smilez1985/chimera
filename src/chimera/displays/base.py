@@ -1,4 +1,4 @@
-"""Gemeinsame Schnittstelle aller Anzeigen (DISPLAYS.md §1, Regel 6c).
+"""Gemeinsame Schnittstelle aller Anzeigen (DISPLAYS.md `docs/DISPLAYS.md`, Abschnitt „Grundsatz", Regel 6c).
 
 Oberhalb dieser Schicht weiß niemand, welches Panel steckt. Ein Panel
 beschreibt sich über sein ``Profil`` (Maße, Farben, Bildrate) und kann

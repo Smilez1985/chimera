@@ -19,7 +19,7 @@ Zeit von außen (``t``) und gibt zurück, was erkannt wurde; sie schläft nicht
 und kennt keinen Faden. Jeder Fall ist damit prüfbar, ohne zu warten.
 
 Schwellen: ``0,7 s`` für „lang" und ``2,0 s`` für „halten" nach der Vorlage
-(PiSugar ``whisplay-daemon``, Apache-2.0, HERKUNFT §4.3: dort
+(PiSugar ``whisplay-daemon``, Apache-2.0, HERKUNFT `docs/HERKUNFT.md`, Abschnitt „Der Daemon: warum wir ihn nicht übernehmen": dort
 ``BUTTON_LONG_PRESS_SEC = 0.7``; der Daemon kannte kein Halten, weil er nur
 einmal je Loslassen handelte). Das **Klickfenster** ist bei uns 0,8 s statt
 3,0 s: Die Vorlage zählte vier Klicks in drei Sekunden für „zurück"; bei uns

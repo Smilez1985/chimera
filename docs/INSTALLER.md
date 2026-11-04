@@ -66,7 +66,7 @@ gleichbedeutend mit „führe aus, was heute dort steht".
 
 ### I5 — Fremde Distributionspakete nie über `/` entpacken
 
-Siehe §3.3. Dieser Punkt hat einen eigenen Abschnitt, weil er ein Gerät
+Siehe Abschnitt „I5". Dieser Punkt hat einen eigenen Abschnitt, weil er ein Gerät
 unbrauchbar machen kann.
 
 ### I6 — Jeder Schritt einzeln aufrufbar
@@ -114,10 +114,10 @@ schlägt den Neustartwunsch.
 | 10 | `check-system` | Board und Betriebssystem erkennen, Whisplay-Revision, Speicher, Platz |
 | 20 | `install-packages` | Systempakete |
 | 25 | `speicher` | zram (75 %) und Auslagerungsdatei, gestaffelt nach Kartengröße (siehe „Modul 50 — Python-Umgebung") |
-| 30 | `install-headers` | Header beschaffen — **der schwierige Teil** (§3) |
-| 40 | `install-display` | Anzeige erkennen und festhalten, neutrale Busse, Ton zur Laufzeit (§4) |
+| 30 | `install-headers` | Header beschaffen — **der schwierige Teil** (Abschnitt „Modul 30") |
+| 40 | `install-display` | Anzeige erkennen und festhalten, neutrale Busse, Ton zur Laufzeit (Abschnitt „Modul 40") |
 | 50 | `python` | venv, Abhängigkeiten **mit Versionsprüfung** (requirements + Anzeigemodul), Nachweis (siehe „Modul 50 — Python-Umgebung") |
-| 60 | `overlay` *(geplant)* | Gerätebaum-Overlay, kollidierende abschalten (§5) |
+| 60 | `overlay` *(geplant)* | Gerätebaum-Overlay, kollidierende abschalten (Abschnitt „Modul 60") |
 | 70 | `alsa` *(geplant)* | Audio-Konfiguration |
 | 80 | `models` *(geplant)* | sherpa-onnx-Modelle laden und prüfen |
 | 95 | `config` *(geplant)* | `.env` aus Vorlage, Ollama-Adresse erfragen |
@@ -148,7 +148,7 @@ muss, ist ein Nutzer, der es falsch setzen kann.
 Die Trennung ist wichtig: **Board und Betriebssystem sind zwei
 unabhängige Achsen.** Radxa Zero 3W mit Radxa-Debian und Radxa Zero 3W mit
 DietPi sind derselbe Chip, aber zwei verschiedene Installationsfälle —
-Overlay-Ablage und Bootkonfiguration unterscheiden sich (§5). Der
+Overlay-Ablage und Bootkonfiguration unterscheiden sich (Abschnitt „Modul 60"). Der
 Installer ermittelt beides getrennt und entscheidet daraus.
 
     board = rpi_zero2w | radxa_zero3w | unknown
@@ -280,7 +280,7 @@ Nachvollzogen aus dem Hersteller-Installer:
 
 1. Headers-Paket herunterladen, **Prüfsumme verifizieren**
 2. Mit `dpkg-deb -x` in ein temporäres Verzeichnis entpacken
-   (**nicht** `dpkg -i`, siehe §3.3)
+   (**nicht** `dpkg -i`, siehe Abschnitt „I5")
 3. Das Header-Verzeichnis nach `/usr/src/linux-headers-<kver>-chimera`
    kopieren
 4. Versionskennung in `include/config/kernel.release` und
@@ -370,7 +370,7 @@ Ablauf:
 Die Quelle ist GPL-2.0 (Linux). Wird sie mitgeliefert statt geladen,
 gehört der Lizenzhinweis dazu und ein Vermerk in `THIRD_PARTY.md`.
 
-**Stand 11.10.2026 — was Modul 40 heute tut** (`docs/DISPLAYS.md` §4/§6,
+**Stand 11.10.2026 — was Modul 40 heute tut** (`docs/DISPLAYS.md`, Abschnitt „Erkennung"/Abschnitt „Deinstallation",
 DESIGN 6e-Ergänzung):
 
 1. **Erkennen** über das Treiberpaket (`python3 -m chimera.displays
@@ -699,7 +699,7 @@ Selbstbegrenzung im Prozess ist ein eigener Punkt der Roadmap.
 **Rückbau** (`uninstaller/steps/98-remove-service.sh`): stoppen und
 abschalten (`disable --now`, am Ergebnis geprüft), Unit und Standdatei
 entfernen, `daemon-reload`, zuletzt den Nutzer — nur wenn er `neu` ist.
-Die Nutzerdaten bleiben (§6).
+Die Nutzerdaten bleiben (Abschnitt „Deinstallation").
 
 ---
 
@@ -772,7 +772,7 @@ und Wiedergabe.
 ## 8. Reihenfolge
 
 1. Gerüst: Modulaufbau, `--dry-run`, `--check`, Protokoll, atomares Schreiben
-2. Modul 10 `preflight` — erfasst die Werte aus §3.5. Liefert sofort
+2. Modul 10 `preflight` — erfasst die Werte aus Abschnitt „Vor dem Bauen erfassen". Liefert sofort
    Nutzen: klärt die offenen Fragen zum Zielgerät
 3. Module 20–70 für den Pi Zero 2 W (der einfache Fall, Stufe 1)
 4. Module 80–99, damit Chimera startet

@@ -4,7 +4,7 @@ Bis 11.10.2026 lag hier der Whisplay-Treiber samt Herstellerimport
 (``whisplay.WhisplayBoard``). Der ist ins Treiberpaket umgezogen
 (``src/chimera/displays/``, erkennbar über ``display.json`` je Modul); diese
 Datei hält nur die vertraute Eintrittsstelle für ``app.py`` und die Tests
-(DISPLAYS.md §5). Ein neues Panel ist seitdem ein Ordner unter
+(DISPLAYS.md `docs/DISPLAYS.md`, Abschnitt „Aufbau"). Ein neues Panel ist seitdem ein Ordner unter
 ``displays/``, nicht eine Zeile hier.
 
 Woher der Typ kommt (Regel 10g — nicht raten):

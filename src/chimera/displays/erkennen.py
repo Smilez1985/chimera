@@ -1,4 +1,4 @@
-"""Welche Anzeige steckt dran? (DISPLAYS.md §4, DESIGN Regel 6e)
+"""Welche Anzeige steckt dran? (DISPLAYS.md `docs/DISPLAYS.md`, Abschnitt „Erkennung", DESIGN Regel 6e)
 
 Jedes Modul bringt in ``display.json`` eine Prüfliste mit. Jede Prüfung
 hat eine **Klasse**:

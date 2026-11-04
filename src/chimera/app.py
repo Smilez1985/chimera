@@ -213,7 +213,7 @@ class Chimera:
         Die Taste kennt nur unten/oben; was gemeint ist (kurz, lang, halten,
         doppelt, dreifach), entscheidet :class:`chimera.display.gesten.Gesten`
         aus dem zeitlichen Verlauf (Regel 7d). Bedeutung der Gesten: DESIGN
-        §3.4 -- ein Druck beendet das Umgebungshoeren und beginnt das
+        `docs/DESIGN.md`, Abschnitt „Umgebungshören im Ruhezustand" -- ein Druck beendet das Umgebungshoeren und beginnt das
         Gespraech; Push-to-Talk haengt an ``halten``/``halten_ende`` und
         wartet auf den Audio-Prozess (ROADMAP Phase 5). Bis dahin: sichtbar
         quittieren und protokollieren, nicht schweigen.
@@ -238,7 +238,7 @@ class Chimera:
     def _geste(self, art: str) -> None:
         """Eine erkannte Geste melden -- und spaeter ausfuehren.
 
-        Die Bedeutung haengt an DESIGN §3.4: kurz beendet das
+        Die Bedeutung haengt an DESIGN `docs/DESIGN.md`, Abschnitt „Umgebungshören im Ruhezustand": kurz beendet das
         Umgebungshoeren, lang beginnt das Gespraech, halten ist
         Push-to-Talk (``halten_ende`` beendet es), doppelt und dreifach
         sind fuer Abbrechen/Zurueck vorgesehen. Bis der Audio-Prozess
@@ -482,7 +482,7 @@ def _try_zeile_und_led(renderer, panel, notes: list[str]):
         breite = int(getattr(panel, "width", 0) or 0)
         hoehe = int(getattr(panel, "height", 0) or 0)
         if hoehe - breite >= 30:
-            # Grundinhalt = Name des Ausdrucks (DESIGN §5). Gelesen aus dem
+            # Grundinhalt = Name des Ausdrucks (DESIGN `docs/DESIGN.md`, Abschnitt „Renderer"). Gelesen aus dem
             # Zustand, den der Renderer zeichnet -- keine zweite Quelle.
             zustand = getattr(renderer, "state", None)
             statusline = StatusLine(

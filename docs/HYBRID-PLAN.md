@@ -218,12 +218,12 @@ Verständigung über geteiltes Gedächtnis für den Pegel, Warteschlange für
 den Rest — dafür kommt Noisys `noisy_shm.py` zum Einsatz.
 
 VAD → Wake-Word → Erkennung → Synthese, einzeln. Emotion der Stimme an
-den Mood koppeln (Regel 4b). Danach das Mienenspiel beim Sprechen (§4.1)
+den Mood koppeln (Regel 4b). Danach das Mienenspiel beim Sprechen (`docs/DESIGN.md`, Abschnitt „Mienenspiel beim Sprechen")
 — der härteste Lastfall.
 
 ### H7 — Umgebungshören *(Hardware nötig)*
 
-Tagger, drei Geschwindigkeiten, nur im Ruhezustand (§3.4).
+Tagger, drei Geschwindigkeiten, nur im Ruhezustand (`docs/DESIGN.md`, Abschnitt „Umgebungshören im Ruhezustand").
 
 ### H8 — Restliche Peripherie
 

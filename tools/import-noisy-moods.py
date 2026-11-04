@@ -3,7 +3,7 @@
 
 Die Audio-Kopplung (`labels`, `fingerprint`, `energy`) fällt weg — welcher
 Ausdruck zu einem Geräusch passt, entscheidet in Chimera das Sprachmodell
-(DESIGN.md §3.4). Was bleibt, sind die Ausdrücke selbst: als Beispiele
+(DESIGN.md `docs/DESIGN.md`, Abschnitt „Umgebungshören im Ruhezustand"). Was bleibt, sind die Ausdrücke selbst: als Beispiele
 dafür, was möglich ist, und als Bestand, aus dem gemischt wird.
 
 Aufruf:  python3 tools/import-noisy-moods.py <pfad-zu-noisy> [ziel.json]

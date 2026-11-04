@@ -11,7 +11,7 @@ Stand: 2026-09-29. Entwurf.
 > **Ab 16.10.2026:** Die Anbieterschicht zieht in das Gateway (Rust) um,
 > siehe `DESIGN.md`, „Gateway: der eine Weg nach draußen" (Regeln 5k–5n, 5b
 > in der Fassung für das Gateway)
-> und §14. Was hier steht, bleibt das Verhalten. Was sich ändert, ist der
+> und `docs/DESIGN.md`, Abschnitt „Zwei Sprachen". Was hier steht, bleibt das Verhalten. Was sich ändert, ist der
 > Prozess, der es ausführt: Der Dienst selbst hat danach kein Netz und keine
 > Schlüssel mehr. Die Automatik „größtes Modell fürs Gespräch“ entfällt und
 > wird durch die vom Nutzer festgelegte Reihenfolge ersetzt (5h, Ergänzung).
@@ -34,7 +34,7 @@ Anbieterschicht** (sie trägt mehr als zwei Anbieter und kann
 Abo-Anmeldung).
 
 Weil OpenMinis GPL-3 ist, wird dessen Teil **nachgebaut, nicht
-übernommen** (`docs/HERKUNFT.md` §0).
+übernommen** (`docs/HERKUNFT.md`, Abschnitt „Die Lizenzgrenze").
 
 ---
 
@@ -57,7 +57,7 @@ Weil OpenMinis GPL-3 ist, wird dessen Teil **nachgebaut, nicht
       ├─ AnthropicKey      API-Schlüssel
       ├─ Ollama            eigenes Netz, wenn vorhanden (5c)
       ├─ LiteLLM           alles Weitere
-      └─ MCP-Werkzeuge     fremde Werkzeugquellen (§4)
+      └─ MCP-Werkzeuge     fremde Werkzeugquellen (Abschnitt „MCP")
 
 ---
 
@@ -266,7 +266,7 @@ Chimera soll fremde Werkzeugquellen einbinden können. Aktueller Stand
 
 Ein MCP-Server ist fremder Code mit eigenen Werkzeugen. Deshalb:
 
-- **Dieselbe Vorprüfung** wie für eigene Werkzeuge (§2), kein Freifahrtschein
+- **Dieselbe Vorprüfung** wie für eigene Werkzeuge (Abschnitt „Aufbau"), kein Freifahrtschein
 - **Dieselbe Schleifenerkennung** — ein fremdes Werkzeug kann genauso
   im Kreis laufen
 - **Dieselbe Protokollierung** (Regel 10e)
@@ -301,7 +301,7 @@ Wiedergabe — sonst nichts. Kein Agent, keine Werkzeuge, kein Netz außer
 dem, was die Modelle brauchen (und die laufen lokal).
 
 Verständigung über **geteiltes Gedächtnis** für den Pegel (der Renderer
-liest ihn bei jedem Bild, §4.1) und eine Warteschlange für alles andere.
+liest ihn bei jedem Bild, `docs/DESIGN.md`, Abschnitt „Mienenspiel beim Sprechen") und eine Warteschlange für alles andere.
 Genau dafür hat Noisy `noisy_shm.py` gebaut, samt dem dokumentierten
 Kniff um den `resource_tracker` — diese Erfahrung wird übernommen.
 

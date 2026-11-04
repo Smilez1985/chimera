@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Was steht in der Statuszeile, wenn niemand etwas meldet? (DESIGN §5, Regel 7c)
+"""Was steht in der Statuszeile, wenn niemand etwas meldet? (DESIGN `docs/DESIGN.md`, Abschnitt „Renderer", Regel 7c)
 
 Am Geraet (smilez, 11.10.2026): "Statusleiste sehe ich nicht". Die Zeile
 war angeschlossen, aber es meldete nie jemand etwas -- nur Agentenzustaende,

@@ -306,7 +306,7 @@ def _split(text: str, size: int) -> list[str]:
 def from_env(session: Session, env: dict | None = None, *, on_state=None) -> Bot:
     """Einen Bot aus der Umgebung bauen.
 
-    Zugangsdaten stehen nicht im Repo (§12): ``CHIMERA_TELEGRAM_TOKEN`` und
+    Zugangsdaten stehen nicht im Repo (`docs/DESIGN.md`, Abschnitt „Hardware"): ``CHIMERA_TELEGRAM_TOKEN`` und
     ``CHIMERA_TELEGRAM_ALLOWED`` (Kennungen, durch Komma getrennt).
     """
     import os

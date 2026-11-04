@@ -6,7 +6,7 @@ Das Format folgt [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 die Versionierung [Semantic Versioning](https://semver.org/lang/de/) — mit
 einer bewussten Abweichung: **ein Versionssprung bricht keine laufende
 Installation.** Was ein Release an bestehenden Installationen ändert,
-erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
+erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md`, Abschnitt „Versionierung").
 
 
 ## [0.1.0] — Pre-Alpha, nicht getaggt
@@ -320,7 +320,7 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Entpacken, keine Abhängigkeit von einem Packprogramm. `DESIGN` nennt jetzt
   auch die Marker-Felder `grund` und `befunde`: der zweite Lauf kennt den
   Bericht des ersten nicht mehr.
-- **Herkunft um die PiSugar-Repos erweitert** (`HERKUNFT §4`): Lizenzgrenze
+- **Herkunft um die PiSugar-Repos erweitert** (`HERKUNFT `docs/HERKUNFT.md`, Abschnitt „PiSugar Whisplay"`): Lizenzgrenze
   je Teilbaum, der Stand unseres Treiber-Nachbaus gegen den heutigen
   Upstream (nur Joystick, Pull-up und MangoPi sind dazugekommen), und die
   vier Sprachmuster, die nachgebaut werden statt kopiert. Ergebnis in
@@ -338,7 +338,7 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
 - Die CPU-Temperatur wird über eine Instanzeigenschaft gelesen, nicht über
   eine Modulkonstante — auf dem Radxa heißt die Zone anders als auf dem Pi
   (Regel 10c).
-- **§13 verschärft und als Regel 13a gefasst:** Vor jedem Push läuft eine
+- **`docs/DESIGN.md`, Abschnitt „Keine Secrets im Repo" verschärft und als Regel 13a gefasst:** Vor jedem Push läuft eine
   Prüfung auf Geheimnisse und Personenbezug, und sie belegt vorher, dass
   sie überhaupt etwas finden kann. Hinzugekommen in der Liste des
   Unerwünschten: private IP-Adressen, MAC-Adressen, Heimnetz-Hostnamen,
@@ -381,7 +381,7 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Doku-Commit erzeugte einen Befund und einen unnötigen CI-Build.
 
 - **Der Installer ist der einzige Weg auf ein Gerät** (DESIGN Regel 13):
-  Zuordnung „Changelog-Bereich → Modul" in `docs/INSTALLER.md` §9, neues
+  Zuordnung „Changelog-Bereich → Modul" in `docs/INSTALLER.md`, Abschnitt „Was welches Modul aus dem Changelog einspielt", neues
   Werkzeug `tools/abgleich.sh` vergleicht Quellbaum, eingespielten Stand
   und `state/quelle-commit`. Anlass: vier Commits lagen nur per `scp` in
   `productive/code` und wurden beim nächsten Boot-Abgleich zurückgerollt.

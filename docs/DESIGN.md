@@ -37,11 +37,11 @@ Richtung nicht MIT-kompatibel.
 **Es wird keine Zeile OpenMinis-Code übernommen — auch nicht übersetzt.**
 Was übernommen wird, sind Lösungsmuster: Schwellwertschemata,
 Staffelungslogik, Reihenfolgen. Algorithmen sind nicht schutzfähig,
-Quelltext ist es. Wer hier einen Baustein ergänzt, dokumentiert ihn in §8
+Quelltext ist es. Wer hier einen Baustein ergänzt, dokumentiert ihn in Abschnitt „Übernommene Muster aus OpenMinis (nachgebaut, nicht kopiert)"
 mit dem Hinweis "nachgebaut, nicht kopiert".
 
 Noisy gehört uns selbst — dort ist Kopieren erlaubt. Dass der Renderer
-trotzdem neu geschrieben wird, ist eine technische Entscheidung (§5).
+trotzdem neu geschrieben wird, ist eine technische Entscheidung (Abschnitt „Renderer").
 
 ---
 
@@ -70,7 +70,7 @@ Slots und Felder:
 ### 3.2 Was gegenüber Noisy entfällt
 
 Noisy bildet Geräusche **fest** auf Moods ab. Chimera behält das Hören,
-aber nicht die feste Zuordnung (§3.4). Gestrichen wird deshalb:
+aber nicht die feste Zuordnung (Abschnitt „Umgebungshören im Ruhezustand"). Gestrichen wird deshalb:
 
 - `labels` — AudioSet-Label → Mood (in Noisy 41×). Die Zuordnung trifft
   das Sprachmodell, nicht die Tabelle.
@@ -78,7 +78,7 @@ aber nicht die feste Zuordnung (§3.4). Gestrichen wird deshalb:
 - `energy` — BPM-/Lautstärke-Fenster (21×)
 
 Eine **kleine** feste Zuordnung bleibt allerdings: die Reflexe für
-Sofortreaktionen (§3.4, Ebene 1). Ein Erschrecken darf nicht auf eine
+Sofortreaktionen (Abschnitt „Umgebungshören im Ruhezustand", Ebene 1). Ein Erschrecken darf nicht auf eine
 Modellantwort warten.
 
 Es bleiben `priority`, `fast_track` und alle Darstellungs-Slots.
@@ -104,7 +104,7 @@ Verhindert, dass dasselbe Gefühl immer pixelgleich aussieht.
 
 **Stufe 3 — Erfinden. LLM, selten.**
 Nur wenn Mischen nicht reicht. Der Agent bekommt das Vokabular als Schema
-— benannte Bausteine **und** die freien Zeichenformen (§3.3a) — und
+— benannte Bausteine **und** die freien Zeichenformen (Abschnitt „Der Renderer ist nicht die Grenze") — und
 schreibt einen neuen Mood. Ergebnis wird validiert, gespeichert und ist
 danach kostenlos wiederverwendbar.
 
@@ -127,7 +127,7 @@ ist aus elf Zeichenbefehlen gebaut:
 
 Dazu Farbe, Umriss, Füllung, eine Ebene (`behind`, `body`, `face`,
 `front`) und eine Bewegung (`bob`, `sway`, `spin`, `pulse`, `flicker`,
-`audio` — letztere folgt der eigenen Sprachausgabe, §4.1).
+`audio` — letztere folgt der eigenen Sprachausgabe, Abschnitt „Mienenspiel beim Sprechen").
 
 #### Architekturregel 1a — Benannte Bausteine sind Vorschläge, keine Grenze
 
@@ -202,7 +202,7 @@ Stattdessen **drei Geschwindigkeiten**:
    kaputt.
 2. **Stimmungslage.** Aus dem, was über die letzten Minuten zu hören war,
    ergibt sich ein Grundzustand — ruhig, belebt, laut. Rein lokal
-   gerechnet, ohne Modell, über Mischen und Variieren (§3.3 Stufen 1–2).
+   gerechnet, ohne Modell, über Mischen und Variieren (Abschnitt „Drei Stufen der Erzeugung" Stufen 1–2).
 3. **Deutung.** In größeren Abständen — oder wenn sich etwas deutlich
    ändert — bekommt das Sprachmodell eine **Zusammenfassung** der
    akustischen Lage und antwortet mit einem Mood: gemischt aus
@@ -349,7 +349,7 @@ nie gemeldet, das Gesicht blieb nach der ersten Antwort stehen.
 #### Architekturregel 4c — Das Sprachmodell setzt Absicht, nicht Bilder
 
 Die Arbeitsteilung folgt derselben Staffelung wie beim Umgebungshören
-(§3.4) — nur enger getaktet:
+(Abschnitt „Umgebungshören im Ruhezustand") — nur enger getaktet:
 
 | Was | Wer | Takt |
 |---|---|---|
@@ -360,7 +360,7 @@ Die Arbeitsteilung folgt derselben Staffelung wie beim Umgebungshören
 Das Sprachmodell liefert **Regieanweisungen zum Text**, keine Einzelbilder.
 Ein Satz kommt also nicht nackt, sondern mit einem Ausdruck versehen —
 etwa „nachdenklich beginnen, bei der Pointe erfreut". Chimera kennt diese
-Ausdrücke bereits als Moods (§3); es sind dieselben Datensätze, die auch
+Ausdrücke bereits als Moods (Abschnitt „Mood-Assets: das Kernkonzept"); es sind dieselben Datensätze, die auch
 sonst das Gesicht bestimmen. Das Modell wählt oder mischt sie, so wie es
 im Ruhezustand die Deutung liefert.
 
@@ -476,7 +476,7 @@ keine Änderung am Router.
 
 `LLMConnector` wird um zwei Dinge erweitert:
 - `supports_tools` — nicht jeder Anbieter kann Tool-Calls
-- `context_window` — nötig für die gestaffelten Kontextschwellen (§8.3).
+- `context_window` — nötig für die gestaffelten Kontextschwellen (`docs/HERKUNFT.md`, Abschnitt „Gestaffelte Kontextschwellen").
   Die Kapazität muss gegen das Modell geprüft werden, das die Anfrage
   **tatsächlich bedient**. Bei Fallback über die Registry sonst gegen das
   falsche Fenster.
@@ -574,7 +574,7 @@ Voreinstellung:
 | Aufgabe | Anbieter |
 |---|---|
 | Gespräch, Werkzeugnutzung | Anthropic (Abo), Fallback Ollama |
-| Mood-Erfindung (§3.3 Stufe 3) | Ollama — selten, günstig, im eigenen Netz |
+| Mood-Erfindung (Abschnitt „Drei Stufen der Erzeugung" Stufe 3) | Ollama — selten, günstig, im eigenen Netz |
 | Zusammenfassen, Aufräumen | Ollama |
 
 Mood-Erfindung auf dem eigenen Server zu belassen, ist bewusst: Der
@@ -584,7 +584,7 @@ Da beide Anbieter außerhalb des Geräts liegen (Regel 5), muss Chimera mit
 **Netzausfall** umgehen können, ohne stehenzubleiben: Die Mood-Stufen 1
 und 2 (Mischen, Variieren) brauchen kein Modell und funktionieren weiter.
 Das Gerät behält also ein Gesicht, auch wenn es gerade nichts sagen kann —
-und kann diesen Zustand sogar zeigen (§7).
+und kann diesen Zustand sogar zeigen (Abschnitt „Zustand sichtbar machen").
 
 ### Konfiguration
 
@@ -593,7 +593,7 @@ hartkodiert. Fehlt ein Schlüssel, meldet der Connector sich als nicht
 verfügbar und die Registry überspringt ihn — kein Absturz, keine
 Fehlermeldung beim Start.
 
-Zugangsdaten gehören nicht ins Repo (§12). `*.example` mit Platzhaltern.
+Zugangsdaten gehören nicht ins Repo (Abschnitt „Hardware"). `*.example` mit Platzhaltern.
 
 ### Architekturregel 5d — Ein Gespräch, zwei Türen
 
@@ -607,7 +607,7 @@ Praktisch: Die Kanäle unterscheiden sich nur in Ein- und Ausgabe
 müssen kürzer sein als geschriebene. Der Agent bekommt den Kanal als
 Kontext mitgeteilt, damit er sich darauf einstellen kann.
 
-Der Avatar zeigt in beiden Fällen denselben Zustand (§7). Wenn per
+Der Avatar zeigt in beiden Fällen denselben Zustand (Abschnitt „Zustand sichtbar machen"). Wenn per
 Telegram eine Anfrage läuft, sieht man das dem Gesicht an.
 
 #### Architekturregel 5i — Ein Kanal hat keinen eigenen Zustand
@@ -775,7 +775,7 @@ und ändert nur, was abweicht:
 
 Ein MCP-Server ist fremder Code mit eigenen Werkzeugen. Deshalb:
 
-- **Dieselbe Vorprüfung** wie für eigene Werkzeuge (§2), kein Freifahrtschein
+- **Dieselbe Vorprüfung** wie für eigene Werkzeuge (Abschnitt „Herkunft und Lizenzgrenzen"), kein Freifahrtschein
 - **Dieselbe Schleifenerkennung** — ein fremdes Werkzeug kann genauso
   im Kreis laufen
 - **Dieselbe Protokollierung** (Regel 10e)
@@ -788,7 +788,7 @@ Anbindung über die Standardwege der Bibliothek (Unterprozess oder HTTP).
 Auf einem Pi Zero ist jeder zusätzliche Dauerprozess Speicher — MCP-Server
 werden deshalb **bei Bedarf gestartet**, nicht im Voraus.
 
-Ausführung und Stand der Spezifikation: `docs/PROVIDER.md` §4.
+Ausführung und Stand der Spezifikation: `docs/PROVIDER.md`, Abschnitt „MCP".
 
 ---
 
@@ -810,7 +810,7 @@ Wiedergabe — sonst nichts. Kein Agent, keine Werkzeuge, kein Netz außer
 dem, was die Modelle brauchen (und die laufen lokal).
 
 Verständigung über **geteiltes Gedächtnis** für den Pegel (der Renderer
-liest ihn bei jedem Bild, §4.1) und eine Warteschlange für alles andere.
+liest ihn bei jedem Bild, Abschnitt „Mienenspiel beim Sprechen") und eine Warteschlange für alles andere.
 Genau dafür hat Noisy `noisy_shm.py` gebaut, samt dem dokumentierten
 Kniff um den `resource_tracker` — diese Erfahrung wird übernommen.
 
@@ -865,7 +865,7 @@ trägt der Nutzer das Risiko für sein eigenes Gerät, hier öffnet er es
 Dritten. Wo eine Fehlkonfiguration Fremden Zugang gibt, wird nicht
 gefragt, sondern verweigert.
 
-Die Liste steht in der Umgebung, nicht im Repo (§13).
+Die Liste steht in der Umgebung, nicht im Repo (Abschnitt „Keine Secrets im Repo").
 
 Für die Web-Oberfläche gilt die Ausnahme „Ersteinrichtung“ in Regel 5u.
 
@@ -873,13 +873,13 @@ Für die Web-Oberfläche gilt die Ausnahme „Ersteinrichtung“ in Regel 5u.
 
 Entschieden am 16.10.2026. Ersetzt den Ansatz, dass jeder Anbieter und
 Telegram im Dienst selbst eine Verbindung öffnen. Vorbild ist der
-Pförtner aus rag4ll (§27): ein Eingang, geprüft am Tor, intern
+Pförtner aus rag4ll (dort Abschnitt 27): ein Eingang, geprüft am Tor, intern
 weitergereicht. Ausführung der Anbieterseite in `docs/PROVIDER.md`.
 
 ### Architekturregel 5n — Chimera spricht nur über sein Gateway mit der Welt
 
 Auf dem Gerät gibt es **genau einen Prozess mit Netzzugang: das Gateway**.
-Es ist Pförtner und Orchestrator zugleich, nach dem Vorbild von rag4ll §27.
+Es ist Pförtner und Orchestrator zugleich, nach dem Vorbild von rag4ll (dort Abschnitt 27).
 
     Welt ── Telegram, Ollama, Anthropic, Web-Oberfläche, MCP, Update
               │
@@ -1000,7 +1000,7 @@ Oberfläche.
   `config/anbieter/.abgelehnt.json`, und die Suche trägt ihn nicht wieder ein.
 - Kataloge bekannter Server werden höchstens stündlich erneuert (7-Tage-Frist
   der Modelle nach 5t). Ein nicht erreichbarer Server behält seinen Katalog.
-- Die Adresse steht nur auf dem Gerät in `config/anbieter/`, nie im Repo (§13).
+- Die Adresse steht nur auf dem Gerät in `config/anbieter/`, nie im Repo (Abschnitt „Keine Secrets im Repo").
 - Bei Netzen über /22 wird nicht gesucht und das gemeldet.
 - Die Adresse in der `.env` (`OLLAMA_API_BASE`) bleibt als Rückfall unter der
   Kennung `ollama`, bis der Nutzer auf die Anbieterliste umgestellt hat.
@@ -1570,20 +1570,20 @@ aufeinanderfolgende können weit auseinanderliegen, und ein Sprung sieht
 dann aus wie ein Bildfehler.
 
 Chimera blendet deshalb über **alle** Felder. Die Mechanik ist dieselbe
-wie beim Mischen (§3.3), nur kommt die Zeit dazu.
+wie beim Mischen (Abschnitt „Drei Stufen der Erzeugung"), nur kommt die Zeit dazu.
 
 #### Architekturregel 6b — Weich ist der Normalfall, hart muss möglich bleiben
 
 Ein Reflex, der über eine halbe Sekunde einblendet, ist kein Schreck,
 sondern eine Verzögerung. Moods mit `fast_track` wechseln deshalb
 **sofort** — dasselbe Merkmal, das im Umgebungshören die Sofortreaktion
-auslöst (§3.4, Ebene 1). Wer es ausdrücklich will, bekommt den harten
+auslöst (Abschnitt „Umgebungshören im Ruhezustand", Ebene 1). Wer es ausdrücklich will, bekommt den harten
 Wechsel auch ohne dieses Merkmal.
 
 Drei Feinheiten, die den Unterschied machen:
 
 - **Die Dauer ist eine Zeitangabe, keine Bildanzahl.** Sinkt die Bildrate
-  beim Sprechen (§4.1), dauert ein Übergang trotzdem gleich lang.
+  beim Sprechen (Abschnitt „Mienenspiel beim Sprechen"), dauert ein Übergang trotzdem gleich lang.
 - **Der Fortschritt hängt an der Uhr, nicht an der Zahl der Aufrufe.**
   Bleibt der Renderer einmal hängen, springt der Übergang weiter, statt
   stehenzubleiben.
@@ -1595,7 +1595,7 @@ Der Verlauf ist weich statt gleichmäßig: Ein linearer Übergang beginnt und
 endet abrupt, obwohl sich die Werte gleichmäßig ändern.
 
 Noisys `AUDIO_SMOOTHING = 0.18` bleibt daneben für die Audiokopplung
-erhalten — dort glättet es jetzt die eigene Sprachausgabe (§4.1) statt der
+erhalten — dort glättet es jetzt die eigene Sprachausgabe (Abschnitt „Mienenspiel beim Sprechen") statt der
 Musik.
 
 ### Architekturregel 6c — Das Panel ist eine Eigenschaft, keine Annahme
@@ -1786,7 +1786,7 @@ jeder Zustand trägt 30 s Laufzeit als Netz. Die LED zeigt ohne Meldung
 den Glow des Gesichts gedimmt (der Renderer reicht seine aktuelle
 Glow-Farbe weiter — keine zweite Farbquelle) und wird im Renderertakt
 gesetzt, nur bei Änderung. Die Seitentaste ist verdrahtet und quittiert
-per LED; was ein Druck auslöst, hängt am Audio-Prozess (§3.4, noch nicht
+per LED; was ein Druck auslöst, hängt am Audio-Prozess (Abschnitt „Umgebungshören im Ruhezustand", noch nicht
 gebaut).
 
 **Ergänzung (11.10.2026, Sichtprüfung am Gerät) — Grundinhalt, Anbieter,
@@ -1794,7 +1794,7 @@ Quittung.** Angeschlossen war die Zeile, sehen konnte man sie trotzdem
 nicht: Gemeldet haben nur Agentenzustände, und ohne Sprachmodell läuft der
 Agent nie. Dazu kam Pillows eingebaute Schrift (rund 10 px). Deshalb:
 
-- Die Zeile hat einen **Grundinhalt**, den Namen des Ausdrucks (§5,
+- Die Zeile hat einen **Grundinhalt**, den Namen des Ausdrucks (Abschnitt „Renderer",
   „Mood-Name, Akku, Agent-Zustand"). Er wird aus dem Zustand gelesen, den
   der Renderer zeichnet, also keine zweite Quelle. Er ist kein Eintrag im
   Verwalter, sondern der Rückfall, wenn dort niemand steht, und läuft
@@ -1822,7 +1822,7 @@ nächste Frist und weckt sie.
 
 | Geste | Bedingung | gedacht für |
 |---|---|---|
-| `kurz` | losgelassen vor 0,7 s | Umgebungshören beenden, Gespräch öffnen (§3.4) |
+| `kurz` | losgelassen vor 0,7 s | Umgebungshören beenden, Gespräch öffnen (Abschnitt „Umgebungshören im Ruhezustand") |
 | `lang` | 0,7–2,0 s gehalten, beim Loslassen gemeldet | Gespräch beginnen |
 | `halten` | ab 2,0 s **während** des Haltens | Push-to-Talk: Aufnahme an |
 | `halten_ende` | Loslassen nach `halten` | Push-to-Talk: Aufnahme aus |
@@ -1849,7 +1849,7 @@ etwas zeigt, fühlt sich kaputt an. Die *Geste* wird erst danach erkannt und
 protokolliert; ihre Wirkung wartet auf den Audio-Prozess (ROADMAP Phase 5).
 
 **Zwei Abweichungen von der Vorlage** (PiSugar `whisplay-daemon`,
-HERKUNFT §4.3): Das Klickfenster ist **0,8 s** statt 3,0 s — bei der Vorlage
+HERKUNFT `docs/HERKUNFT.md`, Abschnitt „Der Daemon: warum wir ihn nicht übernehmen"): Das Klickfenster ist **0,8 s** statt 3,0 s — bei der Vorlage
 zählte es vier Klicks für „zurück“, bei uns hängt an einem kurzen Druck eine
 Aktion, die nicht drei Sekunden auf ihre Bestätigung warten darf. Und das
 Halten hat bei uns ein **Ende**; der Daemon handelte nur einmal je Loslassen.
@@ -1994,10 +1994,10 @@ Die Übersetzung im Einzelnen:
 
 | openclawgotchi (E-Ink) | Chimera (Whisplay) |
 |---|---|
-| `FACE: <mood>` steuert Emoticon aus `custom_faces.json` | steuert einen Mood-Datensatz (§3) |
+| `FACE: <mood>` steuert Emoticon aus `custom_faces.json` | steuert einen Mood-Datensatz (Abschnitt „Mood-Assets: das Kernkonzept") |
 | 10 feste Text-Emoticons | Mood-Bibliothek, vom Agenten erweiterbar |
 | `DISPLAY: <text>` Statuszeile | Statuszeile in den 40 zusätzlichen Zeilen |
-| `SAY: <msg>` Sprechblase | Sprechblase **und** Sprachausgabe (§4) |
+| `SAY: <msg>` Sprechblase | Sprechblase **und** Sprachausgabe (Abschnitt „Sprache") |
 | Vollbild-Auffrischung gegen Geisterbilder | entfällt — LCD hat kein Ghosting |
 | ~2 s pro Bild, statisch | 15 FPS, animiert |
 
@@ -2246,7 +2246,7 @@ data/ich/                      Persönlichkeit
       TRAITS.md      gewachsene Eigenheiten (8g)                 ≤ 1 200 Zeichen
       BOOTSTRAP.md   Kennenlern-Ritual, nur bis zur Ersteinrichtung
     data/gedaechtnis/              wie 8c, dazu:
-      MEMORY.md      kuratierte Fakten, §-getrennt               ≤ 2 200 Zeichen
+      MEMORY.md      kuratierte Fakten, in Abschnitte geteilt               ≤ 2 200 Zeichen
 
 Die Budgets sind Startwerte (Hermes, OpenMinis) und werden am Pi gegen
 die Fenster der Modelle gemessen.
@@ -2280,7 +2280,7 @@ die Fenster der Modelle gemessen.
   Absichten (4c).
 - `SYSTEM_TEMPLATE` schrumpft auf den Sicherheitskern (was nie
   verhandelbar ist). Der Rest kommt aus den Dateien. Der Installer legt
-  Vorlagen ab (`*.example` im Repo, ohne persönliche Daten, §13).
+  Vorlagen ab (`*.example` im Repo, ohne persönliche Daten, Abschnitt „Keine Secrets im Repo").
 
 ### Architekturregel 8f — Wer was schreiben darf, setzt der Kernel durch
 
@@ -2351,7 +2351,7 @@ Chimera sich entwickelt oder nur Text ansammelt.
 
 Antwort auf „Soll das Gedächtnis eine richtige Datenbank sein?“: **ja,
 als Index; nein, als Quelle.** Das ist Konsens bei OpenClaw und Hermes
-(Bericht §9).
+(Bericht Abschnitt „Tests").
 
 - **Quelle bleiben Markdown-Dateien in Git:** lesbar ohne Chimera,
   vergleichbar, zurückrollbar. Die Prüfung auf Vollständigkeit (8c)
@@ -2840,7 +2840,7 @@ sprengt.
    nicht geladen, sondern zur Seite gelegt
    (`<datei>.quarantaene-<zeit>`). Gestartet wird mit dem Standard.
 3. Das Zurückfallen wird **gemeldet**, im Protokoll (Regel 10e) und
-   sichtbar (§7). Läuft das Gerät weiter, ohne dass jemand erfährt, warum
+   sichtbar (Abschnitt „Zustand sichtbar machen"). Läuft das Gerät weiter, ohne dass jemand erfährt, warum
    das Gesicht fehlt, ist das stiller Erfolg (Regel 8a).
 4. Die Unit begrenzt die Neustarts (`StartLimitIntervalSec=`,
    `StartLimitBurst=`) für den Fall, dass Schritt 2 versagt.
@@ -3085,7 +3085,7 @@ Dienstes löst die Prüfsumme von `productive/` aus.
 `logs/productive/`: Gerade nach einem Rückbau braucht man sie, um zu
 sehen, was passiert ist. Löschen nur auf ausdrückliche Anforderung
 (opt-in). Dasselbe gilt für `config/` und `/home/<nutzer>/chimera/data/`
-(INSTALLER.md §6). Den Nutzer
+(INSTALLER.md `docs/INSTALLER.md`, Abschnitt „Deinstallation"). Den Nutzer
 `chimera` entfernt er nur, wenn sein Home dabei mitgeht (also nur bei
 angeforderter Löschung der Daten und Protokolle). Sonst bliebe
 ein Home ohne Eigentümer zurück, und eine später vergebene UID erbte es.
@@ -3322,7 +3322,7 @@ nur am fehlenden „(Ruhe: 2)" im Protokoll).
 **Nach grünem Funktionstest wird committet und eingespielt, in dieser
 Reihenfolge, im selben Arbeitsgang.** Ein Stand, der nur auf dem Gerät
 liegt, ist kein Stand; ein Commit, den kein Modul einspielt, ist ein
-offenes Ende (§9 in `docs/INSTALLER.md`).
+offenes Ende (Abschnitt „Tests" in `docs/INSTALLER.md`).
 
 Nachweis: `tools/abgleich.sh --erwartet <commit>` auf dem Gerät —
 Quellbaum, eingespielter Stand und festgehaltener Commit müssen gleich

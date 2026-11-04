@@ -1,6 +1,6 @@
 """Mischen und Variieren — Ausdrücke ohne Sprachmodell.
 
-Die beiden billigen Stufen aus dem Entwurf (§3.3). Sie decken den Alltag
+Die beiden billigen Stufen aus dem Entwurf (`docs/DESIGN.md`, Abschnitt „Drei Stufen der Erzeugung"). Sie decken den Alltag
 ab: Ein Gerät, das für jeden Gesichtsausdruck ein Modell fragt, wäre weder
 bezahlbar noch schnell genug, und bei Netzausfall bliebe es ausdruckslos.
 

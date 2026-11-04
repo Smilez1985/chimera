@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Tests fuer das Treiberpaket `chimera.displays` und die Fassade
-`chimera.display.panel` (DISPLAYS.md §4/§5, DESIGN Regel 6e/10g).
+`chimera.display.panel` (DISPLAYS.md `docs/DISPLAYS.md`, Abschnitt „Erkennung"/Abschnitt „„eingerichtet" waehlt NICHT (smilez, 11.10.): ALSA-Karte und Overlay", DESIGN Regel 6e/10g).
 
 Geprueft wird, was am Geraet NICHT nachstellbar ist: die Entscheidungen.
 Hardware wird nicht nachgebaut -- `erkennen.py` liest Attrappen unter

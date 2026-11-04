@@ -10,12 +10,12 @@ Also über **alle** Felder blenden. Die Mechanik dafür steht schon in
 :func:`chimera.mood.blend.mix`; hier kommt die Zeit dazu.
 
 **Hart muss aber auch gehen.** Ein Reflex, der über eine halbe Sekunde
-einblendet, ist kein Schreck, sondern eine Verzögerung (§3.4, Ebene 1).
+einblendet, ist kein Schreck, sondern eine Verzögerung (`docs/DESIGN.md`, Abschnitt „Umgebungshören im Ruhezustand", Ebene 1).
 Moods mit ``fast_track`` wechseln deshalb sofort — und wer es ausdrücklich
 will, bekommt es auch ohne dieses Merkmal.
 
 Die Dauer ist eine Angabe in Sekunden, keine Bildanzahl: Sinkt die Bildrate
-beim Sprechen (§4.1), soll ein Übergang trotzdem gleich lang dauern.
+beim Sprechen (`docs/DESIGN.md`, Abschnitt „Mienenspiel beim Sprechen"), soll ein Übergang trotzdem gleich lang dauern.
 """
 
 from __future__ import annotations

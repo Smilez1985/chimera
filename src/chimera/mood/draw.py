@@ -78,7 +78,7 @@ MOTIONS = (
     "spin",     # drehen
     "pulse",    # größer/kleiner
     "flicker",  # Helligkeit
-    "audio",    # folgt der Lautstärke der Sprachausgabe (§4.1)
+    "audio",    # folgt der Lautstärke der Sprachausgabe (`docs/DESIGN.md`, Abschnitt „Mienenspiel beim Sprechen")
 )
 
 

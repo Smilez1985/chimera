@@ -13,11 +13,11 @@ jeweils mit Whisplay HAT (V2) und **DietPi** als Betriebssystem. Der
 Installer erkennt das Board selbst (`docs/INSTALLER.md`, Abschnitt „Boarderkennung").
 
 Chimera ist **headless** — kein Desktop, keine grafische Oberfläche.
-Höchstens eine schlanke Web-Oberfläche für Einstellungen (§3).
+Höchstens eine schlanke Web-Oberfläche für Einstellungen (Abschnitt „Radxa Zero 3W").
 
 **Entwickelt wird zuerst auf dem Pi Zero 2 W**, portiert wird danach auf
 den Radxa. Auf dem Pi funktioniert alles, während der Radxa unter DietPi
-erst einen Treiber-Bootstrap braucht (§3).
+erst einen Treiber-Bootstrap braucht (Abschnitt „Radxa Zero 3W").
 
 Der Radxa bringt mehr Arbeitsspeicher (8 GB im vorhandenen Gerät), aber
 **kein lokales Sprachmodell** — dazu der Abschnitt „Warum das Sprachmodell
@@ -159,7 +159,7 @@ Trotzdem Trixie, aus drei Gründen:
    laufend. Rückt dabei ein neuer Kernel nach, **passt das mühsam
    gebaute Whisplay-Modul nicht mehr** — genau die Fehlerklasse, gegen
    die die Kombinationstabelle im Installer gebaut wurde
-   (`docs/INSTALLER.md` §3.4).
+   (`docs/INSTALLER.md`, Abschnitt „Versionsbindung").
 2. **DietPi setzt selbst auf Trixie.** Forky ist vorgesehen, aber nicht
    Voreinstellung. Der seltenere Pfad ist der schlechter geprüfte.
 3. **Python 3.14 ist die Bruchstelle für Fremdpakete.** Heute passt es;
@@ -210,7 +210,7 @@ nachzubauen**: Armbians Repository einbinden oder das passende
 `linux-headers-…-rockchip64`-Paket zur installierten Kernelversion laden.
 Die Kernelversion des Headers-Pakets muss exakt zur laufenden passen —
 genau dafür gibt es die Tabelle bekannter Kombinationen
-(`docs/INSTALLER.md` §3.4).
+(`docs/INSTALLER.md`, Abschnitt „Versionsbindung").
 
 Stufe 3 (Header aufbereiten, `fixdep` und `modpost` selbst bauen) bleibt
 als Rückfallebene beschrieben, ist aber vermutlich **nicht nötig**. Das ist

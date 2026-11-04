@@ -190,7 +190,7 @@ app.zustand_melden("spricht", statusline=sl4, led=ld4, jetzt_ms=2000)
 check("spricht verdraengt hoert auf der LED", ld4.quelle(2001), "spricht")
 check("spricht: Zeile", sl4.text(2001), "spricht")
 app.zustand_melden("wartet", statusline=sl4, led=ld4, jetzt_ms=3000)
-# Seit dem Grundinhalt (DESIGN §5) ist die Zeile nach "wartet" nicht leer,
+# Seit dem Grundinhalt (DESIGN `docs/DESIGN.md`, Abschnitt „Renderer") ist die Zeile nach "wartet" nicht leer,
 # sondern zeigt den Namen des Ausdrucks -- entscheidend ist, dass der
 # Agentenzustand weg ist.
 check("wartet: Agentenzustand zurueckgenommen (Grundinhalt)", sl4.quelle(3001), "leerlauf")

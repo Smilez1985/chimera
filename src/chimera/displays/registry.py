@@ -2,7 +2,7 @@
 
 Ein Modul ist ein Ordner neben dieser Datei mit ``display.json`` und
 ``panel.py``. Die Registry liest den Ordner, nicht eine Liste -- wer ein
-Panel hinzufügt, legt einen Ordner an (DISPLAYS.md §5, wie bei den Moods).
+Panel hinzufügt, legt einen Ordner an (DISPLAYS.md `docs/DISPLAYS.md`, Abschnitt „Aufbau", wie bei den Moods).
 
 ``panel.py`` muss eine Klasse mit Endung ``Panel`` exportieren, die ohne
 Pflichtargumente konstruierbar ist, und ``profil()``.

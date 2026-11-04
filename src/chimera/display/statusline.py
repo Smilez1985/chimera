@@ -117,7 +117,7 @@ class StatusLine:
         # 11.10.2026: "Statusleiste sehe ich nicht").
         self._schrift = schrift if schrift is not None else _schrift_laden(
             max(10, int(self.hoehe * 0.45)))
-        # Grundinhalt (DESIGN §5: "Mood-Name, Akku, Agent-Zustand"): eine
+        # Grundinhalt (DESIGN `docs/DESIGN.md`, Abschnitt „Renderer": "Mood-Name, Akku, Agent-Zustand"): eine
         # Funktion ohne Argument, die den Text liefert. Er steht, wenn keine
         # Quelle etwas meldet -- vorher blieb die Zeile ohne Meldung leer,
         # und ohne Sprachmodell meldete nie jemand etwas.

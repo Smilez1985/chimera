@@ -4,7 +4,7 @@ Warum ein eigener Waechter: Die Datei hat sich zweimal unbemerkt zerlegt --
 ein doppelter Abschnitt ("### Hinzugefuegt" nach "### Entfernt") und zwei
 Bullets, die ohne Ueberschrift direkt nach dem Vorspann standen. Beides faellt
 beim Lesen nicht auf, beim Auswerten (Release-Notizen, Abgleich Changelog ->
-Modul, docs/INSTALLER.md §9) sehr wohl.
+Modul, docs/INSTALLER.md `docs/INSTALLER.md`, Abschnitt „Was welches Modul aus dem Changelog einspielt") sehr wohl.
 
 Geprueft wird der TEXT, nicht die Datei -- damit die Gegenprobe mit einer
 veraenderten Kopie arbeiten kann, statt die echte Datei anzufassen.
