@@ -41,6 +41,15 @@ zram wird nicht angefasst, wenn es läuft.
       die Tests von `test-python-env.sh` laufen seit 4.11. ohne Netz
       (Attrappen-Wheels, `PIP_NO_INDEX`, mit vergiftetem Proxy belegt).
 
+- [ ] **Vorab-Laden im Hintergrund** (DESIGN, Abschnitt „Architekturregel 10u"):
+      Abhängigkeiten und Downloads, die der Lauf ohnehin braucht, abgekoppelt
+      und in Modulreihenfolge holen (`chimera-prefetch`), damit die Installation
+      anfängt, sobald das erste Stück da ist. Marken je Objekt (`.teil`,
+      `.done` nur nach Prüfsumme, `.fehler`), Verbraucher prüft selbst nach,
+      kein paralleler `apt`-Lauf. Phasen: **P1 Dauer je Modul protokollieren
+      (erledigt 4.11.)**, P2 `chimera-prefetch`, P3 `network_fetch` nutzt die
+      Marken, P4 Tests, P5 Messung am Pi.
+
 ## Phase ACP — Chimera als Agent für Editoren und IDEs (DESIGN: Regel „ACP“)
 
 Pflicht-Schnittstelle (smilez, 2.11.). **Entschieden: Der ACP-Server wird gebaut,

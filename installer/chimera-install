@@ -218,6 +218,9 @@ for mod in $(steps_list); do
 
 	RAN=$((RAN + 1))
 	_log_raw "--- Modul $name ---"
+	# Dauer je Modul (Regel 10u, Phase P1): Ohne diese Zahlen ist jede
+	# Reihenfolge beim Vorab-Laden geraten. BusyBox und GNU date koennen +%s.
+	_MOD_T0=$(date +%s)
 
 	# Betriebsart wird an das Modul durchgereicht; Module, die sie nicht
 	# kennen, ignorieren sie.
@@ -243,6 +246,9 @@ for mod in $(steps_list); do
 	CHIMERA_MODE="$MODE" CHIMERA_LOGFILE="$CHIMERA_LOGFILE" CHIMERA_KLAMMER="$_KLAMMER" sh "$mod"
 	rc=$?
 	set -e
+
+	_MOD_D=$(( $(date +%s) - _MOD_T0 ))
+	_log_raw "Modul $name brauchte ${_MOD_D}s"
 
 	if [ "$_FORT_PAUSIERT" = 1 ]; then
 		fortschritt_start "$_FORT_GESAMT_VORLAUF" "$RAN"

@@ -122,6 +122,7 @@ fahr() {
 	OUT="$(env CHIMERA_ROOT="$WURZEL" CHIMERA_MANIFEST="$MANIFEST" \
 	           CHIMERA_LOG_DIR="$CHIMERA_LOG_DIR" CHIMERA_MODE="$1" \
 	           PIP_NO_INDEX=1 PIP_FIND_LINKS="$WHEELS" \
+	           CHIMERA_NETZ_PROBE="${CHIMERA_NETZ_PROBE-}" \
 	           sh "$BAUM/installer/steps/50-python.sh" 2>&1)"
 	RC=$?
 	set -e
@@ -489,6 +490,32 @@ printf 'gibtsnicht-paket>=1\n' >>"$BAUM/requirements.txt"
 PATH="$W/bin-dpkg:$PATH" PIP_NO_INDEX=1 fahr run
 check "Abhaengigkeit fehlt -> rc 2" "$RC" "2"
 contains "Abhaengigkeit fehlt: benannt" "$OUT" "gibtsnicht-paket"
+
+# --- Fall 8: kein Netz -- warten statt abbrechen, dann benannt aufgeben ----
+# Vorgabe smilez: Downloads und Abhaengigkeiten laufen in derselben
+# Warte-Schleife wie network_fetch (Vorbild rag4ll bg-downloader). Fehlt das
+# Netz, pausiert sie; hier ist die Probe tot und die Grenze kurz, damit der
+# Test nicht 10 Minuten wartet. Erwartet: benannter Abbruch (rc 2), kein
+# stiller Fehlschlag.
+mkbaum "kein-netz"
+setze_anforderungen "gibtsnicht-paket>=1"
+_out_alt="$OUT"
+_save_probe="${CHIMERA_NETZ_PROBE-}"; _save_lim="${CHIMERA_NETWORK_LIMIT-}"
+_save_vers="${CHIMERA_PIP_VERSUCHE-}"
+# export, nicht nur zuweisen: `fahr` startet den Schritt ueber `env` -- eine
+# nicht exportierte Variable kommt dort nicht an (erster Versuch lief deshalb
+# mit der Vorgabe 600 s in die Zeitgrenze).
+CHIMERA_NETZ_PROBE="127.0.0.1:9"; export CHIMERA_NETZ_PROBE
+CHIMERA_NETWORK_LIMIT=4; export CHIMERA_NETWORK_LIMIT
+CHIMERA_PIP_VERSUCHE=1; export CHIMERA_PIP_VERSUCHE
+fahr run
+CHIMERA_NETZ_PROBE="$_save_probe"; export CHIMERA_NETZ_PROBE
+CHIMERA_NETWORK_LIMIT="$_save_lim"; export CHIMERA_NETWORK_LIMIT
+CHIMERA_PIP_VERSUCHE="$_save_vers"; export CHIMERA_PIP_VERSUCHE
+contains "kein Netz: Warteschleife greift (Meldung)" "$OUT" "Kein Netz"
+contains "kein Netz: benannter Abbruch" "$OUT" "pip-Abruf abgebrochen"
+check "kein Netz: rc 2" "$RC" "2"
+OUT="$_out_alt"
 
 printf '\nErgebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

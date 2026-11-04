@@ -151,6 +151,11 @@ network_wait() {
 : "${CHIMERA_NETZ_PROBE:=8.8.8.8:53 1.1.1.1:443}"
 
 network_erreichbar() {
+	# Leere Probekliste heisst NICHT "Netz weg", sondern "ich kann es nicht
+	# sehen" (Regel 10j). Das brauchen hermetische Testlaeufe: Sie setzen
+	# CHIMERA_NETZ_PROBE leer, damit die Warteschleife nicht auf ein Netz
+	# wartet, das sie absichtlich nicht benutzt.
+	[ -n "${CHIMERA_NETZ_PROBE:-}" ] || return 2
 	for _ne_ziel in $CHIMERA_NETZ_PROBE; do
 		_ne_host="${_ne_ziel%%:*}"
 		_ne_port="${_ne_ziel##*:}"
@@ -159,6 +164,60 @@ network_erreichbar() {
 		network_reachable "$_ne_host" "$_ne_port" && return 0
 	done
 	return 1
+}
+
+# Warten, bis ueberhaupt Netz da ist.
+#
+# Die Pause-Schleife fuer Werkzeuge, die ihren Abruf selbst machen (pip):
+# Fehlt das Netz, wird gewartet statt abgebrochen; kehrt es zurueck, geht es
+# weiter. Dasselbe Muster wie network_fetch, nur ohne eigene Uebertragung --
+# deshalb dieselbe Meldepolitik: erste Meldung sofort, dann in wachsenden
+# Abstaenden, Grenze wie CHIMERA_NETWORK_LIMIT.
+#
+# $1 Grenze in Sekunden (0 = ohne Grenze)
+netz_warten_erreichbar() {
+	_nwe_grenze="${1:-${CHIMERA_NETWORK_LIMIT:-600}}"
+
+	network_erreichbar || _nwe_rc=$?
+	_nwe_rc="${_nwe_rc:-0}"
+	case "$_nwe_rc" in
+		0) return 0 ;;
+		2) # Nicht pruefbar (keine Probe gesetzt): NICHT warten -- sonst
+		   # haengt ein hermetischer Lauf an einem Netz, das er nicht braucht.
+		   warn "Erreichbarkeit nicht pruefbar (CHIMERA_NETZ_PROBE leer) -- kein Warten."
+		   return 0 ;;
+	esac
+
+	warn "Kein Netz (Probe: $CHIMERA_NETZ_PROBE)."
+	warn "Es wird gewartet, nicht abgebrochen. Grenze: ${_nwe_grenze}s"
+
+	_nwe_wartet=0
+	_nwe_pause=2
+	_nwe_meldung=15
+
+	while :; do
+		sleep "$_nwe_pause"
+		_nwe_wartet=$((_nwe_wartet + _nwe_pause))
+
+		if network_erreichbar; then
+			log "Netz wieder da nach ${_nwe_wartet}s -- es geht weiter."
+			return 0
+		fi
+
+		[ "$_nwe_pause" -lt 30 ] && _nwe_pause=$((_nwe_pause * 2))
+		[ "$_nwe_pause" -gt 30 ] && _nwe_pause=30
+
+		if [ "$_nwe_wartet" -ge "$_nwe_meldung" ]; then
+			info "warte weiter ... ${_nwe_wartet}s ohne Netz"
+			_nwe_meldung=$((_nwe_meldung * 2))
+		fi
+
+		if [ "$_nwe_grenze" != 0 ] && [ "$_nwe_wartet" -ge "$_nwe_grenze" ]; then
+			err "Nach ${_nwe_wartet}s immer noch kein Netz. Aufgegeben."
+			err "Der Lauf laesst sich wiederholen -- Fertiges bleibt fertig."
+			return 1
+		fi
+	done
 }
 
 # Mojo um eine Netz-Reparatur bitten: Es prueft und repariert, was es kennt

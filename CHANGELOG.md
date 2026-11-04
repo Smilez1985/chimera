@@ -20,6 +20,13 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Blaupause: Regel 10u — Downloads warten auf das Netz, Vorab-Laden im
+  Hintergrund.** Der Installer laedt, was er ohnehin braucht, kuenftig
+  abgekoppelt und in Modulreihenfolge vor (`chimera-prefetch`), mit Marken je
+  Objekt (`.done` nur nach Prüfsumme) und Rueckfall auf den eigenen Abruf —
+  ein toter Prefetch darf einen Schritt nie blockieren. Kein paralleler
+  `apt`-Lauf (dpkg-Sperre). Erst messen, dann bauen: Phase P1 (Dauer je Modul
+  im Protokoll) ist gebaut, P2–P5 stehen in der Roadmap.
 - **Changelog-Wächter** (`tests/test_changelog.py`): prüft Abschnittsnamen,
   dass jeder nur einmal vorkommt, die Reihenfolge nach Keep a Changelog,
   keinen `Unreleased`-Block und keine Punkte ohne Abschnittsüberschrift.

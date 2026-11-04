@@ -2587,6 +2587,91 @@ Das gilt auch für Chimera selbst: Die Anbieterprüfung, die
 Anzeigenerkennung und die Selbstprüfung nach einem Update müssen
 unterscheiden können zwischen „nicht da" und „konnte nicht nachsehen".
 
+### Architekturregel 10u — Downloads warten auf das Netz; was vorher feststeht, wird vorab geladen
+
+Vorgabe smilez (4.11.2026), zwei Teile:
+
+> „wir Wrappen downloads (auch dependencys!) in eine while Ping schleife, die
+> pausiert wenn kein Ping (8.8.8.8) mehr eingeht und fortsetzt wenn er wieder
+> da ist ... wie bg-downloader in rag4ll das macht!"
+>
+> „vielleicht sollten wir dependencys und andere Downloads am Anfang des
+> installers gleich gebündelt laden, aber als abgekoppelt
+> background-downloader, und in der benötigten Reihenfolge, damit wir sobald
+> das erste fertig ist mit laden die Install starten können ... mit
+> Haltemarken des installers nach einem step und done Marken des downloaders"
+
+**Teil 1 — nicht abbrechen, warten (gebaut).** Jeder Abruf läuft in einer
+Schleife, die den Ausfall meldet, pausiert und weitermacht, sobald das Netz
+zurück ist: `network_wait()` für einen bestimmten Host, seit 4.11.
+`netz_warten_erreichbar()` für Werkzeuge, die ihren Abruf selbst machen
+(`pip` in `pydep_ensure`). Grenze ist `CHIMERA_NETWORK_LIMIT` (Vorgabe 600 s),
+danach ein *benannter* Befund — nicht ein stiller Abbruch.
+
+Zwei Festlegungen, die dazugehören:
+
+- **Geprobt wird über TCP, nicht über ICMP.** `8.8.8.8` ist das Ziel, aber
+  Port 53: ICMP ist in der Sandbox gesperrt und wird in manchen Netzen
+  gefiltert — eine Prüfung, die dann „kein Netz" meldet, obwohl das Netz da
+  ist, wäre schlimmer als keine. Ein offener TCP-Port zum selben Ziel sagt
+  dasselbe und funktioniert überall (so macht es auch rag4ll).
+  Probeziele: `CHIMERA_NETZ_PROBE`, Vorgabe ``8.8.8.8:53 1.1.1.1:443``.
+- **„Nicht prüfbar" ist nicht „Netz weg"** (Regel 10j). Ist die Probekliste
+  leer, wird nicht gewartet, sondern ohne Pause weitergemacht — daran hängen
+  die hermetischen Testläufe, die absichtlich kein Netz benutzen.
+
+**Teil 2 — Vorab-Laden im Hintergrund (entworfen, noch nicht gebaut).**
+Der Installer kennt seine Downloads vor dem ersten Schritt: `apt`-Pakete aus
+Modul 20/30, das Whisplay-Repo (Modul 40), `pip`-Wheels (50), das
+`rust-<commit>`-Binary (55). Sie seriell abzuwarten, während die CPU wartet
+(und umgekehrt beim Bauen des Kernelmoduls das Netz stillsteht), kostet die
+Summe statt das Maximum.
+
+Bauform:
+
+1. **`chimera-prefetch`** — ein abgekoppelter `oneshot` (wie
+   `chimera-installhelper`), gestartet nach Modul 00, läuft neben dem Lauf.
+   Er holt **nur**, was in einer Tabelle steht (Objekt, Quelle, Prüfsumme,
+   Reihenfolge) und benutzt **dieselben** Funktionen wie der Installer
+   (`network_fetch`, `network_git`, `network_checksum_ok`) — keine zweite
+   Download-Logik (das ist die Doppelimplementierung, die im Projekt schon
+   dreimal Logik erzeugt hat).
+2. **Marken je Objekt** unter `state/prefetch/`: `<name>.teil` (unterwegs,
+   fortsetzbar), `<name>.done` (fertig, **nach** Prüfsummenvergleich,
+   atomar geschrieben), `<name>.fehler` (Grund). Eine `.done` ohne stimmige
+   Prüfsumme gilt nicht — der Verbraucher prüft selbst nach.
+3. **Verbraucher-Seite:** `network_fetch` sieht vor dem Abruf nach, ob eine
+   gültige `.done`-Datei liegt, und benutzt sie; sonst lädt es selbst. Ein
+   toter oder hängender Prefetch kann den Lauf damit **nie blockieren** —
+   er beschleunigt ihn nur.
+4. **Haltemarken:** Der Installer schreibt nach jedem Modul seinen Stand
+   (`state/prefetch/halt`), damit der Prefetch weiß, was als Nächstes
+   gebraucht wird und was er sich sparen kann. Das ist eine Optimierung der
+   Reihenfolge, keine Bedingung fürs Funktionieren.
+5. **Reihenfolge** = Reihenfolge der Module. Der Prefetch hält sich daran:
+   erst `apt` (Modul 20/30), dann Whisplay-Repo (40), dann Wheels (50), dann
+   Binary (55). Er lädt immer nur ein Objekt gleichzeitig (ein Zero 2 W hat
+   eine Leitung, nicht zehn).
+6. **Grenzen:** `apt` bekommt **keinen** parallelen Zugriff — `dpkg` hat eine
+   Sperre, und zwei `apt`-Aufrufe nebeneinander blockieren sich oder brechen
+   ab. Möglich ist höchstens `apt-get download` in den Cache (nur holen,
+   nicht installieren); das wird gemessen, nicht angenommen.
+
+**Erst messen, dann bauen.** Die Reihenfolge der Phasen ist Absicht:
+
+| Phase | Inhalt | Warum zuerst |
+|---|---|---|
+| P1 | Dauer je Modul ins Protokoll (`Modul 40: 41 s`) | Ohne diese Zahlen ist die Reihenfolge geraten — und der Gewinn unbelegt (Regel 10g) |
+| P2 | `chimera-prefetch` mit Tabelle und Marken | Kern des Vorschlags |
+| P3 | `network_fetch` benutzt gültige Marken | damit der Gewinn beim Lauf ankommt |
+| P4 | Tests: Marke nur nach Prüfsumme, toter Prefetch blockiert nicht, kein zweiter Download | stiller Erfolg ist hier die Gefahr |
+| P5 | Vorher/Nachher am Pi, gleicher Commit | der Beleg, dass es Zeit spart |
+
+**Nicht-Ziele:** kein paralleler `apt`-Lauf, kein zweiter Download-Weg, keine
+Marke ohne Prüfsumme, kein Prefetch als Bedingung für einen Schritt.
+
+
+
 ### Architekturregel 10e — Jeder Lauf hinterlässt ein Protokoll
 
 In `logs/` (vorgesehen: `/var/log/chimera/`), **auch bei Erfolg**. Ein
@@ -3971,6 +4056,7 @@ einen Verweis liest, soll verstehen, **worum es geht**, ohne nachzuschlagen.
 - **10q** — Speicher wird am Prozess gemessen und vom Prozess begrenzt
 - **10r** — Der Agent ist ein eigener Nutzer, und was root ausführt, kann er nicht ändern
 - **10s** — Root gibt es nur auf Rückfrage, auf Zeit, und nicht für den Agenten selbst
+- **10u** — Downloads warten auf das Netz; was vorher feststeht, wird vorab geladen
 - **Installerhelfer** — Der Installer läuft nie unter einem Dienst und nie in der SSH-Sitzung
 - **ACP** — Chimera ist ein Agent für Editoren, erreichbar über eine Transportschicht am Gateway
 - **MQTT** — Ein Broker in Rust löst gespeicherte Moods auf dem Display aus

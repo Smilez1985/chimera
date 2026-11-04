@@ -76,9 +76,37 @@ EOF
 	# vorhandene genuegt. (Der Fall "numpy 2.5.4 statt 1.26.4" kam nicht
 	# daher, sondern von der Anforderung ohne Obergrenze; offener Punkt
 	# in docs/ROADMAP.md.)
+	#
+	# Und der Abruf wird UMWARTET, nicht abgebrochen: Fehlt das Netz,
+	# pausiert die Schleife, bis es zurueck ist (Vorgabe smilez: Downloads
+	# und Abhaengigkeiten in derselben Warte-Schleife wie network_fetch,
+	# Vorbild rag4ll bg-downloader). Erst wenn das Netz steht und pip
+	# trotzdem scheitert, ist es ein Befund.
 	# shellcheck disable=SC2086
-	printf '%s\n' "$_pe_holt" | grep -v '^$' | xargs "$_pe_py" -m pip install || \
-		warn "pip meldete einen Fehler -- entscheidend ist die Nachmessung."
+	_pe_versuche="${CHIMERA_PIP_VERSUCHE:-3}"
+	_pe_n=0
+	_pe_ok=""
+	while [ "$_pe_n" -lt "$_pe_versuche" ]; do
+		_pe_n=$((_pe_n + 1))
+		if command -v netz_warten_erreichbar >/dev/null 2>&1; then
+			netz_warten_erreichbar || {
+				err "Kein Netz -- pip-Abruf abgebrochen."
+				return 1
+			}
+		fi
+		[ "$_pe_n" -gt 1 ] && info "pip: Versuch $_pe_n von $_pe_versuche"
+		set +e
+		printf '%s\n' "$_pe_holt" | grep -v '^$' | xargs "$_pe_py" -m pip install
+		_pe_rc=$?
+		set -e
+		if [ "$_pe_rc" = 0 ]; then
+			_pe_ok=1
+			break
+		fi
+		warn "pip unterbrochen (Exitcode $_pe_rc)."
+		[ "$_pe_n" -lt "$_pe_versuche" ] && sleep 2
+	done
+	[ -n "$_pe_ok" ] || warn "pip meldete einen Fehler -- entscheidend ist die Nachmessung."
 	_pe_f="$(pydep_fehlend "$_pe_py" "$@")" && { info "Python-Abhaengigkeiten hergestellt."; return 0; }
 	err "Nach pip weiterhin nicht erfuellt:"
 	printf '%s\n' "$_pe_f" | sed 's/^/    /' >&2
