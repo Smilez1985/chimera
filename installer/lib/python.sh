@@ -95,8 +95,17 @@ EOF
 			}
 		fi
 		[ "$_pe_n" -gt 1 ] && info "pip: Versuch $_pe_n von $_pe_versuche"
+		# Vorgeladene Wheels benutzen, wenn es sie gibt (Regel "Warte-Schleife
+		# und Vorab-Laden"): --find-links fuegt sie als Quelle hinzu, ohne den
+		# Index abzuwaehlen -- die neueste Fassung gewinnt weiterhin.
+		_pe_vd="$(rootpath "${CHIMERA_STATE:-/opt/chimera/state}")/prefetch/wheels"
 		set +e
-		printf '%s\n' "$_pe_holt" | grep -v '^$' | xargs "$_pe_py" -m pip install
+		if [ -d "$_pe_vd" ]; then
+			printf '%s\n' "$_pe_holt" | grep -v '^$' |
+				xargs "$_pe_py" -m pip install --find-links "$_pe_vd"
+		else
+			printf '%s\n' "$_pe_holt" | grep -v '^$' | xargs "$_pe_py" -m pip install
+		fi
 		_pe_rc=$?
 		set -e
 		if [ "$_pe_rc" = 0 ]; then

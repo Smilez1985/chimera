@@ -1,0 +1,58 @@
+#!/bin/sh
+# chimera-prefetch -- holt die Downloads des Installers im Hintergrund.
+#
+# Aufruf (durch installer/chimera-install, abgekoppelt):
+#   chimera-prefetch
+#
+# Warum ein eigener Prozess: Der Installer arbeitet waehrenddessen weiter.
+# Ein Objekt nach dem anderen, in Modulreihenfolge -- und nur, was laenger
+# dauert als der Aufwand (siehe lib/vorab.sh, Liste und Begruendung).
+#
+# Grundsatz (DESIGN, Regel "Warte-Schleife und Vorab-Laden"): Die Marken sind
+# eine Beschleunigung, keine Bedingung. Jeder Verbraucher prueft seine Ware
+# selbst. Stirbt dieser Prozess, merkt das niemand -- und es schadet nicht.
+#
+# Exitcode: 0 alles geholt oder schon da, 1 mindestens ein Objekt nicht.
+
+set -eu
+
+_HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$_HERE/lib/common.sh"
+. "$_HERE/lib/network.sh"
+. "$_HERE/lib/vorab.sh"
+
+CHIMERA_STEP="prefetch"; export CHIMERA_STEP
+
+# Protokoll nur, wenn der Aufrufer keins fuehrt: Der Installer reicht seine
+# Datei nicht durch, der Hintergrundprozess schreibt seine eigene.
+[ -n "${CHIMERA_LOGFILE:-}" ] || log_open "prefetch" || \
+	warn "Kein Protokoll moeglich -- der Vorab-Lauf wird nicht festgehalten."
+
+log "Vorab-Laden -- $(vorab_verzeichnis)"
+
+# Warten, bis ueberhaupt Netz da ist: Ein Vorab-Lader, der beim Start in eine
+# Stoerung laeuft, soll nicht sofort aufgeben (dieselbe Schleife wie im Lauf).
+if command -v netz_warten_erreichbar >/dev/null 2>&1; then
+	netz_warten_erreichbar || {
+		warn "Vorab-Laden: kein Netz -- der Installer laedt selbst."
+		log "kein Netz"
+		log_close 1
+		exit 1
+	}
+fi
+
+vorab_alle || true
+
+# Bilanz
+vorab_liste | while IFS='	' read -r _n _a _r; do
+	[ -n "$_n" ] || continue
+	if vorab_fertig "$_n"; then
+		info "  fertig:  $_n"
+	else
+		warn "  offen:   $_n -- der Schritt laedt selbst"
+	fi
+done
+
+log "Vorab-Laden beendet"
+log_close 0
+exit 0

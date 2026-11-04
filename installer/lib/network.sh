@@ -593,7 +593,8 @@ network_apt() {
 			err "Kein Netz -- Paketinstallation abgebrochen."
 			return 1
 		}
-		if DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@"; then
+		if DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+			-o DPkg::Lock::Timeout="${CHIMERA_APT_LOCK_TIMEOUT:-300}" "$@"; then
 			info "Installiert: $*"
 			return 0
 		fi

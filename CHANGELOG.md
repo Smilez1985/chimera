@@ -20,8 +20,23 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
-- **Blaupause: Regel 10u — Downloads warten auf das Netz, Vorab-Laden im
-  Hintergrund.** Der Installer laedt, was er ohnehin braucht, kuenftig
+- **Vorab-Laden im Hintergrund** (`installer/lib/vorab.sh`,
+  `installer/chimera-prefetch`): Vor der Modulschleife startet ein
+  abgekoppelter Helfer und holt die Downloads in Modulreihenfolge — zuerst
+  die apt-Pakete (`apt-get install --download-only`, damit der Netzanteil aus
+  Modul 20 herausfaellt), dann die pip-Wheels (`pip download`, in Schritt 50
+  ueber `--find-links` mitbenutzt). Je Objekt eine Marke (`.teil` unterwegs,
+  `.done` erst nach dem Erfolg atomar geschrieben, `.fehler` mit Grund); eine
+  Marke beschleunigt nur, jeder Verbraucher prueft seine Ware selbst. Kann der
+  Vorab-Lader nicht laden (kein Netz, kein pip im Systempython), laedt der
+  Schritt wie bisher — es faellt nichts aus. `apt-get` wartet auf beiden
+  Seiten ueber `DPkg::Lock::Timeout`, damit sich Vorab-Lader und Modul 20
+  nicht gegenseitig abbrechen. Test `installer/tests/test-vorab.sh` 10 ok
+  (apt- und pip-Weg werden ohne root/pip als uebersprungen gemeldet, nicht
+  als gruen).
+- **Blaupause: Regel „Warte-Schleife und Vorab-Laden" — kein Download bricht
+  bei einem Netzaussetzer ab, und was der Lauf ohnehin braucht, wird im
+  Hintergrund geholt.** Der Installer laedt, was er ohnehin braucht, kuenftig
   abgekoppelt und in Modulreihenfolge vor (`chimera-prefetch`), mit Marken je
   Objekt (`.done` nur nach Prüfsumme) und Rueckfall auf den eigenen Abruf —
   ein toter Prefetch darf einen Schritt nie blockieren. Kein paralleler

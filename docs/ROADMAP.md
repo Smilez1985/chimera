@@ -41,14 +41,15 @@ zram wird nicht angefasst, wenn es läuft.
       die Tests von `test-python-env.sh` laufen seit 4.11. ohne Netz
       (Attrappen-Wheels, `PIP_NO_INDEX`, mit vergiftetem Proxy belegt).
 
-- [ ] **Vorab-Laden im Hintergrund** (DESIGN, Abschnitt „Architekturregel 10u"):
-      Abhängigkeiten und Downloads, die der Lauf ohnehin braucht, abgekoppelt
-      und in Modulreihenfolge holen (`chimera-prefetch`), damit die Installation
-      anfängt, sobald das erste Stück da ist. Marken je Objekt (`.teil`,
-      `.done` nur nach Prüfsumme, `.fehler`), Verbraucher prüft selbst nach,
-      kein paralleler `apt`-Lauf. Phasen: **P1 Dauer je Modul protokollieren
-      (erledigt 4.11.)**, P2 `chimera-prefetch`, P3 `network_fetch` nutzt die
-      Marken, P4 Tests, P5 Messung am Pi.
+- [ ] **Vorab-Laden im Hintergrund** (DESIGN, Abschnitt „Warte-Schleife und
+      Vorab-Laden"): **P1 und P2 sind gebaut** (`installer/lib/vorab.sh`,
+      `installer/chimera-prefetch`, Start vor der Modulschleife; Marken
+      `.teil`/`.done` nur nach Prüfung, `.fehler` mit Grund; apt-.deb über
+      `apt-get install --download-only`, Wheels über `pip download` und
+      `--find-links` in Schritt 50; `DPkg::Lock::Timeout` auf beiden Seiten).
+      **Offen:** P3 (weitere Marken: Whisplay-Klon, `rust-<commit>`),
+      P4 (Test mit echtem apt/pip — im Sandbox übersprungen, läuft in der CI),
+      P5 (Vorher/Nachher am Pi).
 
 ## Phase ACP — Chimera als Agent für Editoren und IDEs (DESIGN: Regel „ACP“)
 

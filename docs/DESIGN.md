@@ -2587,7 +2587,7 @@ Das gilt auch für Chimera selbst: Die Anbieterprüfung, die
 Anzeigenerkennung und die Selbstprüfung nach einem Update müssen
 unterscheiden können zwischen „nicht da" und „konnte nicht nachsehen".
 
-### Architekturregel 10u — Downloads warten auf das Netz; was vorher feststeht, wird vorab geladen
+### Regel „Warte-Schleife und Vorab-Laden“ — kein Download bricht ab, und was feststeht, wird im Hintergrund geholt
 
 Vorgabe smilez (4.11.2026), zwei Teile:
 
@@ -4056,7 +4056,7 @@ einen Verweis liest, soll verstehen, **worum es geht**, ohne nachzuschlagen.
 - **10q** — Speicher wird am Prozess gemessen und vom Prozess begrenzt
 - **10r** — Der Agent ist ein eigener Nutzer, und was root ausführt, kann er nicht ändern
 - **10s** — Root gibt es nur auf Rückfrage, auf Zeit, und nicht für den Agenten selbst
-- **10u** — Downloads warten auf das Netz; was vorher feststeht, wird vorab geladen
+- **Warte-Schleife und Vorab-Laden** — Kein Download bricht bei einem Netzaussetzer ab, und was der Lauf ohnehin braucht, wird im Hintergrund geholt
 - **Installerhelfer** — Der Installer läuft nie unter einem Dienst und nie in der SSH-Sitzung
 - **ACP** — Chimera ist ein Agent für Editoren, erreichbar über eine Transportschicht am Gateway
 - **MQTT** — Ein Broker in Rust löst gespeicherte Moods auf dem Display aus
