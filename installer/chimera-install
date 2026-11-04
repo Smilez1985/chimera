@@ -84,6 +84,10 @@ export CHIMERA_DOWNGRADE="${CHIMERA_DOWNGRADE:-false}" CHIMERA_MIT="${CHIMERA_MI
 . "$HERE/lib/python.sh"
 . "$HERE/lib/helfer.sh"
 . "$HERE/lib/fortschritt.sh"
+# Nur fuer vorab_an(): Der Schalter CHIMERA_PREFETCH_RAD wird an EINER Stelle
+# gelesen (lib/vorab.sh), damit Installer und Prefetch-Prozess nie
+# verschiedener Meinung sind.
+. "$HERE/lib/vorab.sh"
 if [ "$HELFER_AUFTRAG" = 1 ]; then
 	helfer_env_lesen
 	# Laufzettel: Der Helfer meldet selbst, dass er laeuft und wie er endet.
@@ -205,13 +209,17 @@ fi
 # falsch, und ein zweiter Lauf neben dem ersten braucht sie nicht.
 if [ "$MODE" = run ] && [ -z "$ONLY" ] && [ "$HARDWARE" != 1 ] && \
    [ "${CHIMERA_NEU_GESTARTET:-0}" != 1 ]; then
-	_vorab_log="${CHIMERA_LOG_DIR}/prefetch.log"
-	if command -v setsid >/dev/null 2>&1; then
-		setsid nohup sh "$HERE/chimera-prefetch" >>"$_vorab_log" 2>&1 </dev/null &
+	if vorab_an; then
+		_vorab_log="${CHIMERA_LOG_DIR}/prefetch.log"
+		if command -v setsid >/dev/null 2>&1; then
+			setsid nohup sh "$HERE/chimera-prefetch" >>"$_vorab_log" 2>&1 </dev/null &
+		else
+			nohup sh "$HERE/chimera-prefetch" >>"$_vorab_log" 2>&1 </dev/null &
+		fi
+		info "Vorab-Laden laeuft im Hintergrund (Protokoll: $_vorab_log)."
 	else
-		nohup sh "$HERE/chimera-prefetch" >>"$_vorab_log" 2>&1 </dev/null &
+		info "Vorab-Laden ist abgeschaltet (CHIMERA_PREFETCH_RAD=0)."
 	fi
-	info "Vorab-Laden laeuft im Hintergrund (Protokoll: $_vorab_log)."
 fi
 
 for mod in $(steps_list); do

@@ -2620,7 +2620,7 @@ Zwei Festlegungen, die dazugehören:
   leer, wird nicht gewartet, sondern ohne Pause weitergemacht — daran hängen
   die hermetischen Testläufe, die absichtlich kein Netz benutzen.
 
-**Teil 2 — Vorab-Laden im Hintergrund (entworfen, noch nicht gebaut).**
+**Teil 2 — Vorab-Laden im Hintergrund (gebaut 4./5.11., Beleg siehe unten).**
 Der Installer kennt seine Downloads vor dem ersten Schritt: `apt`-Pakete aus
 Modul 20/30, das Whisplay-Repo (Modul 40), `pip`-Wheels (50), das
 `rust-<commit>`-Binary (55). Sie seriell abzuwarten, während die CPU wartet
@@ -2669,6 +2669,31 @@ Bauform:
 
 **Nicht-Ziele:** kein paralleler `apt`-Lauf, kein zweiter Download-Weg, keine
 Marke ohne Prüfsumme, kein Prefetch als Bedingung für einen Schritt.
+
+**Was davon gebaut ist (Stand 5.11.2026)** — und wo die Umsetzung von der
+Bauform oben abweicht, mit Grund:
+
+| Punkt der Bauform | Stand |
+|---|---|
+| 1 `chimera-prefetch` als abgekoppelter Prozess | gebaut (`installer/chimera-prefetch`, gestartet aus `chimera-install`) |
+| 2 Marken `.teil`/`.done`/`.fehler`, atomar | gebaut (`installer/lib/vorab.sh`) |
+| 3 Verbraucher prüft Marke vor dem Abruf | **anders gelöst.** Kein Eingriff in `network_fetch`: `apt-get install` findet die geholten `.deb` im eigenen Cache, Modul 50 bekommt `--find-links <state>/prefetch/wheels`. Beide Verbraucher prüfen ihre Ware ohnehin selbst (Version, Prüfsumme) — ein Vorab-Objekt kann einen Schritt also nicht täuschen |
+| 4 Haltemarken des Installers (`state/prefetch/halt`) | **nicht gebaut.** Die Liste hat zwei Objekte; eine Rückmeldung des Laufs wäre mehr Maschinerie als Nutzen. Bleibt der Weg für den Fall, dass die Liste wächst |
+| 5 Reihenfolge = Modulreihenfolge, ein Objekt nach dem anderen | gebaut (Liste in `vorab_liste()`) |
+| 6 `apt` nur holen, nie parallel installieren | gebaut: `apt-get install --download-only` mit `DPkg::Lock::Timeout` auf beiden Seiten (Modul 20 wartet genauso, statt abzubrechen) |
+| 6a nur Objekte mit spürbarem Betrag | Liste bewusst kurz: `apt-debs` (40–80 MB) und `pip-wheels` (22 MB/18 s). Whisplay-Klon (13 MB/3 s) und `rust-<commit>` (~2 MB/1 s) sind **nicht** dabei — der Aufwand einer Marke ist größer als der Gewinn |
+
+**Schalter.** `CHIMERA_PREFETCH_RAD=0` schaltet das Vorab-Laden ab. Der
+Schalter wird an genau einer Stelle gelesen (`vorab_an()`), damit Installer
+und Prefetch-Prozess nie verschiedener Meinung sind; gebraucht wird er zum
+Messen (vorher/nachher) und als Notaus.
+
+**Offen (P5, Beleg am Gerät).** Auf einem bereits installierten Gerät ist
+nichts mehr zu holen: `apt` hat die Pakete, pip die Wheels. Der Gewinn lässt
+sich dort also nicht ablesen — er zeigt sich nur bei einer Erstinstallation
+oder nach `apt-get clean` **mit** fehlenden Paketen. Solange das nicht
+gemessen ist, gilt der Nutzen als **unbelegt** (Regel 10g), nicht als
+bewiesen.
 
 
 

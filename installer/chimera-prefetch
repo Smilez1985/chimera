@@ -23,6 +23,14 @@ _HERE="$(cd "$(dirname "$0")" && pwd)"
 
 CHIMERA_STEP="prefetch"; export CHIMERA_STEP
 
+# Abschaltbar (CHIMERA_PREFETCH_RAD=0). Der Installer startet uns dann gar
+# nicht -- dieser Riegel hier faengt den Handstart ab, damit beide Wege
+# dasselbe Verhalten zeigen.
+vorab_an || {
+	printf 'Vorab-Laden ist abgeschaltet (CHIMERA_PREFETCH_RAD=0).\n'
+	exit 0
+}
+
 # Protokoll nur, wenn der Aufrufer keins fuehrt: Der Installer reicht seine
 # Datei nicht durch, der Hintergrundprozess schreibt seine eigene.
 [ -n "${CHIMERA_LOGFILE:-}" ] || log_open "prefetch" || \

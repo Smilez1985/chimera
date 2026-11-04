@@ -40,6 +40,24 @@ mkdir -p "$CHIMERA_ROOT/opt/chimera/state" "$CHIMERA_LOG_DIR"
 check "Vorab-Verzeichnis liegt unter state" \
 	"$(vorab_verzeichnis)" "$CHIMERA_ROOT/opt/chimera/state/prefetch"
 
+# Schalter: an ist die Vorgabe, 0 schaltet ab. Er wird an EINER Stelle
+# gelesen (vorab_an), damit Installer und Prefetch-Prozess nicht
+# verschiedener Meinung sind -- ein Schalter, den nur eine Seite kennt,
+# ist schlimmer als keiner.
+vorab_an && ok "Vorgabe: Vorab-Laden ist an" || bad "Vorgabe ist nicht 'an'"
+if CHIMERA_PREFETCH_RAD=0 vorab_an; then bad "CHIMERA_PREFETCH_RAD=0 schaltet nicht ab"; \
+	else ok "CHIMERA_PREFETCH_RAD=0 schaltet ab"; fi
+CHIMERA_PREFETCH_RAD=1 vorab_an && ok "CHIMERA_PREFETCH_RAD=1 schaltet an" \
+	|| bad "CHIMERA_PREFETCH_RAD=1 schaltet nicht an"
+
+# Und der Schalter wirkt: abgeschaltet wird nichts geholt und keine Marke
+# gesetzt (sonst waere "ab" nur ein Wort).
+_rc=0
+CHIMERA_PREFETCH_RAD=0 vorab_alle >/dev/null 2>&1 || _rc=$?
+check "vorab_alle meldet 'abgeschaltet' (rc 2)" "$_rc" "2"
+_n="$(ls "$(vorab_verzeichnis)" 2>/dev/null | wc -l | tr -d ' ')"
+check "abgeschaltet entstehen keine Marken" "$_n" "0"
+
 vorab_anlegen && ok "Verzeichnis anlegbar" || bad "Verzeichnis nicht anlegbar"
 [ -d "$(vorab_verzeichnis)" ] && ok "Verzeichnis existiert" || bad "Verzeichnis fehlt"
 

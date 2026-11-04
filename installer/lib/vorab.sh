@@ -14,11 +14,24 @@
 # Verbraucher prueft seine Ware selbst (Pruefsumme, Version). Ein toter oder
 # haengender Vorab-Lader darf keinen Installationsschritt blockieren.
 #
-# Was NICHT hierher gehoert: `apt`. dpkg hat eine Sperre, und die Pakete
-# werden von Modul 20 als erstes gebraucht -- ein paralleler apt-Lauf
-# blockiert sich mit dem Installer selbst (gemessen: 4.11.).
+# Zu `apt`: Es gehoert hierher, aber nur HOLEN, nie installieren. dpkg hat
+# eine Sperre; ein zweiter `apt-get install` neben dem Installer blockiert
+# sich (gemessen 4.11.). Deshalb `apt-get install --download-only` (holt samt
+# Abhaengigkeiten in den Cache, aendert am System nichts) und auf BEIDEN
+# Seiten `DPkg::Lock::Timeout` -- wer nicht drankommt, wartet, statt
+# abzubrechen. Modul 20 entpackt danach aus dem eigenen Cache.
+#
+# Schalter: CHIMERA_PREFETCH_RAD=0 laesst das Vorab-Laden aus (Vorgabe 1).
+# Gebraucht wird er zum Messen (vorher/nachher) und als Notaus, wenn ein
+# Geraet am Vorab-Laden haengt.
 
 : "${CHIMERA_PREFETCH_RAD:=1}"
+
+# Ist das Vorab-Laden eingeschaltet? Einzige Stelle, an der der Schalter
+# gelesen wird -- Aufrufer fragen hier, nicht selbst.
+vorab_an() {
+	[ "${CHIMERA_PREFETCH_RAD:-1}" != 0 ]
+}
 
 vorab_verzeichnis() {
 	printf '%s/prefetch' "$(rootpath "${CHIMERA_STATE:-/opt/chimera/state}")"
@@ -139,6 +152,7 @@ vorab_holen() {
 # Jedes Objekt steht fuer sich, ein gescheitertes darf die uebrigen nicht
 # aufhalten (und der Lauf merkt es ohnehin erst beim Verbraucher).
 vorab_alle() {
+	vorab_an || { info "Vorab-Laden ist abgeschaltet (CHIMERA_PREFETCH_RAD=0)."; return 2; }
 	vorab_anlegen || {
 		warn "Vorab-Laden: $(vorab_verzeichnis) nicht beschreibbar -- wird uebersprungen."
 		return 1

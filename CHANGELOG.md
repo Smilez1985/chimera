@@ -360,6 +360,26 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Mood.
 
 ### Geändert
+- **Abschalter fürs Vorab-Laden** (`CHIMERA_PREFETCH_RAD=0`): Der in
+  `lib/vorab.sh` angekündigte Schalter wurde nirgends gelesen — er war ein
+  Wort ohne Wirkung. Er wird jetzt an genau einer Stelle geprüft
+  (`vorab_an()`), Installer und `chimera-prefetch` fragen dort, und
+  `vorab_alle()` meldet rc 2 statt zu laden. Gebraucht wird er zum Messen
+  (vorher/nachher) und als Notaus. Tests: drei neue Prüfungen in
+  `installer/tests/test-vorab.sh` (Vorgabe an, `0` ab, abgeschaltet
+  entstehen keine Marken) — Gegenprobe gemacht: ohne den Riegel in
+  `vorab_alle()` fallen zwei davon, mit ihm keine.
+- **DESIGN, Regel „Warte-Schleife und Vorab-Laden": Teil 2 steht nicht mehr
+  als „entworfen" da.** Der Stand ist eingetragen, samt der Abweichungen:
+  kein Eingriff in `network_fetch` (die Verbraucher finden ihre Ware über
+  den apt-Cache bzw. `--find-links`), keine Haltemarken (bei zwei Objekten
+  mehr Maschinerie als Nutzen), Whisplay-Klon und `rust-<commit>` bleiben
+  draußen (3 s / 1 s rechtfertigen keine eigene Marke). Ebenso die
+  offene Messung: auf einem bestückten Gerät ist nichts zu holen, der
+  Nutzen gilt bis zum Beleg als **unbelegt**.
+- **`lib/vorab.sh`: Der Kopf-Kommentar widersprach der Liste.** Er sagte
+  „Was NICHT hierher gehört: apt" — die Liste holt seit `3f79030` genau das.
+  Jetzt steht dort, warum apt dazugehört und nur `--download-only` sein darf.
 - **Der Snapshot vor einem Neustart ist ein Verzeichnis, kein Archiv**
   (`state/mojo-snapshot/` mit `stand.tsv` und den Kopien unter ihrer Nummer).
   Zurückrollen ist damit ein Kopieren mit Prüfsummenvergleich — kein
