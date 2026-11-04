@@ -360,6 +360,20 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Mood.
 
 ### Geändert
+- **Der Vorab-Lader läuft in einer eigenen transienten Unit**
+  (`systemd-run --unit=chimera-prefetch --collect --service-type=oneshot`),
+  nicht mehr als `nohup`-Kind des Installers. Am Pi 5.11. gemessen: Der
+  Installer läuft selbst als transiente Unit (`chimera-installhelper.service`,
+  `KillMode=control-group`); das Kind hing in dieser Cgroup und wurde beim
+  Ende des Laufs erschossen — mitten im Download, ohne `.done` und ohne
+  `.fehler` (erster Lauf: Pillow halb geholt, `wheels/` leer). Neu:
+  `vorab_starten()` in `installer/lib/vorab.sh` (Rückfall auf `setsid`, wenn
+  kein `systemd-run` vorhanden ist), Rückgabe 0/1/2 und eine Meldung je Fall
+  im Protokoll — ein nicht startbarer Vorab-Lader ist ein Befund, kein
+  stiller Erfolg. Tests: neun Prüfungen mit einer `systemd-run`-Attrappe
+  (Unit-Name, `--collect`, `--service-type`, Programm kommt an, Name belegt →
+  zweiter Versuch → rc 1, abgeschaltet startet nicht); Gegenprobe gemacht
+  (Unit-Name mutiert → zwei rot).
 - **Abschalter fürs Vorab-Laden** (`CHIMERA_PREFETCH_RAD=0`): Der in
   `lib/vorab.sh` angekündigte Schalter wurde nirgends gelesen — er war ein
   Wort ohne Wirkung. Er wird jetzt an genau einer Stelle geprüft

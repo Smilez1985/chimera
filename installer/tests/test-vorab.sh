@@ -113,6 +113,55 @@ grep -q 'pip download rc=' "$(vorab_verzeichnis)/pip-kaputt.fehler" && ok "Fehle
 
 fi
 
+# --- Start als eigene Unit -------------------------------------------------
+# Warum das geprueft wird: Der Installer laeuft selbst als transiente Unit.
+# Ein einfaches Kind haengt in deren Cgroup und wird bei ihrem Ende
+# abgeraeumt (am Pi 5.11.: Vorab-Lader mitten im Download erschossen, keine
+# Marke). Der Start muss deshalb ueber `systemd-run --unit=chimera-prefetch`
+# gehen -- sichtbar geprueft mit einer Attrappe, nicht angenommen.
+_stub="$W/stub"; mkdir -p "$_stub"
+_fake="$W/fakeprefetch"; printf '#!/bin/sh\nexit 0\n' >"$_fake"
+cat >"$_stub/systemd-run" <<'STUB'
+#!/bin/sh
+printf '%s\n' "$*" >>"$STUB_RUF"
+[ -f "$STUB_SCHEITERT" ] && exit 1
+exit 0
+STUB
+chmod +x "$_stub/systemd-run" "$_fake"
+
+STUB_RUF="$W/rufe.txt"; export STUB_RUF
+STUB_SCHEITERT="$W/scheitert"; export STUB_SCHEITERT
+: >"$STUB_RUF"
+
+_rc=0
+PATH="$_stub:$PATH" CHIMERA_PREFETCH_RAD=0 vorab_starten "$_fake" || _rc=$?
+check "abgeschaltet startet nicht (rc 2)" "$_rc" "2"
+_n="$(wc -l <"$STUB_RUF" | tr -d ' ')"
+check "abgeschaltet ruft systemd-run nicht" "$_n" "0"
+
+_rc=0
+PATH="$_stub:$PATH" vorab_starten "$_fake" || _rc=$?
+check "Start ueber systemd-run (rc 0)" "$_rc" "0"
+grep -q -- '--unit=chimera-prefetch' "$STUB_RUF" && ok "eigene Unit chimera-prefetch" \
+	|| bad "startet nicht in eigener Unit"
+grep -qF -- "$_fake" "$STUB_RUF" && ok "startet das uebergebene Programm" \
+	|| bad "Programm kam nicht an"
+grep -q -- '--collect' "$STUB_RUF" && ok "Unit wird aufgeraeumt (--collect)" \
+	|| bad "ohne --collect bleibt die Unit liegen"
+grep -q -- '--service-type=oneshot' "$STUB_RUF" && ok "oneshot wie der Installer-Helfer" \
+	|| bad "falscher Unit-Typ"
+
+# Scheitert systemd-run zweimal (Name belegt), ist das ein Befund -- und
+# zwar ein gemeldeter: rc 1, nicht stiller Erfolg.
+: >"$STUB_RUF"
+: >"$STUB_SCHEITERT"
+_rc=0
+PATH="$_stub:$PATH" vorab_starten "$_fake" || _rc=$?
+check "nicht startbar wird gemeldet (rc 1)" "$_rc" "1"
+_n="$(grep -c 'chimera-prefetch' "$STUB_RUF" | tr -d ' ')"
+check "zweiter Versuch nach reset-failed" "$_n" "2"
+rm -f "$STUB_SCHEITERT"
+
 # --- apt-Weg --------------------------------------------------------------
 if [ "$(id -u)" = 0 ] && command -v apt-get >/dev/null 2>&1 && \
    apt-get install --download-only --yes --print-uris ca-certificates >/dev/null 2>&1; then

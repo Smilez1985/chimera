@@ -148,6 +148,47 @@ vorab_holen() {
 	return 2
 }
 
+# Den Vorab-Lader abgekoppelt starten.
+#
+# $1 = Programm (installer/chimera-prefetch)
+# Rueckgabe: 0 gestartet, 1 nicht startbar, 2 abgeschaltet (CHIMERA_PREFETCH_RAD=0).
+#
+# WARUM EINE EIGENE transient Unit und nicht `nohup ... &` (am Pi gemessen,
+# 5.11.): Der Installer laeuft selbst als transiente Unit
+# (`chimera-installhelper.service`, `--collect`). Ein einfaches Kind haengt in
+# DESSEN Cgroup -- und systemd raeumt eine beendete Unit mit
+# `KillMode=control-group` komplett ab. Der Vorab-Lader wurde damit beim Ende
+# des Laufs erschossen, mitten im Download, ohne .done und ohne .fehler
+# (erster Lauf: Pillow halb geholt, wheels/ leer). Eine eigene Unit gehoert
+# niemandem ausser sich selbst und laeuft zu Ende.
+vorab_starten() {
+	_vs_prog="$1"
+	vorab_an || return 2
+	_vs_log="${CHIMERA_LOG_DIR:-/var/log/chimera}/prefetch.log"
+	# setsid als Rueckfall: ohne systemd (Sandbox, Test) wenigstens eine
+	# eigene Sitzung, damit ein SIGHUP des Aufrufers nicht durchschlaegt.
+	if command -v systemd-run >/dev/null 2>&1; then
+		if systemd-run --unit=chimera-prefetch --collect --no-block \
+			--service-type=oneshot \
+			--description="Chimera -- Vorab-Laden (abgekoppelt)" \
+			/bin/sh "$_vs_prog" >>"$_vs_log" 2>&1; then
+			return 0
+		fi
+		# Der Name kann von einem frueheren Lauf belegt sein.
+		systemctl reset-failed chimera-prefetch >/dev/null 2>&1 || true
+		systemd-run --unit=chimera-prefetch --collect --no-block \
+			--service-type=oneshot \
+			--description="Chimera -- Vorab-Laden (abgekoppelt)" \
+			/bin/sh "$_vs_prog" >>"$_vs_log" 2>&1 && return 0
+		return 1
+	fi
+	if command -v setsid >/dev/null 2>&1; then
+		setsid nohup sh "$_vs_prog" >>"$_vs_log" 2>&1 </dev/null &
+	else
+		nohup sh "$_vs_prog" >>"$_vs_log" 2>&1 </dev/null &
+	fi
+	return 0
+}
 # Alle Objekte der Liste abarbeiten. Bricht beim ersten Fehler NICHT ab:
 # Jedes Objekt steht fuer sich, ein gescheitertes darf die uebrigen nicht
 # aufhalten (und der Lauf merkt es ohnehin erst beim Verbraucher).

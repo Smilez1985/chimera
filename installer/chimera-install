@@ -209,17 +209,16 @@ fi
 # falsch, und ein zweiter Lauf neben dem ersten braucht sie nicht.
 if [ "$MODE" = run ] && [ -z "$ONLY" ] && [ "$HARDWARE" != 1 ] && \
    [ "${CHIMERA_NEU_GESTARTET:-0}" != 1 ]; then
-	if vorab_an; then
-		_vorab_log="${CHIMERA_LOG_DIR}/prefetch.log"
-		if command -v setsid >/dev/null 2>&1; then
-			setsid nohup sh "$HERE/chimera-prefetch" >>"$_vorab_log" 2>&1 </dev/null &
-		else
-			nohup sh "$HERE/chimera-prefetch" >>"$_vorab_log" 2>&1 </dev/null &
-		fi
-		info "Vorab-Laden laeuft im Hintergrund (Protokoll: $_vorab_log)."
-	else
-		info "Vorab-Laden ist abgeschaltet (CHIMERA_PREFETCH_RAD=0)."
-	fi
+	# Eigene Unit, nicht `nohup ... &`: sonst haengt der Vorab-Lader in der
+	# Cgroup dieses Laufs und wird bei dessen Ende abgeraeumt (5.11. am Pi:
+	# mitten im Download erschossen, keine Marke). Siehe lib/vorab.sh.
+	_vorab_rc=0
+	vorab_starten "$HERE/chimera-prefetch" || _vorab_rc=$?
+	case "$_vorab_rc" in
+		0) info "Vorab-Laden laeuft im Hintergrund (chimera-prefetch)." ;;
+		2) info "Vorab-Laden ist abgeschaltet (CHIMERA_PREFETCH_RAD=0)." ;;
+		*) warn "Vorab-Laden konnte nicht gestartet werden -- die Schritte laden selbst." ;;
+	esac
 fi
 
 for mod in $(steps_list); do

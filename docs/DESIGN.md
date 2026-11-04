@@ -2675,7 +2675,7 @@ Bauform oben abweicht, mit Grund:
 
 | Punkt der Bauform | Stand |
 |---|---|
-| 1 `chimera-prefetch` als abgekoppelter Prozess | gebaut (`installer/chimera-prefetch`, gestartet aus `chimera-install`) |
+| 1 `chimera-prefetch` als abgekoppelter Prozess | gebaut (`installer/chimera-prefetch`), gestartet aus `chimera-install` **in einer eigenen transienten Unit** (`systemd-run --unit=chimera-prefetch --collect`). Ein bloßes `nohup ... &` reicht nicht: Der Installer läuft selbst als transiente Unit, ein Kind hängt in deren Cgroup und wird beim Ende abgeräumt (`KillMode=control-group`) — am Pi 5.11. gemessen (Download mitten drin erschossen, keine Marke) |
 | 2 Marken `.teil`/`.done`/`.fehler`, atomar | gebaut (`installer/lib/vorab.sh`) |
 | 3 Verbraucher prüft Marke vor dem Abruf | **anders gelöst.** Kein Eingriff in `network_fetch`: `apt-get install` findet die geholten `.deb` im eigenen Cache, Modul 50 bekommt `--find-links <state>/prefetch/wheels`. Beide Verbraucher prüfen ihre Ware ohnehin selbst (Version, Prüfsumme) — ein Vorab-Objekt kann einen Schritt also nicht täuschen |
 | 4 Haltemarken des Installers (`state/prefetch/halt`) | **nicht gebaut.** Die Liste hat zwei Objekte; eine Rückmeldung des Laufs wäre mehr Maschinerie als Nutzen. Bleibt der Weg für den Fall, dass die Liste wächst |
