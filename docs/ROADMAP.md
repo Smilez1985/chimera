@@ -61,10 +61,12 @@ zram wird nicht angefasst, wenn es läuft.
       Am Pi belegt: Spur `0,00 … 1,00` ohne Rücksprung, genau ein Zeichner.
 - [x] **„Updated“-Gesicht am Gerät:** am Panel abgelesen (2.11.): Gesicht mit
       Balken und „Updating…" sichtbar, Anzeige bleibt bis zum Dienststart.
-- [ ] **Grüner LED-Abschluss am Gerät:** Bisher leuchtet am Ende gelb, weil
+- [x] **Grüner LED-Abschluss am Gerät:** Bisher leuchtet am Ende gelb, weil
       jeder Lauf aus einem Zip mit dem Befund „kein Commit ⇒ kein Binary" endet
       (rc 1). Ein Lauf aus einem Git-Baum mit Commit muss grün zeigen — einmal
       ablesen, dann ist der Fall belegt.
+      *Erledigt 4.11.: Voller Lauf aus dem Klon auf Commit `e3cff04` endet mit
+      „12 Modul(e), ohne Fehler" und `LED: ok (3 s)`.*
 - [x] **Bedarf messen:** CPU, RAM und freier Datentraeger, die Chimera im
       Betrieb wirklich braucht. *Erledigt 3.11. am Pi (Zahlen im DESIGN,
       Regel „Neustart mit Fortsetzung"): RAM 462 MB, 359 MB verfuegbar;
@@ -125,7 +127,7 @@ zram wird nicht angefasst, wenn es läuft.
       *Erledigt 3.11.: Typ aus `state/anzeige` gilt bei belegten Leitungen,
       wenn sein Nachweis zutrifft (Am Pi: rc 0, Gegenprobe rc 1). Der grüne
       LED-Abschluss im VOLLEN Lauf steht noch aus.*
-- [ ] **Grüner LED-Abschluss am Gerät.** Modul 40 ist erledigt (voller Lauf
+- [x] **Grüner LED-Abschluss am Gerät.** Modul 40 ist erledigt (voller Lauf
       3.11.: `Modul 40-install-display: ok`). Ursache für das Gelb war zuletzt
       **Modul 55**: Fehlte das Prerelease `rust-<commit>`, endet der Lauf mit
       Befund (rc 1). Zum Commit `db8870a` fehlte es, weil die CI auf
@@ -135,13 +137,14 @@ zram wird nicht angefasst, wenn es läuft.
       „12 Modul(e), ohne Fehler"). Zu entscheiden (smilez): `entwicklung` in
       den Push-Trigger aufnehmen, oder den Rust-Job an einen Pfadfilter
       (`rust/**`) hängen und das Prerelease nur dann erwarten.
-      *Teil gelöst 4.11.: Der Befund entfällt, wenn `rust/` unverändert ist —
+      *Erledigt 4.11.: Modul 55 hält still, wenn `rust/` unverändert ist —
       `state/rust-stand` (Commit, Hash des Baums, Version) lässt das Binary
-      liegen („Rust unverändert seit …“, kein Netz, kein CI-Build). Damit
-      braucht es für einen reinen Doku-Commit kein Prerelease mehr. Offen
-      bleibt der Beleg im **vollen** Lauf (LED grün) und die Entscheidung
-      über den Push-Trigger; die braucht ohnehin nur noch, wer `rust/`
-      anfasst.*
+      liegen („Rust unverändert seit …", kein Netz, kein CI-Build). **Am Pi
+      belegt** (4.11., 03:39): Doku-Commit `e3cff04` ohne Prerelease → Modul 55
+      „Rust unveraendert seit 763d1cb", voller Lauf „12 Modul(e), ohne Fehler",
+      `LED: ok (3 s)`, `tools/abgleich.sh --erwartet e3cff04` stimmt. Die
+      Entscheidung über den Push-Trigger (`entwicklung` bzw. Pfadfilter
+      `rust/**`) berührt jetzt nur noch, wer `rust/` anfasst.*
 - [x] **CI ist auf `entwicklung` rot — behoben am 3.11. (Sitzung `d4427984`).**
       Fünf rote Testdateien, alle mit Ursache: `test-helfer.sh`
       (`bad function name`: Attrappe war eine Funktion mit Bindestrich — jetzt
