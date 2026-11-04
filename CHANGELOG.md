@@ -8,6 +8,7 @@ einer bewussten Abweichung: **ein Versionssprung bricht keine laufende
 Installation.** Was ein Release an bestehenden Installationen ändert,
 erledigt der Installer, nicht der Nutzer (siehe `docs/DESIGN.md` §10).
 
+
 ## [0.1.0] — Pre-Alpha, nicht getaggt
 
 **Nicht getaggt.** Pre-Alpha bleibt ungetaggt, bis eine Fassung auf echter
@@ -18,9 +19,14 @@ Alles hier Genannte ist committet und geprüft. **Kein `[Unreleased]`-Block:**
 Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
+### Hinzugefügt
+- **Changelog-Wächter** (`tests/test_changelog.py`): prüft Abschnittsnamen,
+  dass jeder nur einmal vorkommt, die Reihenfolge nach Keep a Changelog,
+  keinen `Unreleased`-Block und keine Punkte ohne Abschnittsüberschrift.
+  Gegenprobe im Test selbst (sechs Fälle, dazu der alte Stand als Beleg).
 - **Mojo:** Neuer Bereich `netz` — TCP-Probe auf öffentliche Adressen; fehlt das Netz, startet Mojo das WLAN neu (`nmcli`/`wpa_cli`/`wpa_supplicant`/`ifup`). Gezielt abfragbar mit `--mojo --bereich netz`.
 - **Installer:** Bei HTTP 404 prüft der Abruf erst die Verbindung, wiederholt, und lässt bei Netzausfall Mojo das WLAN neu starten; nach drei Runden ist es ein benannter Befund statt 91 Sekunden Stillstand.
-### Hinzugefügt
+
 **Anzeige**
 - **Prioritäts-Verwalter** (`chimera.arbiter`): löst auf, wer das
   Ausgabegerät bespielen darf. Quellen mit fester Basis-Priorität, ein
@@ -257,6 +263,56 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
 - `tools/check-globals.py` — findet Namen, die eine Funktion als global
   liest, die es aber nicht gibt. Statisch, ohne Ausführung.
 
+- **Mojo macht nach einem Neustart weiter.** `chimera-mojo-fortsetzung.service`
+  läuft einmal nach dem Start — nur wenn der Marker `state/mojo-fortsetzen.json`
+  steht (`ConditionPathExists`, kein Zeitgeber), geordnet **nach** den Diensten,
+  und ruft `chimera-tor --mojo --miracle --fortsetzen`. Im Manifest, im
+  Rückbau abgedeckt, Nachweis über `is-enabled` (die Unit ist absichtlich meist
+  inaktiv). Test `test-mojo.sh` 81 ok, sieben neue Mutationen in
+  `counter-check-mojo.sh`.
+- **LED meldet jeden Ausgang des Installer-Laufs.** Bisher gab es ein
+  Abschlusszeichen nur, wenn der Lauf die Dienste angehalten hatte — ein Lauf
+  ohne Änderung („alles aktuell") zeigte gar nichts. Jetzt: `ok` grün fest,
+  `nichts` grün langsam blinkend, `befund` gelb fest, `neustart` blau blinkend,
+  `fehler` rot SOS. Liegt der Dienst still auf den Leitungen, meldet der
+  Installer über den Sitzungs-Socket (neue Operation `led`), der Renderer setzt
+  die Farbe (neue LED-Quelle `installer`, Muster `sos`).
+- **Ruhe-Bildrate** (`NoisyRenderer.RUHE_FPS`, Vorgabe 2 Bilder/s; `0` heißt
+  „nicht zeichnen"): Der Zustand bestimmt die Bildrate. Volle Rate nur bei
+  Blinzeln, Sprechen/Reden, Partikeln, Takt/gehörtem Pegel, Bewegungsphysik
+  und nach einem Zustandswechsel (`wecken(sekunden)`); sonst zeichnet die
+  Schleife mit der Ruhe-Rate. Am Pi gemessen: 35,5 % → 10,8 % eines Kerns,
+  577 → 134 `write()`/s, 383 → 86 KB/s. Test `test_bildrate.py` 25 ok,
+  Gegenprobe `gegenprobe_bildrate.py` 8 ok (sieben Mutationen).
+- **Taste ohne Abfrage im Takt:** `Leitungen.request(kanten=…)` fordert
+  Kantenereignisse an (`event_buffer_size`, `GPIO_V2_LINE_FLAG_EDGE_RISING/
+  FALLING`), `ereignisse()` wartet im Kern auf die Flanke. Die Tastenschleife
+  fragte vorher alle 5 ms ab (200 `ioctl`s je Sekunde, ~1,3 % eines Kerns);
+  ohne Kanten greift die Abfrage als Rückfall. Fremde Ereignisse werden
+  aufgehoben, nicht verworfen. Test `test_gpio_kanten.py` 23 ok, Gegenprobe
+  8 ok. Am Pi: Gesamtlast 10,8 % → 9,5 %, Protokoll „Taste:
+  Kantenereignisse“.
+- **LED-Taktfrequenz je Anzeige einstellbar** (`display.json` →
+  `led_frequenz_hz`, Vorgabe 100 Hz, Whisplay 60 Hz). Drei Kanäle takten
+  damit billiger: am Pi 9,6 % → **8,1 %** eines Kerns im Leerlauf. Am Gerät
+  geprüft, dass 60 Hz nicht flimmern.
+- **Tastenentprellung über den Pegel:** Die Taste prellt am Gerät bis 136 ms;
+  Flankenketten wurden als mehrere Klicks gezählt (ein Druck ergab „dreifach").
+  Jetzt weckt die Flanke nur den Faden, der auf 80 ms Ruhe wartet und dann den
+  echten Pegel liest — gemeldet wird der Übergang, nicht die Flanke. Am Gerät
+  belegt: fünf Gesten, je eine Protokollzeile.
+- **Fünf Tastengesten** (`display/gesten.py`): kurz (<0,7 s), lang (0,7–2 s),
+  halten (ab 2,0 s, während gehalten), `halten_ende` als Gegenstück (für
+  Push-to-Talk), doppelt und dreifach im Klickfenster (0,8 s). Reine
+  Zustandsmaschine nach Regel 7d; `GestenTakt` wartet auf die Frist und weckt
+  sie. Der Druck quittiert sofort per LED, die erkannte Geste geht ins
+  Protokoll. Test `test_gesten.py` 29 ok, Gegenprobe 8 ok.
+- **Blinzeln hängt an der Uhr, nicht an der Bildzahl:** Abstand 3,0–8,7 s,
+  Dauer 0,20–0,47 s (vorher 45–130 bzw. 3–7 Bilder, was nur bei 15 Bildern/s
+  stimmte). Die Ruhe-Schleife schläft genau bis zum Blinzelbeginn, statt mit
+  festem Vorlauf zu laufen — ein Vorlauf von 0,6 s kostete je Blinzeln fast
+  eine Sekunde voller Rate (14,6 % statt 10,8 %).
+
 ### Geändert
 - **Der Snapshot vor einem Neustart ist ein Verzeichnis, kein Archiv**
   (`state/mojo-snapshot/` mit `stand.tsv` und den Kopien unter ihrer Nummer).
@@ -329,64 +385,18 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Werkzeug `tools/abgleich.sh` vergleicht Quellbaum, eingespielten Stand
   und `state/quelle-commit`. Anlass: vier Commits lagen nur per `scp` in
   `productive/code` und wurden beim nächsten Boot-Abgleich zurückgerollt.
+
 ### Entfernt
 - **Anzeige:** Herstellertreiber `whisplay.py` samt `spidev`/`gpiod`/
   `python3-dev` aus dem venv; die Anzeigetypen `st7789` und `epaper` der
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
-### Hinzugefügt
-- **Mojo macht nach einem Neustart weiter.** `chimera-mojo-fortsetzung.service`
-  läuft einmal nach dem Start — nur wenn der Marker `state/mojo-fortsetzen.json`
-  steht (`ConditionPathExists`, kein Zeitgeber), geordnet **nach** den Diensten,
-  und ruft `chimera-tor --mojo --miracle --fortsetzen`. Im Manifest, im
-  Rückbau abgedeckt, Nachweis über `is-enabled` (die Unit ist absichtlich meist
-  inaktiv). Test `test-mojo.sh` 81 ok, sieben neue Mutationen in
-  `counter-check-mojo.sh`.
-- **LED meldet jeden Ausgang des Installer-Laufs.** Bisher gab es ein
-  Abschlusszeichen nur, wenn der Lauf die Dienste angehalten hatte — ein Lauf
-  ohne Änderung („alles aktuell") zeigte gar nichts. Jetzt: `ok` grün fest,
-  `nichts` grün langsam blinkend, `befund` gelb fest, `neustart` blau blinkend,
-  `fehler` rot SOS. Liegt der Dienst still auf den Leitungen, meldet der
-  Installer über den Sitzungs-Socket (neue Operation `led`), der Renderer setzt
-  die Farbe (neue LED-Quelle `installer`, Muster `sos`).
-- **Ruhe-Bildrate** (`NoisyRenderer.RUHE_FPS`, Vorgabe 2 Bilder/s; `0` heißt
-  „nicht zeichnen"): Der Zustand bestimmt die Bildrate. Volle Rate nur bei
-  Blinzeln, Sprechen/Reden, Partikeln, Takt/gehörtem Pegel, Bewegungsphysik
-  und nach einem Zustandswechsel (`wecken(sekunden)`); sonst zeichnet die
-  Schleife mit der Ruhe-Rate. Am Pi gemessen: 35,5 % → 10,8 % eines Kerns,
-  577 → 134 `write()`/s, 383 → 86 KB/s. Test `test_bildrate.py` 25 ok,
-  Gegenprobe `gegenprobe_bildrate.py` 8 ok (sieben Mutationen).
-- **Taste ohne Abfrage im Takt:** `Leitungen.request(kanten=…)` fordert
-  Kantenereignisse an (`event_buffer_size`, `GPIO_V2_LINE_FLAG_EDGE_RISING/
-  FALLING`), `ereignisse()` wartet im Kern auf die Flanke. Die Tastenschleife
-  fragte vorher alle 5 ms ab (200 `ioctl`s je Sekunde, ~1,3 % eines Kerns);
-  ohne Kanten greift die Abfrage als Rückfall. Fremde Ereignisse werden
-  aufgehoben, nicht verworfen. Test `test_gpio_kanten.py` 23 ok, Gegenprobe
-  8 ok. Am Pi: Gesamtlast 10,8 % → 9,5 %, Protokoll „Taste:
-  Kantenereignisse“.
-- **LED-Taktfrequenz je Anzeige einstellbar** (`display.json` →
-  `led_frequenz_hz`, Vorgabe 100 Hz, Whisplay 60 Hz). Drei Kanäle takten
-  damit billiger: am Pi 9,6 % → **8,1 %** eines Kerns im Leerlauf. Am Gerät
-  geprüft, dass 60 Hz nicht flimmern.
-- **Tastenentprellung über den Pegel:** Die Taste prellt am Gerät bis 136 ms;
-  Flankenketten wurden als mehrere Klicks gezählt (ein Druck ergab „dreifach").
-  Jetzt weckt die Flanke nur den Faden, der auf 80 ms Ruhe wartet und dann den
-  echten Pegel liest — gemeldet wird der Übergang, nicht die Flanke. Am Gerät
-  belegt: fünf Gesten, je eine Protokollzeile.
-- **Fünf Tastengesten** (`display/gesten.py`): kurz (<0,7 s), lang (0,7–2 s),
-  halten (ab 2,0 s, während gehalten), `halten_ende` als Gegenstück (für
-  Push-to-Talk), doppelt und dreifach im Klickfenster (0,8 s). Reine
-  Zustandsmaschine nach Regel 7d; `GestenTakt` wartet auf die Frist und weckt
-  sie. Der Druck quittiert sofort per LED, die erkannte Geste geht ins
-  Protokoll. Test `test_gesten.py` 29 ok, Gegenprobe 8 ok.
-- **Blinzeln hängt an der Uhr, nicht an der Bildzahl:** Abstand 3,0–8,7 s,
-  Dauer 0,20–0,47 s (vorher 45–130 bzw. 3–7 Bilder, was nur bei 15 Bildern/s
-  stimmte). Die Ruhe-Schleife schläft genau bis zum Blinzelbeginn, statt mit
-  festem Vorlauf zu laufen — ein Vorlauf von 0,6 s kostete je Blinzeln fast
-  eine Sekunde voller Rate (14,6 % statt 10,8 %).
-
-
 ### Behoben
+- **Das Changelog war zerlegt**: „Hinzugefügt" kam zweimal (nach
+  „Entfernt"), und zwei Punkte standen ohne Überschrift direkt nach dem
+  Vorspann — beim Lesen unsichtbar, beim Auswerten nicht. Wieder in die
+  Reihenfolge gebracht, die Dublette zusammengeführt; nur verschoben,
+  kein Text geändert (Mengen der Zeilen vorher/nachher verglichen).
 - **Leerlauf-Last des Renderers.** Grund war nicht der Transport, sondern die
   Bildrate: In der Ruhe schwingt das Gesicht, dadurch änderte sich jeder
   Rahmen flächig (44–60 % der Pixel, gemessen über 20 Rahmen). Der Umbau auf
