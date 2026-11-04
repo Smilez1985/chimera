@@ -21,6 +21,8 @@ ROOT = Path(__file__).resolve().parent.parent
 # Uebersteuerbar, damit sich der Waechter gegen eine Kopie richten laesst
 # (Beleg: der alte, kaputte Stand wird rot).
 DATEI = Path(os.environ.get("CHIMELOG_DATEI") or (ROOT / "CHANGELOG.md"))
+# Die Roadmap wird mitgeprueft: sie darf keine Haken tragen.
+ROADMAP = Path(os.environ.get("CHIMERA_ROADMAP") or (ROOT / "docs/ROADMAP.md"))
 GEGENPROBE = "--gegenprobe" in sys.argv
 PASS = FAIL = 0
 
@@ -114,6 +116,23 @@ def lauf(text, was):
         ok(was)
 
 
+def pruefe_roadmap(text):
+    """docs/ROADMAP.md enthaelt nur, was aussteht.
+
+    Projektregel: Erledigtes steht im CHANGELOG, die Roadmap traegt keine
+    Haken. Anlass: 96 erledigte Punkte sammelten sich dort an, waehrend
+    dieselbe Arbeit im Changelog stand -- zwei Staende, die auseinanderliefen.
+    """
+    fehler = []
+    for nr, z in enumerate(text.split("\n"), 1):
+        if "[x]" in z.lower():
+            fehler.append(f"Zeile {nr}: Haken '[x]' -- Erledigtes gehoert ins "
+                          "CHANGELOG")
+    if not re.search(r"^## ", text, re.M):
+        fehler.append("keine Abschnitte")
+    return fehler
+
+
 print("=== Changelog (Keep a Changelog, ohne Unreleased) ===")
 
 if not DATEI.is_file():
@@ -123,6 +142,17 @@ if not DATEI.is_file():
 
 gut = DATEI.read_text(encoding="utf-8")
 lauf(gut, "CHANGELOG.md")
+
+if not ROADMAP.is_file():
+    bad("docs/ROADMAP.md fehlt")
+else:
+    roadmap = ROADMAP.read_text(encoding="utf-8")
+    fehler = pruefe_roadmap(roadmap)
+    if fehler:
+        for f in fehler:
+            bad("docs/ROADMAP.md: " + f)
+    else:
+        ok("docs/ROADMAP.md ohne Haken")
 
 if GEGENPROBE:
     # Jede Zusage einmal brechen; der Pruefer MUSS rot werden. Arbeitet auf
@@ -154,6 +184,20 @@ if GEGENPROBE:
             ok(f"Gegenprobe '{was}': rot")
         else:
             bad(f"Gegenprobe '{was}': blieb gruen")
+
+    # Roadmap-Waechter: ein zurueckgekehrter Haken MUSS auffallen.
+    if not ROADMAP.is_file():
+        bad("Gegenprobe 'Haken in der Roadmap': Roadmap fehlt")
+    else:
+        text = roadmap + "\n- [x] **alter Punkt**\n"
+        if pruefe_roadmap(text):
+            ok("Gegenprobe 'Haken in der Roadmap': rot")
+        else:
+            bad("Gegenprobe 'Haken in der Roadmap': blieb gruen")
+        if pruefe_roadmap(roadmap.replace("\n## ", "\n#### ")):
+            ok("Gegenprobe 'Roadmap ohne Abschnitte': rot")
+        else:
+            bad("Gegenprobe 'Roadmap ohne Abschnitte': blieb gruen")
 
 print("\nErgebnis: %d ok, %d fehlgeschlagen" % (PASS, FAIL))
 sys.exit(1 if FAIL else 0)

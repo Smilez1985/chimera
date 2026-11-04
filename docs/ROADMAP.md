@@ -1,20 +1,16 @@
 # Chimera — Roadmap
 
 Was noch fehlt, nach Priorität. Entscheidungen und Begründungen stehen in
-`docs/DESIGN.md`, nicht hier.
+`docs/DESIGN.md`, nicht hier. **Erledigtes steht ausschließlich im
+`CHANGELOG.md`** — hier steht nur, was aussteht; ein Haken gibt es deshalb
+nicht mehr.
 
-Stand: 2026-10-11. Pre-Alpha.
+Stand: 2026-11-04. Pre-Alpha.
 
 ---
 
 ## Phase 0 — Blaupause ✅ (läuft)
 
-- [x] `docs/DESIGN.md` — Architektur, Regeln, Grenzen
-- [x] `docs/ROADMAP.md`
-- [x] `CHANGELOG.md` nach Keep a Changelog (ohne `[Unreleased]`, Regel „Changelog ohne Unreleased“)
-- [x] `README.md`, `LICENSE`, `VERSION`
-- [x] `docs/HARDWARE.md` — Zielplattform und Boardfrage
-- [x] Debian-Fassung entschieden: **Trixie** (stable), nicht Forky
 - [ ] Hardware-Revision der vorhandenen Whisplay prüfen (**V2?**)
 - [ ] `uname -r`, `/lib/modules/$(uname -r)/build`, `modinfo snd-soc-wm8960`
       auf dem Zielgerät notieren (Checkliste in `docs/HARDWARE.md`, Abschnitt „Vor dem ersten Start prüfen")
@@ -27,134 +23,10 @@ Vorgaben smilez (2.11.): Der Installer fasst **nur an, was fehlt oder wegen
 einer neuen Version aktualisiert werden muss**; er läuft nie in der SSH-Sitzung;
 zram wird nicht angefasst, wenn es läuft.
 
-- [x] **Abkopplung im Code:** `chimera-install` startet die Arbeit als
-      `chimera-installhelper` (transient, `oneshot`) und wartet; ohne root wird
-      abgelehnt statt in der Sitzung zu laufen. Ein zweiter Aufruf hängt sich an
-      den laufenden Lauf.
-- [x] **Klammer um den Lauf:** Dienste anhalten, Dateien tauschen, in der
-      gemessenen Reihenfolge starten (Sockets **vor** Diensten), Nachweis, dass
-      alles läuft. Das Gateway wird über den Socket **geweckt**, nicht direkt
-      gestartet (am Pi gemessen: direkter Start scheitert, es braucht
-      `LISTEN_FDS`).
-- [x] **Klammer nur bei echter Änderung:** unveränderter Quellstand und erfüllte
-      Abhängigkeiten → Dienste laufen weiter, nichts wird angefasst.
-- [x] **zram:** Läuft es, bleibt der Speicherschritt ganz aus (kein
-      `swapoff -a`, kein Dateischritt, keine Änderung der Konfiguration).
-      Angelegt wird nur, wenn es fehlt.
-- [x] **SSH-Schutz:** Drop-in `ssh.service.d/10-chimera-oom.conf` mit
-      `OOMScoreAdjust=-900` (Sitzungsprozesse hatten `oom_score_adj=0`).
-- [x] **Transiente Unit geklärt (2.11.):** Die Unit ist über `systemctl` nicht
-      abfragbar („Failed to open /run/systemd/transient/…“), **läuft aber**. Das
-      ist eine Eigenheit der transienten Unit, kein Fehler — deshalb der
-      Laufzettel in `/run/chimera-installhelper.status`. Die eigentliche Ursache
-      der „startete nicht“-Meldungen war eine andere: `systemd-run` ohne
-      `--no-block` wartet auf den `oneshot` und meldet dessen Exitcode als
-      Startfehler. Belegt: Verbindungsabbruch nach 9 s, Helfer lief durch,
-      Zettel `fertig`, Dienste aktiv, Web 200.
-- [x] **„Updated“-Gesicht vor dem Anhalten:** Gesicht `UPDATE` (Mood) +
-      Operation `gesicht` am Sitzungs-Socket; der Installer setzt es, bevor die
-      Dienste gehen (`installer/lib/py/gesicht.py`). Das Panel wird nicht
-      geleert, das Bild bleibt bis zum Dienststart stehen.
-- [x] **Fortschrittsbalken, LED und Licht:** echte Stufen (fertig/gesamt),
-      „Updating…" darüber, ein Zeichner je Lauf; LED gelb blinkend → grün /
-      gelb ruhig / rot SOS; jede Backlight-Änderung mit Grund protokolliert.
-      Am Pi belegt: Spur `0,00 … 1,00` ohne Rücksprung, genau ein Zeichner.
-- [x] **„Updated“-Gesicht am Gerät:** am Panel abgelesen (2.11.): Gesicht mit
-      Balken und „Updating…" sichtbar, Anzeige bleibt bis zum Dienststart.
-- [x] **Grüner LED-Abschluss am Gerät:** Bisher leuchtet am Ende gelb, weil
-      jeder Lauf aus einem Zip mit dem Befund „kein Commit ⇒ kein Binary" endet
-      (rc 1). Ein Lauf aus einem Git-Baum mit Commit muss grün zeigen — einmal
-      ablesen, dann ist der Fall belegt.
-      *Erledigt 4.11.: Voller Lauf aus dem Klon auf Commit `e3cff04` endet mit
-      „12 Modul(e), ohne Fehler" und `LED: ok (3 s)`.*
-- [x] **Bedarf messen:** CPU, RAM und freier Datentraeger, die Chimera im
-      Betrieb wirklich braucht. *Erledigt 3.11. am Pi (Zahlen im DESIGN,
-      Regel „Neustart mit Fortsetzung"): RAM 462 MB, 359 MB verfuegbar;
-      Karte 95 GB frei; `source/` 3 MB, `state/` 40 KB, `productive/` 107 MB;
-      `chimera.service` 47 MB RSS und **28,4 % eines Kerns im Leerlauf**;
-      `chimera-tor --dienst` 1,6 MB / 0,2 %; Mojo-Pruefung 528 ms und 6 MB
-      Spitze. Die 100 MB vor einem Snapshot sind damit eine Untergrenze, kein
-      Bedarf.*
 - [ ] **Platzpruefung vor dem Snapshot:** Statt fester 100 MB die **Groesse der
       zu sichernden Dateien** plus Reserve pruefen (Summe steht vor dem
       Kopieren fest, DESIGN-Regel „Neustart mit Fortsetzung"). Die 100 MB
       bleiben Untergrenze.
-- [ ] **Leerlauf-Last des Agenten:** `chimera.service` verbrauchte im Leerlauf
-      **28,4 %** eines Kerns; ein Faden hing zu ~22 % in `D` und schrieb auf
-      `/dev/spidev0.0` — **572 `write()` je Sekunde**, rund 17 volle Bilder je
-      Sekunde ohne Änderung.
-      *3.11. gemessen und eingegrenzt:* Der Transport war es nicht. Der Umbau
-      auf geänderte Bereiche ließ die Last sogar auf 35,5 % steigen (577
-      `write()`/s), weil das schwingende Gesicht **jedes** Bild flächig ändert
-      (44–60 % der Pixel je Rahmen). Danach die Bildrate an den Zustand
-      gebunden (DESIGN, Regel 7a): Ruhe 2 Bilder/s, volle Rate nur beim
-      Blinzeln/Sprechen/Zustandswechsel. **Am Pi belegt:** 10,8 % eines Kerns,
-      134 `write()`/s, 86 KB/s — ein Drittel der Last, ein Viertel der
-      Schreibaufrufe. Offen bleiben die vier Nebenverbraucher (je ~1,3 %):
-      - [x] **Tastenschleife:** fragte alle 5 ms die Leitung ab (200 Weckrufe
-        je Sekunde, ~1,3 % eines Kerns). *Erledigt 3.11.: Kantenereignisse
-        (`request(kanten=…)`, `ereignisse()`, `EDGE_RISING/FALLING`); am Pi
-        belegt („Taste: Kantenereignisse" im Protokoll), Gesamtlast 10,8 % →
-        9,5 %. Rückfall auf die Abfrage, wenn der Kernel die Kanten nicht
-        annimmt. Tests `test_gpio_kanten.py` 23 ok, Gegenprobe 8 ok.*
-      - [x] **LED-Kanäle:** *3.11.: Taktfrequenz von 100 auf **60 Hz**
-        gesenkt (`display.json` → `led_frequenz_hz`, am Pi 9,6 % → 8,1 %);
-        smilez hat am Gerät geprüft, dass es nicht flimmert. Der größere
-        Schritt — **ein Faden für alle drei Kanäle** mit gemeinsamer
-        Kantenplanung — wurde gebaut, am Pi verglichen und **verworfen**:
-        bei gleichem Tastgrad (Weiß) 18 % weniger, bei ungleichem (jede
-        Farbe) 20 % **mehr** als getrennte Fäden. Zahlen:
-        `docs/research/LED-TAKT.md`, Werkzeug `tools/pwm-vergleich.py`.*
-        Damit bleibt von den „vier Nebenverbrauchern" nichts offen.
-
-- [x] **Neustart mit Fortsetzung:** Marker, Snapshot der geänderten Dateien,
-      `chimera-mojo-fortsetzung.service` (einmal nach dem Start), Rückfall bei
-      wirkungslosem Neustart, Sperre nach zwei Versuchen (DESIGN, Regel
-      „Neustart mit Fortsetzung und Rückfall").
-      *Erledigt 3.11.: Marker, Snapshot, Rückfall und Sperre in
-      `chimera-tor --mojo --fortsetzen` (14 Tests, `cargo test -p chimera-tor`
-      256 ok); `chimera-mojo-fortsetzung.service` schreibt der Installer
-      (Schritt 27, 82 Tests, Gegenprobe 32). **Am Pi belegt** (3.11., 21:40):
-      Installer aus `81c047b` → Unit eingeschaltet und im Manifest; Marker
-      geschrieben, `systemctl reboot` → Fortsetzung lief nach dem Start
-      (9 ok, 0 warn), meldete „der Neustart hat gewirkt … Marker entfernt",
-      Marker danach weg. Ohne Marker: „skipped, unmet condition check",
-      `Result=success` — kein Befund bei jedem Boot.*
-- [x] **Modul 40: laufender Dienst ist kein Befund.** Meldet „Leitungen
-      gehalten", wenn die Ton-Prüfung fehlschlägt und Schritt 40 deshalb in die
-      Erkennung läuft, obwohl die Anzeige eingerichtet ist und der Dienst sie
-      bedient. Fix: eingerichtete Anzeige + laufender Dienst = gesund.
-      *Erledigt 3.11.: Typ aus `state/anzeige` gilt bei belegten Leitungen,
-      wenn sein Nachweis zutrifft (Am Pi: rc 0, Gegenprobe rc 1). Der grüne
-      LED-Abschluss im VOLLEN Lauf steht noch aus.*
-- [x] **Grüner LED-Abschluss am Gerät.** Modul 40 ist erledigt (voller Lauf
-      3.11.: `Modul 40-install-display: ok`). Ursache für das Gelb war zuletzt
-      **Modul 55**: Fehlte das Prerelease `rust-<commit>`, endet der Lauf mit
-      Befund (rc 1). Zum Commit `db8870a` fehlte es, weil die CI auf
-      `entwicklung` **nicht bei jedem Push** läuft (`on.push.branches: [main]`
-      in `.github/workflows/tests.yml`); Releases entstehen dort nur per
-      `workflow_dispatch`. Nach dem Anstoßen war der Lauf fehlerfrei (rc 0,
-      „12 Modul(e), ohne Fehler"). Zu entscheiden (smilez): `entwicklung` in
-      den Push-Trigger aufnehmen, oder den Rust-Job an einen Pfadfilter
-      (`rust/**`) hängen und das Prerelease nur dann erwarten.
-      *Erledigt 4.11.: Modul 55 hält still, wenn `rust/` unverändert ist —
-      `state/rust-stand` (Commit, Hash des Baums, Version) lässt das Binary
-      liegen („Rust unverändert seit …", kein Netz, kein CI-Build). **Am Pi
-      belegt** (4.11., 03:39): Doku-Commit `e3cff04` ohne Prerelease → Modul 55
-      „Rust unveraendert seit 763d1cb", voller Lauf „12 Modul(e), ohne Fehler",
-      `LED: ok (3 s)`, `tools/abgleich.sh --erwartet e3cff04` stimmt. Die
-      Entscheidung über den Push-Trigger (`entwicklung` bzw. Pfadfilter
-      `rust/**`) berührt jetzt nur noch, wer `rust/` anfasst.*
-- [x] **CI ist auf `entwicklung` rot — behoben am 3.11. (Sitzung `d4427984`).**
-      Fünf rote Testdateien, alle mit Ursache: `test-helfer.sh`
-      (`bad function name`: Attrappe war eine Funktion mit Bindestrich — jetzt
-      ein Skript im PATH), `test-launcher-hardware.sh`,
-      `test-launcher-rc3.sh` und `test-source.sh` (liefen in die Abkopplung nach
-      `systemd-run`, das im CI-Runner fehlt: rc 2 vor dem ersten Modul — jetzt
-      `CHIMERA_HELFER=1` und `systemctl`-Attrappe), `test_cli_doku.py`
-      (Python 3.13 dedentet Docstrings, die Befehlsliste der `displays`-Hilfe
-      verlor ihre Einrückung). Nichts davon war durch die Anzeige-Änderung
-      verursacht; sie waren nur unsichtbar, solange der Push-Trigger fehlte.
 - [ ] **pip: nur Fehlendes, ohne `--upgrade`.** Zurückgestellt: Die Änderung
       machte zwei Tests von `test-python-env.sh` rot; der erprobte Stand bleibt,
       bis die Ursache geklärt ist (das venv hatte `numpy 2.5.4` statt `1.26.4`).
@@ -174,8 +46,6 @@ mit einer Transportschicht, damit eine IDE das Gateway ansprechen kann.**
 Recherche: `docs/research/ACP.md` und `docs/research/ACP-MCP.md`. Rust im
 Gateway-Workspace (Regel „Rust, wo dauernd läuft“), eigene Tür.
 
-- [x] Recherche: ACP klären (Client, Communication, Context), mit MCP vergleichen,
-      Android Studio Rabbit 2 lesen.
 - [ ] **Bibliothek messen:** Crate `agent-client-protocol` 3.6.0 gegen den
       Mindestumfang mit `serde_json` (Größe des Binarys, Speicher, Laufzeit);
       danach entscheiden.
@@ -232,9 +102,6 @@ es geht („5n“ wird „Gateway“, „10r“ wird „Agent-Nutzer“ usw.).
 Jede Umbenennung ist ein Satz Ersetzungen mit Prüfung, dass kein Verweis auf
 einen alten Namen übrig bleibt.
 
-- [x] Regel „Sprechende Namen“ steht; `tests/test_regelnamen.py` verhindert neue
-      Nummern, mit Gegenprobe.
-- [x] „Sprechgesicht“ (vorher 4d) und „Mojo“ (vorher 10t) tragen schon Namen.
 - [ ] Die Namen für den Altbestand festlegen (eine Tabelle Nummer -> Name, von
       smilez abzunehmen), dann je Themenblock umbenennen: Anbieter und Gateway
       (5*), Anzeige (6*, 7*), Gedächtnis und Sitzung (8*), Installer (10*),
@@ -242,72 +109,24 @@ einen alten Namen übrig bleibt.
 - [ ] Die Verzeichnisse und Querverweise „Regel 5n“ usw. in Quelltext-Kommentaren
       folgen mit der Umbenennung.
 
-## Phase 1 — Mood-Schema und Validator
-
-**Ohne Hardware testbar.** Kern der neuen Idee, deshalb zuerst.
-
-- [x] Kanonische Feldtabelle (`src/chimera/mood/schema.py`)
-- [x] Schema für den Agenten *aus derselben Tabelle* (`describe_for_llm`)
-- [x] Validator: zurechtstutzen statt ablehnen, unbekannte Felder verwerfen
-- [x] Rückfall-Mood
-- [x] Registry mit dynamischer Nummernvergabe, Ablage als JSON
-- [x] Herkunft, Anlage- und Nutzungszeit; Aufräumen nach Gebrauch
-- [x] **Freie Zeichenformen** (`draw.py`) — 11 Grundformen, Regel 1a
-- [x] Noisys 41 Moods als Startbestand (`tools/import-noisy-moods.py`)
-- [x] 68 Tests mit Gegenproben
-
 ## Phase 2 — Mischen und Variieren
 
 **Ohne Hardware testbar.**
 
-- [x] `mix(a, b, gewicht)` — Farbton statt Kanäle, Listen werden vereinigt
-- [x] `vary(mood, seed)` — gleicher Anlass, gleiches Ergebnis
-- [x] Kontaktbogen (`tools/contact-sheet.py`)
 - [ ] `MAX_SHAPES` auf echter Hardware messen
 
 ## Phase 3 — Display und Renderer
 
 Hardware ist vorhanden, also nicht blockiert.
 
-- [x] Display-Adapter: `PIL.Image` → RGB565 → `board.draw_image()`
-      (`chimera.display.panel`, wie bei Noisy direkt in den Panelspeicher)
-- [x] Renderer aus Noisy übernommen und auflösungsrelativ gemacht
-- [x] Komponenten-Pipeline (kam mit)
-- [x] Blink-Engine, Nachlauf-Effekte, Software-Dimming (kamen mit)
-- [x] Mood-Übergänge über alle Felder, weich und hart (Regel 6b)
-- [x] Bildrate auf Zielhardware gemessen: 39,3 ms je Bild
-      (zeichnen 3,4 · umrechnen 7,9 · **SPI senden 28,1**) = 25,4 Bilder/s
-      Obergrenze. 15 Bilder/s brauchen 59 % des Budgets.
-      **Befund: Die Übertragung kostet 70 % — mehr als Zeichnen und
-      Umrechnen zusammen.** War nicht erwartet und verschiebt den Engpass.
-- [x] **Prioritäts-Verwalter** (`chimera/arbiter.py`) — gemeinsame
-      Auflösung für Statuszeile **und** LED (Regel 7c). Ein Baustein, zwei
-      Nutzer; die Vorlage nimmt hier bewusst eine Doppelung in Kauf
-      („nur Stil-Analogie"), das war für uns die falsche Wahl.
-      30 Prüfungen mit Gegenproben.
-- [x] **Statuszeile in den 40 zusätzlichen Zeilen — nach der
-      Prioritäts-Grammatik** (`chimera/display/statusline.py`),
-      angeschlossen in `NoisyRenderer.show()`. 25 + 7 Prüfungen.
-      Offen geblieben (siehe unten): gesichtsabhängige Einstellungen,
-      Teilübertragung, eigene Schriftart.
-- [x] **Eigenes Treiberpaket `chimera.displays`** (11.10.2026): ST7789-Kern,
-      GPIO v2/SPI per ctypes, Whisplay-Modul (LCD, LED, Backlight, Taste),
-      Registry über Ordner, Erkennung in drei Klassen, Ton zur Laufzeit.
-      Gemessen: `show` 29,4 ms je Bild (statt 39,3 mit Herstellertreiber),
-      keine Quellbau-Abhängigkeiten mehr. Tests 42 + Gegenprobe 7 Mutationen.
 - [ ] **Module `gamepi13/`** (DC25 RST27 BL19, 240×240, MADCTL 0x70,
       Pimoroni-Einschaltfolge, invertiert) und **`epd2in13b/`** (Treiber aus
       dem Gotchi-Fork, BUSY-Prüfung, Mindestabstand 120 s, reduziert+Akzent).
       Messung erst beim Kartentausch bzw. am E-Ink-Pi.
-- [x] **Boot-Abgleich:** `chimera-hardware.service` (oneshot, root, vor dem
-      Dienst) → `chimera-install --hardware` (40/45/50), Ton laden,
-      `/run/chimera/anzeige.env` an den Dienst. Dienst startet mit Panel
-      und Ton ohne Zutun.
 - [ ] **Dienst-Template `chimera@<typ>.service`** (ein Dienst je
       Anzeigeart, E-Paper braucht einen anderen Renderer) und
       `state/hardware.json` (erkannt, Zeit, Quelle; Soll/Ist-Abgleich für
       UPS). Bis dahin: ein `chimera.service`, Anzeige aus der Umgebung.
-- [x] **Boot-Abgleich unter 10 s** (9,6 s, vorher 20,2 s).
 - [ ] **Boot-Abgleich weiter kürzen:** Schritt 40 startet Python für
       Erkennung, Profil und Ton getrennt (zusammen 4,5 s).
 - [ ] **Anbieterausfall auf der LED?** Entscheiden, ob ein Gerät ohne
@@ -316,8 +135,6 @@ Hardware ist vorhanden, also nicht blockiert.
       störend.
 - [ ] **Akku in der Statuszeile** (DESIGN `docs/DESIGN.md`, Abschnitt „Renderer"), sobald die Akkuquelle
       (PiSugar / UPS HAT C) gebaut ist.
-- [x] **Mikrofonwahl durch Messung** (Modul 46): Jede Installation misst
-      ihre Mikrofone und wählt die brauchbaren; Aufnahmegerät `chimera_mikro`.
 - [ ] **Audio-Prozess nutzt `chimera_mikro`** (DESIGN 5g), sobald er gebaut
       ist; bis dahin nimmt noch niemand darüber auf.
 - [ ] **Teilübertragung des unteren Rands.** `panel.py` schreibt immer
@@ -460,12 +277,6 @@ Es ist ein Bündel aus Moods, Vorgaben, Namen und Herkunft.
 - [ ] `skills/mood/SKILL.md` (Architekturregel 8)
 - [ ] Agent-Zustände auf Moods abbilden (denkt, spricht, hört zu)
 
-### Werkzeugschleife → erledigt
-
-`FACE:` ist als Werkzeug `set_face` umgesetzt und mit der Mood-Bibliothek
-verdrahtet. Offen bleiben `DISPLAY:` (Statuszeile) und `SAY:` (braucht
-Sprachausgabe).
-
 ### E-Ink-Ausgabe auf Whisplay umbiegen
 
 Die Steuerbefehle bleiben, nur das Ziel wechselt (`docs/DESIGN.md`, Abschnitt „Was von openclawgotchi bleibt").
@@ -482,15 +293,6 @@ Die Steuerbefehle bleiben, nur das Ziel wechselt (`docs/DESIGN.md`, Abschnitt �
 
 Kann parallel zu Phase 4 laufen; berührt den Renderer nicht.
 
-- [x] **Registry** mit Aufgaben und Gruppen (Regel 5a, 5h)
-- [x] Rückfall **über Anbietergrenzen** — jedes Glied nennt Anbieter+Modell
-- [x] `Connector` um `supports_tools`, `context_window`,
-      `supports_streaming`, `cost_class`, `access` erweitert
-- [x] **Ollama-Connector** mit Platzhalter-Erkennung und Netzsuche
-- [x] **Claude getrennt nach Abo und Schlüssel**, Herkunft in der Antwort
-- [x] Client-Kennung zur Laufzeit (aus `claude --version`), mit
-      Rückfallwert. Weicht von PR #407 ab und wird in Phase 4d ersetzt.
-- [x] Ersteinrichtung: suchen, vorschlagen, übernehmen — änderbar
 - [ ] Auffrischen der Abo-Marke vor Ablauf, mit Koordinator
 - [ ] Werkzeugschleife aus openclawgotchi anschließen
 - [ ] **Anthropic-Connector mit Abo-Anmeldung** nach dem Muster von
@@ -516,43 +318,30 @@ Kann parallel zu Phase 4 laufen; berührt den Renderer nicht.
 
 Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
 
-- [x] **Rust-Grundlage:** `rust/` als Cargo-Workspace (`gemein`, `chimera-tor`), CI-Job mit
-      `cargo test`, `cargo deny`, Build aarch64-musl und SHA-256 am
-      Prerelease `rust-<commit>`. Installer-Modul 55 holt und prüft das Binary.
-- [x] **Gerüst:** Socket `/run/chimera/tor.sock`, Unit mit Nutzer
-      `chimera-tor` und `MemoryMax` (Modul 99).
-- [x] **Ollama im Gateway:** `op: chat`/`modelle` mit `anbieter: ollama`,
-      Python-Connector `provider/gateway.py` (Name bleibt `ollama`, Anzeige
-      „ollama @ Host“); der Dienst nutzt das Gateway, wenn es antwortet,
-      sonst den direkten Weg.
 - [ ] **Ein Kanal, eine Hauptsitzung** (DESIGN 5s) — Sitzungs-Socket, Ereignisstrom, Telegram-Tür im Gateway, Umleitung auf `haupt` und Sitzungsablage mit Wechsel (`wechseln`, `sitzungen`, `lesen`) laufen. Offen: Auslöser für den Wechsel (Wächter, 8d), Python-Telegram im Dienst entfernen, Klingel (Briefkasten, 5o) als Tür mit `ref`.
 - [ ] **Web-Oberfläche als Modul-Plattform** (5m), **vor** den weiteren
-      Anbietern, damit alles per Oberfläche einstellbar ist:
-      1. [x] Rahmen: Anmeldung (Passwort-Hash), Menü, Router, Modul-Erkennung
-         (`module/*/manifest.json`), eingebaute und nachgelegte Module.
-      2. Module, in dieser Reihenfolge (DESIGN 5t, 5u):
-         [x] Chat (Strom, Senden, ältere Sitzungen lesen);
-         [x] Status (Dienste, Speicher, Temperatur);
-         [ ] Modul-Registrierung (5v) — Rechteliste und Vorlage (`--module-neu`, `--module-pruefen`) stehen; offen: Freigabe mit Prüfsumme und
-         Passwort, Sandbox-iframe mit Brücke, Weitergabe an Modul-Socket;
-         [ ] Datenschicht im Gateway — Ablagen, Operationen und Unit-Rechte
-         stehen; offen: Katalog füllen (Abfrage + `fehlt_seit`), Neustart
-         des Gateways nach Schlüsseländerung, Umzug von Telegram-Token und
-         Passwort-Hash aus der `.env` nach `config/geheim/`
-         (`migrate_from`), Rechte `anbieter-lesen`/`anbieter-schreiben`;
-         [x] Anbieter Ollama (Vorlage für alle), „Anbieter hinzufügen“ und
-         Netzsuche mit Selbsteintrag (am Pi gelaufen);
-         [ ] Reihenfolge (Wahl über Anbieter hinweg);
-         [ ] Einstellungen: Passwort ändern, Werksreset mit Satz am Display,
-         Telegram, Sprache;
-         [ ] Anbieter Anthropic (Schlüssel, danach Abo);
-         [ ] Anzeigespiegel (Waveshare) — braucht zuerst ein fertiges Bild
-         im Shared Memory vom Renderer, eigener Entwurf.
-      3. [x] Ein Zusatzmodul erscheint ohne Änderung an Rahmen oder Gateway
-         (Test mit Gegenprobe).
-      4. [x] Installer trägt den Hash ein (`CHIMERA_WEB_PASSWORT`);
-         [x] Port nur im LAN begrenzen (Prüfung der Quelladresse im Gateway, 5m).
-      5. [ ] Am Pi laufen lassen (Anmeldung, Chat gegen die echte Sitzung).
+      Anbietern, damit alles per Oberfläche einstellbar ist.
+      Fertig und im Changelog: Rahmen (Anmeldung mit Passwort-Hash, Menü,
+      Router, Modul-Erkennung mit eingebauten und nachgelegten Modulen), die
+      Module Chat, Status und Ollama, die Rechteliste mit `--module-neu` und
+      `--module-pruefen`, das Web-Passwort aus dem Installer und die
+      LAN-Begrenzung der Oberfläche. Offen:
+      - **Modul-Registrierung (5v):** Freigabe mit Prüfsumme und Passwort,
+        Sandbox-iframe mit Brücke, Weitergabe an den Modul-Socket.
+      - **Datenschicht im Gateway:** Katalog füllen (Abfrage + `fehlt_seit`),
+        Neustart des Gateways nach Schlüsseländerung, Umzug von
+        Telegram-Token und Passwort-Hash aus der `.env` nach
+        `config/geheim/` (`migrate_from`), Rechte
+        `anbieter-lesen`/`anbieter-schreiben`.
+      - **Reihenfolge** (Wahl über Anbieter hinweg).
+      - **Einstellungen:** Passwort ändern, Werksreset mit Satz am Display,
+        Telegram, Sprache.
+      - **Anbieter Anthropic** (Schlüssel, danach Abo).
+      - **Anzeigespiegel (Waveshare)** — braucht zuerst ein fertiges Bild im
+        Shared Memory vom Renderer, eigener Entwurf.
+      - **Ein Zusatzmodul** erscheint ohne Änderung an Rahmen oder Gateway —
+        belegt ist es (Test mit Gegenprobe); offen bleibt der Lauf am Pi
+        (Anmeldung, Chat gegen die echte Sitzung).
 - [ ] **Status-Sonden ergänzen:** CPU-Zeit und Speicher je Dienst (`cpu.stat` je Cgroup, RSS aus `/proc/<pid>`), Netz (Durchsatz), Verlauf der Werte.
 - [ ] **Weitere Anbieter im Gateway:** Anthropic-Schlüssel, Anthropic-Abo
       nach PR #407 (Regel 5b, Fassung für das Gateway: Registry-Version,
@@ -692,18 +481,6 @@ Rust-Teile im selben Cargo-Workspace wie das Gateway (Regel 14).
 - [ ] Index `rusqlite` bundled FTS5 in `chimera-sitzung`, `--index-neu`,
       RSS am Pi messen.
 
-## Phase 4c — Telegram erhalten ✓
-
-Erledigt, siehe `CHANGELOG.md`. Telegram wurde nicht
-übernommen, sondern ohne Fremdbibliothek neu gebaut (nur `urllib`) — auf
-512 MB ist jede vermiedene Abhängigkeit eine gesparte. Gemeinsamer Verlauf,
-Kanal als Kontext und die Zustandsmeldung ans Gesicht sind verdrahtet und
-geprüft.
-
-Offen bleibt hier nur, was Sprache voraussetzt: Der Sprachkanal existiert
-als Betriebsart (`mode="voice"` mit kürzerer Ausgabe), hat aber noch keine
-Ein- und Ausgabe — die kommt mit Phase 5.
-
 ## Phase 5a — Umgebungshören im Ruhezustand
 
 Setzt Phase 5 voraus (Audioaufnahme läuft bereits). Details in
@@ -752,6 +529,9 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
 > Quelle: `../VERGLEICH-HATFACES.md`, HATFaces
 > `docs/konzept/03_Stand_2026-04-17.md`.
 
+- [ ] **Sprachkanal anschließen:** Die Betriebsart `mode="voice"` (kürzere
+      Ausgabe) existiert im Telegram-Kanal, hat aber noch keine Ein- und
+      Ausgabe — sie hängt an dieser Phase.
 - [ ] sherpa-onnx auf der Zielhardware, Modelle laden
 - [ ] VAD (`silero_vad_v5`)
 - [ ] **Aufnahme mit Energie-VAD als Rückfall** (ohne Modell, ~0 CPU):
@@ -777,9 +557,6 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
 
 ### Mienenspiel beim Sprechen (`docs/DESIGN.md`, Abschnitt „Mienenspiel beim Sprechen")
 
-- [x] **Ausdruck für „spricht“** (Regel „Sprechgesicht“): `SPEAK` mit vier Mundphasen,
-      `LISTEN` für „hört zu“, `IDLE` für den Ruhezustand, `wartet` nach jeder
-      Antwort; Tests und Gegenprobe stehen, am Pi noch nicht angesehen.
 - [ ] Mundphase folgt der Lautstärke der Sprachausgabe (Regel 4c), sobald es
       sie gibt.
 - [ ] Mundform folgt der Lautstärke der Sprachausgabe, jedes Bild
@@ -800,7 +577,6 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
 Die vier Muster aus `docs/DESIGN.md`, Abschnitt „Übernommene Muster aus OpenMinis (nachgebaut, nicht kopiert)" sind gebaut und verdrahtet.
 Offen bleibt:
 
-- [x] Rangordnung im Gedächtnis (nur lesbar gegen agentgeschrieben)
 - [ ] Auslagern bei `Action.OFFLOAD`: erkannt wird es, getan noch nicht
 - [ ] Schleifenzustand auf die RGB-LED (braucht Hardware)
 - [ ] **Regel 10q, Messen:** `VmRSS`/`VmHWM`/`VmSwap` je Arbeitsschritt ins
@@ -816,26 +592,14 @@ Offen bleibt:
       (`cgroup_enable=memory`, Bootdatei) oder bei der Selbstbegrenzung
       bleiben. Der RPi-Kernel startet mit `cgroup_disable=memory`, und
       `MemoryMax=` wirkt dort nicht (gemessen)
-- [x] Systemd-Unit mit `StartLimitBurst=` in `[Unit]` (10p, Punkt 4) —
-      Schritt 98, Abnahme am Gerät offen
 - [ ] Prüfung des Speicher-Controllers, falls `MemoryMax=` je in die Unit
       kommt (10q) — die Unit trägt es bewusst nicht
 
 ## Phase 7 — Restliche Peripherie
 
-- [x] RGB-LED an Mood-Glow (`display/led.py`, Verwalter nach Regel 7c,
-      Muster als reine Funktionen der Zeit, Regel 7d) — 48 Prüfungen,
-      Gegenprobe 7 Mutationen
-- [x] Statuszeile angeschlossen (war gebaut, aber nie an den Renderer gegeben)
-- [x] Taste verdrahtet: quittiert per LED, protokolliert
 - [ ] Das Display zeigt einen Zustand erst nach dem Neustart des Dienstes
       richtig: Am Pi nach der Änderung von `SPEAK` ansehen und mit dem
       Dienstprotokoll abgleichen (Ausdruck, Statuszeile, LED).
-- [x] Button: Gesten — *Erkennung erledigt 3.11. (`display/gesten.py`):
-      kurz (<0,7 s), lang (0,7–2 s), halten (≥2 s, mit `halten_ende` für
-      Push-to-Talk), doppelt, dreifach. Reine Zustandsmaschine (Regel 7d),
-      `GestenTakt` weckt zur Frist; Sofortquittung per LED beim Drücken.
-      Tests `test_gesten.py` 29 ok, Gegenprobe 8 ok.*
 - [ ] **Bedeutung der Gesten** (DESIGN `docs/DESIGN.md`, Abschnitt „Umgebungshören im Ruhezustand"): kurz = Umgebungshören
       beenden/Gespräch öffnen, lang = Gespräch beginnen, halten =
       Push-to-Talk, doppelt = abbrechen, dreifach = zurück. Hängt am
@@ -846,10 +610,6 @@ Offen bleibt:
       Aufnahme starten (Mikrofon, VAD) und stoppen (Transkription). Sobald
       der Audio-Prozess steht, ist es ein Aufrufpaar — die Erkennung muss
       dafür nicht angefasst werden.
-- [x] **Gestentest am Gerät:** *Erledigt 3.11., 23:09* — kurz, lang, halten +
-      `halten_ende`, doppelt, dreifach; jede Geste genau eine Protokollzeile.
-      Dabei fiel das Prellen auf (Ketten bis 136 ms, ein Druck wurde
-      „dreifach") → Entprellung über den Pegel statt über die Flanke.
 - [ ] **Joystick (5-Wege) der neueren HAT-Revision** als Option prüfen:
       BOARD 32/33/31/29/37, active-low mit internem Pull-up, 20 ms
       Entprellung (HERKUNFT `docs/HERKUNFT.md`, Abschnitt „Der Treiber: Stand unseres Nachbaus"). Erst am Gerät feststellen, ob unsere
@@ -879,107 +639,26 @@ Entwurf steht in `docs/INSTALLER.md`. Der Installer traegt die
 Plattformfrage, deshalb eigene Phase und nicht am Ende angehaengt.
 
 ### 8a — Geruest
-- [x] `installer/lib/common.sh` — Ausgabe, Systemabfragen über `CHIMERA_ROOT`
-- [x] Atomares Schreiben: Sidecar neben dem Ziel, dann `mv`
-- [x] **`mktemp` geprueft** — ungeprueft leert es Zieldateien (I3)
-- [x] **Leere Eingabe wird abgelehnt** (Regel 8a: stiller Erfolg). Gefunden
-      durch den eigenen Test, nicht durch Nachdenken
-- [x] `chimera-install` als Einstieg, Module nach Nummer, `--only`, `--list`
-- [x] **Protokolldatei je Lauf, auch bei Erfolg** (Regel 10e)
 - [ ] `--dry-run` und `--check` in den Modulen tatsaechlich auswerten
       (werden bisher nur durchgereicht)
-- [x] Protokolle aufraeumen (Anzahl oder Alter begrenzen) —
-      `common.sh:log_rotate`, die juengsten `CHIMERA_LOG_KEEP` bleiben
 - [ ] `VERSION` ins System stempeln, `chimera --version`
-
-### 8a1 — Laeufer (neu, aus Stufe B1)
-- [x] **Exitcodes der Module** (neues I7): 0 = fertig, 1 = Befund,
-      2 = Abbruch, 3 = Neustart noetig. Der Lauf wird von rc 3 NICHT mehr
-      abgebrochen; der Wunsch wird EINMAL am Ende gemeldet, und der
-      Gesamt-Exitcode sagt es weiter (3). Vorher endete der Lauf an
-      Schritt 40 und kam auf einer frischen Installation nie darueber
-      hinaus. Test: `tests/test-launcher-rc3.sh`, mit Gegenprobe gegen
-      die alte Fassung
-- [x] Zeilen an Fremddateien werden ebenfalls ATOMAR geschrieben
-      (Regel I3): nicht mehr `>>`, sondern Inhalt lesen, Zeile anfuegen,
-      in einem Zug ersetzen (`manifest_line` ueber `write_atomic`).
-      Eine Bootkonfiguration, die mitten im Schreiben den Strom verliert,
-      enthaelt sonst eine halbe Zeile
-- [x] `write_atomic` uebernimmt ausser den Rechten auch **Besitzer und
-      Gruppe** des Originals (`chown --reference`)
-
-### 8a2 — Gepruefte Fehlerzweige (neu, aus Stufe B1)
-- [x] `mktemp` wird in Schritt 20 GEPRUEFT (`common.sh:tmp_path`). Vorher
-      stand dort `"${TMPDIR:-/tmp}/.name.$$"` — zeigte TMPDIR ins Leere,
-      starb der Schritt unter `set -e` mit rc 1 und der Laeufer wertete
-      das als Befund und lief weiter
-- [x] **KVER-Falle** (`steps/10`, `steps/30`): `$(read_file … || uname -r)`
-      greift nie, weil der Exitstatus einer Pipe der des letzten Glieds
-      ist. Jetzt `common.sh:kernel_version`, leere Kennung = benannter
-      Abbruch statt `/lib/modules//build`
-- [x] Tests laufen TMPDIR-unabhaengig (`run-tests.sh` richtet sein eigenes
-      Arbeitsverzeichnis ein); der Rundlauftest prueft den Pfad auf die
-      Eigenschaft "liegt unter meinem Arbeitsverzeichnis" statt auf eine
-      Positivliste /tmp|/var/tmp
-
-### 8a3 — Fremdcode und Kernelmodul (neu, aus Stufe B1)
-- [x] **Whisplay-Repo auf einen Commit festgelegt und die aufgerufene
-      Datei gegen eine Pruefsumme geprueft** (I4, 5f). `network_git`
-      nimmt einen Commit (shallow `fetch` auf die Kennung, gemessen),
-      `fremddatei_pruefen` prueft die Datei. Hinterlegt ist
-      Commit `c73051e6…` und sha256 `0767aba3…` (install_driver.sh,
-      10.10.2026). Eine Abweichung wird BENANNT abgebrochen, nicht
-      ausgefuehrt
-- [x] **Kernelmodul wird per `modprobe` geprueft**, nicht nur per
-      Dateiexistenz (`lib/module.sh:kernel_module_state`). Ein
-      ABI-inkompatibles Modul liegt da und laedt trotzdem nicht. Test:
-      `tests/test-module-state.sh`, mit Gegenprobe
-- [x] **Whisplay ohne EEPROM erkannt** (`lib/display.sh`): Overlay-Eintrag
-      in der Bootkonfiguration, ALSA-Karte, gebautes Modul — alles am
-      Herstellertreiber belegt (dtoverlay=whisplay-soundcard,
-      whisplaysound), kein Geraten. Welcher Treffer gilt, steht in
-      `DISPLAY_QUELLE` und wird benannt. Test:
-      `tests/test-display-signatur.sh`, mit Gegenprobe
 
 ### 8b — Modul 10 `preflight` + Boardprofile  ✅ erster Wurf steht
 Liefert sofort Nutzen: klaert die offenen Fragen zum Zielgeraet.
 **Von Anfang an mit beiden Boards im Blick** (`docs/INSTALLER.md`, Abschnitt „Boarderkennung") —
 sonst bedeutet Portieren spaeter ein Durchsuchen aller Module.
-- [x] Board und Betriebssystem **getrennt** erkennen (zwei Achsen: derselbe
-      Chip unter DietPi und unter Radxa-Debian sind zwei Faelle)
-- [x] Bootmethode erkennen: `config.txt` / extlinux / u-boot-Skript
-- [x] Erkennung auf **konkrete `compatible`-Kennung** stuetzen, nicht auf
-      `model == *"Radxa"*` — das trifft jedes Radxa-Board
-- [x] **Profiltabelle** fuer alles Boardabhaengige (Header-Stufe, SPI-Bus
-      und -Takt, Overlay-Quelle und -Ziel, kollidierende Overlays,
-      Bootmethode, ALSA-Vorlage) — ein neues Board = ein Eintrag
-- [x] Radxa-Eintrag von Anfang an vorhanden, meldet „noch nicht
-      unterstuetzt" als bewussten Zustand
-- [x] Unbekanntes Board ⇒ **Abbruch mit Auskunft**, kein Rateversuch.
-      `--force-board` nur fuer Entwicklung, nie im Fehlertext vorgeschlagen
-- [x] Whisplay-EEPROM auslesen (`/proc/device-tree/hat/`)
 - [ ] **Offen, braucht Hardware:** laesst sich daraus V1 gegen V2
       unterscheiden? Bis dahin bleibt die Warnung stehen
-- [x] `uname -r`, Header-Verzeichnis, `snd-soc-wm8960`, `/boot/config-*`,
-      Speicher erfassen und berichten
 - [ ] Warnen, wenn ungeteilte Kernelupdates aktiv sind
 - [ ] Protokolldatei statt nur Ausgabe auf dem Schirm
-- [x] Test ohne Hardware: erfundene `model`- und `os-release`-Inhalte in
-      einem temporaeren Wurzelverzeichnis (31 Tests, mit Gegenproben)
 
 ### 8c — Module 20–70 fuer Pi Zero 2 W
 Der einfache Fall: Header kommen aus dem Distributionspaket.
 - [ ] Systempakete, Header (Stufe 1), Whisplay-Treiber bauen
       — Module 20/30/40 stehen im Code; was auf echter Hardware gelaufen
       ist, steht in `docs/HARDWARE-BEFUNDE.md`
-- [x] WM8960 pruefen: **`modprobe` versuchen**, nicht nur Existenz pruefen
-      (ein vorhandenes Modul kann ABI-inkompatibel sein) — die Pruefung
-      steht jetzt in `lib/module.sh:kernel_module_state` und ist in
-      Schritt 40 verdrahtet; fuer WM8960 wird sie im Codec-Modul
-      benutzt, wenn es gebaut wird
 - [ ] Overlay, kollidierende **umbenennen** statt loeschen
 - [ ] Bootmethode erkennen statt `u-boot-update` vorauszusehen
-- [x] Bootdateien vorher sichern
 - [ ] ALSA-Konfiguration
 
 ### 8d — Module 80–99
@@ -991,8 +670,6 @@ Der einfache Fall: Header kommen aus dem Distributionspaket.
 - [ ] Auf beiden Boards gleich einrichten — auch wo es nicht nötig wäre
 - [ ] Python-Umgebung, Modelle laden und Pruefsummen verifizieren
 - [ ] `.env` aus Vorlage, Ollama-Adresse erfragen
-- [x] systemd-Unit und Dienstnutzer (Schritt 98) — Abnahme am Gerät offen:
-      `systemctl is-active` nach 10 s, `NRestarts=0`
 - [ ] `migrate_from()` fuer Uebergaenge (I2)
 - [ ] Deinstallation, die den Ausgangszustand wiederherstellt
 

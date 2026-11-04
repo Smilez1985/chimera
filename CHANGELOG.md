@@ -312,6 +312,30 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   stimmte). Die Ruhe-Schleife schläft genau bis zum Blinzelbeginn, statt mit
   festem Vorlauf zu laufen — ein Vorlauf von 0,6 s kostete je Blinzeln fast
   eine Sekunde voller Rate (14,6 % statt 10,8 %).
+- **Installer: die Arbeit läuft abgekoppelt** (`chimera-installhelper`, eine
+  transiente `oneshot`-Unit). `chimera-install` startet sie und kehrt zurück;
+  ohne root wird der Aufruf abgelehnt, statt in der SSH-Sitzung zu laufen, und
+  ein zweiter Aufruf hängt sich an den laufenden Lauf, statt einen zweiten zu
+  beginnen.
+- **Installer: die Klammer um den Lauf** — Dienste anhalten, Dateien tauschen,
+  in der gemessenen Reihenfolge starten (Sockets **vor** Diensten), danach der
+  Nachweis, dass alles läuft. Das Gateway wird dabei über seinen Socket
+  **geweckt** und nicht direkt gestartet: Ein direkter Start scheitert am Pi,
+  weil `LISTEN_FDS` fehlt.
+- **Installer: SSH-Schutz** gegen den OOM-Killer — Drop-in
+  `ssh.service.d/10-chimera-oom.conf` mit `OOMScoreAdjust=-900`. Anlass:
+  Sitzungsprozesse standen auf `oom_score_adj=0` und waren die ersten Opfer,
+  wenn die Speichergrenze griff.
+- **Anzeige: Komponenten-Pipeline, Blink-Engine, Nachlauf-Effekte und
+  Software-Dimming** kamen mit dem Renderer aus Noisy und laufen auf Zuständen
+  statt auf einem Orchestrator; Muster sind reine Funktionen der Zeit
+  (Regel 7d).
+- **Ausdruck: Herkunft, Anlage- und Nutzungszeit** stehen an jedem
+  Bibliothekseintrag; Einträge, die nur für einen Anlass gebaut wurden, werden
+  nach dem Gebrauch wieder aufgeräumt.
+- **Werkzeug:** `tools/contact-sheet.py` legt alle Ausdrücke als
+  Kontaktbogen auf ein Blatt — Muster auf einen Blick statt eine Datei je
+  Mood.
 
 ### Geändert
 - **Der Snapshot vor einem Neustart ist ein Verzeichnis, kein Archiv**
@@ -385,6 +409,28 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Werkzeug `tools/abgleich.sh` vergleicht Quellbaum, eingespielten Stand
   und `state/quelle-commit`. Anlass: vier Commits lagen nur per `scp` in
   `productive/code` und wurden beim nächsten Boot-Abgleich zurückgerollt.
+- **Installer: die Klammer greift nur bei echter Änderung** — unveränderter
+  Quellstand und erfüllte Abhängigkeiten lassen die Dienste weiterlaufen;
+  nichts wird angefasst, nichts angehalten.
+- **Installer: zram wird nur noch angelegt, wenn es fehlt.** Läuft es, bleibt
+  der Speicherschritt ganz aus — kein `swapoff -a`, kein Dateischritt, keine
+  Änderung der Konfiguration.
+- **Installer: der abgekoppelte Helfer hat einen Laufzettel**
+  (`/run/chimera-installhelper.status`). Die transiente Unit lässt sich über
+  `systemctl` nicht abfragen („Failed to open /run/systemd/transient/…") und
+  läuft trotzdem; der Zustand wird deshalb neben der Unit geführt, statt aus
+  ihr gelesen.
+- **Installer: `write_atomic` übernimmt neben den Rechten auch Besitzer und
+  Gruppe** des Originals (`chown --reference`) — eine ersetzte Datei behält
+  damit ihre Zugehörigkeit, auch wenn sie als root geschrieben wird.
+- **Anbieter: `Connector` kennt jetzt `supports_tools`, `context_window`,
+  `supports_streaming`, `cost_class` und `access`** — die Wahl eines Ziels
+  entscheidet über Eigenschaften, nicht über einen Namen.
+- **Dokumentation: Verweise nennen den Abschnitt beim Namen.** 113
+  Paragrafenverweise in sieben Dokumenten, im Quelltext und in den Werkzeugen
+  zeigen auf Abschnittsnamen statt auf `§9` („`docs/INSTALLER.md`, Abschnitt
+  „Was welches Modul aus dem Changelog einspielt""). Im Repo steht kein `§`
+  mehr; `tests/test_regelnamen.py` hält neue Nummern fern.
 
 ### Entfernt
 - **Anzeige:** Herstellertreiber `whisplay.py` samt `spidev`/`gpiod`/
@@ -568,3 +614,17 @@ Die Prüfung des H4-Stands gegen die Blaupause steht in
 ALSA-Karte `whisplaysound` registriert (Codec WM8960). Was sich dabei
 gezeigt hat — auch die Fehlschläge und ihre Ursachen — steht in
 `docs/HARDWARE-BEFUNDE.md`.
+- **Bedarf am Pi gemessen** (3.11., Pi Zero 2 W, Kernel 6.18.50): RAM 462 MB
+  gesamt / 359 MB verfügbar, Karte 117 GB mit 95 GB frei; `source/` 3 MB,
+  `state/` 40 KB, `productive/` 107 MB; `chimera.service` 47 MB RSS,
+  `chimera-tor --dienst` 1,6 MB und 0,2 % eines Kerns; Mojo-Prüfung 528 ms bei
+  6 MB Spitze. Die 100 MB vor einem Snapshot sind damit eine Untergrenze, kein
+  gemessener Bedarf.
+- **Ein voller Installerlauf endet grün.** Aus dem Klon auf Commit `e3cff04`
+  (Doku, `rust/` unverändert): „12 Modul(e), ohne Fehler", `LED: ok (3 s)`,
+  und `tools/abgleich.sh --erwartet e3cff04` bestätigt Quellbaum wie
+  eingespielten Stand. Vorher endete jeder Lauf aus einem Zip mit einem
+  Befund und gelber LED.
+- **Das „Updated"-Gesicht wurde am Panel abgelesen** (2.11.): Gesicht,
+  Fortschrittsbalken und „Updating…" stehen sichtbar auf der Anzeige und
+  bleiben bis zum Dienststart stehen — nicht nur die Socket-Antwort stimmte.
