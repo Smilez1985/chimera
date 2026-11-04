@@ -6,20 +6,26 @@
 # nach dem anderen, nicht alle gleichzeitig (ein Zero 2 W hat eine Leitung).
 #
 # Je Objekt eine Marke unter $CHIMERA_STATE/prefetch/:
-#   <name>.teil    unterwegs (fortsetzbar, wird nie als fertig gelesen)
-#   <name>.done    fertig -- erst nach Pruefung geschrieben, atomar
-#   <name>.fehler  Grund, warum es nicht ging
+#   <name>.done    fertig -- erst geschrieben, wenn die Ware wirklich da ist
+#   <name>.fehler  Grund, warum es nicht ging (bleibt stehen, wird beim
+#                  naechsten Lauf erneut versucht)
+#   *.teil         Schreibzwischenstand der Marke (.done.teil/.fehler.teil),
+#                  damit nie eine halbe Marke gelesen wird. Kein
+#                  Fortsetzungspunkt eines Downloads -- halbe Downloads
+#                  landen in wheels.teil und werden verworfen.
 #
 # Grundsatz: Eine Marke beschleunigt nur, sie ist NIE Bedingung. Jeder
 # Verbraucher prueft seine Ware selbst (Pruefsumme, Version). Ein toter oder
 # haengender Vorab-Lader darf keinen Installationsschritt blockieren.
 #
-# Zu `apt`: Es gehoert hierher, aber nur HOLEN, nie installieren. dpkg hat
-# eine Sperre; ein zweiter `apt-get install` neben dem Installer blockiert
-# sich (gemessen 4.11.). Deshalb `apt-get install --download-only` (holt samt
-# Abhaengigkeiten in den Cache, aendert am System nichts) und auf BEIDEN
-# Seiten `DPkg::Lock::Timeout` -- wer nicht drankommt, wartet, statt
-# abzubrechen. Modul 20 entpackt danach aus dem eigenen Cache.
+# Zu `apt`: Es bleibt draussen. apt hat schon einen Eigentuemer
+# (`apt_install` in lib/network.sh, mit DPkg::Lock::Timeout) -- ein zweiter
+# Weg waere genau die Doppelimplementierung, die dieses Projekt schon dreimal
+# bezahlt hat. Und er kann nicht ueberlappen: `apt-get install` holt unter
+# derselben Sperre, die Modul 20 braucht; wer zuerst kommt, haelt den anderen
+# auf (am Pi gemessen, 5.11.: 25 s fuer null Pakete). apt laedt also dort, wo
+# es ohnehin laeuft -- in Modul 20. Was hier bleibt, ist pip: 22 MB, 16 s,
+# und die fallen wirklich aus Modul 50 heraus.
 #
 # Schalter: CHIMERA_PREFETCH_RAD=0 laesst das Vorab-Laden aus (Vorgabe 1).
 # Gebraucht wird er zum Messen (vorher/nachher) und als Notaus, wenn ein
@@ -74,74 +80,153 @@ vorab_marke_fehler() {
 	} >"$_vb_t" && mv "$_vb_t" "$_vb_d/$1.fehler"
 }
 
+# Alte Fehlmarken in das Protokoll des Laufs holen.
+#
+# Warum das hierher gehoert: Der Vorab-Lader laeuft abgekoppelt und schreibt
+# sein eigenes Protokoll; ein Fehlschlag von gestern steht sonst nur in
+# state/prefetch und in keiner Zeile, die der Lauf kennt. Mojo liest den Lauf,
+# nicht das Verzeichnis -- was nicht im Protokoll steht, findet es nicht.
+# Beheben muss niemand etwas: der naechste Start versucht jedes Objekt ohne
+# .done erneut (eine .fehler-Marke blockiert nicht). Die Meldung ist trotzdem
+# wichtig, weil sie den Grund nennt, bevor er sich wiederholt.
+vorab_fehler_berichten() {
+	_vf_d="$(vorab_verzeichnis)"
+	[ -d "$_vf_d" ] || return 0
+	_vf_n=0
+	for _vf_f in "$_vf_d"/*.fehler; do
+		[ -f "$_vf_f" ] || continue
+		_vf_n=$((_vf_n + 1))
+		warn "Vorab-Laden: $(basename "$_vf_f" .fehler) scheiterte zuletzt -- $(sed -n 's/^grund=//p' "$_vf_f" 2>/dev/null | head -1)"
+	done
+	[ "$_vf_n" -eq 0 ] || \
+		info "Vorab-Laden: $_vf_n Objekt(e) werden in diesem Lauf erneut versucht."
+	return 0
+}
+
 # --- Die Objekte, in der Reihenfolge, in der die Module sie brauchen ------
 #
 # Je Zeile: Name <Tab> Art <Tab> Parameter
-#   apt  <pakete>            -> .deb in den apt-Cache (Modul 20/30/40)
 #   pip  <anforderungen>     -> Wheels nach <prefetch>/wheels (Modul 50)
 #
 # Die Liste ist bewusst kurz: Was wenige Sekunden kostet, wird nicht
-# vorgeladen -- der Aufwand waere groesser als der Gewinn (gemessen 4.11.:
-# Whisplay-Klon 3 s, rust-Binary 1 s, pip-Wheels 18 s, apt-Pakete 40-80 MB).
+# vorgeladen -- der Aufwand einer Marke waere groesser als der Gewinn
+# (gemessen 4.11.: Whisplay-Klon 3 s, rust-Binary 1 s).
 #
-# `apt` steht vorn (Vorgabe smilez, 4.11.): apt holt und installiert je
-# Paket nacheinander. Holt man die .deb VORHER alle zusammen, faellt der
-# Netzanteil aus der Installation heraus -- `apt-get install` entpackt dann
-# nur noch aus dem eigenen Cache.
+# Beim Nachdenken ueber ein neues Objekt zuerst fragen: Hat der Schritt, der
+# es braucht, schon einen eigenen Weg (dann gehoert es dorthin), und kann der
+# Abruf ueberhaupt nebenher laufen? Zwei Nein heisst: nicht vorladen.
 vorab_liste() {
 	cat <<'EOF'
-apt-debs	apt	git gcc make device-tree-compiler alsa-utils ca-certificates python3-pil python3-numpy
 pip-wheels	pip	Pillow numpy
 EOF
 }
 
+# Ist fuer diese Anforderung schon ein Wheel da? (idempotent: installieren
+# nur, was fehlt). Verglichen wird der Paketname aus der Anforderung
+# (`numpy>=1.26` -> `numpy`, `python-dateutil` -> `python_dateutil`) mit dem
+# Dateinamen im Vorab-Verzeichnis.
+vorab_wheel_da() {
+	_vwd="$1"
+	_vwd="$(printf '%s' "$_vwd" | sed 's/[<>=!~[].*$//' | tr 'A-Z' 'a-z' | tr '-' '_')"
+	[ -n "$_vwd" ] || return 1
+	# Trennzeichen zwischen Name und Fassung ist im Wheel-Dateinamen '-'
+	# (im Paketnamen selbst '_'): `pillow-13.0.0-...whl`, `python_dateutil-2.9-...`.
+	ls "$(vorab_verzeichnis)/wheels" 2>/dev/null | tr 'A-Z' 'a-z' |
+		grep -q "^${_vwd}[-_]"
+}
+
 # Ein Objekt holen. Rueckgabe 0 = fertig (Marke gesetzt), 1 = Fehler (Marke
-# gesetzt), 2 = uebersprungen (kein Grund, keine Marke).
+# gesetzt), 2 = uebersprungen (keine Marke), 3 = nichts zu tun (alles da).
 vorab_holen() {
 	_vh_name="$1"; _vh_art="$2"; shift 2
 	_vh_d="$(vorab_verzeichnis)"
 
 	case "$_vh_art" in
-	apt)
-		# --download-only holt die Pakete MIT Abhaengigkeiten in den
-		# apt-Cache und installiert nichts. Der spaetere `apt-get install`
-		# findet sie dort und braucht kein Netz mehr.
-		#
-		# Sperre: apt nimmt die dpkg-Sperre schon fuers Herunterladen. Laeuft
-		# parallel ein anderer apt, wird hier gewartet (Lock::Timeout) --
-		# nicht abgebrochen. Der Installer wartet seinerseits (Modul 20,
-		# gleiche Option), damit keiner dem anderen in die Quere kommt.
-		[ "$(id -u)" = 0 ] || { vorab_marke_fehler "$_vh_name" "nur als root"; return 1; }
-		command -v apt-get >/dev/null 2>&1 || { vorab_marke_fehler "$_vh_name" "kein apt-get"; return 1; }
-		_vh_rc=0
-		apt-get install --download-only --yes \
-			-o DPkg::Lock::Timeout="${CHIMERA_APT_LOCK_TIMEOUT:-300}" \
-			"$@" >>"$_vh_d/$_vh_name.log" 2>&1 || _vh_rc=$?
-		if [ "$_vh_rc" != 0 ]; then
-			vorab_marke_fehler "$_vh_name" "apt-get rc=$_vh_rc (siehe ${CHIMERA_STATE:-/opt/chimera/state}/prefetch/$_vh_name.log)"
-			return 1
-		fi
-		vorab_marke_done "$_vh_name"
-		return 0 ;;
 	pip)
 		_vh_dir="$_vh_d/wheels"
-		mkdir -p "$_vh_dir" || { vorab_marke_fehler "$_vh_name" "Verzeichnis nicht anlegbar"; return 1; }
+		# Zwischenverzeichnis, das STEHEN BLEIBT: Was schon geholt ist, wird
+		# beim naechsten Versuch nicht erneut geholt (pip erkennt vorhandene
+		# Dateien und meldet Erfolg). Genau das macht den Abruf idempotent und
+		# nach einem harten Abbruch fortsetzbar, statt von vorn zu beginnen.
+		_vh_teil="$_vh_d/wheels.teil"
 		command -v python3 >/dev/null 2>&1 || {
 			vorab_marke_fehler "$_vh_name" "kein python3"; return 1; }
-		# --no-deps gibt es hier nicht: die Wheels sollen samt Abhaengigkeiten
-		# im Verzeichnis liegen, damit Modul 50 sie ohne Netz findet.
+		# Zuerst nachsehen, was wirklich fehlt -- nicht blind laden. Was schon
+		# im Vorab-Verzeichnis liegt, wird nicht angefasst.
+		_vh_fehl=""
+		for _vh_a in "$@"; do
+			vorab_wheel_da "$_vh_a" || _vh_fehl="$_vh_fehl $_vh_a"
+		done
+		if [ -z "$_vh_fehl" ]; then
+			vorab_marke_done "$_vh_name"
+			return 3
+		fi
+		mkdir -p "$_vh_teil" || {
+			vorab_marke_fehler "$_vh_name" "Zwischenverzeichnis nicht anlegbar"; return 1; }
+		# Fehlt pip im Systempython, wird es geholt -- nicht gemeldet und nicht
+		# uebersprungen. pip ist eine Abhaengigkeit, die der Installer selbst
+		# herstellt (`python3-pip`, Pflichtpaket in Modul 20); apt zu fragen ist
+		# derselbe Weg wie dort, nicht ein zweiter: network_apt in
+		# lib/network.sh haelt die Sperre (DPkg::Lock::Timeout), wartet aufs
+		# Netz und installiert nur, was fehlt.
+		if ! python3 -m pip --version >/dev/null 2>&1; then
+			info "Vorab-Laden: kein pip im Systempython -- wird ueber apt geholt."
+			if command -v network_apt >/dev/null 2>&1; then
+				network_apt python3-pip || \
+					warn "Vorab-Laden: apt konnte python3-pip nicht holen."
+			fi
+			if ! python3 -m pip --version >/dev/null 2>&1; then
+				vorab_marke_fehler "$_vh_name" "kein pip im Systempython, auch nach apt (python3-pip)"
+				return 1
+			fi
+		fi
+		# DIESELBE Warte-Schleife wie in Modul 50 (pydep_ensure) und in
+		# network_fetch: Fehlt das Netz, wird pausiert und weiter versucht --
+		# ein Netzaussetzer ist kein Befund. Erst wenn das Netz steht und pip
+		# trotzdem scheitert, gibt es eine .fehler-Marke.
 		#
-		# Kein pip? Debian ohne python3-pip ist kein Fehler des Vorab-Ladens --
-		# Modul 50 richtet die Umgebung selbst ein und laedt dann normal.
-		# `|| _vh_rc=$?` statt `set +e`: Das set -e des Aufrufers wird nicht
-		# verstellt, und ein Fehlschlag ist trotzdem messbar.
-		_vh_rc=0
-		python3 -m pip download --no-cache-dir --dest "$_vh_dir" "$@" \
-			>>"$_vh_d/$_vh_name.log" 2>&1 || _vh_rc=$?
+		# `|| _vh_rc=$?` statt `set +e`: Das set -e des Aufrufers bleibt
+		# unangetastet, und ein Fehlschlag ist trotzdem messbar.
+		_vh_versuche="${CHIMERA_PIP_VERSUCHE:-3}"
+		_vh_n=0
+		_vh_rc=1
+		while [ "$_vh_n" -lt "$_vh_versuche" ]; do
+			_vh_n=$((_vh_n + 1))
+			if command -v netz_warten_erreichbar >/dev/null 2>&1; then
+				netz_warten_erreichbar || {
+					warn "Vorab-Laden: kein Netz -- $_vh_name bleibt offen, der Schritt laedt selbst."
+					_vh_rc=1
+					break
+				}
+			fi
+			[ "$_vh_n" -gt 1 ] && \
+				info "Vorab-Laden: $_vh_name, Versuch $_vh_n von $_vh_versuche"
+			# Kein --no-deps: die Wheels sollen samt Abhaengigkeiten
+			# im Verzeichnis liegen, damit Modul 50 sie ohne Netz findet.
+			# Geladen wird nur, was fehlt ($_vh_fehl, Wortliste).
+			_vh_rc=0
+			# shellcheck disable=SC2086
+			python3 -m pip download --no-cache-dir --dest "$_vh_teil" $_vh_fehl \
+				>>"$_vh_d/$_vh_name.log" 2>&1 || _vh_rc=$?
+			[ "$_vh_rc" = 0 ] && break
+			warn "Vorab-Laden: $_vh_name unterbrochen (Exitcode $_vh_rc, Versuch $_vh_n von $_vh_versuche)."
+			[ "$_vh_n" -lt "$_vh_versuche" ] && sleep 2
+		done
 		if [ "$_vh_rc" != 0 ]; then
-			vorab_marke_fehler "$_vh_name" "pip download rc=$_vh_rc (siehe $CHIMERA_STATE/prefetch/$_vh_name.log)"
+			# Zwischenverzeichnis bleibt liegen: der naechste Lauf macht dort
+			# weiter, wo dieser aufgehoert hat.
+			vorab_marke_fehler "$_vh_name" "pip download rc=$_vh_rc nach $_vh_n Versuch(en) (siehe ${CHIMERA_STATE:-/opt/chimera/state}/prefetch/$_vh_name.log)"
 			return 1
 		fi
+		mkdir -p "$_vh_dir" || {
+			vorab_marke_fehler "$_vh_name" "Zielverzeichnis nicht anlegbar"; return 1; }
+		# Verschieben erst nach Erfolg: In wheels/ liegt nur, was vollstaendig
+		# ist. Scheitert das Verschieben, bleibt die Marke aus -- Modul 50
+		# laedt dann selbst.
+		if ! mv "$_vh_teil"/*.whl "$_vh_dir"/ 2>/dev/null; then
+			warn "Vorab-Laden: $_vh_name hat keine Wheel-Datei abgelegt (pip meldete Erfolg)."
+		fi
+		rm -rf "$_vh_teil"
 		vorab_marke_done "$_vh_name"
 		return 0 ;;
 	esac
@@ -200,17 +285,19 @@ vorab_alle() {
 	}
 	vorab_liste | while IFS='	' read -r _va_name _va_art _va_rest; do
 		[ -n "$_va_name" ] || continue
-		if vorab_fertig "$_va_name"; then
-			info "Vorab-Laden: $_va_name ist schon da."
-			continue
-		fi
+		# Kein Sprung auf die .done-Marke: Was wirklich gebraucht wird,
+		# entscheidet der Bestand (idempotent -- installieren, nur was fehlt).
+		# Die Marke ist der Beleg, dass der Abruf durchlief, nicht das Tor.
 		info "Vorab-Laden: $_va_name ($_va_art) ..."
+		_va_rc=0
 		# shellcheck disable=SC2086
-		if vorab_holen "$_va_name" "$_va_art" $_va_rest; then
-			info "Vorab-Laden: $_va_name fertig."
-		else
-			warn "Vorab-Laden: $_va_name nicht geholt -- der Schritt laedt selbst."
-		fi
+		vorab_holen "$_va_name" "$_va_art" $_va_rest || _va_rc=$?
+		case "$_va_rc" in
+			0) info "Vorab-Laden: $_va_name fertig." ;;
+			3) info "Vorab-Laden: $_va_name ist vollstaendig da -- nichts zu holen." ;;
+			2) info "Vorab-Laden: $_va_name nicht vorgesehen (uebersprungen)." ;;
+			*) warn "Vorab-Laden: $_va_name nicht geholt -- der Schritt laedt selbst." ;;
+		esac
 	done
 	return 0
 }

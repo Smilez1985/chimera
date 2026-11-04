@@ -2625,96 +2625,106 @@ Der Installer kennt seine Downloads vor dem ersten Schritt: `apt`-Pakete aus
 Modul 20/30, das Whisplay-Repo (Modul 40), `pip`-Wheels (50), das
 `rust-<commit>`-Binary (55). Sie seriell abzuwarten, während die CPU wartet
 (und umgekehrt beim Bauen des Kernelmoduls das Netz stillsteht), kostet die
-Summe statt das Maximum.
+Summe statt das Maximum. Was davon tatsächlich vorgeladen wird, entscheidet
+die Messung — heute ist es allein der pip-Abruf (Begründung unten).
 
 Bauform:
 
 1. **`chimera-prefetch`** — ein abgekoppelter `oneshot` (wie
    `chimera-installhelper`), gestartet nach Modul 00, läuft neben dem Lauf.
-   Er holt **nur**, was in einer Tabelle steht (Objekt, Quelle, Prüfsumme,
-   Reihenfolge) und benutzt **dieselben** Funktionen wie der Installer
-   (`network_fetch`, `network_git`, `network_checksum_ok`) — keine zweite
+   Er holt **nur**, was in einer Tabelle steht (Objekt, Art, Parameter) und
+   benutzt **dieselben** Funktionen wie der Installer — keine zweite
    Download-Logik (das ist die Doppelimplementierung, die im Projekt schon
    dreimal Logik erzeugt hat).
-2. **Marken je Objekt** unter `state/prefetch/`: `<name>.teil` (unterwegs,
-   fortsetzbar), `<name>.done` (fertig, **nach** Prüfsummenvergleich,
-   atomar geschrieben), `<name>.fehler` (Grund). Eine `.done` ohne stimmige
-   Prüfsumme gilt nicht — der Verbraucher prüft selbst nach.
-3. **Verbraucher-Seite:** `network_fetch` sieht vor dem Abruf nach, ob eine
-   gültige `.done`-Datei liegt, und benutzt sie; sonst lädt es selbst. Ein
-   toter oder hängender Prefetch kann den Lauf damit **nie blockieren** —
-   er beschleunigt ihn nur.
-4. **Haltemarken:** Der Installer schreibt nach jedem Modul seinen Stand
-   (`state/prefetch/halt`), damit der Prefetch weiß, was als Nächstes
-   gebraucht wird und was er sich sparen kann. Das ist eine Optimierung der
-   Reihenfolge, keine Bedingung fürs Funktionieren.
-5. **Reihenfolge** = Reihenfolge der Module. Der Prefetch hält sich daran:
-   erst `apt` (Modul 20/30), dann Whisplay-Repo (40), dann Wheels (50), dann
-   Binary (55). Er lädt immer nur ein Objekt gleichzeitig (ein Zero 2 W hat
-   eine Leitung, nicht zehn).
-6. **Grenzen:** `apt` bekommt **keinen** parallelen Zugriff — `dpkg` hat eine
-   Sperre, und zwei `apt`-Aufrufe nebeneinander blockieren sich oder brechen
-   ab. Möglich ist höchstens `apt-get download` in den Cache (nur holen,
-   nicht installieren); das wird gemessen, nicht angenommen.
+2. **Marken je Objekt** unter `state/prefetch/`: `<name>.done` (fertig,
+   atomar über `.done.teil` geschrieben), `<name>.fehler` (Grund). Eine
+   `.done` beweist nur, dass der Abruf durchlief — die Ware prüft der
+   Verbraucher selbst nach.
+3. **Verbraucher-Seite:** Modul 50 bekommt `<state>/prefetch/wheels` als
+   `--find-links`. Kein Eingriff in `network_fetch`: Der Verbraucher prüft
+   seine Ware ohnehin selbst (Version, Prüfsumme) — ein Vorab-Objekt kann
+   einen Schritt damit nicht täuschen.
+4. **Reihenfolge** = Reihenfolge der Module, ein Objekt nach dem anderen
+   (ein Zero 2 W hat eine Leitung, nicht zehn).
+5. **Was nicht hineingehört**, und warum — die Prüffrage vor jedem neuen
+   Objekt: Hat der Schritt, der es braucht, schon einen eigenen Weg? Kann
+   der Abruf überhaupt nebenher laufen? Zweimal nein heißt: dort lassen.
 
-**Erst messen, dann bauen.** Die Reihenfolge der Phasen ist Absicht:
+**Reihenfolge der Arbeit — erst messen, dann bauen.** Die Schritte heißen
+nach dem, was sie tun:
 
-| Phase | Inhalt | Warum zuerst |
+| Schritt | Inhalt | Warum so früh |
 |---|---|---|
-| P1 | Dauer je Modul ins Protokoll (`Modul 40: 41 s`) | Ohne diese Zahlen ist die Reihenfolge geraten — und der Gewinn unbelegt (Regel 10g) |
-| P2 | `chimera-prefetch` mit Tabelle und Marken | Kern des Vorschlags |
-| P3 | `network_fetch` benutzt gültige Marken | damit der Gewinn beim Lauf ankommt |
-| P4 | Tests: Marke nur nach Prüfsumme, toter Prefetch blockiert nicht, kein zweiter Download | stiller Erfolg ist hier die Gefahr |
-| P5 | Vorher/Nachher am Pi, gleicher Commit | der Beleg, dass es Zeit spart |
+| Dauer je Modul im Protokoll | `Modul 40 brauchte 41s` | Ohne diese Zahlen ist die Reihenfolge geraten (Regel „Nie raten") |
+| Vorab-Lader mit Tabelle und Marken | `lib/vorab.sh`, `chimera-prefetch` | Kern des Vorschlags |
+| Verbraucher nutzen die Marken | `--find-links` in Modul 50 | damit der Gewinn beim Lauf ankommt |
+| Tests ohne stillen Erfolg | Marke nur nach Erfolg, toter Vorab-Lader blockiert nicht | stiller Erfolg ist hier die Gefahr |
+| Messung am Gerät | vorher/nachher, gleicher Commit | der Beleg, dass es Zeit spart |
 
-**Nicht-Ziele:** kein paralleler `apt`-Lauf, kein zweiter Download-Weg, keine
-Marke ohne Prüfsumme, kein Prefetch als Bedingung für einen Schritt.
+**Nicht-Ziele:** kein zweiter `apt`-Weg, kein zweiter Download-Weg, keine
+Marke ohne Erfolg, kein Vorab-Laden als Bedingung für einen Schritt.
 
-**Was davon gebaut ist (Stand 5.11.2026)** — und wo die Umsetzung von der
-Bauform oben abweicht, mit Grund:
+**Was gebaut ist (Stand 5.11.2026)** — und wo die Umsetzung von der Bauform
+abweicht, mit Grund:
 
 | Punkt der Bauform | Stand |
 |---|---|
-| 1 `chimera-prefetch` als abgekoppelter Prozess | gebaut (`installer/chimera-prefetch`), gestartet aus `chimera-install` **in einer eigenen transienten Unit** (`systemd-run --unit=chimera-prefetch --collect`). Ein bloßes `nohup ... &` reicht nicht: Der Installer läuft selbst als transiente Unit, ein Kind hängt in deren Cgroup und wird beim Ende abgeräumt (`KillMode=control-group`) — am Pi 5.11. gemessen (Download mitten drin erschossen, keine Marke) |
-| 2 Marken `.teil`/`.done`/`.fehler`, atomar | gebaut (`installer/lib/vorab.sh`) |
-| 3 Verbraucher prüft Marke vor dem Abruf | **anders gelöst.** Kein Eingriff in `network_fetch`: `apt-get install` findet die geholten `.deb` im eigenen Cache, Modul 50 bekommt `--find-links <state>/prefetch/wheels`. Beide Verbraucher prüfen ihre Ware ohnehin selbst (Version, Prüfsumme) — ein Vorab-Objekt kann einen Schritt also nicht täuschen |
-| 4 Haltemarken des Installers (`state/prefetch/halt`) | **nicht gebaut.** Die Liste hat zwei Objekte; eine Rückmeldung des Laufs wäre mehr Maschinerie als Nutzen. Bleibt der Weg für den Fall, dass die Liste wächst |
-| 5 Reihenfolge = Modulreihenfolge, ein Objekt nach dem anderen | gebaut (Liste in `vorab_liste()`) |
-| 6 `apt` nur holen, nie parallel installieren | gebaut: `apt-get install --download-only` mit `DPkg::Lock::Timeout` auf beiden Seiten (Modul 20 wartet genauso, statt abzubrechen) |
-| 6a nur Objekte mit spürbarem Betrag | Liste bewusst kurz: `apt-debs` (40–80 MB) und `pip-wheels` (22 MB/18 s). Whisplay-Klon (13 MB/3 s) und `rust-<commit>` (~2 MB/1 s) sind **nicht** dabei — der Aufwand einer Marke ist größer als der Gewinn |
+| 1 abgekoppelter Prozess | gebaut (`installer/chimera-prefetch`), gestartet aus `chimera-install` **in einer eigenen transienten Unit** (`systemd-run --unit=chimera-prefetch --collect`). Ein bloßes `nohup ... &` reicht nicht: Der Installer läuft selbst als transiente Unit, ein Kind hängt in deren Cgroup und wird beim Ende abgeräumt (`KillMode=control-group`) — am Pi gemessen: Download mitten drin erschossen, keine Marke |
+| 2 Marken, atomar | gebaut. Eine `.done` ist **Beleg, nicht Tor**: Was zu holen ist, entscheidet der Bestand. `*.teil` ist nur der Schreibzwischenstand der Marke, kein Fortsetzungspunkt; halbe Downloads bleiben in `wheels.teil` und werden beim nächsten Versuch fortgesetzt |
+| 3 Verbraucher | gebaut wie beschrieben (`--find-links`) |
+| 4 Reihenfolge, ein Objekt nach dem anderen | gebaut (`vorab_liste()`); Haltemarken des Installers gibt es **nicht** — bei dieser Listengröße mehr Maschinerie als Nutzen |
+| 5 Liste kurz halten | `pip-wheels` (22 MB / 16 s). Whisplay-Klon (13 MB/3 s) und `rust-<commit>` (~2 MB/1 s) sind draußen: der Aufwand einer Marke ist größer als der Gewinn |
+| 6 Voraussetzung pip | fehlt `pip` im Systempython, wird es über `network_apt` geholt (`python3-pip`, Pflichtpaket in Modul 20) und danach geladen — kein Überspringen, keine Fehlmarke wegen einer Voraussetzung, die der Installer selbst herstellt |
+| — `apt` | **nicht im Vorab-Laden.** `apt` hat schon einen Eigentümer (`apt_install` in `lib/network.sh`, mit `DPkg::Lock::Timeout`); ein zweiter Weg wäre eine Doppelimplementierung. Und er kann nicht überlappen: `apt-get install` holt unter derselben Sperre, die Modul 20 braucht (Messung unten) |
 
-**Schalter.** `CHIMERA_PREFETCH_RAD=0` schaltet das Vorab-Laden ab. Der
+**Abschalten.** `CHIMERA_PREFETCH_RAD=0` lässt das Vorab-Laden aus. Der
 Schalter wird an genau einer Stelle gelesen (`vorab_an()`), damit Installer
-und Prefetch-Prozess nie verschiedener Meinung sind; gebraucht wird er zum
-Messen (vorher/nachher) und als Notaus.
+und Vorab-Lader nie verschiedener Meinung sind; gebraucht wird er zum
+Messen und als Notaus.
 
-**Offen (P5, Beleg am Gerät).** Auf einem bereits installierten Gerät ist
-nichts mehr zu holen: `apt` hat die Pakete, pip die Wheels. Der Gewinn lässt
-sich dort also nicht ablesen — er zeigt sich nur bei einer Erstinstallation
-oder nach `apt-get clean` **mit** fehlenden Paketen. Solange das nicht
-gemessen ist, gilt der Nutzen als **unbelegt** (Regel 10g), nicht als
-bewiesen.
+**Idempotent heißt: installieren, nur was fehlt.** Der Vorab-Lader fragt vor
+jedem Abruf nach dem Bestand (liegt für die Anforderung schon ein Wheel im
+Verzeichnis?), nicht nach einer Marke von gestern — eine Marke belegt, dass
+etwas durchlief, sie sagt nichts darüber, ob die Ware noch da ist oder ob die
+Liste inzwischen eine neue Anforderung enthält. Fehlt nichts, gibt es nichts
+zu tun (Rückgabe „nichts zu tun", keine Netzverbindung).
+
+**Kein harter Abbruch, kein falscher Alarm.** Ein Netzaussetzer ist kein
+Befund: Der Abruf läuft in derselben Warte-Schleife wie `network_fetch` und
+Modul 50 (`netz_warten_erreichbar`, dann erneuter Versuch), und was schon im
+Zwischenverzeichnis liegt, wird beim nächsten Versuch nicht erneut geholt.
+Fehlt `pip` selbst, wird es **geholt, nicht gemeldet**: `python3-pip` ist ein
+Pflichtpaket des Installers (Modul 20), und der Weg dorthin ist `network_apt`
+aus `lib/network.sh` — dieselbe Funktion, keine zweite apt-Logik. Erst wenn
+nach allen Versuchen etwas fehlt, entsteht eine `.fehler`-Marke mit Grund;
+der Lauf macht weiter, und `vorab_fehler_berichten()` holt alte Marken zu
+Beginn eines Laufs mit Grund ins Protokoll, damit Mojo sie findet (Mojo liest
+den Lauf, nicht das Verzeichnis). Behebung ist der nächste Versuch — von Hand
+ist nichts zu tun.
 
 **Messung am Pi, 5.11.2026, Commit `4f06a3c`** (Gerät bestückt, Marken
 vorher gelöscht):
 
 | Objekt | Wanduhr | Befund |
 |---|---|---|
-| `apt-debs` | 25 s (Marke 00:33:01, Start 00:32:36) | **0 Pakete zu holen** — alle „already the newest version". Die 25 s sind Warten auf die apt-Sperre neben Modul 20/30, nicht Netz |
+| `apt-debs` (damals noch in der Liste) | 25 s (Marke 00:33:01, Start 00:32:36) | **0 Pakete zu holen** — alle „already the newest version". Die 25 s waren Warten auf die apt-Sperre neben Modul 20/30, nicht Netz |
 | `pip-wheels` | 16 s (Marke 00:33:17) | 22 MB: Pillow 13.0.0 + numpy 2.5.4, beide im Verzeichnis |
-| Lauf selbst | ~30 s, 12 Module ohne Fehler, LED ok | Modul 20: 1 s, Modul 50: 6 s (vorher 3 s) — kein Gewinn messbar |
+| Lauf selbst | ~30 s, 12 Module ohne Fehler, LED ok | Modul 20: 1 s, Modul 50: 6 s (vorher 3 s) — auf einem bestückten Gerät ist kein Gewinn zu erwarten, und es gab keinen |
 
-Daraus zwei Feststellungen, die vorher offen waren:
+Was die Messung entschieden hat:
 
-1. **Der pip-Teil wirkt und überlappt** (16 s Netz, die aus Modul 50
-   herausfallen, wenn die Umgebung sie braucht).
-2. **Der apt-Teil kann nicht überlappen.** Er holt nicht nur, er *wartet
-   auch* auf dieselbe Sperre wie Modul 20/30. Wer zuerst drankommt, hält den
-   anderen auf: gewinnt der Vorab-Lader, wird Modul 20 um die Downloadzeit
-   später fertig — die Zeit ist nur verschoben, nicht gespart. Auf einem
-   bestückten Gerät ist sie ganz verloren (25 s für nichts).
-   **Empfehlung: `apt-debs` aus der Liste nehmen**, `pip-wheels` behalten.
-   Die Entscheidung liegt bei smilez (ROADMAP, Phase Installer).
+1. **`pip` wirkt und überlappt** — 16 s Netz, die aus Modul 50 herausfallen,
+   sobald die Umgebung sie braucht.
+2. **`apt` kann nicht überlappen.** Wer zuerst an der Sperre ist, hält den
+   anderen auf; gewinnt der Vorab-Lader, wird Modul 20 um die Downloadzeit
+   später fertig — die Zeit ist verschoben, nicht gespart. Auf einem
+   bestückten Gerät ist sie ganz verloren. Vorgabe smilez (5.11.): *die
+   apt-Pakete werden ohnehin geladen, wann ist egal* — also dort, wo sie
+   ohnehin geladen werden: in Modul 20.
+3. **Der Nutzen auf einer Erstinstallation ist weiterhin unbelegt.** Dort
+   liegt der Netzanteil bei 1,5–2 min; ob er wirklich aus dem Lauf
+   herausfällt, zeigt erst eine Erstinstallation. Bis dahin gilt der Gewinn
+   als plausibel, nicht als gemessen.
 
 
 

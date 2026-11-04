@@ -360,6 +360,28 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Mood.
 
 ### Geändert
+- **Vorab-Laden: idempotent, abbruchsicher, ohne eigenen apt-Weg.** Vier
+  Änderungen, alle aus derselben Regel („installieren, nur was fehlt"):
+  - **`apt` ist wieder draußen.** Es hat schon einen Eigentümer
+    (`network_apt` in `lib/network.sh`) und teilt sich mit Modul 20 dieselbe
+    Sperre — überlappen kann es nicht (gemessen: 25 s für null Pakete).
+    Vorgabe smilez: die Pakete werden ohnehin geladen, wann ist egal.
+  - **Geladen wird nur, was fehlt** (`vorab_wheel_da`): Der Bestand
+    entscheidet, nicht eine Marke von gestern. Ist alles da, kostet der
+    Vorab-Lauf einen Blick ins Verzeichnis und keine Netzverbindung.
+  - **Fehlt `pip` selbst, wird es geholt** — über `network_apt`
+    (`python3-pip`, jetzt Pflichtpaket in Modul 20), nicht gemeldet und nicht
+    übersprungen. Danach läuft der Abruf normal weiter.
+  - **Kein harter Abbruch:** `pip download` läuft in derselben Warte-Schleife
+    wie `network_fetch` und Modul 50 (Netz abwarten, erneut versuchen);
+    teilweise geholte Wheels bleiben in `wheels.teil` und werden beim
+    nächsten Versuch nicht erneut geholt. Erst nach allen Versuchen entsteht
+    eine `.fehler`-Marke mit Grund.
+  Tests: `installer/tests/test-vorab.sh` 46 ok (drei Fälle neu bzw. geschärft:
+  fehlender pip ist ein Befund mit Grund, vorhandene Wheels werden erkannt,
+  vollständiger Bestand meldet „nichts zu holen" mit rc 3). Gegenproben
+  gemacht (apt-Zeile zurück in die Liste → rot; Bericht stummgeschaltet →
+  zwei rot).
 - **P5 gemessen (Pi, 5.11., `4f06a3c`) — der apt-Teil des Vorab-Ladens bringt
   nichts.** Lauf mit gelöschten Marken: `pip-wheels` 16 s für 22 MB
   (Pillow 13.0.0 + numpy 2.5.4), `apt-debs` 25 s für **0 Pakete** (alle schon

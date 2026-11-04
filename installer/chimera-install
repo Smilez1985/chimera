@@ -207,6 +207,11 @@ fi
 # wird -- apt-.deb zuerst, damit der Netzanteil aus Modul 20 herausfaellt.
 # Nur im vollen Lauf: Bei --only und beim Boot-Abgleich waere die Vorhersage
 # falsch, und ein zweiter Lauf neben dem ersten braucht sie nicht.
+# Alte Fehlmarken des Vorab-Ladens zuerst ins Protokoll (Mojo liest den Lauf,
+# nicht das Verzeichnis). Danach starten -- der neue Lauf versucht sie ohnehin
+# erneut.
+vorab_fehler_berichten
+
 if [ "$MODE" = run ] && [ -z "$ONLY" ] && [ "$HARDWARE" != 1 ] && \
    [ "${CHIMERA_NEU_GESTARTET:-0}" != 1 ]; then
 	# Eigene Unit, nicht `nohup ... &`: sonst haengt der Vorab-Lader in der

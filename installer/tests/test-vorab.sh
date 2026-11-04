@@ -81,11 +81,44 @@ grep -q 'grund=Testgrund' "$(vorab_verzeichnis)/probes.fehler" && ok "Fehlermark
 if vorab_fertig probes; then bad "Fehlerfall gilt als fertig"; else ok "Fehlerfall ist nicht fertig"; fi
 
 # --- pip-Weg: Wheels aus Attrappen, ohne Netz -----------------------------
-# Ohne pip im System (Debian bringt es nicht mit, PEP 668) faellt dieser Weg
-# im Betrieb auf den normalen Abruf in Modul 50 zurueck. Hier wird er dann
-# als uebersprungen gemeldet, nicht als gruen.
+# Fehlt pip im Systempython, ist das ein BEFUND (pip ist eine Abhaengigkeit,
+# die der Installer in Modul 20 selbst herstellt) -- also rc 1 und eine Marke
+# mit Grund. Geprueft mit einer python3-Attrappe, damit der Fall unabhaengig
+# davon pruefbar ist, ob im Sandbox ein pip liegt.
+_stubpy="$W/pyohne"; mkdir -p "$_stubpy"
+printf '#!/bin/sh\nexit 1\n' >"$_stubpy/python3"
+chmod +x "$_stubpy/python3"
+_rc=0
+PATH="$_stubpy:$PATH" vorab_holen "pip-ohne" pip "Pillow" >/dev/null 2>&1 || _rc=$?
+check "ohne pip ein Befund (rc 1)" "$_rc" "1"
+if grep -q 'kein pip' "$(vorab_verzeichnis)/pip-ohne.fehler" 2>/dev/null; then
+	ok "Fehlmarke nennt den fehlenden pip"
+else
+	bad "Fehlmarke ohne Hinweis auf pip"
+fi
+if vorab_fertig "pip-ohne"; then bad "ohne pip eine fertige Marke"; \
+	else ok "ohne pip keine fertige Marke"; fi
+rm -f "$(vorab_verzeichnis)/pip-ohne.fehler"
+
+# Idempotenz: Was schon da ist, wird nicht erneut geholt. Geprueft am
+# Bestand, nicht an der Marke -- eine Marke von gestern sagt nichts darueber,
+# ob die Ware noch da ist, und eine neue Anforderung in der Liste muss auch
+# dann geladen werden, wenn das Objekt schon eine .done hat.
+_vd="$(vorab_verzeichnis)"
+mkdir -p "$_vd/wheels"
+: >"$_vd/wheels/pillow-10.0.0-py3-none-any.whl"
+vorab_wheel_da "Pillow" && ok "Wheel erkannt (Pillow)" || bad "Wheel nicht erkannt"
+vorab_wheel_da "pillow>=10" && ok "Anforderung mit Grenze erkannt" || bad "Anforderung mit Grenze nicht erkannt"
+vorab_wheel_da "numpy" && bad "fremdes Wheel als Treffer gemeldet" || ok "fremdes Wheel kein Treffer"
+_rc=0
+vorab_holen "pip-daa" pip "Pillow" >/dev/null 2>&1 || _rc=$?
+check "vollstaendig da: nichts zu holen (rc 3)" "$_rc" "3"
+if vorab_fertig "pip-daa"; then ok "dabei entsteht eine fertige Marke"; else bad "Marke fehlt"; fi
+rm -f "$_vd/wheels/pillow-10.0.0-py3-none-any.whl" "$_vd/pip-daa.done"
+rmdir "$_vd/wheels" 2>/dev/null || true
+
 if ! python3 -m pip --version >/dev/null 2>&1; then
-	skip "pip-Weg (kein pip im Systempython)"
+	skip "pip-Weg mit Attrappen-Wheels (kein pip im Systempython)"
 	_wh=""
 else
 _wh="$W/quelle"
@@ -100,6 +133,8 @@ check "pip-Objekt geholt (rc)" "$_rc" "0"
 if vorab_fertig "pip-test"; then ok "pip-Objekt hat eine fertige Marke"; else bad "pip-Marke fehlt"; fi
 _n="$(ls "$(vorab_verzeichnis)/wheels" 2>/dev/null | grep -c 'Pillow' || true)"
 check "Wheel liegt im Vorab-Verzeichnis" "$_n" "1"
+[ -d "$(vorab_verzeichnis)/wheels.teil" ] && bad "Zwischenverzeichnis blieb liegen" \
+	|| ok "Zwischenverzeichnis ist aufgeraeumt"
 
 # Gegenprobe: unloesbare Anforderung -> Fehlermarke, keine fertige Marke.
 set +e
@@ -162,18 +197,35 @@ _n="$(grep -c 'chimera-prefetch' "$STUB_RUF" | tr -d ' ')"
 check "zweiter Versuch nach reset-failed" "$_n" "2"
 rm -f "$STUB_SCHEITERT"
 
-# --- apt-Weg --------------------------------------------------------------
-if [ "$(id -u)" = 0 ] && command -v apt-get >/dev/null 2>&1 && \
-   apt-get install --download-only --yes --print-uris ca-certificates >/dev/null 2>&1; then
-	set +e
-	vorab_holen "apt-test" apt ca-certificates >/dev/null 2>&1
-	_rc=$?
-	set -e
-	check "apt-Objekt geholt (rc)" "$_rc" "0"
-	if vorab_fertig "apt-test"; then ok "apt-Objekt hat eine fertige Marke"; else bad "apt-Marke fehlt"; fi
-else
-	skip "apt-Weg (kein root oder kein apt in dieser Umgebung)"
-fi
+# --- Kein apt im Vorab-Laden ----------------------------------------------
+# apt hat einen Eigentuemer (apt_install in lib/network.sh) und teilt sich mit
+# Modul 20 dieselbe Sperre -- es kann nicht ueberlappen (am Pi gemessen,
+# 5.11.: 25 s fuer null Pakete). Dieser Test haelt fest, dass der Weg nicht
+# versehentlich zurueckkommt: eine Liste ohne apt-Objekt, und die Art "apt"
+# wird nicht mehr bedient.
+_n="$(vorab_liste | grep -c '	apt	' || true)"
+check "keine apt-Zeile in der Vorab-Liste" "$_n" "0"
+_rc=0
+vorab_holen "apt-probe" apt ca-certificates >/dev/null 2>&1 || _rc=$?
+check "Art 'apt' wird nicht bedient (rc 2)" "$_rc" "2"
+if vorab_fertig "apt-probe"; then bad "apt-Probe hinterliess eine fertige Marke"; \
+	else ok "apt-Probe hinterlaesst keine Marke"; fi
+
+# --- Fehlerbericht: was gestern schiefging, steht heute im Protokoll ------
+# Mojo liest den Lauf, nicht das Verzeichnis. Der Bericht ist die einzige
+# Bruecke zwischen einer .fehler-Marke und dem, was gefunden werden kann.
+_texte="$W/bericht.txt"
+vorab_fehler_berichten >"$_texte" 2>&1
+grep -q 'probes' "$_texte" && ok "Fehlmarke wird im Lauf gemeldet" \
+	|| bad "Fehlmarke bleibt unerwaehnt"
+grep -q 'Testgrund' "$_texte" && ok "Bericht nennt den Grund" \
+	|| bad "Bericht ohne Grund"
+grep -q 'erneut versucht' "$_texte" && ok "Bericht sagt, dass es erneut versucht wird" \
+	|| bad "Bericht ohne Hinweis auf den neuen Versuch"
+rm -f "$(vorab_verzeichnis)/probes.fehler"
+vorab_fehler_berichten >"$_texte" 2>&1
+grep -q 'probes' "$_texte" && bad "Bericht redet von einer geloeschten Marke" \
+	|| ok "ohne Fehlmarke schweigt der Bericht"
 
 printf '\nErgebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
