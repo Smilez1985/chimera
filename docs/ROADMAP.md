@@ -32,12 +32,9 @@ zram wird nicht angefasst, wenn es läuft.
       bis die Ursache geklärt ist (das venv hatte `numpy 2.5.4` statt `1.26.4`).
 - [ ] **UV für `requirements.txt`** (Vorgabe smilez, 2.11.): eigenes
       Werkzeug-venv, nur anlegen wenn es fehlt, Installation über pip (Prüfsummen
-      von PyPI), harte Zeitgrenzen, Rückfall auf pip. Vorbedingung: die Tests von
-      `test-python-env.sh` müssen ohne Netz reproduzierbar sein (der
-      Nachweis-Fall geht heute ins Netz und hängt in der Sandbox).
-- [ ] **`test-python-env.sh` hermetisch machen:** alle Fälle mit
-      `PIP_NO_INDEX=1` und lokalen Wheels, damit das Ergebnis nicht davon
-      abhängt, ob der Rechner Internet hat.
+      von PyPI), harte Zeitgrenzen, Rückfall auf pip. Vorbedingung ist erfüllt:
+      die Tests von `test-python-env.sh` laufen seit 4.11. ohne Netz
+      (Attrappen-Wheels, `PIP_NO_INDEX`, mit vergiftetem Proxy belegt).
 
 ## Phase ACP — Chimera als Agent für Editoren und IDEs (DESIGN: Regel „ACP“)
 

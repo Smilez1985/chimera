@@ -3,10 +3,21 @@
 #
 # Das Modul wird als Ganzes geprueft, in einer Kopie des Repos (Regel 9:
 # nicht die Logik nachbauen). Die Kopie traegt ein replacement der
-# requirements.txt, das KEINE Netzabhaengigkeit hat: `pip` ist im
-# frischen venv immer da, pip install pip ist online, pip install auf
-# eine vorhandene Fassung meldet "already satisfied" ohne Netz. Damit
-# ist der ECHTE Lauf messbar, auch im CI.
+# requirements.txt, das KEINE Netzabhaengigkeit hat.
+#
+# Hermetisch, ohne Netz: Die Anforderungen (Pillow, numpy) kommen aus
+# Attrappen-Wheels, die der Test selbst baut (tests/fake-wheel.py) und dem
+# Schritt ueber PIP_NO_INDEX=1 + PIP_FIND_LINKS anbietet. Auch
+# `pip install --upgrade pip` findet so nichts und scheitert folgenlos.
+# Anlass (4.11.2026): `pip install Pillow numpy` lief ins Netz, und im
+# Sandbox wurde der Lauf dabei abgeschossen (signal 9) -- das Ergebnis hing
+# davon ab, ob und wie schnell der Rechner Internet hat.
+#
+# Was die Attrappen NICHT liefern: ein importierbares Pillow/numpy (sie
+# tragen nur Metadaten und ein leeres Modul). Deshalb prueft der Test
+# Anzeigemodule ueber die Registry (`panel_klasse`), nicht durch Zeichnen,
+# und `--pruefen` meldet "Gesicht: Baustein fehlt (PIL)" -- das ist im
+# Nachweis kein Fehler, sondern eine Auskunft.
 #
 # Gegenprobe: eine Kopie mit GEBROCHENER Verdrahtung (requirements.txt
 # leer oder .pth auf ein fehlendes Verzeichnis). Sie muss abbrechen,
@@ -45,6 +56,20 @@ lacks() {
 }
 
 printf '=== Python-Umgebung (Modul 50) ===\n'
+
+# Attrappen-Wheels fuer die Anforderungen aus requirements.txt. Einmal gebaut,
+# von allen Faellen benutzt (PIP_FIND_LINKS in `fahr`). Die Versionen muessen
+# die Zusagen der Datei erfuellen (Pillow>=10.0.0, numpy>=1.26), sonst meldet
+# der Schritt sie als fehlend.
+WHEELS="$W/attrappen-wheels"
+python3 "$HERE/tests/fake-wheel.py" "$WHEELS" Pillow 10.0.0 >/dev/null
+python3 "$HERE/tests/fake-wheel.py" "$WHEELS" numpy 1.26.4 >/dev/null
+if [ -f "$WHEELS/Pillow-10.0.0-py3-none-any.whl" ] &&
+   [ -f "$WHEELS/numpy-1.26.4-py3-none-any.whl" ]; then
+	ok "Attrappen-Wheels fuer Pillow und numpy gebaut (kein Netz noetig)"
+else
+	bad "Attrappen-Wheels fehlen -- der Lauf ginge ins Netz"
+fi
 
 # Baumkopie: lib und der Schritt, unter CHIMERA_ROOT als Wurzel.
 # requirements.txt wird JEDER Kopie mitgegeben, je Fall anders. Der echte
@@ -86,10 +111,17 @@ setze_anforderungen() {
 }
 
 # Den Schritt fahren. $1 Modus. Setzt RC und OUT.
+# Hermetisch: Die Anforderungen (Pillow, numpy) kommen aus Attrappen-Wheels
+# im Testverzeichnis, nicht von PyPI. Anlass (4.11.): `pip install Pillow
+# numpy` lief ins Netz; im Sandbox wurde der Lauf dabei abgeschossen, und
+# das Ergebnis hing davon ab, ob und wie schnell der Rechner Internet hat.
+# Die Attrappen tragen die echte Version (Metadaten) -- die Versionspruefung
+# misst also dasselbe wie vorher; importierbar sind sie nur als leeres Modul.
 fahr() {
 	set +e
 	OUT="$(env CHIMERA_ROOT="$WURZEL" CHIMERA_MANIFEST="$MANIFEST" \
 	           CHIMERA_LOG_DIR="$CHIMERA_LOG_DIR" CHIMERA_MODE="$1" \
+	           PIP_NO_INDEX=1 PIP_FIND_LINKS="$WHEELS" \
 	           sh "$BAUM/installer/steps/50-python.sh" 2>&1)"
 	RC=$?
 	set -e

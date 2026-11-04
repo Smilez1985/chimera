@@ -426,6 +426,17 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
 - **Anbieter: `Connector` kennt jetzt `supports_tools`, `context_window`,
   `supports_streaming`, `cost_class` und `access`** — die Wahl eines Ziels
   entscheidet über Eigenschaften, nicht über einen Namen.
+- **`installer/tests/test-python-env.sh` laeuft ohne Netz.** Pillow und numpy
+  kommen aus Attrappen-Wheels, die der Test mit `tests/fake-wheel.py` selbst
+  baut (`PIP_NO_INDEX=1`, `PIP_FIND_LINKS`); auch `pip install --upgrade pip`
+  findet nichts und scheitert folgenlos. Anlass: Der Test holte die echten
+  Pakete von PyPI — im Sandbox wurde der Lauf dabei abgeschossen, und das
+  Ergebnis hing davon ab, ob und wie schnell der Rechner Internet hat.
+  **Belegt:** mit vergiftetem Proxy (`http_proxy=http://127.0.0.1:9`) 50 ok,
+  0 fehlgeschlagen, unter dash und BusyBox. Die Attrappen tragen nur Metadaten
+  und ein leeres Modul; deshalb prueft der Test Anzeigemodule ueber die
+  Registry (`panel_klasse`) statt durch Zeichnen, und `--pruefen` meldet
+  „Gesicht: Baustein fehlt (PIL)" als Auskunft, nicht als Fehler.
 - **CI: Der Rust-Job laeuft nur noch, wenn sich am Binary etwas aendert.**
   Er liegt jetzt in `.github/workflows/rust.yml` mit Pfadfilter (`rust/**`,
   `VERSION`, die Workflow-Datei selbst) statt in `tests.yml`. Anlass: Jeder
