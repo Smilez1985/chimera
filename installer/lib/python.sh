@@ -70,7 +70,7 @@ EOF
 		info "[wuerde installieren]$(printf '%s' "$_pe_holt" | tr '\n' ' ')"
 		return 0
 	fi
-	# Nur die betroffenen, nicht die ganze Liste — und zwar ohne
+	# Nur die betroffenen, nicht die ganze Liste -- und zwar ohne
 	# `--upgrade`: pip holt eine Fassung, die die Anforderung erfuellt.
 	# Mit `--upgrade` zieht pip auch dann die jeweils neueste, wenn die
 	# vorhandene genuegt. (Der Fall "numpy 2.5.4 statt 1.26.4" kam nicht
