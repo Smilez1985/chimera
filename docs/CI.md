@@ -65,7 +65,8 @@ Fehler, den der erste Lauf auf echter Hardware hatte.
 
 ## Der Token braucht den `workflow`-Scope
 
-Ohne ihn lehnt GitHub jeden Push ab, der eine Workflow-Datei anfasst:
+Ohne ihn lehnt GitHub jeden Push ab, der eine Workflow-Datei anfasst
+(`tests.yml` oder `rust.yml`):
 
 ```
 refusing to allow an OAuth App to create or update workflow
