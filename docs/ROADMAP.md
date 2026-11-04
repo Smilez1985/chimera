@@ -135,6 +135,13 @@ zram wird nicht angefasst, wenn es läuft.
       „12 Modul(e), ohne Fehler"). Zu entscheiden (smilez): `entwicklung` in
       den Push-Trigger aufnehmen, oder den Rust-Job an einen Pfadfilter
       (`rust/**`) hängen und das Prerelease nur dann erwarten.
+      *Teil gelöst 4.11.: Der Befund entfällt, wenn `rust/` unverändert ist —
+      `state/rust-stand` (Commit, Hash des Baums, Version) lässt das Binary
+      liegen („Rust unverändert seit …“, kein Netz, kein CI-Build). Damit
+      braucht es für einen reinen Doku-Commit kein Prerelease mehr. Offen
+      bleibt der Beleg im **vollen** Lauf (LED grün) und die Entscheidung
+      über den Push-Trigger; die braucht ohnehin nur noch, wer `rust/`
+      anfasst.*
 - [x] **CI ist auf `entwicklung` rot — behoben am 3.11. (Sitzung `d4427984`).**
       Fünf rote Testdateien, alle mit Ursache: `test-helfer.sh`
       (`bad function name`: Attrappe war eine Funktion mit Bindestrich — jetzt
