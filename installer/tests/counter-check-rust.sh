@@ -51,7 +51,7 @@ mutation() {
 		lib)  _neu="$_m/installer/lib/source.sh"; _env="CHIMERA_SRCLIB=$_neu" ;;
 	esac
 	cp "$_neu" "$_neu.orig"
-	python3 - "$_neu" "$3" "$4" <<'PY'
+	if ! python3 - "$_neu" "$3" "$4" <<'PY'
 import sys
 p, a, b = sys.argv[1:4]
 s = open(p).read()
@@ -59,8 +59,12 @@ if a not in s:
     sys.exit(3)
 open(p, "w").write(s.replace(a, b, 1))
 PY
-	if [ $? -ne 0 ] || cmp -s "$_neu.orig" "$_neu"; then
+	then
 		bad "$1: Mutation griff nicht (Muster fehlt)"
+		return
+	fi
+	if cmp -s "$_neu.orig" "$_neu"; then
+		bad "$1: Mutation griff nicht (Datei unveraendert)"
 		return
 	fi
 	if env "$_env" sh "$TEST" >"$_m/aus.txt" 2>&1; then
@@ -75,7 +79,7 @@ PY
 
 # M1: Rueckfall auf irgendein Binary -- der Commit wird nicht benutzt.
 mutation commit-egal step \
-	'URL="$CHIMERA_RUST_URL/rust-$COMMIT"' 'URL="$CHIMERA_RUST_URL/rust-abc1234"' \
+	'URL="$CHIMERA_RUST_URL/rust-$QUELLE_C"' 'URL="$CHIMERA_RUST_URL/rust-abc1234"' \
 	"anderer Commit: rc 1"
 
 # M2: Pruefsumme wird beim Laden nicht geprueft (leere erwartete Summe). Die
@@ -125,7 +129,7 @@ mutation lokal-ohne-version step \
 # M8: Idempotenz fehlt -- immer neu laden.
 mutation immer-laden step \
 	'if [ -n "$_eigen_summe" ] && [ "$_eigen_summe" = "$SUMME" ] && \' 'if false && \' \
-	"zweiter Lauf: sagt es"
+	"ohne Zustand, Binary passend: sagt es"
 
 # M9: Alte Manifestzeile bleibt stehen (zwei Zeilen fuer dieselbe Datei).
 mutation manifest-doppelt step \
@@ -134,9 +138,10 @@ mutation manifest-doppelt step \
 
 # M10: Trockenlauf legt doch ab.
 mutation trockenlauf-schreibt step \
-	'if is_dry_run; then
-	info "[wuerde laden]' 'if false; then
-	info "[wuerde laden]' \
+	'info "[wuerde ablegen] $BIN (root, 755)"
+	log_close 0; exit 0
+fi' 'info "[wuerde ablegen] $BIN (root, 755)"
+fi' \
 	"Trockenlauf: rc 0"
 
 # M11: Rueckbau loescht auch eine ausgetauschte Datei.
@@ -164,6 +169,54 @@ mutation alter-commit-bleibt lib \
 mutation git-elternbaum lib \
 	'[ -d "$1/.git" ] || return 0' ':' \
 	"Baum im fremden Repo, ohne eigenes .git: kein Commit"
+
+# M16: Der Kurzweg "rust/ unveraendert" faellt weg -- jeder Doku-Commit verlangt
+# wieder ein Prerelease (genau der Befund, den die Zusage beseitigt).
+mutation kurzweg-aus step \
+	'if [ "$STILL" = 1 ] && [ -n "$_eigen_summe" ] && \' 'if false && \' \
+	"baumgleich: ohne Prerelease rc 0 (kein Befund)"
+
+# M17: Es zaehlt nur der Commit, nicht der Baum -- ein geaenderter rust/-Baum
+# hielte dann still (veraltetes Binary bliebe liegen).
+mutation baum-egal step \
+	'[ "$BAUM_HASH" = "$_alt_h" ]' '[ -n "$_alt_h" ]' \
+	"baum geaendert, kein Prerelease: rc 1"
+
+# M18: Der Kurzweg prueft die Pruefsumme nicht -- ein ausgetauschtes Binary
+# bliebe als "unveraendert" stehen.
+mutation kurzweg-ohne-summe step \
+	'[ "$(network_checksum "$BIN")" = "$_eigen_summe" ] && \' ': && \' \
+	"baumgleich, Binary veraendert: wieder das Richtige"
+
+# M19: Der Kurzweg prueft nicht, ob das Binary laeuft und die Version nennt.
+mutation kurzweg-ohne-laufprobe step \
+	'[ "$("$BIN" --version 2>/dev/null || true)" = "chimera-tor $SOLL_V" ]' ':' \
+	"baumgleich, Binary laeuft nicht: kein Stillhalten"
+
+# M20: Die VERSION zaehlt beim Stillhalten nicht mit (das Binary nennte die
+# alte Version).
+mutation version-egal step \
+	'[ "$_alt_v" = "$SOLL_V" ]; then' 'true; then' \
+	"andere Version im Zustand: kein Stillhalten (Befund ohne Netz)"
+
+# M21: Der Zustand wird nie geschrieben -- dann gibt es kein Stillhalten und
+# jeder Lauf braucht das Netz.
+mutation zustand-fehlt step \
+	"	printf '%s %s %s\\n' \"\$1\" \"\$2\" \"\$3\" >\"\$RUST_STAND.neu\"" \
+	"	: >\"\$RUST_STAND.neu\"" \
+	"baumgleich: Zustand nennt den Commit"
+
+# M22: Fehlt das Binary, wird der neue Commit geladen statt der Stand des
+# Zustands -- zu einem Doku-Commit gibt es aber kein Prerelease.
+mutation neuer-commit-statt-stand step \
+	'[ "$STILL" = 1 ] && QUELLE_C="$_alt_c"' ':' \
+	"Binary fehlt, Baum gleich: rc 0"
+
+# M23: Der Kurzweg schreibt im Trockenlauf doch -- er kuendigt nicht an, sondern
+# tut, als waere er fertig.
+mutation trockenlauf-kurzweg step \
+	'info "[wuerde behalten] $BIN (rust/ unveraendert seit $_alt_c, Version $SOLL_V)"' 'info "Rust unveraendert seit $_alt_c"' \
+	"Trockenlauf, Baum gleich: kuendigt Behalten an"
 
 printf '\nErgebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

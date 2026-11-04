@@ -15,7 +15,11 @@
 #   7. Eine fremde Datei am Zielort wird nie ueberschrieben (rc 2).
 #   8. Rueckbau 55 entfernt nur, was im Manifest steht UND noch die
 #      eingetragene Pruefsumme hat; eine ausgetauschte Datei bleibt (rc 1).
-#   9. Schritt 00: source_commit_festhalten schreibt den Commit eines
+#   9. Ein unveraenderter rust/-Baum verlangt kein neues Binary: das
+#      vorhandene bleibt (rc 0, "Rust unveraendert seit <commit>"), ohne Netz
+#      und ohne Befund. Gemessen wird der Baum, nicht der Commit; eine neue
+#      VERSION hebt das Stillhalten auf.
+#  10. Schritt 00: source_commit_festhalten schreibt den Commit eines
 #      sauberen Klons, nichts bei fehlendem .git oder geaendertem rust/, und
 #      entfernt dann eine alte Datei.
 #
@@ -70,9 +74,15 @@ spiegel() { # $1 Commit, $2 Version im Binary
 	( cd "$_d" && sha256sum chimera-tor-aarch64 >chimera-tor-aarch64.sha256 )
 }
 
+# Ein eigener rust/-Baum je Fall: er entscheidet, ob das Binary stillhaelt.
+# Der echte Baum des Repos waere kein Pruefmittel -- er aendert sich mit jedem
+# Rust-Commit und ist fuer alle Faelle derselbe.
+baum_aendern() { printf '%s\n' "$1" >>"$R/rust/Baum.txt"; }
+
 mkroot() { # $1 Name, $2 Commit der Quelle (leer = keiner)
 	R="$W/$1"
-	mkdir -p "$R/opt/chimera/state" "$R/logs"
+	mkdir -p "$R/opt/chimera/state" "$R/logs" "$R/rust"
+	printf 'a\n' >"$R/rust/Baum.txt"
 	MANIFEST="$R/opt/chimera/state/manifest.tsv"
 	[ -z "${2:-}" ] || printf '%s\n' "$2" >"$R/opt/chimera/state/quelle-commit"
 	BIN="$R/opt/chimera/bin/chimera-tor"
@@ -81,7 +91,8 @@ mkroot() { # $1 Name, $2 Commit der Quelle (leer = keiner)
 fahr() { # $1 Modus; Variablen per env davor
 	set +e
 	OUT="$(env CHIMERA_ROOT="$R" CHIMERA_MANIFEST="$MANIFEST" CHIMERA_LOG_DIR="$R/logs" \
-	           CHIMERA_MODE="$1" CHIMERA_RUST_URL="$URLBASIS" \
+	           CHIMERA_MODE="$1" CHIMERA_RUST_URL="${RUST_URL:-$URLBASIS}" \
+	           CHIMERA_RUST_BAUM="$R/rust" \
 	           CHIMERA_ARCH="${ARCH:-aarch64}" CHIMERA_NETWORK_LIMIT=5 CHIMERA_DL_VERSUCHE=1 \
 	           sh "${SCHRITT:-$STEP}" 2>&1)"
 	RC=$?
@@ -151,6 +162,7 @@ hat "falsche Summe: benannt" "$OUT" "Pruefsumme stimmt nicht"
 mkroot summe2 abc1234; fahr run
 _vor="$(summe "$BIN")"
 printf 'bad0001\n' >"$R/opt/chimera/state/quelle-commit"
+baum_aendern "rust geaendert"
 fahr run
 check "falsche Summe: rc 2 auch mit altem Binary" "$RC" "2"
 check "falsche Summe: altes Binary unberuehrt" "$(summe "$BIN")" "$_vor"
@@ -195,7 +207,7 @@ _sum="$(summe "$BIN")"; _z="$(wc -l <"$MANIFEST")"; _m="$(stat -c %Y "$BIN")"
 sleep 1
 fahr run
 check "zweiter Lauf: rc 0" "$RC" "0"
-hat "zweiter Lauf: sagt es" "$OUT" "Schon vorhanden und geprueft"
+hat "zweiter Lauf: sagt es" "$OUT" "Rust unveraendert seit"
 check "zweiter Lauf: Datei unveraendert" "$(summe "$BIN")" "$_sum"
 check "zweiter Lauf: nicht neu geschrieben" "$(stat -c %Y "$BIN")" "$_m"
 check "zweiter Lauf: Manifest nicht gewachsen" "$(wc -l <"$MANIFEST")" "$_z"
@@ -207,6 +219,7 @@ printf '#!/bin/sh\n[ "${1:-}" = --version ] && { echo "chimera-tor %s"; exit 0; 
 chmod 755 "$W/spiegel/rust-2220002/chimera-tor-aarch64"
 ( cd "$W/spiegel/rust-2220002" && sha256sum chimera-tor-aarch64 >chimera-tor-aarch64.sha256 )
 printf '2220002\n' >"$R/opt/chimera/state/quelle-commit"
+baum_aendern "neuer rust-stand"
 fahr run
 check "neuer Commit: rc 0" "$RC" "0"
 check "neuer Commit: Binary ersetzt" "$(summe "$BIN")" "$(summe "$W/spiegel/rust-2220002/chimera-tor-aarch64")"
@@ -234,7 +247,7 @@ hat "lokal: sagt, woher" "$OUT" "lokale Datei"
 _z="$(wc -l <"$MANIFEST")"; _m="$(stat -c %Y "$BIN")"; sleep 1
 CHIMERA_RUST_LOKAL="$W/lokal-gut" fahr run
 check "lokal: zweiter Lauf rc 0" "$RC" "0"
-hat "lokal: zweiter Lauf erkennt es" "$OUT" "Schon vorhanden und geprueft"
+hat "lokal: zweiter Lauf erkennt es" "$OUT" "Rust unveraendert seit lokal"
 check "lokal: Manifest waechst nicht" "$(wc -l <"$MANIFEST")" "$_z"
 check "lokal: nicht neu geschrieben" "$(stat -c %Y "$BIN")" "$_m"
 
@@ -289,6 +302,108 @@ mkroot rueck4 abc1234; mkdir -p "$R/opt/chimera/bin"; printf 'x\n' >"$BIN"
 rueckbau
 check "Rueckbau ohne Manifest: rc 0" "$RC" "0"
 check "Rueckbau ohne Manifest: Datei bleibt" "$(cat "$BIN")" "x"
+
+# --- 12. Unveraenderter rust/-Baum: kein neues Binary, kein Befund -------------
+# Das Binary haengt am Inhalt von rust/. Ein Doku-Commit laesst ihn stehen --
+# dann darf weder geladen noch gemeckert werden. Gemessen wird der Baum, nicht
+# der Commit.
+printf '\n=== Unveraenderter rust/-Baum ===\n'
+spiegel 3330003 "$VERSION_SOLL"
+mkroot baumgleich 3330003
+fahr run
+check "baumgleich: erster Lauf rc 0" "$RC" "0"
+check "baumgleich: Zustand geschrieben" "$(cat "$R/opt/chimera/state/rust-stand" 2>/dev/null | wc -l)" "1"
+hat "baumgleich: Zustand nennt den Commit" "$(cat "$R/opt/chimera/state/rust-stand")" "3330003"
+_sum="$(summe "$BIN")"; _z="$(wc -l <"$MANIFEST")"
+# Neuer Commit (Doku), gleicher Baum, KEIN Prerelease dazu -- und kein Netz.
+printf '4440004\n' >"$R/opt/chimera/state/quelle-commit"
+RUST_URL="http://127.0.0.1:1" fahr run
+check "baumgleich: ohne Prerelease rc 0 (kein Befund)" "$RC" "0"
+hat "baumgleich: sagt es" "$OUT" "Rust unveraendert seit 3330003"
+check "baumgleich: Binary unberuehrt" "$(summe "$BIN")" "$_sum"
+check "baumgleich: Manifest nicht gewachsen" "$(wc -l <"$MANIFEST")" "$_z"
+check "baumgleich: Commit bleibt der des Binaries" "$(cut -d' ' -f1 "$R/opt/chimera/state/rust-stand")" "3330003"
+
+# Ein ausgetauschtes Binary wird NICHT als "unveraendert" durchgewinkt: die
+# Pruefsumme im Manifest entscheidet, danach wird nachgeladen.
+printf '#!/bin/sh\necho "chimera-tor %s"\n' "$VERSION_SOLL" >"$BIN"
+( cd "$R/opt/chimera/bin" && printf 'fremd\n' >>chimera-tor )
+fahr run
+check "baumgleich, Binary veraendert: rc 0 (nachgeladen)" "$RC" "0"
+check "baumgleich, Binary veraendert: wieder das Richtige" "$(summe "$BIN")" "$_sum"
+
+# Ein geaenderter Baum verlangt ein neues Binary -- gibt es keins zum neuen
+# Commit, ist das ein Befund (das alte Binary bleibt liegen).
+printf '5550005\n' >"$R/opt/chimera/state/quelle-commit"
+baum_aendern "neue Zeile in rust/"
+fahr run
+check "baum geaendert, kein Prerelease: rc 1" "$RC" "1"
+hat "baum geaendert: benannt" "$OUT" "rust-5550005"
+check "baum geaendert: altes Binary bleibt" "$(summe "$BIN")" "$_sum"
+
+# Eine neue VERSION im Zustand hebt das Stillhalten auf: die Version steht im
+# Binary, ein Doku-Commit mit Versionssprung braucht also ein neues.
+mkroot baumver 3330003
+fahr run
+_alt_hash="$(cut -d' ' -f2 "$R/opt/chimera/state/rust-stand")"
+printf '3330003 %s 0.0.0-frueher\n' "$_alt_hash" >"$R/opt/chimera/state/rust-stand"
+RUST_URL="http://127.0.0.1:1" fahr run
+check "andere Version im Zustand: kein Stillhalten (Befund ohne Netz)" "$RC" "1"
+
+# Fehlt das Binary, wird der Stand aus dem Zustand geholt -- nicht der neue
+# Commit, zu dem es kein Prerelease gibt.
+mkroot baumfehlt 3330003
+fahr run
+rm -f "$BIN"
+printf '6660006\n' >"$R/opt/chimera/state/quelle-commit"
+fahr run
+check "Binary fehlt, Baum gleich: rc 0" "$RC" "0"
+hat "Binary fehlt: laedt den Stand des Zustands" "$OUT" "rust-3330003"
+check "Binary fehlt: wieder da" "$([ -x "$BIN" ] && echo ja || echo nein)" "ja"
+
+# Ein Binary, das nicht mehr laeuft, gilt nicht als unveraendert -- auch wenn
+# Manifest und Pruefsumme dazu passen (jemand hat beides nachgezogen).
+mkroot baumtot 3330003
+fahr run
+printf 'kaputt\n' >"$BIN"
+_sum_t="$(summe "$BIN")"
+awk -F'\t' -v p="$BIN" -v s="$_sum_t" 'BEGIN{OFS="\t"} { if ($3 == "datei" && $4 == p) $5 = s; print }' \
+	"$MANIFEST" >"$MANIFEST.neu" && mv "$MANIFEST.neu" "$MANIFEST"
+RUST_URL="http://127.0.0.1:1" fahr run
+check "baumgleich, Binary laeuft nicht: kein Stillhalten" "$RC" "1"
+
+# Ohne Zustand wird nicht behauptet, der Baum sei gleich: der normale Weg
+# prueft die Pruefsumme und findet das Binary passend ("schon vorhanden").
+mkroot schon 3330003
+fahr run
+_sum_s="$(summe "$BIN")"; _z_s="$(wc -l <"$MANIFEST")"; _m_s="$(stat -c %Y "$BIN")"
+rm -f "$R/opt/chimera/state/rust-stand"
+sleep 1
+fahr run
+check "ohne Zustand, Binary passend: rc 0" "$RC" "0"
+hat "ohne Zustand, Binary passend: sagt es" "$OUT" "Schon vorhanden und geprueft"
+check "ohne Zustand, Binary passend: nicht neu geschrieben" "$(stat -c %Y "$BIN")" "$_m_s"
+check "ohne Zustand, Binary passend: Manifest nicht gewachsen" "$(wc -l <"$MANIFEST")" "$_z_s"
+check "ohne Zustand, Binary passend: Zustand wieder da" "$([ -s "$R/opt/chimera/state/rust-stand" ] && echo ja || echo nein)" "ja"
+
+# Trockenlauf mit unveraendertem Baum: er kuendigt das Behalten an und legt
+# nichts an (auch keinen Zustand).
+mkroot trockenbaum 3330003
+fahr run
+_st_vor="$(summe "$R/opt/chimera/state/rust-stand")"
+printf '7770007\n' >"$R/opt/chimera/state/quelle-commit"
+RUST_URL="http://127.0.0.1:1" fahr dry
+check "Trockenlauf, Baum gleich: rc 0" "$RC" "0"
+hat "Trockenlauf, Baum gleich: kuendigt Behalten an" "$OUT" "wuerde behalten"
+check "Trockenlauf, Baum gleich: Zustand unberuehrt" "$(summe "$R/opt/chimera/state/rust-stand")" "$_st_vor"
+
+# Ohne Zustand wird nicht behauptet, der Baum sei gleich: normaler Weg.
+mkroot baumleer 3330003
+rm -f "$R/opt/chimera/state/rust-stand"
+fahr run
+check "ohne Zustand: rc 0" "$RC" "0"
+hat "ohne Zustand: laedt (kein Kurzweg)" "$OUT" "Abgelegt:"
+check "ohne Zustand: Zustand danach da" "$([ -s "$R/opt/chimera/state/rust-stand" ] && echo ja || echo nein)" "ja"
 
 # --- 11. Commit aus Schritt 00 -----------------------------------------------------------------
 printf '\n=== Commit der Quelle (Modul 00) ===\n'

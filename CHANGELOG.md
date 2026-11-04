@@ -316,6 +316,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   der Dienst startet entsprechend früher.
 - **Installer:** Der Nachweis der Python-Umgebung sucht nicht mehr im Netz
   nach Anbietern und öffnet das Panel nicht mehr.
+- **Installer:** Modul 55 verlangt kein neues Binary, wenn der `rust/-Baum`
+  unverändert ist. `state/rust-stand` hält Commit, Hash des Baums und
+  Version fest; bei Gleichheit bleibt das vorhandene Binary liegen
+  (`Rust unverändert seit <commit>`) — ohne Netz, ohne Befund, ohne
+  CI-Build. Geprüft werden dabei Prüfsumme, Lauf und Version; ein
+  geänderter Baum oder eine neue `VERSION` hebt es auf. Anlass: Jeder
+  Doku-Commit erzeugte einen Befund und einen unnötigen CI-Build.
 
 - **Der Installer ist der einzige Weg auf ein Gerät** (DESIGN Regel 13):
   Zuordnung „Changelog-Bereich → Modul" in `docs/INSTALLER.md` §9, neues

@@ -470,6 +470,16 @@ Holt das Gateway-Binary (DESIGN Regel 14) und legt es nach
 - **Commit:** aus `state/quelle-commit` (von Schritt 00 beim Klonen
   geschrieben, 7 Zeichen). Leer oder fehlend ⇒ Befund (rc 1) mit Hinweis,
   kein Raten, kein „neuestes Prerelease“.
+- **Unveränderter rust/-Baum:** Ein Doku-Commit lässt `rust/` stehen — dann
+  ist kein neues Binary nötig. `state/rust-stand` (`<commit> <hash des
+  rust/-Baums> <version>`) hält den Stand fest, aus dem das abgelegte Binary
+  gebaut wurde. Bei gleichem Hash, gleicher Version und geprüftem Binary
+  bleibt es liegen (rc 0, „Rust unverändert seit …“) — ohne Netz, ohne
+  Befund, ohne CI-Build. Geprüft wird dabei trotzdem: Prüfsumme wie im
+  Manifest, Lauf, Version. Ein geänderter Baum oder eine neue `VERSION`
+  hebt das Stillhalten auf (die Version steht im Binary). Fehlt das Binary,
+  wird `rust-<commit aus dem Stand>` geholt, nicht das des neuen Commits.
+  `CHIMERA_RUST_BAUM` ersetzt den Baum (Tests).
 - **Quelle:** `https://github.com/Smilez1985/chimera/releases/download/rust-<commit>/`
   mit `chimera-tor-aarch64` und `chimera-tor-aarch64.sha256`.
   `CHIMERA_RUST_URL` ersetzt die Basis (Tests, Spiegel).
