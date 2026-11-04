@@ -27,9 +27,14 @@ zram wird nicht angefasst, wenn es läuft.
       zu sichernden Dateien** plus Reserve pruefen (Summe steht vor dem
       Kopieren fest, DESIGN-Regel „Neustart mit Fortsetzung"). Die 100 MB
       bleiben Untergrenze.
-- [ ] **pip: nur Fehlendes, ohne `--upgrade`.** Zurückgestellt: Die Änderung
-      machte zwei Tests von `test-python-env.sh` rot; der erprobte Stand bleibt,
-      bis die Ursache geklärt ist (das venv hatte `numpy 2.5.4` statt `1.26.4`).
+- [ ] **Obergrenze für `numpy` (und Pillow) entscheiden.** `requirements.txt`
+      verlangt `numpy>=1.26` — ohne Obergrenze holt pip die jeweils neueste
+      Fassung. Im Testvenv stand deshalb einmal `numpy 2.5.4` statt `1.26.4`.
+      Das ist eine Frage der *Anforderung*, nicht des pip-Aufrufs: `pydep_ensure`
+      installiert seit 4.11. ohne `--upgrade` (nur die nicht erfüllten
+      Anforderungen), und für eine fehlende Anforderung holt pip so oder so die
+      neueste. Zu entscheiden: Obergrenze (`numpy>=1.26,<3`) setzen oder die
+      Abweichung bewusst zulassen — gemessen ist bisher nur 1.26.x am Pi.
 - [ ] **UV für `requirements.txt`** (Vorgabe smilez, 2.11.): eigenes
       Werkzeug-venv, nur anlegen wenn es fehlt, Installation über pip (Prüfsummen
       von PyPI), harte Zeitgrenzen, Rückfall auf pip. Vorbedingung ist erfüllt:

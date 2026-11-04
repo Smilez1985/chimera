@@ -70,11 +70,14 @@ EOF
 		info "[wuerde installieren]$(printf '%s' "$_pe_holt" | tr '\n' ' ')"
 		return 0
 	fi
-	# Nur die betroffenen, nicht die ganze Liste -- und `--upgrade`, damit
-	# "zu alt" auch wirklich erneuert wird (ohne haelt pip ein vorhandenes
-	# Paket fuer erfuellt, selbst wenn die Anforderung hoeher liegt).
+	# Nur die betroffenen, nicht die ganze Liste — und zwar ohne
+	# `--upgrade`: pip holt eine Fassung, die die Anforderung erfuellt.
+	# Mit `--upgrade` zieht pip auch dann die jeweils neueste, wenn die
+	# vorhandene genuegt. (Der Fall "numpy 2.5.4 statt 1.26.4" kam nicht
+	# daher, sondern von der Anforderung ohne Obergrenze; offener Punkt
+	# in docs/ROADMAP.md.)
 	# shellcheck disable=SC2086
-	printf '%s\n' "$_pe_holt" | grep -v '^$' | xargs "$_pe_py" -m pip install --upgrade || \
+	printf '%s\n' "$_pe_holt" | grep -v '^$' | xargs "$_pe_py" -m pip install || \
 		warn "pip meldete einen Fehler -- entscheidend ist die Nachmessung."
 	_pe_f="$(pydep_fehlend "$_pe_py" "$@")" && { info "Python-Abhaengigkeiten hergestellt."; return 0; }
 	err "Nach pip weiterhin nicht erfuellt:"

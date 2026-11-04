@@ -426,6 +426,16 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
 - **Anbieter: `Connector` kennt jetzt `supports_tools`, `context_window`,
   `supports_streaming`, `cost_class` und `access`** — die Wahl eines Ziels
   entscheidet über Eigenschaften, nicht über einen Namen.
+- **Installerschritt 50 installiert Python-Abhaengigkeiten ohne `--upgrade`.**
+  `pydep_ensure` uebergibt pip nur die *nicht erfuellten* Anforderungen
+  (fehlend oder zu alt). Mit `--upgrade` haette pip auch eine *genuegende*
+  Fassung auf die jeweils neueste gehoben — ohne bleibt die erfuellte stehen.
+  Getestet mit `test-python-env.sh` (50 ok, auch der Fall „zu altes numpy im
+  Angebot"), also keine Verhaltensaenderung an einer Messstelle: pip
+  installiert eine unerfuellte Anforderung ohnehin. Ehrlich dazu: Der
+  beobachtete Fall `numpy 2.5.4` statt `1.26.4` kam **nicht** von `--upgrade`,
+  sondern von der Anforderung ohne Obergrenze (`numpy>=1.26`) — das steht als
+  offener Punkt in der Roadmap.
 - **`installer/tests/test-python-env.sh` laeuft ohne Netz.** Pillow und numpy
   kommen aus Attrappen-Wheels, die der Test mit `tests/fake-wheel.py` selbst
   baut (`PIP_NO_INDEX=1`, `PIP_FIND_LINKS`); auch `pip install --upgrade pip`
