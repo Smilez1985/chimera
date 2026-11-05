@@ -40,6 +40,126 @@ pydep_liste() {
 	grep -vE '^[[:space:]]*(#|$)' "$1" 2>/dev/null | sed 's/[[:space:]]*#.*$//; s/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$'
 }
 
+# --- uv (Vorgabe smilez 2.11./5.11.) -------------------------------------
+#
+# Warum ueberhaupt: uv loest Abhaengigkeiten als Ganzes auf und ist auf dem
+# Pi deutlich schneller als pip. Die Anforderungen in requirements.txt gelten
+# weiter, uv aendert die Auswahl nicht -- es nimmt nur dieselbe Arbeit
+# schneller und mit einem pruefbaren Lock.
+#
+# Zwei Grundsaetze, die daran haengen:
+#   * uv liegt in einem EIGENEN Werkzeug-venv und wird nur angelegt, wenn es
+#     fehlt (idempotent, wie alles hier). Installiert wird es mit pip --
+#     pip prueft die Pruefsummen der PyPI, uv selbst tut das beim Holen auch.
+#   * uv ist eine BESCHLEUNIGUNG, keine Bedingung: fehlt es, laesst es sich
+#     nicht anlegen oder scheitert es, laeuft derselbe Abruf ueber pip. Eine
+#     eigene Fehlerquelle darf hier nicht entstehen.
+#
+# Gemessen (5.11.2026, uv 0.13.7 aarch64): `uv pip install --python <venv>`
+# und `-f/--find-links <dir>` gibt es; ein nicht vorhandenes --find-links-
+# Verzeichnis bricht ab (deshalb wird es nur mitgegeben, wenn es da ist).
+# `uv pip download` gibt es NICHT -- das Vorab-Laden bleibt bei pip.
+
+: "${CHIMERA_UV:=an}"
+: "${CHIMERA_UV_FRIST:=600}"     # harte Zeitgrenze je uv-Aufruf (Sekunden)
+
+# Ist uv eingeschaltet? Einzige Stelle, an der der Schalter gelesen wird.
+uv_an() {
+	[ "${CHIMERA_UV:-an}" != aus ]
+}
+
+uv_verzeichnis() {
+	printf '%s/tools/uv' "$(rootpath "${CHIMERA_OPT:-/opt/chimera}")"
+}
+
+# Pfad zum lauffaehigen uv, sonst rc 1. Ein Verzeichnis mit uv-Datei ist
+# kein Beleg -- gefragt wird das Programm (Regel 10j).
+uv_weg() {
+	_uw_b="$(uv_verzeichnis)/bin/uv"
+	[ -x "$_uw_b" ] || return 1
+	"$_uw_b" --version >/dev/null 2>&1 || return 1
+	printf '%s\n' "$_uw_b"
+}
+
+# uv herstellen, nur wenn es fehlt. rc 0 vorhanden, 1 nicht verfuegbar
+# (dann pip), 2 abgeschaltet.
+uv_bereitstellen() {
+	uv_an || return 2
+	uv_weg >/dev/null 2>&1 && return 0
+	_ub_d="$(uv_verzeichnis)"
+	info "uv: wird eingerichtet ($_ub_d) ..."
+	mkdir -p "$(dirname "$_ub_d")" 2>/dev/null || return 1
+	[ -x "$_ub_d/bin/python" ] || {
+		python3 -m venv "$_ub_d" >/dev/null 2>&1 || {
+			warn "uv: Werkzeug-venv nicht anlegbar -- es bleibt bei pip."
+			return 1
+		}
+	}
+	# pip in diesem venv holt uv samt Pruefsummenpruefung der PyPI.
+	# --no-input/--disable-pip-version-check: keine Rueckfragen, kein Netz
+	# fuer eine Versionsanzeige.
+	_ub_rc=0
+	"$_ub_d/bin/python" -m pip install --quiet --no-input \
+		--disable-pip-version-check uv >/dev/null 2>&1 || _ub_rc=$?
+	if [ "$_ub_rc" != 0 ] || ! uv_weg >/dev/null 2>&1; then
+		warn "uv: liess sich nicht installieren (rc=$_ub_rc) -- es bleibt bei pip."
+		return 1
+	fi
+	info "uv: bereit ($(uv_weg 2>/dev/null))"
+	return 0
+}
+
+# Anforderungen in ein venv bringen -- uv zuerst, pip als Rueckfall.
+# $1 Python des venv, $2.. Anforderungen. rc 0 = ohne Fehler durchgelaufen
+# (das Ergebnis prueft der Aufrufer nach, nicht dieser Exitcode).
+pydep_holen() {
+	_ph_py="$1"; shift
+	# Vorgeladene Wheels, wenn es sie gibt: --find-links fuegt sie als Quelle
+	# hinzu, ohne den Index abzuwaehlen.
+	_ph_find=""
+	_ph_vd="$(rootpath "${CHIMERA_STATE:-/opt/chimera/state}")/prefetch/wheels"
+	[ -d "$_ph_vd" ] && _ph_find="$_ph_vd"
+	_ph_uv="$(uv_weg 2>/dev/null)" || _ph_uv=""
+	if [ -n "$_ph_uv" ]; then
+		info "uv: hole $*"
+		# Harte Zeitgrenze: ein haengender Abruf darf den Lauf nicht
+		# festhalten. timeout gibt es in BusyBox und in Debian; fehlt es,
+		# laeuft der Aufruf ohne Grenze (besser als gar kein uv).
+		set +e
+		if command -v timeout >/dev/null 2>&1; then
+			if [ -n "$_ph_find" ]; then
+				timeout "${CHIMERA_UV_FRIST:-600}" "$_ph_uv" pip install \
+					--python "$_ph_py" --find-links "$_ph_find" "$@"
+			else
+				timeout "${CHIMERA_UV_FRIST:-600}" "$_ph_uv" pip install \
+					--python "$_ph_py" "$@"
+			fi
+		else
+			if [ -n "$_ph_find" ]; then
+				"$_ph_uv" pip install --python "$_ph_py" --find-links "$_ph_find" "$@"
+			else
+				"$_ph_uv" pip install --python "$_ph_py" "$@"
+			fi
+		fi
+		_ph_rc=$?
+		set -e
+		[ "$_ph_rc" = 0 ] && return 0
+		warn "uv: Exitcode $_ph_rc -- derselbe Abruf geht ueber pip."
+	fi
+	# pip, wie vor uv. Kein --upgrade: pip holt eine Fassung, die die
+	# Anforderung erfuellt.
+	set +e
+	if [ -n "$_ph_find" ]; then
+		printf '%s\n' "$@" | grep -v '^$' |
+			xargs "$_ph_py" -m pip install --find-links "$_ph_find"
+	else
+		printf '%s\n' "$@" | grep -v '^$' | xargs "$_ph_py" -m pip install
+	fi
+	_ph_rc=$?
+	set -e
+	return "$_ph_rc"
+}
+
 # Herstellen: fehlende/zu alte Anforderungen holen, dann nachmessen.
 # $1 Python des venv, $2.. Anforderungen. Benennt, was es tat.
 # rc 0 alles erfuellt (vorher oder jetzt), 1 pip lief, Ergebnis stimmt
@@ -84,6 +204,9 @@ EOF
 	# trotzdem scheitert, ist es ein Befund.
 	# shellcheck disable=SC2086
 	_pe_versuche="${CHIMERA_PIP_VERSUCHE:-3}"
+	# uv einmal bereitstellen (nur anlegen, wenn es fehlt). Scheitert es,
+	# laeuft alles ueber pip -- das ist der Rueckfall, kein Befund.
+	uv_bereitstellen || true
 	_pe_n=0
 	_pe_ok=""
 	while [ "$_pe_n" -lt "$_pe_versuche" ]; do
@@ -94,20 +217,13 @@ EOF
 				return 1
 			}
 		fi
-		[ "$_pe_n" -gt 1 ] && info "pip: Versuch $_pe_n von $_pe_versuche"
-		# Vorgeladene Wheels benutzen, wenn es sie gibt (Regel "Warte-Schleife
-		# und Vorab-Laden"): --find-links fuegt sie als Quelle hinzu, ohne den
-		# Index abzuwaehlen -- die neueste Fassung gewinnt weiterhin.
-		_pe_vd="$(rootpath "${CHIMERA_STATE:-/opt/chimera/state}")/prefetch/wheels"
-		set +e
-		if [ -d "$_pe_vd" ]; then
-			printf '%s\n' "$_pe_holt" | grep -v '^$' |
-				xargs "$_pe_py" -m pip install --find-links "$_pe_vd"
-		else
-			printf '%s\n' "$_pe_holt" | grep -v '^$' | xargs "$_pe_py" -m pip install
-		fi
-		_pe_rc=$?
-		set -e
+		[ "$_pe_n" -gt 1 ] && info "Versuch $_pe_n von $_pe_versuche"
+		# uv zuerst, pip als Rueckfall (pydep_holen entscheidet und benennt
+		# es). Vorgeladene Wheels gehen als --find-links mit, wenn es sie gibt
+		# (Regel "Warte-Schleife und Vorab-Laden").
+		# shellcheck disable=SC2086
+		_pe_rc=0
+		pydep_holen "$_pe_py" $_pe_holt || _pe_rc=$?
 		if [ "$_pe_rc" = 0 ]; then
 			_pe_ok=1
 			break

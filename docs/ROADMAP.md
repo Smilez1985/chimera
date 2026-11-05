@@ -35,19 +35,24 @@ zram wird nicht angefasst, wenn es läuft.
       Anforderungen), und für eine fehlende Anforderung holt pip so oder so die
       neueste. Zu entscheiden: Obergrenze (`numpy>=1.26,<3`) setzen oder die
       Abweichung bewusst zulassen — gemessen ist bisher nur 1.26.x am Pi.
-- [ ] **UV für `requirements.txt`** (Vorgabe smilez, 2.11.): eigenes
-      Werkzeug-venv, nur anlegen wenn es fehlt, Installation über pip (Prüfsummen
-      von PyPI), harte Zeitgrenzen, Rückfall auf pip. Vorbedingung ist erfüllt:
-      die Tests von `test-python-env.sh` laufen seit 4.11. ohne Netz
-      (Attrappen-Wheels, `PIP_NO_INDEX`, mit vergiftetem Proxy belegt).
+- [ ] **UV für `requirements.txt` — gebaut in Modul 50, Messung am Gerät
+      fehlt noch.** Eigenes Werkzeug-venv `tools/uv` (nur anlegen, wenn es
+      fehlt), uv über pip installiert (Prüfsummen von PyPI), `uv pip install
+      --python <venv>` mit `--find-links`, nur wenn es vorgeladene Wheels
+      gibt; harte Zeitgrenze `CHIMERA_UV_FRIST` (600 s, `timeout`), Schalter
+      `CHIMERA_UV=aus`, Rückfall auf pip in derselben Warte-Schleife. Tests:
+      `installer/tests/test-uv.sh` 20 ok (Anlegen nur wenn es fehlt, venv
+      nicht anlegbar → pip, uv scheitert → pip, auch pip scheitert → Befund,
+      Zeitgrenze greift, `--find-links` nur bei vorhandenem Verzeichnis);
+      Gegenproben rot (Zeitgrenze ausgebaut → 2 rot, Rückfall ausgebaut →
+      3 rot). **Offen: Messung auf dem Pi** (Dauer uv gegen pip bei gleicher
+      Anforderung) — bis dahin ist der Gewinn plausibel, nicht belegt.
       **Gemessen (5.11., uv 0.13.7, aarch64):** `uv pip download` gibt es
       nicht („unrecognized subcommand"), und `uv pip install --dry-run` löst
       zwar auf, lädt die Wheels aber **nicht** (eigener Cache danach 1,3 MB,
       keine `.whl`). Für das Vorab-Laden bleibt es deshalb bei `pip download`
-      — nur pip kann holen, ohne zu installieren. UV gehört in Modul 50
-      (Auflösen/Installieren, `--find-links` kennt es) und als Lock-Erzeuger
-      (`uv pip compile` → `requirements.txt`/`pylock.toml`). Offen: ob UV auf
-      dem Pi schneller ist als pip — messen, nicht annehmen.
+      — nur pip kann holen, ohne zu installieren. `uv pip compile` (Lock) ist
+      noch nicht eingebaut.
 
 - [ ] **Vorab-Laden im Hintergrund** (DESIGN, Abschnitt „Warte-Schleife und
       Vorab-Laden"): **gebaut und am Gerät belegt** (`installer/lib/vorab.sh`,

@@ -358,6 +358,28 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
 - **Werkzeug:** `tools/contact-sheet.py` legt alle Ausdrücke als
   Kontaktbogen auf ein Blatt — Muster auf einen Blick statt eine Datei je
   Mood.
+- **uv für die Python-Abhängigkeiten in Modul 50** (`installer/lib/python.sh`).
+  Vorgabe smilez (2.11./5.11.): uv löst Abhängigkeiten als Ganzes auf und ist
+  auf dem Pi schneller als pip. Bauform:
+  - uv liegt in einem **eigenen Werkzeug-venv** `<CHIMERA_OPT>/tools/uv` und
+    wird **nur angelegt, wenn es fehlt**; installiert wird es mit pip (der
+    die Prüfsummen der PyPI prüft).
+  - `pydep_holen()` nimmt uv `pip install --python <venv>`; vorgeladene
+    Wheels gehen als `--find-links` mit — **nur wenn das Verzeichnis
+    existiert** (ein fehlendes bricht uv ab, gemessen).
+  - **Harte Zeitgrenze** `CHIMERA_UV_FRIST` (Vorgabe 600 s) über `timeout`;
+    fehlt `timeout`, läuft der Aufruf ohne Grenze.
+  - **Rückfall auf pip** bei jedem uv-Fehlschlag — derselbe Abruf, dieselbe
+    Warte-Schleife. Schalter `CHIMERA_UV=aus`.
+  - Das Ergebnis zählt weiterhin: `pydep_ensure` misst nach dem Abruf, der
+    Exitcode von uv oder pip entscheidet nichts.
+  Tests `installer/tests/test-uv.sh` 20 ok (Werkzeug-venv, zweiter Aufruf
+  richtet nichts mehr ein, venv nicht anlegbar → pip, uv scheitert → pip,
+  uv **und** pip scheitern → Befund, Zeitgrenze greift in 1 s, `--find-links`
+  nur bei vorhandenem Verzeichnis). Gegenproben: Zeitgrenze ausgebaut → 2 rot,
+  Rückfall ausgebaut → 3 rot. `test-python-env.sh` 53 ok, `test-portability.sh`
+  10 ok. **Offen: die Messung auf dem Pi** (uv gegen pip bei gleicher
+  Anforderung) — der Gewinn ist bis dahin plausibel, nicht belegt.
 
 ### Geändert
 - **UV als Vorab-Lader geprüft und verworfen — die Voraussetzungen fehlen
