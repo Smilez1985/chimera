@@ -114,6 +114,16 @@ grep -q 'pip install --python' "$UV_LOG" && ok "uv bekommt 'pip install --python
 grep -q 'Pillow numpy' "$UV_LOG" && ok "Anforderungen kommen bei uv an" || bad "Anforderungen fehlen"
 check "pip wurde dabei nicht gerufen" "$(grep -c . "$PY_LOG" || true)" "0"
 
+# --- 4b. Schalter gilt auch fuer die Nutzung ---------------------------
+# Ohne diese Pruefung laesst sich "mit uv" und "ohne uv" nicht vergleichen
+# (am Pi 5.11. aufgefallen: CHIMERA_UV=aus benutzte trotzdem uv).
+: >"$UV_LOG"; : >"$PY_LOG"
+_rc=0; CHIMERA_UV=aus pydep_holen "$(uv_verzeichnis)/bin/python" Pillow || _rc=$?
+check "CHIMERA_UV=aus: Abruf laeuft durch (rc 0)" "$_rc" "0"
+check "CHIMERA_UV=aus: uv wird nicht benutzt" "$(grep -c . "$UV_LOG" || true)" "0"
+grep -q -- '-m pip install' "$PY_LOG" && ok "CHIMERA_UV=aus: pip uebernimmt" \
+	|| bad "CHIMERA_UV=aus: pip lief nicht"
+
 # --- 5. uv scheitert -> pip --------------------------------------------
 # Der Rueckfall ist der Sinn der Sache: uv scheitert, pip uebernimmt, und das
 # Ergebnis zaehlt. Erfolg ist hier also rc 0 -- gemessen wird, DASS pip lief.

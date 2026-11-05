@@ -120,6 +120,10 @@ pydep_holen() {
 	_ph_vd="$(rootpath "${CHIMERA_STATE:-/opt/chimera/state}")/prefetch/wheels"
 	[ -d "$_ph_vd" ] && _ph_find="$_ph_vd"
 	_ph_uv="$(uv_weg 2>/dev/null)" || _ph_uv=""
+	# Der Schalter gilt auch fuer die NUTZUNG, nicht nur fuers Anlegen --
+	# sonst laesst sich ohne uv nicht messen (am Pi 5.11. aufgefallen: Lauf
+	# mit CHIMERA_UV=aus benutzte trotzdem uv).
+	uv_an || _ph_uv=""
 	if [ -n "$_ph_uv" ]; then
 		info "uv: hole $*"
 		# Harte Zeitgrenze: ein haengender Abruf darf den Lauf nicht
