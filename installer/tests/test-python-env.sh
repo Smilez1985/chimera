@@ -97,6 +97,10 @@ mkbaum() {
 	CHIMERA_ROOT="$WURZEL"; export CHIMERA_ROOT
 	CHIMERA_MANIFEST="$WURZEL/opt/chimera/state/manifest.tsv"
 	CHIMERA_LOG_DIR="$WURZEL/logs"; export CHIMERA_LOG_DIR
+	# uv bleibt aus: Dieser Test ist hermetisch und ohne Netz (Attrappen-
+	# Wheels). uv selbst einzurichten ginge nur ueber PyPI -- genau das darf
+	# dieser Test nicht. Geprueft wird uv in tests/test-uv.sh.
+	CHIMERA_UV=aus; export CHIMERA_UV
 	mkdir -p "$(dirname "$CHIMERA_MANIFEST")" "$CHIMERA_LOG_DIR"
 	MANIFEST="$CHIMERA_MANIFEST"
 }

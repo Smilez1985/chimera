@@ -307,6 +307,13 @@ else
 	# Wheel-Tags nicht und brechen mit kryptischem Fehler ab.
 	"$PY" -m pip install --upgrade pip >/dev/null 2>&1 || true
 
+	# uv bereitstellen (eigenes Werkzeug-venv, nur wenn es fehlt). Bewusst
+	# HIER und nicht erst im Abruf: Sonst entstuende es nie auf einem Geraet,
+	# dessen Abhaengigkeiten schon erfuellt sind -- und genau dort soll der
+	# naechste Abruf uv benutzen (gemessen am Pi 5.11.: Lauf gruen, kein uv).
+	# Scheitert es, laeuft alles ueber pip; das ist kein Befund.
+	uv_bereitstellen || true
+
 	# shellcheck disable=SC2046
 	pydep_ensure "$PY" $(pydep_liste "$REQUIREMENTS") || {
 		err "Abhaengigkeiten nicht hergestellt (Anforderungen: $REQUIREMENTS)."
