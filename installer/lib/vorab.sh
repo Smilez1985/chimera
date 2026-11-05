@@ -144,11 +144,17 @@ vorab_holen() {
 	case "$_vh_art" in
 	pip)
 		_vh_dir="$_vh_d/wheels"
-		# Zwischenverzeichnis, das STEHEN BLEIBT: Was schon geholt ist, wird
-		# beim naechsten Versuch nicht erneut geholt (pip erkennt vorhandene
-		# Dateien und meldet Erfolg). Genau das macht den Abruf idempotent und
-		# nach einem harten Abbruch fortsetzbar, statt von vorn zu beginnen.
-		_vh_teil="$_vh_d/wheels.teil"
+		# Direkt nach wheels/, KEIN Zwischenverzeichnis mehr. Grund (am Pi
+		# gemessen, 5.11.2026): pip legt ein Wheel erst dann im Zielordner ab,
+		# wenn es vollstaendig ist -- 40 Abtastungen waehrend eines 15-MB-
+		# Downloads sahen nie eine halbe Datei, sie erschien einmal mit voller
+		# Groesse. Ein Zwischenverzeichnis mit Umhaengen am ENDE kostete
+		# dagegen genau den Vorteil: Modul 50 startet nach ~20 s, der Abruf
+		# braucht ~20 s -- mit Zwischenverzeichnis war wheels/ zu diesem
+		# Zeitpunkt noch leer und der Vorab-Lauf nutzlos (drei Messlaeufe,
+		# Vorab-Laden brachte 0 s).
+		# Was schon da ist, wird nicht erneut geholt (pip meldet "already
+		# downloaded" und Erfolg) -- das bleibt idempotent und fortsetzbar.
 		command -v python3 >/dev/null 2>&1 || {
 			vorab_marke_fehler "$_vh_name" "kein python3"; return 1; }
 		# Zuerst nachsehen, was wirklich fehlt -- nicht blind laden. Was schon
@@ -161,8 +167,8 @@ vorab_holen() {
 			vorab_marke_done "$_vh_name"
 			return 3
 		fi
-		mkdir -p "$_vh_teil" || {
-			vorab_marke_fehler "$_vh_name" "Zwischenverzeichnis nicht anlegbar"; return 1; }
+		mkdir -p "$_vh_dir" || {
+			vorab_marke_fehler "$_vh_name" "Zielverzeichnis nicht anlegbar"; return 1; }
 		# Fehlt pip im Systempython, wird es geholt -- nicht gemeldet und nicht
 		# uebersprungen. pip ist eine Abhaengigkeit, die der Installer selbst
 		# herstellt (`python3-pip`, Pflichtpaket in Modul 20); apt zu fragen ist
@@ -206,7 +212,7 @@ vorab_holen() {
 			# Geladen wird nur, was fehlt ($_vh_fehl, Wortliste).
 			_vh_rc=0
 			# shellcheck disable=SC2086
-			python3 -m pip download --no-cache-dir --dest "$_vh_teil" $_vh_fehl \
+			python3 -m pip download --no-cache-dir --dest "$_vh_dir" $_vh_fehl \
 				>>"$_vh_d/$_vh_name.log" 2>&1 || _vh_rc=$?
 			[ "$_vh_rc" = 0 ] && break
 			warn "Vorab-Laden: $_vh_name unterbrochen (Exitcode $_vh_rc, Versuch $_vh_n von $_vh_versuche)."
@@ -218,15 +224,6 @@ vorab_holen() {
 			vorab_marke_fehler "$_vh_name" "pip download rc=$_vh_rc nach $_vh_n Versuch(en) (siehe ${CHIMERA_STATE:-/opt/chimera/state}/prefetch/$_vh_name.log)"
 			return 1
 		fi
-		mkdir -p "$_vh_dir" || {
-			vorab_marke_fehler "$_vh_name" "Zielverzeichnis nicht anlegbar"; return 1; }
-		# Verschieben erst nach Erfolg: In wheels/ liegt nur, was vollstaendig
-		# ist. Scheitert das Verschieben, bleibt die Marke aus -- Modul 50
-		# laedt dann selbst.
-		if ! mv "$_vh_teil"/*.whl "$_vh_dir"/ 2>/dev/null; then
-			warn "Vorab-Laden: $_vh_name hat keine Wheel-Datei abgelegt (pip meldete Erfolg)."
-		fi
-		rm -rf "$_vh_teil"
 		vorab_marke_done "$_vh_name"
 		return 0 ;;
 	esac
