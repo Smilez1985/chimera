@@ -84,10 +84,6 @@ export CHIMERA_DOWNGRADE="${CHIMERA_DOWNGRADE:-false}" CHIMERA_MIT="${CHIMERA_MI
 . "$HERE/lib/python.sh"
 . "$HERE/lib/helfer.sh"
 . "$HERE/lib/fortschritt.sh"
-# Nur fuer vorab_an(): Der Schalter CHIMERA_PREFETCH_RAD wird an EINER Stelle
-# gelesen (lib/vorab.sh), damit Installer und Prefetch-Prozess nie
-# verschiedener Meinung sind.
-. "$HERE/lib/vorab.sh"
 if [ "$HELFER_AUFTRAG" = 1 ]; then
 	helfer_env_lesen
 	# Laufzettel: Der Helfer meldet selbst, dass er laeuft und wie er endet.
@@ -201,31 +197,8 @@ if [ "$_KLAMMER" = 1 ] && [ -z "$ONLY" ] && [ "$HARDWARE" != 1 ]; then
 	fortschritt_start "$_FORT_GESAMT_VORLAUF"
 fi
 
-# Vorab-Laden im Hintergrund (DESIGN, Regel "Warte-Schleife und Vorab-Laden"):
-# Bevor der erste Schritt laeuft, kennt der Lauf seine Downloads bereits. Ein
-# abgekoppelter Helfer holt sie in Modulreihenfolge, waehrend hier gearbeitet
-# wird -- apt-.deb zuerst, damit der Netzanteil aus Modul 20 herausfaellt.
-# Nur im vollen Lauf: Bei --only und beim Boot-Abgleich waere die Vorhersage
-# falsch, und ein zweiter Lauf neben dem ersten braucht sie nicht.
-# Alte Fehlmarken des Vorab-Ladens zuerst ins Protokoll (Mojo liest den Lauf,
-# nicht das Verzeichnis). Danach starten -- der neue Lauf versucht sie ohnehin
-# erneut.
-vorab_fehler_berichten
-
-if [ "$MODE" = run ] && [ -z "$ONLY" ] && [ "$HARDWARE" != 1 ] && \
-   [ "${CHIMERA_NEU_GESTARTET:-0}" != 1 ]; then
-	# Eigene Unit, nicht `nohup ... &`: sonst haengt der Vorab-Lader in der
-	# Cgroup dieses Laufs und wird bei dessen Ende abgeraeumt (5.11. am Pi:
-	# mitten im Download erschossen, keine Marke). Siehe lib/vorab.sh.
-	_vorab_rc=0
-	vorab_starten "$HERE/chimera-prefetch" || _vorab_rc=$?
-	case "$_vorab_rc" in
-		0) info "Vorab-Laden laeuft im Hintergrund (chimera-prefetch)." ;;
-		2) info "Vorab-Laden ist abgeschaltet (CHIMERA_PREFETCH_RAD=0)." ;;
-		*) warn "Vorab-Laden konnte nicht gestartet werden -- die Schritte laden selbst." ;;
-	esac
-fi
-
+# Dauer je Modul (Regel "Warte-Schleife"): Ohne diese Zahlen ist keine
+# Aussage ueber den Netzanteil zu halten. BusyBox und GNU date koennen +%s.
 for mod in $(steps_list); do
 	name="$(basename "$mod" .sh)"
 
@@ -247,9 +220,8 @@ for mod in $(steps_list); do
 
 	RAN=$((RAN + 1))
 	_log_raw "--- Modul $name ---"
-	# Dauer je Modul (Regel "Warte-Schleife und Vorab-Laden", Phase P1):
-	# Ohne diese Zahlen ist jede
-	# Reihenfolge beim Vorab-Laden geraten. BusyBox und GNU date koennen +%s.
+	# Dauer je Modul (Regel "Warte-Schleife"): Ohne diese Zahlen ist jede
+	# Aussage ueber den Zeitanteil geraten. BusyBox und GNU date koennen +%s.
 	_MOD_T0=$(date +%s)
 
 	# Betriebsart wird an das Modul durchgereicht; Module, die sie nicht

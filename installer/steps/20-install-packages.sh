@@ -49,7 +49,7 @@ packages_required() {
 	cat <<'EOF'
 git	command -v git	Quelltext holen
 python3	command -v python3	Chimera selbst
-python3-pip	python3 -m pip --version	Python-Abhaengigkeiten (Modul 50) und Vorab-Laden
+python3-pip	python3 -m pip --version	Python-Abhaengigkeiten (Modul 50)
 make	command -v make	Treiberbau
 gcc	command -v gcc	Treiberbau
 device-tree-compiler	command -v dtc	Overlays uebersetzen

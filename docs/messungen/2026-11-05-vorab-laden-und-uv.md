@@ -40,6 +40,21 @@ entstehen.
    vollständig ab, nie halb. Der Gewinn blieb trotzdem aus (E gegen D2) —
    der Grund ist die Leitung, nicht die Marke.
 
+## Entschieden (5.11.2026, smilez)
+
+**Vorab-Laden: ausgebaut.** Auftrag nach Vorlage der Messreihe: „vorab Lader
+ganz raus .. UV dafür aber weiterhin nutzen". Entfernt sind
+`installer/lib/vorab.sh`, `installer/chimera-prefetch`,
+`installer/tests/test-vorab.sh`, der Schalter `CHIMERA_PREFETCH_RAD`
+(auch aus `HELFER_UMGEBUNG`) und `--find-links` auf `state/prefetch/wheels`
+in Modul 50. Die Erstinstallations-Messung wird **nicht** nachgeholt: Sie
+hätte nur den Vorab-Lader rechtfertigen können, und der Aufwand eines
+frischen Systems steht gegen 0 s Gewinn auf jedem bestückten Gerät.
+
+**uv bleibt** — und die Messung dafür ist der eigentliche Ertrag dieser
+Reihe: 82–85 s → 53–58 s in Modul 50, über vier Läufe stabil. Offen ist nur
+noch `uv pip compile` als Lock (ROADMAP).
+
 ## Ehrlich offen
 
 - **Streuung:** A1 gegen A2 sind 19 s Unterschied bei identischen

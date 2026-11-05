@@ -35,57 +35,14 @@ zram wird nicht angefasst, wenn es läuft.
       Anforderungen), und für eine fehlende Anforderung holt pip so oder so die
       neueste. Zu entscheiden: Obergrenze (`numpy>=1.26,<3`) setzen oder die
       Abweichung bewusst zulassen — gemessen ist bisher nur 1.26.x am Pi.
-- [ ] **UV für `requirements.txt` — gebaut in Modul 50, Messung am Gerät
-      fehlt noch.** Eigenes Werkzeug-venv `tools/uv` (nur anlegen, wenn es
-      fehlt), uv über pip installiert (Prüfsummen von PyPI), `uv pip install
-      --python <venv>` mit `--find-links`, nur wenn es vorgeladene Wheels
-      gibt; harte Zeitgrenze `CHIMERA_UV_FRIST` (600 s, `timeout`), Schalter
-      `CHIMERA_UV=aus`, Rückfall auf pip in derselben Warte-Schleife. Tests:
-      `installer/tests/test-uv.sh` 20 ok (Anlegen nur wenn es fehlt, venv
-      nicht anlegbar → pip, uv scheitert → pip, auch pip scheitert → Befund,
-      Zeitgrenze greift, `--find-links` nur bei vorhandenem Verzeichnis);
-      Gegenproben rot (Zeitgrenze ausgebaut → 2 rot, Rückfall ausgebaut →
-      3 rot). **Am Pi gemessen (5.11., kalt, je eigener Cache, dieselben
-      Pakete Pillow 13.0.0 + numpy 2.5.4): pip 41 s, uv 10 s — der Gewinn
-      ist belegt.** uv liegt dort als 0.13.7 (aarch64) im Werkzeug-venv.
-      **Offen: `uv pip compile` als Lock** (noch nicht eingebaut) und die
-      Frage, ob Modul 50 auch die Obergrenzen-Frage über den Lock löst.
-      **Messreihe mit und ohne uv** (`docs/messungen/2026-11-05-vorab-laden-und-uv.md`):
-      uv spart rund 30 s in Modul 50 (82–85 s → 53–58 s, vier Läufe).
-      **Gemessen (5.11., uv 0.13.7, aarch64):** `uv pip download` gibt es
-      nicht („unrecognized subcommand"), und `uv pip install --dry-run` löst
-      zwar auf, lädt die Wheels aber **nicht** (eigener Cache danach 1,3 MB,
-      keine `.whl`). Für das Vorab-Laden bleibt es deshalb bei `pip download`
-      — nur pip kann holen, ohne zu installieren. `uv pip compile` (Lock) ist
-      noch nicht eingebaut.
-
-- [ ] **Vorab-Laden im Hintergrund** (DESIGN, Abschnitt „Warte-Schleife und
-      Vorab-Laden"): **gebaut und am Gerät belegt** (`installer/lib/vorab.sh`,
-      `installer/chimera-prefetch` als eigene transiente Unit; Marken
-      `.done`/`.fehler`, halbe Downloads landen in `wheels.teil` und werden
-      verworfen; `--find-links` in Modul 50; Abschalter
-      `CHIMERA_PREFETCH_RAD=0`; alte Fehlmarken werden zu Beginn eines Laufs
-      ins Protokoll geholt, damit Mojo sie findet; geladen wird nur, was
-      fehlt; fehlendes `pip` wird über `network_apt` geholt). `test-vorab.sh`
-      46 ok.
-      Gemessen am Pi (5.11., `4f06a3c`): pip-Wheels 16 s für 22 MB (wirkt,
-      überlappt), apt-debs 25 s für **null** Pakete — apt ist deshalb wieder
-      aus der Liste, es hat in Modul 20 seinen einzigen Weg.
-      **Gemessen und ERNÜCHTERND** (`docs/messungen/2026-11-05-vorab-laden-und-uv.md`):
-      Auf dem Pi bringt das Vorab-Laden **nichts** — Modul 50 beginnt nach
-      ~20 s, der Abruf braucht ~20 s für 22 MB; beide teilen sich dieselbe
-      Leitung, in einem Lauf wurde es dadurch schlechter (100 s statt 79 s).
-      Ein Fehler dabei gefunden und behoben: Die Wheels landeten erst am Ende
-      des Abrufs in `wheels/` (Zwischenverzeichnis), waren bei Modul-50-Start
-      also noch nicht da — jetzt schreibt pip direkt dorthin (pip legt Wheels
-      vollständig ab, gemessen). Der Gewinn blieb trotzdem aus.
-      **Entscheidung nötig:** Vorab-Laden so lassen (kostet nichts, nützt
-      nichts), abschalten (`CHIMERA_PREFETCH_RAD=0` als Vorgabe) oder erst
-      wieder aufnehmen, wenn eine echte Erstinstallation gemessen ist.
-- [ ] **Weitere Vorab-Objekte** (Whisplay-Klon 13 MB/3 s, `rust-<commit>`
-      ~2 MB/1 s): **zurückgestellt**, der Aufwand einer Marke ist größer als
-      der Betrag. Wird nur wieder aufgegriffen, wenn die Erstinstallation es
-      verlangt.
+- [ ] **`uv pip compile` als Lock für `requirements.txt`** — der letzte offene
+      Teil von uv. Sonst ist uv fertig: Modul 50 nutzt es (eigenes
+      Werkzeug-venv `tools/uv`, harte Zeitgrenze `CHIMERA_UV_FRIST`, Schalter
+      `CHIMERA_UV=aus`, Rückfall auf pip), am Pi gemessen 53–58 s statt
+      82–85 s in Modul 50 (Beleg:
+      `docs/messungen/2026-11-05-vorab-laden-und-uv.md`). Offen: Lock
+      erzeugen, einspielen und die Obergrenzen-Frage (Punkt darüber) darüber
+      lösen.
 
 ## Phase ACP — Chimera als Agent für Editoren und IDEs (DESIGN: Regel „ACP“)
 

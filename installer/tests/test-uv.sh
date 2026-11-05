@@ -7,7 +7,7 @@
 #   * uv scheitert -> derselbe Abruf geht ueber pip (Rueckfall, kein Befund)
 #   * harte Zeitgrenze (CHIMERA_UV_FRIST): ein haengendes uv haelt den Lauf nicht
 #   * Schalter CHIMERA_UV=aus laesst uv ganz weg
-#   * vorgeladene Wheels gehen als --find-links mit, aber nur wenn es sie gibt
+#   * kein --find-links mehr (Vorab-Laden am 5.11.2026 entfernt)
 #
 # Die Werkzeuge sind Attrappen: python3 (legt das Werkzeug-venv an) und uv
 # (schreibt seine Aufrufe in ein Protokoll). Das echte uv wird hier NICHT
@@ -159,18 +159,20 @@ else
 	printf '  uebersprungen  Zeitgrenze (kein timeout)\n'
 fi
 
-# --- 7. Vorgeladene Wheels: --find-links nur, wenn es sie gibt ----------
-_vd="$(rootpath "${CHIMERA_STATE:-/opt/chimera/state}")/prefetch/wheels"
-rm -rf "$(dirname "$_vd")"
-: >"$UV_LOG"
-_rc=0; pydep_holen "$(uv_verzeichnis)/bin/python" Pillow || _rc=$?
-grep -q -- '--find-links' "$UV_LOG" && bad "--find-links ohne Verzeichnis mitgegeben" \
-	|| ok "ohne Wheels kein --find-links"
-mkdir -p "$_vd"
-: >"$UV_LOG"
-_rc=0; pydep_holen "$(uv_verzeichnis)/bin/python" Pillow || _rc=$?
-grep -q -- "--find-links $_vd" "$UV_LOG" && ok "mit Wheels: --find-links zeigt dorthin" \
-	|| bad "--find-links fehlt trotz vorhandener Wheels"
+# --- 7. Keine Vorab-Wheels mehr --------------------------------------
+# Das Vorab-Laden ist am 5.11.2026 entfernt worden (Messreihe: 0 s Gewinn,
+# siehe CHANGELOG). Ein wieder eingebautes --find-links waere eine zweite
+# Quelle, die niemand pflegt -- dieser Test haelt fest, dass der Abruf
+# nur den Index fragt, auch wenn ein prefetch-Verzeichnis herumliegt.
+mkdir -p "$W/state/prefetch/wheels"
+: >"$UV_LOG"; : >"$PY_LOG"
+_rc=0; CHIMERA_STATE="$W/state" pydep_holen "$(uv_verzeichnis)/bin/python" Pillow || _rc=$?
+grep -q -- '--find-links' "$UV_LOG" && bad "uv: --find-links trotz entferntem Vorab-Laden" \
+	|| ok "uv: kein --find-links (Vorab-Laden ist entfernt)"
+_rc=0; CHIMERA_UV=aus CHIMERA_STATE="$W/state" \
+	pydep_holen "$(uv_verzeichnis)/bin/python" Pillow || _rc=$?
+grep -q -- '--find-links' "$PY_LOG" && bad "pip: --find-links trotz entferntem Vorab-Laden" \
+	|| ok "pip: kein --find-links (Vorab-Laden ist entfernt)"
 
 printf '\nErgebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

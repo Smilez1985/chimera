@@ -56,9 +56,7 @@ pydep_liste() {
 #     eigene Fehlerquelle darf hier nicht entstehen.
 #
 # Gemessen (5.11.2026, uv 0.13.7 aarch64): `uv pip install --python <venv>`
-# und `-f/--find-links <dir>` gibt es; ein nicht vorhandenes --find-links-
-# Verzeichnis bricht ab (deshalb wird es nur mitgegeben, wenn es da ist).
-# `uv pip download` gibt es NICHT -- das Vorab-Laden bleibt bei pip.
+# gibt es; `uv pip download` nicht.
 
 : "${CHIMERA_UV:=an}"
 : "${CHIMERA_UV_FRIST:=600}"     # harte Zeitgrenze je uv-Aufruf (Sekunden)
@@ -114,11 +112,6 @@ uv_bereitstellen() {
 # (das Ergebnis prueft der Aufrufer nach, nicht dieser Exitcode).
 pydep_holen() {
 	_ph_py="$1"; shift
-	# Vorgeladene Wheels, wenn es sie gibt: --find-links fuegt sie als Quelle
-	# hinzu, ohne den Index abzuwaehlen.
-	_ph_find=""
-	_ph_vd="$(rootpath "${CHIMERA_STATE:-/opt/chimera/state}")/prefetch/wheels"
-	[ -d "$_ph_vd" ] && _ph_find="$_ph_vd"
 	_ph_uv="$(uv_weg 2>/dev/null)" || _ph_uv=""
 	# Der Schalter gilt auch fuer die NUTZUNG, nicht nur fuers Anlegen --
 	# sonst laesst sich ohne uv nicht messen (am Pi 5.11. aufgefallen: Lauf
@@ -131,19 +124,10 @@ pydep_holen() {
 		# laeuft der Aufruf ohne Grenze (besser als gar kein uv).
 		set +e
 		if command -v timeout >/dev/null 2>&1; then
-			if [ -n "$_ph_find" ]; then
-				timeout "${CHIMERA_UV_FRIST:-600}" "$_ph_uv" pip install \
-					--python "$_ph_py" --find-links "$_ph_find" "$@"
-			else
-				timeout "${CHIMERA_UV_FRIST:-600}" "$_ph_uv" pip install \
-					--python "$_ph_py" "$@"
-			fi
+			timeout "${CHIMERA_UV_FRIST:-600}" "$_ph_uv" pip install \
+				--python "$_ph_py" "$@"
 		else
-			if [ -n "$_ph_find" ]; then
-				"$_ph_uv" pip install --python "$_ph_py" --find-links "$_ph_find" "$@"
-			else
-				"$_ph_uv" pip install --python "$_ph_py" "$@"
-			fi
+			"$_ph_uv" pip install --python "$_ph_py" "$@"
 		fi
 		_ph_rc=$?
 		set -e
@@ -153,12 +137,7 @@ pydep_holen() {
 	# pip, wie vor uv. Kein --upgrade: pip holt eine Fassung, die die
 	# Anforderung erfuellt.
 	set +e
-	if [ -n "$_ph_find" ]; then
-		printf '%s\n' "$@" | grep -v '^$' |
-			xargs "$_ph_py" -m pip install --find-links "$_ph_find"
-	else
-		printf '%s\n' "$@" | grep -v '^$' | xargs "$_ph_py" -m pip install
-	fi
+	printf '%s\n' "$@" | grep -v '^$' | xargs "$_ph_py" -m pip install
 	_ph_rc=$?
 	set -e
 	return "$_ph_rc"
@@ -223,8 +202,7 @@ EOF
 		fi
 		[ "$_pe_n" -gt 1 ] && info "Versuch $_pe_n von $_pe_versuche"
 		# uv zuerst, pip als Rueckfall (pydep_holen entscheidet und benennt
-		# es). Vorgeladene Wheels gehen als --find-links mit, wenn es sie gibt
-		# (Regel "Warte-Schleife und Vorab-Laden").
+		# es).
 		# shellcheck disable=SC2086
 		_pe_rc=0
 		pydep_holen "$_pe_py" $_pe_holt || _pe_rc=$?

@@ -20,28 +20,13 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
-- **Vorab-Laden im Hintergrund** (`installer/lib/vorab.sh`,
-  `installer/chimera-prefetch`): Vor der Modulschleife startet ein
-  abgekoppelter Helfer und holt die Downloads in Modulreihenfolge — zuerst
-  die apt-Pakete (`apt-get install --download-only`, damit der Netzanteil aus
-  Modul 20 herausfaellt), dann die pip-Wheels (`pip download`, in Schritt 50
-  ueber `--find-links` mitbenutzt). Je Objekt eine Marke (`.teil` unterwegs,
-  `.done` erst nach dem Erfolg atomar geschrieben, `.fehler` mit Grund); eine
-  Marke beschleunigt nur, jeder Verbraucher prueft seine Ware selbst. Kann der
-  Vorab-Lader nicht laden (kein Netz, kein pip im Systempython), laedt der
-  Schritt wie bisher — es faellt nichts aus. `apt-get` wartet auf beiden
-  Seiten ueber `DPkg::Lock::Timeout`, damit sich Vorab-Lader und Modul 20
-  nicht gegenseitig abbrechen. Test `installer/tests/test-vorab.sh` 10 ok
-  (apt- und pip-Weg werden ohne root/pip als uebersprungen gemeldet, nicht
-  als gruen).
-- **Blaupause: Regel „Warte-Schleife und Vorab-Laden" — kein Download bricht
-  bei einem Netzaussetzer ab, und was der Lauf ohnehin braucht, wird im
-  Hintergrund geholt.** Der Installer laedt, was er ohnehin braucht, kuenftig
-  abgekoppelt und in Modulreihenfolge vor (`chimera-prefetch`), mit Marken je
-  Objekt (`.done` nur nach Prüfsumme) und Rueckfall auf den eigenen Abruf —
-  ein toter Prefetch darf einen Schritt nie blockieren. Kein paralleler
-  `apt`-Lauf (dpkg-Sperre). Erst messen, dann bauen: Phase P1 (Dauer je Modul
-  im Protokoll) ist gebaut, P2–P5 stehen in der Roadmap.
+- **Blaupause: Regel „Warte-Schleife" — kein Download bricht bei einem
+  Netzaussetzer ab.** Jeder Abruf läuft in einer Schleife, die den Ausfall
+  meldet, pausiert und weitermacht, sobald das Netz zurück ist (`network_wait`
+  für einen Host, `netz_warten_erreichbar` für Werkzeuge, die selbst laden).
+  Grenze `CHIMERA_NETWORK_LIMIT` (600 s), danach ein benannter Befund statt
+  eines stillen Abbruchs. Geprobt wird über TCP, nicht über ICMP.
+
 - **Changelog-Wächter** (`tests/test_changelog.py`): prüft Abschnittsnamen,
   dass jeder nur einmal vorkommt, die Reihenfolge nach Keep a Changelog,
   keinen `Unreleased`-Block und keine Punkte ohne Abschnittsüberschrift.
@@ -387,109 +372,21 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
-- **Das Vorab-Laden ist jetzt standardmäßig AUS** (`CHIMERA_PREFETCH_RAD`
-  Vorgabe 1 → 0). Entscheidung anhand der Messreihe
-  (`docs/messungen/2026-11-05-vorab-laden-und-uv.md`, sieben kalte Läufe):
-  Gewinn 0 s, in einem Lauf 21 s **schlechter**, weil der Abruf Modul 50 die
-  Leitung wegnimmt. Der Code bleibt — er ist getestet, und auf einer
-  Erstinstallation (Netzanteil 1,5–2 min) kann er etwas bringen; bis das
-  gemessen ist, läuft er nicht mit. Einschalten mit `CHIMERA_PREFETCH_RAD=1`;
-  Test angepasst (Vorgabe aus) und Gegenprobe gemacht (Vorgabe zurückgedreht
-  → rot).
-- **Messreihe Vorab-Laden × uv am Pi** (Ergebnis: `docs/messungen/2026-11-05-vorab-laden-und-uv.md`).
-  Je Lauf kalt (venv, pip-/uv-Cache und Vorab-Marken weg), sieben Läufe:
-  ohne uv 82–85 s in Modul 50 (Gesamt 107–126 s), mit uv 53–58 s (Gesamt
-  79–81 s) — **uv spart rund 30 s**. Das **Vorab-Laden brachte nichts**:
-  Modul 50 beginnt nach ~20 s, der Abruf braucht ~20 s für 22 MB, beide
-  teilen dieselbe Leitung (ein Lauf wurde dadurch sogar langsamer: 100 s).
-  Dabei einen eigenen Fehler gefunden: Die Wheels wurden erst am Ende des
-  Abrufs in `wheels/` umgehängt und waren beim Start von Modul 50 noch nicht
-  da — jetzt schreibt pip direkt dorthin (gemessen: pip legt Wheels
-  vollständig ab, nie halb; 40 Abtastungen während eines 15-MB-Downloads).
-  Der Gewinn blieb trotzdem aus — der Engpass ist die Leitung, nicht die
-  Marke. Entscheidung offen (ROADMAP): Vorab-Laden so lassen, abschalten
-  oder erst nach einer echten Erstinstallations-Messung wieder aufnehmen.
-- **`CHIMERA_UV` und `CHIMERA_PREFETCH_RAD` gehen jetzt an den Helfer**
-  (`HELFER_UMGEBUNG`). Vorher erreichte ein gesetzter Schalter den Lauf nicht
-  — beim Messen aufgefallen, weil `CHIMERA_UV=aus` trotzdem uv benutzte.
-  Dabei ein zweiter Fehler: `pydep_holen` fragte nur nach dem uv-Binary,
-  nicht nach dem Schalter; `CHIMERA_UV=aus` schaltete damit nur das Anlegen
-  ab. Test `test-uv.sh` auf 23 Prüfungen erweitert (uv wird bei `=aus` nicht
-  benutzt, pip übernimmt), Gegenprobe rot.
-- **UV als Vorab-Lader geprüft und verworfen — die Voraussetzungen fehlen
-  (gemessen 5.11., uv 0.13.7 auf aarch64, nicht vermutet):** `uv pip download`
-  existiert nicht („unrecognized subcommand 'download'"), und
-  `uv pip install --dry-run --cache-dir <frisch>` löst zwar auf („Would
-  download 1 package"), legt aber keine Wheel-Datei ab (Cache 1,3 MB, keine
-  `.whl`). Holen ohne Installieren kann nur pip — der Vorab-Lader bleibt
-  deshalb bei `pip download`. UV bleibt für Modul 50 vorgemerkt (löst auf,
-  kennt `--find-links`); ob es auf dem Pi schneller ist als pip, wird
-  gemessen, nicht angenommen.
-- **Vorab-Laden: idempotent, abbruchsicher, ohne eigenen apt-Weg.** Vier
-  Änderungen, alle aus derselben Regel („installieren, nur was fehlt"):
-  - **`apt` ist wieder draußen.** Es hat schon einen Eigentümer
-    (`network_apt` in `lib/network.sh`) und teilt sich mit Modul 20 dieselbe
-    Sperre — überlappen kann es nicht (gemessen: 25 s für null Pakete).
-    Vorgabe smilez: die Pakete werden ohnehin geladen, wann ist egal.
-  - **Geladen wird nur, was fehlt** (`vorab_wheel_da`): Der Bestand
-    entscheidet, nicht eine Marke von gestern. Ist alles da, kostet der
-    Vorab-Lauf einen Blick ins Verzeichnis und keine Netzverbindung.
-  - **Fehlt `pip` selbst, wird es geholt** — über `network_apt`
-    (`python3-pip`, jetzt Pflichtpaket in Modul 20), nicht gemeldet und nicht
-    übersprungen. Danach läuft der Abruf normal weiter.
-  - **Kein harter Abbruch:** `pip download` läuft in derselben Warte-Schleife
-    wie `network_fetch` und Modul 50 (Netz abwarten, erneut versuchen);
-    teilweise geholte Wheels bleiben in `wheels.teil` und werden beim
-    nächsten Versuch nicht erneut geholt. Erst nach allen Versuchen entsteht
-    eine `.fehler`-Marke mit Grund.
-  Tests: `installer/tests/test-vorab.sh` 46 ok (drei Fälle neu bzw. geschärft:
-  fehlender pip ist ein Befund mit Grund, vorhandene Wheels werden erkannt,
-  vollständiger Bestand meldet „nichts zu holen" mit rc 3). Gegenproben
-  gemacht (apt-Zeile zurück in die Liste → rot; Bericht stummgeschaltet →
-  zwei rot).
-- **P5 gemessen (Pi, 5.11., `4f06a3c`) — der apt-Teil des Vorab-Ladens bringt
-  nichts.** Lauf mit gelöschten Marken: `pip-wheels` 16 s für 22 MB
-  (Pillow 13.0.0 + numpy 2.5.4), `apt-debs` 25 s für **0 Pakete** (alle schon
-  installiert) — die Zeit war Warten auf die apt-Sperre neben Modul 20/30.
-  Der apt-Weg kann nicht überlappen; auf einer Erstinstallation verschiebt er
-  die Downloadzeit nur von Modul 20 in den Vorab-Lader. Empfehlung und
-  Entscheidungspunkt in `DESIGN` und `ROADMAP` festgehalten. Moduldauern
-  dieses Laufs (20: 1 s, 50: 6 s) zeigen auf bestücktem Gerät keinen Gewinn;
-  das war auch nicht zu erwarten.
-- **Der Vorab-Lader läuft in einer eigenen transienten Unit**
-  (`systemd-run --unit=chimera-prefetch --collect --service-type=oneshot`),
-  nicht mehr als `nohup`-Kind des Installers. Am Pi 5.11. gemessen: Der
-  Installer läuft selbst als transiente Unit (`chimera-installhelper.service`,
-  `KillMode=control-group`); das Kind hing in dieser Cgroup und wurde beim
-  Ende des Laufs erschossen — mitten im Download, ohne `.done` und ohne
-  `.fehler` (erster Lauf: Pillow halb geholt, `wheels/` leer). Neu:
-  `vorab_starten()` in `installer/lib/vorab.sh` (Rückfall auf `setsid`, wenn
-  kein `systemd-run` vorhanden ist), Rückgabe 0/1/2 und eine Meldung je Fall
-  im Protokoll — ein nicht startbarer Vorab-Lader ist ein Befund, kein
-  stiller Erfolg. Tests: neun Prüfungen mit einer `systemd-run`-Attrappe
-  (Unit-Name, `--collect`, `--service-type`, Programm kommt an, Name belegt →
-  zweiter Versuch → rc 1, abgeschaltet startet nicht); Gegenprobe gemacht
-  (Unit-Name mutiert → zwei rot).
-- **Abschalter fürs Vorab-Laden** (`CHIMERA_PREFETCH_RAD=0`): Der in
-  `lib/vorab.sh` angekündigte Schalter wurde nirgends gelesen — er war ein
-  Wort ohne Wirkung. Er wird jetzt an genau einer Stelle geprüft
-  (`vorab_an()`), Installer und `chimera-prefetch` fragen dort, und
-  `vorab_alle()` meldet rc 2 statt zu laden. Gebraucht wird er zum Messen
-  (vorher/nachher) und als Notaus. Tests: drei neue Prüfungen in
-  `installer/tests/test-vorab.sh` (Vorgabe an, `0` ab, abgeschaltet
-  entstehen keine Marken) — Gegenprobe gemacht: ohne den Riegel in
-  `vorab_alle()` fallen zwei davon, mit ihm keine.
-- **DESIGN, Regel „Warte-Schleife und Vorab-Laden": Teil 2 steht nicht mehr
-  als „entworfen" da.** Der Stand ist eingetragen, samt der Abweichungen:
-  kein Eingriff in `network_fetch` (die Verbraucher finden ihre Ware über
-  den apt-Cache bzw. `--find-links`), keine Haltemarken (bei zwei Objekten
-  mehr Maschinerie als Nutzen), Whisplay-Klon und `rust-<commit>` bleiben
-  draußen (3 s / 1 s rechtfertigen keine eigene Marke). Ebenso die
-  offene Messung: auf einem bestückten Gerät ist nichts zu holen, der
-  Nutzen gilt bis zum Beleg als **unbelegt**.
-- **`lib/vorab.sh`: Der Kopf-Kommentar widersprach der Liste.** Er sagte
-  „Was NICHT hierher gehört: apt" — die Liste holt seit `3f79030` genau das.
-  Jetzt steht dort, warum apt dazugehört und nur `--download-only` sein darf.
+- **uv für Modul 50 eingeführt und am Pi gemessen**
+  (`docs/messungen/2026-11-05-vorab-laden-und-uv.md`). Je Lauf kalt
+  (venv, pip-/uv-Cache weg), sieben Läufe: ohne uv 82–85 s in Modul 50
+  (Gesamt 107–126 s), mit uv 53–58 s (Gesamt 79–81 s) — **uv spart rund
+  30 s**. uv liegt in einem eigenen Werkzeug-venv (`/opt/chimera/tools/uv`),
+  wird nur angelegt, wenn es fehlt, und hat eine harte Zeitgrenze
+  (`CHIMERA_UV_FRIST`, 600 s); scheitert es, geht derselbe Abruf über pip.
+  Achtung auf die Lehre aus der Messreihe: `uv pip download` gibt es nicht,
+  und Holen ohne Installieren kann nur pip.
+- **`CHIMERA_UV` geht jetzt an den Helfer** (`HELFER_UMGEBUNG`). Vorher
+  erreichte ein gesetzter Schalter den Lauf nicht — beim Messen aufgefallen,
+  weil `CHIMERA_UV=aus` trotzdem uv benutzte. Dabei ein zweiter Fehler:
+  `pydep_holen` fragte nur nach dem uv-Binary, nicht nach dem Schalter;
+  `CHIMERA_UV=aus` schaltete damit nur das Anlegen ab. Test `test-uv.sh`
+  erweitert (uv wird bei `=aus` nicht benutzt, pip übernimmt), Gegenprobe rot.
 - **Der Snapshot vor einem Neustart ist ein Verzeichnis, kein Archiv**
   (`state/mojo-snapshot/` mit `stand.tsv` und den Kopien unter ihrer Nummer).
   Zurückrollen ist damit ein Kopieren mit Prüfsummenvergleich — kein
@@ -619,6 +516,16 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   mehr; `tests/test_regelnamen.py` hält neue Nummern fern.
 
 ### Entfernt
+- **Vorab-Laden im Hintergrund wieder entfernt** (`installer/lib/vorab.sh`,
+  `installer/chimera-prefetch`, `installer/tests/test-vorab.sh`, Schalter
+  `CHIMERA_PREFETCH_RAD`, `--find-links` auf `state/prefetch/wheels` in
+  Modul 50): Sieben kalte Läufe am Pi ergaben **0 s Gewinn**, in einem Lauf
+  21 s Verlust (der Abruf nahm Modul 50 die Leitung); nur eine
+  Erstinstallation hätte etwas abfangen können, und die ist nicht gemessen.
+  Was 0 s bringt und gepflegt werden muss, ist toter Ballast — die
+  Begründung und die Messreihe stehen in
+  `docs/messungen/2026-11-05-vorab-laden-und-uv.md`. **uv bleibt:** Modul 50
+  braucht mit uv 53–58 s statt 82–85 s, über vier Läufe stabil.
 - **Anzeige:** Herstellertreiber `whisplay.py` samt `spidev`/`gpiod`/
   `python3-dev` aus dem venv; die Anzeigetypen `st7789` und `epaper` der
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
