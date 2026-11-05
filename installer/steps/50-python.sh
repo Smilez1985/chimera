@@ -206,6 +206,10 @@ fi
 log ""
 
 if pruef_ok; then
+	# Auch auf einem fertigen Geraet das Werkzeug bereitstellen: Der naechste
+	# Abruf (neue Anforderung, neuere Fassung) soll uv benutzen. Ohne diesen
+	# Aufruf entstuende uv nie -- am Pi gemessen (5.11.): Lauf gruen, kein uv.
+	uv_bereitstellen || true
 	log "Die Python-Umgebung ist bereit und nachweisbar."
 	info "venv: $VENV"
 	log_close 0; exit 0
