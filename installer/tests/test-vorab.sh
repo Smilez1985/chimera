@@ -44,7 +44,8 @@ check "Vorab-Verzeichnis liegt unter state" \
 # gelesen (vorab_an), damit Installer und Prefetch-Prozess nicht
 # verschiedener Meinung sind -- ein Schalter, den nur eine Seite kennt,
 # ist schlimmer als keiner.
-vorab_an && ok "Vorgabe: Vorab-Laden ist an" || bad "Vorgabe ist nicht 'an'"
+if vorab_an; then bad "Vorgabe ist noch 'an' -- gemessen nutzlos, Vorgabe seit 5.11. aus"; \
+	else ok "Vorgabe: Vorab-Laden ist aus (gemessen: kein Gewinn)"; fi
 if CHIMERA_PREFETCH_RAD=0 vorab_an; then bad "CHIMERA_PREFETCH_RAD=0 schaltet nicht ab"; \
 	else ok "CHIMERA_PREFETCH_RAD=0 schaltet ab"; fi
 CHIMERA_PREFETCH_RAD=1 vorab_an && ok "CHIMERA_PREFETCH_RAD=1 schaltet an" \
@@ -154,6 +155,9 @@ fi
 # abgeraeumt (am Pi 5.11.: Vorab-Lader mitten im Download erschossen, keine
 # Marke). Der Start muss deshalb ueber `systemd-run --unit=chimera-prefetch`
 # gehen -- sichtbar geprueft mit einer Attrappe, nicht angenommen.
+# Der Start wird geprueft, also den Schalter ausdruecklich einschalten --
+# die Vorgabe ist seit 5.11. aus (gemessen: kein Gewinn).
+CHIMERA_PREFETCH_RAD=1; export CHIMERA_PREFETCH_RAD
 _stub="$W/stub"; mkdir -p "$_stub"
 _fake="$W/fakeprefetch"; printf '#!/bin/sh\nexit 0\n' >"$_fake"
 cat >"$_stub/systemd-run" <<'STUB'

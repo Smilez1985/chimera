@@ -387,6 +387,15 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Das Vorab-Laden ist jetzt standardmäßig AUS** (`CHIMERA_PREFETCH_RAD`
+  Vorgabe 1 → 0). Entscheidung anhand der Messreihe
+  (`docs/messungen/2026-11-05-vorab-laden-und-uv.md`, sieben kalte Läufe):
+  Gewinn 0 s, in einem Lauf 21 s **schlechter**, weil der Abruf Modul 50 die
+  Leitung wegnimmt. Der Code bleibt — er ist getestet, und auf einer
+  Erstinstallation (Netzanteil 1,5–2 min) kann er etwas bringen; bis das
+  gemessen ist, läuft er nicht mit. Einschalten mit `CHIMERA_PREFETCH_RAD=1`;
+  Test angepasst (Vorgabe aus) und Gegenprobe gemacht (Vorgabe zurückgedreht
+  → rot).
 - **Messreihe Vorab-Laden × uv am Pi** (Ergebnis: `docs/messungen/2026-11-05-vorab-laden-und-uv.md`).
   Je Lauf kalt (venv, pip-/uv-Cache und Vorab-Marken weg), sieben Läufe:
   ohne uv 82–85 s in Modul 50 (Gesamt 107–126 s), mit uv 53–58 s (Gesamt

@@ -27,16 +27,22 @@
 # es ohnehin laeuft -- in Modul 20. Was hier bleibt, ist pip: 22 MB, 16 s,
 # und die fallen wirklich aus Modul 50 heraus.
 #
-# Schalter: CHIMERA_PREFETCH_RAD=0 laesst das Vorab-Laden aus (Vorgabe 1).
+# Schalter: CHIMERA_PREFETCH_RAD=1 schaltet das Vorab-Laden EIN.
+# Vorgabe seit 5.11.2026: AUS. Grund ist gemessen, nicht geschaetzt
+# (docs/messungen/2026-11-05-vorab-laden-und-uv.md): sieben Laeufe am Pi,
+# kalt, mit und ohne Vorab-Laden -- der Gewinn war 0 s, in einem Lauf sogar
+# -21 s (der Abruf nahm Modul 50 die Leitung weg). Der Code bleibt, weil er
+# getestet ist und auf einer ERSTinstallation etwas bringen kann; dort ist
+# der Netzanteil 1,5-2 min. Bis das gemessen ist, laeuft er nicht mit.
 # Gebraucht wird er zum Messen (vorher/nachher) und als Notaus, wenn ein
 # Geraet am Vorab-Laden haengt.
 
-: "${CHIMERA_PREFETCH_RAD:=1}"
+: "${CHIMERA_PREFETCH_RAD:=0}"
 
 # Ist das Vorab-Laden eingeschaltet? Einzige Stelle, an der der Schalter
 # gelesen wird -- Aufrufer fragen hier, nicht selbst.
 vorab_an() {
-	[ "${CHIMERA_PREFETCH_RAD:-1}" != 0 ]
+	[ "${CHIMERA_PREFETCH_RAD:-0}" != 0 ]
 }
 
 vorab_verzeichnis() {
