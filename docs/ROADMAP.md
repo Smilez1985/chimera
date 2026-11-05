@@ -50,6 +50,8 @@ zram wird nicht angefasst, wenn es läuft.
       ist belegt.** uv liegt dort als 0.13.7 (aarch64) im Werkzeug-venv.
       **Offen: `uv pip compile` als Lock** (noch nicht eingebaut) und die
       Frage, ob Modul 50 auch die Obergrenzen-Frage über den Lock löst.
+      **Messreihe mit und ohne uv** (`docs/messungen/2026-11-05-vorab-laden-und-uv.md`):
+      uv spart rund 30 s in Modul 50 (82–85 s → 53–58 s, vier Läufe).
       **Gemessen (5.11., uv 0.13.7, aarch64):** `uv pip download` gibt es
       nicht („unrecognized subcommand"), und `uv pip install --dry-run` löst
       zwar auf, lädt die Wheels aber **nicht** (eigener Cache danach 1,3 MB,
@@ -69,9 +71,17 @@ zram wird nicht angefasst, wenn es läuft.
       Gemessen am Pi (5.11., `4f06a3c`): pip-Wheels 16 s für 22 MB (wirkt,
       überlappt), apt-debs 25 s für **null** Pakete — apt ist deshalb wieder
       aus der Liste, es hat in Modul 20 seinen einzigen Weg.
-      **Offen:** der Nutzen auf einer **Erstinstallation** (dort liegt der
-      Netzanteil bei 1,5–2 min). Bis dahin gilt der Gewinn als plausibel,
-      nicht als gemessen.
+      **Gemessen und ERNÜCHTERND** (`docs/messungen/2026-11-05-vorab-laden-und-uv.md`):
+      Auf dem Pi bringt das Vorab-Laden **nichts** — Modul 50 beginnt nach
+      ~20 s, der Abruf braucht ~20 s für 22 MB; beide teilen sich dieselbe
+      Leitung, in einem Lauf wurde es dadurch schlechter (100 s statt 79 s).
+      Ein Fehler dabei gefunden und behoben: Die Wheels landeten erst am Ende
+      des Abrufs in `wheels/` (Zwischenverzeichnis), waren bei Modul-50-Start
+      also noch nicht da — jetzt schreibt pip direkt dorthin (pip legt Wheels
+      vollständig ab, gemessen). Der Gewinn blieb trotzdem aus.
+      **Entscheidung nötig:** Vorab-Laden so lassen (kostet nichts, nützt
+      nichts), abschalten (`CHIMERA_PREFETCH_RAD=0` als Vorgabe) oder erst
+      wieder aufnehmen, wenn eine echte Erstinstallation gemessen ist.
 - [ ] **Weitere Vorab-Objekte** (Whisplay-Klon 13 MB/3 s, `rust-<commit>`
       ~2 MB/1 s): **zurückgestellt**, der Aufwand einer Marke ist größer als
       der Betrag. Wird nur wieder aufgegriffen, wenn die Erstinstallation es

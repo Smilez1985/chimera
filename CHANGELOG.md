@@ -387,6 +387,26 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Messreihe Vorab-Laden × uv am Pi** (Ergebnis: `docs/messungen/2026-11-05-vorab-laden-und-uv.md`).
+  Je Lauf kalt (venv, pip-/uv-Cache und Vorab-Marken weg), sieben Läufe:
+  ohne uv 82–85 s in Modul 50 (Gesamt 107–126 s), mit uv 53–58 s (Gesamt
+  79–81 s) — **uv spart rund 30 s**. Das **Vorab-Laden brachte nichts**:
+  Modul 50 beginnt nach ~20 s, der Abruf braucht ~20 s für 22 MB, beide
+  teilen dieselbe Leitung (ein Lauf wurde dadurch sogar langsamer: 100 s).
+  Dabei einen eigenen Fehler gefunden: Die Wheels wurden erst am Ende des
+  Abrufs in `wheels/` umgehängt und waren beim Start von Modul 50 noch nicht
+  da — jetzt schreibt pip direkt dorthin (gemessen: pip legt Wheels
+  vollständig ab, nie halb; 40 Abtastungen während eines 15-MB-Downloads).
+  Der Gewinn blieb trotzdem aus — der Engpass ist die Leitung, nicht die
+  Marke. Entscheidung offen (ROADMAP): Vorab-Laden so lassen, abschalten
+  oder erst nach einer echten Erstinstallations-Messung wieder aufnehmen.
+- **`CHIMERA_UV` und `CHIMERA_PREFETCH_RAD` gehen jetzt an den Helfer**
+  (`HELFER_UMGEBUNG`). Vorher erreichte ein gesetzter Schalter den Lauf nicht
+  — beim Messen aufgefallen, weil `CHIMERA_UV=aus` trotzdem uv benutzte.
+  Dabei ein zweiter Fehler: `pydep_holen` fragte nur nach dem uv-Binary,
+  nicht nach dem Schalter; `CHIMERA_UV=aus` schaltete damit nur das Anlegen
+  ab. Test `test-uv.sh` auf 23 Prüfungen erweitert (uv wird bei `=aus` nicht
+  benutzt, pip übernimmt), Gegenprobe rot.
 - **UV als Vorab-Lader geprüft und verworfen — die Voraussetzungen fehlen
   (gemessen 5.11., uv 0.13.7 auf aarch64, nicht vermutet):** `uv pip download`
   existiert nicht („unrecognized subcommand 'download'"), und
