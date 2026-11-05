@@ -45,8 +45,11 @@ zram wird nicht angefasst, wenn es läuft.
       nicht anlegbar → pip, uv scheitert → pip, auch pip scheitert → Befund,
       Zeitgrenze greift, `--find-links` nur bei vorhandenem Verzeichnis);
       Gegenproben rot (Zeitgrenze ausgebaut → 2 rot, Rückfall ausgebaut →
-      3 rot). **Offen: Messung auf dem Pi** (Dauer uv gegen pip bei gleicher
-      Anforderung) — bis dahin ist der Gewinn plausibel, nicht belegt.
+      3 rot). **Am Pi gemessen (5.11., kalt, je eigener Cache, dieselben
+      Pakete Pillow 13.0.0 + numpy 2.5.4): pip 41 s, uv 10 s — der Gewinn
+      ist belegt.** uv liegt dort als 0.13.7 (aarch64) im Werkzeug-venv.
+      **Offen: `uv pip compile` als Lock** (noch nicht eingebaut) und die
+      Frage, ob Modul 50 auch die Obergrenzen-Frage über den Lock löst.
       **Gemessen (5.11., uv 0.13.7, aarch64):** `uv pip download` gibt es
       nicht („unrecognized subcommand"), und `uv pip install --dry-run` löst
       zwar auf, lädt die Wheels aber **nicht** (eigener Cache danach 1,3 MB,

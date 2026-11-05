@@ -378,8 +378,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   uv **und** pip scheitern → Befund, Zeitgrenze greift in 1 s, `--find-links`
   nur bei vorhandenem Verzeichnis). Gegenproben: Zeitgrenze ausgebaut → 2 rot,
   Rückfall ausgebaut → 3 rot. `test-python-env.sh` 53 ok, `test-portability.sh`
-  10 ok. **Offen: die Messung auf dem Pi** (uv gegen pip bei gleicher
-  Anforderung) — der Gewinn ist bis dahin plausibel, nicht belegt.
+  10 ok. **Am Pi gemessen (5.11., je eigener Cache, kalt, dieselben Pakete
+  Pillow 13.0.0 + numpy 2.5.4): pip 41 s, uv 10 s.** uv liegt dort als
+  0.13.7 (aarch64) unter `/opt/chimera/tools/uv`; der Lauf war grün, LED ok.
+  Dabei fiel ein echter Fehler auf: Zuerst stand die Bereitstellung nur im
+  Abrufzweig — auf einem Gerät, dessen Abhängigkeiten schon erfüllt sind,
+  wurde uv also **nie** angelegt (Lauf grün, kein uv). Jetzt wird es auch im
+  fertigen Fall bereitgestellt.
 
 ### Geändert
 - **UV als Vorab-Lader geprüft und verworfen — die Voraussetzungen fehlen
