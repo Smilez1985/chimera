@@ -41,12 +41,21 @@
 
 # Umgebungsvariablen, die der Lauf von aussen bekommt und die der Helfer erben
 # soll. Feste Liste: Was hier nicht steht, hat im Helfer seine Vorgabe.
-HELFER_UMGEBUNG="CHIMERA_ROOT CHIMERA_LOG_DIR CHIMERA_LOG_KEEP CHIMERA_DOWNGRADE
+HELFER_UMGEBUNG="CHIMERA_ROOT CHIMERA_LOG_DIR CHIMERA_LOG_ZIEL CHIMERA_LOG_KEEP CHIMERA_DOWNGRADE
 CHIMERA_QUELLE_URL CHIMERA_RUST_URL CHIMERA_RUST_LOKAL CHIMERA_MIT
 CHIMERA_WEB_PASSWORT CHIMERA_SWAP_RESERVE_MIB CHIMERA_ZRAM_PROZENT
 CHIMERA_ZRAM_ALGO CHIMERA_ZRAM_PRIO CHIMERA_TOR_SPEICHER CHIMERA_TOR_WARTEN
 CHIMERA_DIENST_WARTEN CHIMERA_NUTZER CHIMERA_DIENSTNUTZER CHIMERA_TOR_NUTZER
 CHIMERA_UHR_MIN CHIMERA_ANZEIGE CHIMERA_LOG_KARTE CHIMERA_STATE_DIR"
+
+# CHIMERA_LOG_DIR **und** CHIMERA_LOG_ZIEL gehen zusammen weiter.
+# Nur das Verzeichnis weiterzureichen war ein Fehler mit Folgen (am Pi 5.11.
+# gemessen): In `lib/common.sh` gilt "CHIMERA_LOG_DIR ist gesetzt" als
+# "--log-dir vom Nutzer", und dann wird das Ziel gleich der Quelle gesetzt.
+# Im Helfer hiess das: CHIMERA_LOG_ZIEL == CHIMERA_LOG_DIR, `log_sync` tat
+# damit absichtlich nichts, und vom Lauf lag nur der Anfang (bis Modul 00)
+# auf der Karte -- der Rest blieb in /run und war nach einem Neustart weg.
+# Wer hier eine der beiden Zeilen entfernt, bricht die Protokollablage.
 
 # Laeuft dieser Prozess schon als Helfer?
 helfer_laeuft() { [ "${CHIMERA_HELFER:-0}" = 1 ]; }

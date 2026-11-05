@@ -318,5 +318,45 @@ hat "Umgebung: Wert mit Leerzeichen bleibt ganz" "$F/lese-ok" "ok"
 hat "Umgebung: fremde Variable wird nicht uebernommen" "$F/lese-ok" "fremd-ignoriert"
 hat "Umgebung: Datei wird danach geloescht" "$F/lese-ok" "datei-weg"
 
+# --- 9. Protokoll: das Ziel muss den Helfer erreichen --------------------
+# Grund (am Pi 5.11. gemessen): Wird nur CHIMERA_LOG_DIR weitergegeben, gilt
+# im Helfer "vom Nutzer gesetzt" -- und CHIMERA_LOG_ZIEL wird gleich der
+# Quelle. log_sync tut dann absichtlich nichts, und der Lauf liegt nur bis
+# Modul 00 auf der Karte. Beide muessen also durch die Umgebung gehen, und
+# zwar mit UNTERSCHIEDLICHEM Wert.
+feld protokoll
+_pr_ok=0
+(
+	set +e
+	. "$HERE/lib/common.sh"
+	. "$LIB"
+	CHIMERA_LOG_DIR="/run/chimera/logs/installer"
+	CHIMERA_LOG_ZIEL="$W/karte/installer"
+	helfer_env_schreiben >/dev/null 2>&1
+	# Wie im Helfer: ein NEUER Prozess kennt die Variablen nicht. Ohne das
+	# hier wuerde der Test auch dann gruen bleiben, wenn nichts in der Datei
+	# steht -- die Werte der Testschale waeren ja noch da (Gegenprobe zeigte
+	# genau das: Mutation blieb gruen).
+	unset CHIMERA_LOG_ZIEL CHIMERA_LOG_DIR
+	CHIMERA_HELFER_ENV="$(helfer_env_datei)" helfer_env_lesen
+	[ "${CHIMERA_LOG_ZIEL:-}" = "$W/karte/installer" ] && exit 0
+	exit 1
+) && _pr_ok=1
+check "Umgebung: CHIMERA_LOG_ZIEL erreicht den Helfer" "$_pr_ok" 1
+_pr_ok=0
+(
+	set +e
+	. "$HERE/lib/common.sh"
+	. "$LIB"
+	CHIMERA_LOG_DIR="/run/chimera/logs/installer"
+	CHIMERA_LOG_ZIEL="$W/karte/installer"
+	helfer_env_schreiben >/dev/null 2>&1
+	unset CHIMERA_LOG_ZIEL CHIMERA_LOG_DIR
+	CHIMERA_HELFER_ENV="$(helfer_env_datei)" helfer_env_lesen
+	[ "${CHIMERA_LOG_ZIEL:-}" != "${CHIMERA_LOG_DIR:-}" ] && exit 0
+	exit 1
+) && _pr_ok=1
+check "Umgebung: Ziel bleibt vom Quellordner verschieden" "$_pr_ok" 1
+
 printf '\nErgebnis: %s ok, %s fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
