@@ -19,6 +19,26 @@ Stand: 2026-11-04. Pre-Alpha.
 
 ## Phase Installer — Idempotenz, Abkopplung, Anzeige beim Update
 
+- [ ] **Installerlauf nach dem `exec`-Neustart hinterlässt kein vollständiges
+      Protokoll auf der Karte** (Regel 10e verletzt, am Pi 5.11. gemessen).
+      Beobachtung an `install-20261105-005936.log`: unter
+      `/run/chimera/logs/installer/` liegen 10.719 Bytes (vollständig, endet
+      mit `=== Ergebnis: Erfolg (0) ===`), unter `/opt/chimera/logs/installer/`
+      nur 1.902 Bytes (bis Modul 00). Das Journal des Helfers nennt
+      `Protokoll: /run/chimera/logs/installer/…` — also wurde am Ende nicht
+      abgeglichen, und eine WARN-Zeile fehlt. `log_sync` selbst ist in Ordnung:
+      von Hand im selben Prozess (`DIR=/run/chimera/logs/installer`,
+      `ZIEL=/opt/chimera/logs/installer`) kopiert es sofort vollständig, rc 0.
+      Zu klären: Warum ist im fortgesetzten Prozess `CHIMERA_LOG_ZIEL` gleich
+      `CHIMERA_LOG_DIR` (dann gleicht `log_sync` absichtlich nichts ab)?
+      Verdacht, **nicht geprüft**: die Umgebung des Helfers
+      (`HELFER_UMGEBUNG` in `lib/helfer.sh`) reicht `CHIMERA_LOG_DIR` weiter,
+      ohne `CHIMERA_LOG_ZIEL` — dann greift der `--log-dir`-Zweig in
+      `lib/common.sh`.
+      Folge: Nach einem Stromausfall fehlt das Protokoll genau des Laufs, der
+      etwas geändert hat — und Mojos Verweis auf `/opt/chimera/logs/installer`
+      zeigt auf eine halbe Datei.
+
 Vorgaben smilez (2.11.): Der Installer fasst **nur an, was fehlt oder wegen
 einer neuen Version aktualisiert werden muss**; er läuft nie in der SSH-Sitzung;
 zram wird nicht angefasst, wenn es läuft.
