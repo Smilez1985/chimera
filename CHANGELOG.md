@@ -568,6 +568,22 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Der Installerlauf hinterlässt sein Protokoll jetzt vollständig auf der
+  Karte** — auch nach dem `exec`-Neustart in Modul 00 (Regel 10e). Ursache am
+  Pi gemessen: `HELFER_UMGEBUNG` reichte `CHIMERA_LOG_DIR` an den Helfer
+  weiter, aber nicht `CHIMERA_LOG_ZIEL`. In `lib/common.sh` gilt „`LOG_DIR`
+  ist gesetzt" als `--log-dir` des Nutzers — dann wird das Ziel gleich der
+  Quelle gesetzt, die Protokolle bleiben in `/run` (tmpfs), und `log_sync`
+  gleicht absichtlich nichts ab. Belegt an `install-20261105-005936.log`:
+  `/run` 10.719 B, `/opt` 1.902 B (bis Modul 00). Jetzt gehen beide Variablen
+  durch die Umgebungsdatei; Nachweis nach dem Fix an
+  `install-20261105-071018.log`: `cmp` identisch, 10.721 B auf beiden Seiten,
+  13 Moduleinträge, „Fertig: 12 Module ohne Fehler", LED ok. Tests
+  `test-helfer.sh` 51 ok, zwei neue Prüfungen (Ziel erreicht den Helfer, Ziel
+  bleibt vom Quellordner verschieden); Gegenprobe: `CHIMERA_LOG_ZIEL` aus der
+  Liste entfernt → rot. Der erste Anlauf der Prüfung war grün *ohne* Wert in
+  der Datei (die Testschale hielt die Variablen noch) — deshalb `unset` vor
+  dem Lesen.
 - **Das Changelog war zerlegt**: „Hinzugefügt" kam zweimal (nach
   „Entfernt"), und zwei Punkte standen ohne Überschrift direkt nach dem
   Vorspann — beim Lesen unsichtbar, beim Auswerten nicht. Wieder in die
