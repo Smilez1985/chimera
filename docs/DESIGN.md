@@ -3906,11 +3906,21 @@ Transportschicht, damit eine IDE das Gateway ansprechen kann.**
    über Rechte; eine Sitzung gehört genau einem Nutzer; keine Zugangsdaten in
    `_meta`. Berechtigungsfragen von Chimera an die IDE sind **beratend**,
    Chimera hält sie selbst ein.
-7. **Die Bibliothek ist nicht entschieden:** Die Rust-Crate
-   `agent-client-protocol` (3.6.0) hängt an `futures` und optional an
-   `async-io`; das Gateway läuft ohne Laufzeit. Gemessen wird Größe und
-   Speicher, bevor sie ins Gateway kommt; sonst baut Chimera den Mindestumfang
-   mit `serde_json` selbst.
+7. **Die Bibliothek ist entschieden: nein.** Die Rust-Crate
+   `agent-client-protocol` hängt an `futures`/`tokio`; das Gateway läuft ohne
+   Laufzeit. Gemessen am 6.11. gegen denselben Vertrag mit `serde_json`
+   (`docs/messungen/2026-11-06-acp-bibliothek.md`):
+
+   | | Crate 5.0.0 | eigener Zeilenrahmen |
+   |---|---|---|
+   | Binärdatei, gestrippt | 2,07 MB | **516 kB** |
+   | 20 000 Anfragen | 5 034 ms | **370 ms** |
+   | Speicher | 984 kB, 10 Fäden | **424 kB, 1 Faden** |
+   | Start bis erste Antwort | 105 ms | **26 ms** |
+
+   Der Mindestumfang wird deshalb **mit `serde_json` selbst gebaut**. Die
+   Crate bleibt Referenz für die Feldnamen, nicht Abhängigkeit. Grenze der
+   Messung: nur `initialize`, nicht das Streaming von `session/prompt`.
 8. **Gegenprobe:** Die Tür muss ohne Anmeldung zu bleiben, ein zweiter Prompt
    während eines Zuges muss in die Reihe, ein `session/cancel` muss den Zug
    beenden, ein Nutzer darf nie die Sitzung eines anderen sehen, und jeder

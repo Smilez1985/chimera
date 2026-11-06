@@ -372,6 +372,15 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **ACP-Bibliothek gemessen und verworfen: der Mindestumfang wird selbst
+  gebaut.** Die Rust-Crate `agent-client-protocol` (3.6.0 und 5.0.0) gegen
+  denselben JSON-RPC-Zeilenrahmen mit `serde_json` — gleiche Arbeit, gleiche
+  Antworten: 2,07 MB gegen 516 kB Binärdatei, 5 034 ms gegen 370 ms für
+  20 000 Anfragen, 984 kB und 10 Fäden gegen 424 kB und einen Faden, 105 ms
+  gegen 26 ms bis zur ersten Antwort. Die Crate brächte `tokio` mit, das
+  Gateway läuft ohne Laufzeit; sie bleibt Referenz für die Feldnamen, nicht
+  Abhängigkeit. Bericht samt Grenzen der Messung (nur `initialize`, nicht das
+  Streaming) in `docs/messungen/2026-11-06-acp-bibliothek.md`.
 - **Platzprüfung vor dem Snapshot rechnet den Bedarf, statt einen Richtwert zu
   prüfen** (`neustart.rs`, `platzbedarf_mb`). Bisher galt „100 MB frei" als
   Bedingung — auch für einen Snapshot von 200 MB. Jetzt zählt die Summe der

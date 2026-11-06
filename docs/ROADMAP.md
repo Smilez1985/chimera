@@ -40,9 +40,6 @@ mit einer Transportschicht, damit eine IDE das Gateway ansprechen kann.**
 Recherche: `docs/research/ACP.md` und `docs/research/ACP-MCP.md`. Rust im
 Gateway-Workspace (Regel „Rust, wo dauernd läuft“), eigene Tür.
 
-- [ ] **Bibliothek messen:** Crate `agent-client-protocol` 3.6.0 gegen den
-      Mindestumfang mit `serde_json` (Größe des Binarys, Speicher, Laufzeit);
-      danach entscheiden.
 - [ ] **ACP-Kern** (`initialize`, `session/new`, `session/prompt`,
       `session/update`, `session/cancel`) gegen die Hauptsitzung, unabhängig vom
       Transport; Test gegen die Prüfwerkzeuge der Spezifikation (Seite „Testing“).
