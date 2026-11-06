@@ -30,9 +30,16 @@ pub const SNAPSHOT: &str = "mojo-snapshot";
 /// So oft darf ein Marker einen Neustart auslösen. Danach nur noch Bericht —
 /// ein Neustart, der nichts ändert, darf sich nicht wiederholen.
 pub const NEUSTARTS_MAX: u32 = 2;
-/// Richtwert für den freien Platz vor dem Snapshot. **Vermutung** (smilez,
-/// 3.11.), bis der Bedarf gemessen ist (`ROADMAP`, „Bedarf messen").
+/// Untergrenze für den freien Platz vor dem Snapshot. Gilt, wenn die Größe
+/// der zu sichernden Dateien klein oder unbekannt ist. Gemessen am 3.11. auf
+/// dem Pi: etwa eine Produktivumgebung (`productive/` samt venv, 107 MB).
 pub const PLATZ_MIN_MB: u64 = 100;
+
+/// Faktor auf die Summe der zu sichernden Dateien. Kurzzeitig liegen **zwei**
+/// Stände auf der Karte: der neue Snapshot und das Archiv des vorherigen
+/// (`snapshot_archivieren` verschiebt, bevor der neue geschrieben wird; das
+/// ältere Archiv verschwindet erst danach).
+pub const PLATZ_FAKTOR: u64 = 2;
 
 /// Eine gesicherte Datei: Pfad auf dem Gerät, Prüfsumme, Nummer der Kopie.
 #[derive(Clone, Debug, PartialEq)]
@@ -203,10 +210,31 @@ pub fn snapshot_archivieren(dir: &Path, jetzt: u64) -> Result<(), String> {
     Ok(())
 }
 
+/// Wie viel Platz der Snapshot braucht, in MB — aus der Summe der
+/// Dateigrößen, nicht aus einem festen Richtwert. `None`, wenn eine Größe
+/// nicht lesbar ist: Dann ist der Bedarf unbekannt und es gilt die
+/// Untergrenze (Regel „Nie raten" — eine geratene Summe wäre schlimmer als
+/// die bewusste Untergrenze).
+pub fn platzbedarf_mb(dateien: &[String]) -> Option<u64> {
+    let mut summe: u64 = 0;
+    for p in dateien {
+        let groesse = std::fs::metadata(p).ok()?.len();
+        summe = summe.saturating_add(groesse);
+    }
+    // Aufrunden: ein halber MB ist ein halber MB zu wenig.
+    let mb = summe.saturating_mul(PLATZ_FAKTOR).div_ceil(1024 * 1024);
+    // usize -> u64 ist auf jedem Ziel erlaubt; max() haelt die Untergrenze.
+    Some(mb.max(PLATZ_MIN_MB))
+}
+
 /// Snapshot der **geänderten** Dateien anlegen. Gibt den Stand zurück, der in
 /// den Marker gehört. `platz_mb` ist der freie Platz auf dem Datenträger; ist
 /// er zu knapp, wird **nichts** gesichert (ein halber Snapshot ist schlimmer
 /// als keiner) und der Grund genannt.
+///
+/// Geprüft wird gegen den **Bedarf** (`platzbedarf_mb`), nicht gegen einen
+/// festen Wert: Ein Snapshot von 200 MB passt nicht in 150 MB frei, auch wenn
+/// 150 über jedem Richtwert liegen.
 pub fn snapshot_anlegen(
     dir: &Path,
     dateien: &[String],
@@ -216,10 +244,12 @@ pub fn snapshot_anlegen(
     if dateien.is_empty() {
         return Ok(Vec::new());
     }
+    let bedarf = platzbedarf_mb(dateien).unwrap_or(PLATZ_MIN_MB);
     if let Some(mb) = platz_mb {
-        if mb < PLATZ_MIN_MB {
+        if mb < bedarf {
             return Err(format!(
-                "zu wenig Platz: {mb} MB frei, {PLATZ_MIN_MB} MB noetig -- kein Snapshot, kein Neustart"
+                "zu wenig Platz: {mb} MB frei, {bedarf} MB noetig ({} Datei(en), doppelt fuer den Vorgaengerstand, Untergrenze {PLATZ_MIN_MB} MB) -- kein Snapshot, kein Neustart",
+                dateien.len()
             ));
         }
     }
@@ -355,6 +385,50 @@ mod tests {
         let fehler = snapshot_anlegen(&d, &[a], Some(PLATZ_MIN_MB - 1), 1000).unwrap_err();
         assert!(fehler.contains("zu wenig Platz"), "{fehler}");
         assert!(!d.join(SNAPSHOT).exists());
+    }
+
+    /// Eine Datei der gewuenschten Groesse, ohne sie zu schreiben (sparse).
+    fn grosse_datei(d: &Path, name: &str, mb: u64) -> String {
+        let p = d.join(name);
+        let f = std::fs::File::create(&p).unwrap();
+        f.set_len(mb * 1024 * 1024).unwrap();
+        p.to_string_lossy().to_string()
+    }
+
+    // Die 100 MB sind eine Untergrenze, kein Bedarf: Ein Snapshot von 60 MB
+    // braucht 120 MB frei (zwei Staende), auch wenn 100 "reichen" wuerden.
+    #[test]
+    fn platzbedarf_zaehlt_die_dateien_und_nicht_nur_die_untergrenze() {
+        let d = feld("bedarf");
+        let gross = grosse_datei(&d, "gross.bin", 60);
+        assert_eq!(platzbedarf_mb(std::slice::from_ref(&gross)), Some(120));
+    }
+
+    #[test]
+    fn platzbedarf_haelt_die_untergrenze_bei_kleinen_dateien() {
+        let d = feld("bedarf-klein");
+        let a = datei(&d, "a.conf", "eins");
+        assert_eq!(platzbedarf_mb(&[a]), Some(PLATZ_MIN_MB));
+    }
+
+    // Groesse nicht lesbar -> Bedarf unbekannt. Dann gilt die Untergrenze,
+    // und der Snapshot scheitert spaeter an der nicht lesbaren Datei --
+    // geraten wird hier nichts.
+    #[test]
+    fn platzbedarf_ohne_lesbare_datei_ist_unbekannt() {
+        assert_eq!(platzbedarf_mb(&["/gibt/es/nicht".to_string()]), None);
+    }
+
+    // Gegenprobe zum Bedarf: 110 MB frei reichen fuer 60 MB Dateien NICHT,
+    // obwohl sie ueber der Untergrenze von 100 MB liegen. Und es entsteht
+    // kein halber Snapshot.
+    #[test]
+    fn grosse_dateien_brauchen_mehr_als_die_untergrenze() {
+        let d = feld("platz-gross");
+        let gross = grosse_datei(&d, "gross.bin", 60);
+        let fehler = snapshot_anlegen(&d, &[gross], Some(110), 1000).unwrap_err();
+        assert!(fehler.contains("120 MB noetig"), "{fehler}");
+        assert!(!d.join(SNAPSHOT).exists(), "kein halber Snapshot");
     }
 
     #[test]

@@ -372,6 +372,16 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Platzprüfung vor dem Snapshot rechnet den Bedarf, statt einen Richtwert zu
+  prüfen** (`neustart.rs`, `platzbedarf_mb`). Bisher galt „100 MB frei" als
+  Bedingung — auch für einen Snapshot von 200 MB. Jetzt zählt die Summe der
+  zu sichernden Dateien, **doppelt** (der neue Snapshot und das Archiv des
+  vorherigen liegen kurzzeitig beide auf der Karte), mit 100 MB als
+  Untergrenze für den Fall, dass eine Größe nicht lesbar ist. Die Meldung
+  nennt Zahl, Bedarf und Herkunft. Tests: 60-MB-Datei → 120 MB Bedarf,
+  kleine Dateien → Untergrenze, unlesbare Datei → Bedarf unbekannt, 110 MB
+  frei für 60 MB Dateien → kein Snapshot (Gegenprobe: Faktor 1 → genau diese
+  zwei Tests rot).
 - **Python-Abhängigkeiten werden bei jedem Lauf aufgefrischt — kein Lock.**
   Vorgabe smilez (5.11.): *immer die neueste Fassung, die mit allem anderen
   kompatibel ist.* Ein Abhängigkeit kann vor dem ersten Installerlauf auf dem

@@ -3827,9 +3827,15 @@ venv: 107 MB). Die Messung:
 | Mojo-Pruefung (`--mojo --oracle`) | 528 ms, **6 MB** Spitze, Exitcode 0 |
 
 Daraus folgt fuer den Snapshot: nicht „100 MB frei", sondern **die Groesse der
-zu sichernden Dateien plus Reserve** pruefen — die steht vor dem Kopieren fest
-(Summe der Dateigroessen aus der Liste). 100 MB bleiben die Untergrenze fuer
-den Fall, dass die Liste leer ist oder die Groesse unbekannt. Der Leerlauf von
+zu sichernden Dateien** pruefen — die steht vor dem Kopieren fest (Summe der
+Dateigroessen aus der Liste), **doppelt**, weil kurzzeitig zwei Staende auf
+der Karte liegen (der neue Snapshot und das Archiv des vorherigen; das
+aeltere Archiv verschwindet erst danach). 100 MB bleiben die Untergrenze fuer
+den Fall, dass die Liste leer ist oder eine Groesse nicht lesbar ist — dann
+gilt die Untergrenze, statt eine Summe zu raten.
+
+Beispiel: 60 MB zu sichern heisst 120 MB frei, nicht 100. Umgekehrt reichen
+110 MB fuer dieselben Dateien nicht, obwohl sie ueber dem Richtwert liegen. Der Leerlauf von
 28 % eines Kerns ist ein eigener Befund (ein Faden haengt zu ~22 % in `D`,
 also in E/A-Wartezeit) und steht in `ROADMAP`.
 
