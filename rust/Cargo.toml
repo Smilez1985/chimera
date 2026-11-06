@@ -10,7 +10,7 @@
 
 [workspace]
 resolver = "2"
-members = ["crates/gemein", "crates/tor"]
+members = ["crates/gemein", "crates/tor", "crates/acp"]
 
 [workspace.package]
 version = "0.0.0"

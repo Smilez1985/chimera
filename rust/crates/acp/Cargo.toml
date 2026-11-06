@@ -1,0 +1,11 @@
+[package]
+name = "chimera-acp"
+description = "ACP-Kern (Agent Client Protocol): JSON-RPC 2.0 mit Zeilenrahmen, Mindestumfang ohne Laufzeit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+gemein.workspace = true

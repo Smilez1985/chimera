@@ -40,9 +40,15 @@ mit einer Transportschicht, damit eine IDE das Gateway ansprechen kann.**
 Recherche: `docs/research/ACP.md` und `docs/research/ACP-MCP.md`. Rust im
 Gateway-Workspace (Regel „Rust, wo dauernd läuft“), eigene Tür.
 
-- [ ] **ACP-Kern** (`initialize`, `session/new`, `session/prompt`,
-      `session/update`, `session/cancel`) gegen die Hauptsitzung, unabhängig vom
-      Transport; Test gegen die Prüfwerkzeuge der Spezifikation (Seite „Testing“).
+- [ ] **ACP-Kern** — **Methoden und Prüfungen gebaut** (`rust/crates/acp`,
+      17 Tests): `initialize` meldet Version 1 und nur vorhandene
+      Fähigkeiten, `session/new` liefert eine ID, `session/prompt` gibt
+      `stopReason` und schickt `session/update` als Meldung, `session/cancel`
+      ist eine Meldung ohne Antwort, unbekannte Methoden und kaputte Zeilen
+      werden zu Fehlerantworten mit dem richtigen Code. **Offen:** Anbindung
+      an die Hauptsitzung (heute Trait `Agent` mit Attrappe), der Test gegen
+      die Prüfwerkzeuge der Spezifikation (Seite „Testing") und das
+      Einreihen eines zweiten Prompts während eines Zuges.
 - [ ] **Transportschicht:** ein Bytestrom-Trait mit Zeilenrahmen; Transporte
       **stdio** (Vermittler `chimera-tor --acp-stdio` auf dem Rechner der IDE),
       **Unix-Socket** am Gateway, später **HTTP/WebSocket** nach dem Entwurf.

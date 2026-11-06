@@ -20,6 +20,18 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **ACP-Kern** (`rust/crates/acp`, `chimera-acp`): JSON-RPC 2.0 mit
+  Zeilenrahmen und der Mindestumfang aus der Regel „ACP“ — `initialize`
+  (Protokollversion 1, nur Fähigkeiten, die es gibt), `session/new`,
+  `session/prompt` mit `stopReason`, `session/update` als Meldung,
+  `session/cancel` als Meldung ohne Antwort. Unbekannte Methoden, kaputte
+  Zeilen und fehlende Parameter werden zu Fehlerantworten mit dem Code, den
+  JSON-RPC 2.0 dafür vorsieht (`id: null`, wenn die Anfrage selbst unlesbar
+  war) — ein Client mit Tippfehler kann weiterreden. Der Zeilenrahmen kommt
+  aus `gemein::zeile`, der Kern ist synchron und ohne Laufzeit; was ein Zug
+  inhaltlich tut, hängt am Trait `Agent`. 17 Tests, dazu vier Grenzfälle
+  (Meldung ohne `id`, `id: null` als echte Anfrage, Bildblock wird
+  abgelehnt statt geschluckt, mehrere Textblöcke bleiben getrennt).
 - **Blaupause: Regel „Warte-Schleife" — kein Download bricht bei einem
   Netzaussetzer ab.** Jeder Abruf läuft in einer Schleife, die den Ausfall
   meldet, pausiert und weitermacht, sobald das Netz zurück ist (`network_wait`

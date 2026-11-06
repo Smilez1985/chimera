@@ -3921,7 +3921,13 @@ Transportschicht, damit eine IDE das Gateway ansprechen kann.**
    Der Mindestumfang wird deshalb **mit `serde_json` selbst gebaut**. Die
    Crate bleibt Referenz für die Feldnamen, nicht Abhängigkeit. Grenze der
    Messung: nur `initialize`, nicht das Streaming von `session/prompt`.
-8. **Gegenprobe:** Die Tür muss ohne Anmeldung zu bleiben, ein zweiter Prompt
+8. **Der Kern liegt in `rust/crates/acp`** (`chimera-acp`) und nutzt den
+   Zeilenrahmen aus `gemein::zeile` — kein zweiter Rahmen, keine zweite
+   Wahrheit. Der Kern kennt Methodennamen, Parametersitze und
+   Fehlerantworten; was ein Zug *inhaltlich* tut, hängt am Trait `Agent`
+   (im Betrieb die Hauptsitzung, im Test eine Attrappe). Bewusst synchron:
+   Wer ihn nebenläufig braucht, ruft ihn aus seinem Faden auf.
+9. **Gegenprobe:** Die Tür muss ohne Anmeldung zu bleiben, ein zweiter Prompt
    während eines Zuges muss in die Reihe, ein `session/cancel` muss den Zug
    beenden, ein Nutzer darf nie die Sitzung eines anderen sehen, und jeder
    Transport muss denselben Kern-Test bestehen (gleiche Nachrichten, gleiche
