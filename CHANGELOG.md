@@ -20,6 +20,16 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **ACP-Transportschicht** (`rust/crates/acp/src/transport.rs`): Der Kern
+  kennt nur einen `Strom` aus JSON-Zeilen; `Stdio` hängt ihn an stdin/stdout
+  (der Fall, den eine IDE erwartet), weitere Transporte (Unix-Socket,
+  HTTP/WebSocket) setzen dasselbe Merkmal um. `bedienen()` läuft bis zum
+  Verbindungsende; eine kaputte Zeile beendet die Sitzung **nicht** — der
+  Client bekommt `-32700` und die nächste Anfrage wird beantwortet. Meldungen
+  eines Zuges gehen vor dessen Antwort raus, sonst sähe der Client die
+  Aktualisierung erst nach dem Ende. Fünf Tests mit In-Memory-Strömen
+  (drei Anfragen → drei Antworten plus Meldung, kaputte Zeile, leere Eingabe,
+  Meldung ohne `id`, eine Ausgabezeile je Nachricht).
 - **ACP-Kern** (`rust/crates/acp`, `chimera-acp`): JSON-RPC 2.0 mit
   Zeilenrahmen und der Mindestumfang aus der Regel „ACP“ — `initialize`
   (Protokollversion 1, nur Fähigkeiten, die es gibt), `session/new`,

@@ -49,10 +49,12 @@ Gateway-Workspace (Regel „Rust, wo dauernd läuft“), eigene Tür.
       an die Hauptsitzung (heute Trait `Agent` mit Attrappe), der Test gegen
       die Prüfwerkzeuge der Spezifikation (Seite „Testing") und das
       Einreihen eines zweiten Prompts während eines Zuges.
-- [ ] **Transportschicht:** ein Bytestrom-Trait mit Zeilenrahmen; Transporte
-      **stdio** (Vermittler `chimera-tor --acp-stdio` auf dem Rechner der IDE),
-      **Unix-Socket** am Gateway, später **HTTP/WebSocket** nach dem Entwurf.
-      Jeder Transport besteht denselben Kern-Test.
+- [ ] **Transportschicht** — **Strom-Merkmal und stdio gebaut**
+      (`Strom`, `Stdio`, `bedienen`; fünf Tests mit In-Memory-Strömen, unter
+      anderem: eine kaputte Zeile beendet die Sitzung nicht). **Offen:** der
+      Vermittler `chimera-tor --acp-stdio` (der Prozess, den eine IDE startet),
+      der Unix-Socket am Gateway und der gemeinsame Kern-Test über **alle**
+      Transporte.
 - [ ] **Tür am Gateway** mit Positivliste, Anmeldung und nur im LAN; Test, dass sie
       ohne Positivliste zu bleibt.
 - [ ] **In einer echten IDE belegen** (Zed, JetBrains oder Android Studio) und

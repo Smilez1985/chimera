@@ -16,6 +16,8 @@
 
 pub mod kern;
 pub mod rpc;
+pub mod transport;
 
 pub use kern::{faehigkeiten, Agent, Ausgang, Kern, PROTOKOLL_VERSION};
 pub use rpc::{deuten, fehlerantwort, meldung, Nachricht};
+pub use transport::{bedienen, Ende, Stdio, Strom};
