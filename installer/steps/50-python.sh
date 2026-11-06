@@ -205,11 +205,106 @@ else
 fi
 log ""
 
+# --- Fassungen auffrischen (Vorgabe smilez, 5.11.2026) --------------------
+#
+# "Immer die neueste Fassung, die mit allem anderen kompatibel ist." Ein
+# Abhaengigkeit kann auf dem Geraet liegen, bevor der Installer je lief, und
+# dabei veraltet sein -- eine vorhandene Fassung ist kein Beweis fuer eine
+# aktuelle. Deshalb wird bei JEDEM Lauf gegen den Index abgeglichen
+# (`--upgrade` ist Vorgabe in lib/python.sh), nicht nur wenn etwas fehlt.
+#
+# Reihenfolge, und warum sie so ist: Stand sichern -> auffrischen ->
+# nachweisen -> im Zweifel zurueck. Der Nachweis entscheidet, nicht der
+# Exitcode von pip. Ohne Sicherung wird nicht zurueckgerollt (dann gibt es
+# nichts, wohin), aber auch nicht schweigend weitergemacht.
+#
+# Eine Stelle fuer beide Wege -- gesunde Umgebung und Herstellen. Zwei
+# Kopien dieser Reihenfolge waeren zwei Verhalten (Regel 10g).
+#
+# Rueckgabe 0 = Umgebung in Ordnung, 2 = Rueckfall gescheitert.
+# $1 optional --ohne-nachweis, dann $@ = Anforderungen
+#
+# --ohne-nachweis braucht der Weg, auf dem die Umgebung erst entsteht: Dort
+# ist die .pth-Datei noch nicht verdrahtet, `pruef_ok` waere also immer
+# falsch und ein "Rueckfall" wuerde eine gesunde Installation zerlegen. Den
+# Nachweis fuehrt dieses Modul am Ende selbst.
+auffrischen() {
+	_ak_nachweis=1
+	[ "${1:-}" = --ohne-nachweis ] && { _ak_nachweis=0; shift; }
+	_ak_stand="$(rootpath "$CHIMERA_STATE")/python-stand.txt"
+	_ak_neu="$_ak_stand.neu"
+	_ak_gesichert=0
+	if pydep_stand_sichern "$PY" "$_ak_stand"; then
+		_ak_gesichert=1
+	else
+		warn "Kein vorheriger Stand sicherbar (leere Umgebung?) -- ohne Rueckfall."
+	fi
+	pydep_ensure "$PY" "$@" || \
+		warn "Auffrischen meldete einen Fehler -- entscheidend ist der Nachweis."
+	if ! pydep_stand_sichern "$PY" "$_ak_neu"; then
+		warn "Neuer Stand nicht feststellbar -- Sicherung bleibt erhalten."
+		return 0
+	fi
+	if [ "$_ak_gesichert" = 1 ] && cmp -s "$_ak_stand" "$_ak_neu"; then
+		info "Fassungen unveraendert (Stand: $_ak_stand)"
+		rm -f "$_ak_neu"
+		return 0
+	fi
+	info "Fassungen erneuert:"
+	diff "$_ak_stand" "$_ak_neu" 2>/dev/null | sed -n 's/^> /    + /p; s/^< /    - /p'
+	info "Neue Fassungen wirken mit dem naechsten Start des Dienstes."
+	# Nachweis nur bei echter Aenderung: einer ohne Anlass kostet einen
+	# Python-Start (am Pi gemessen: 1,7 s warm).
+	#
+	# WICHTIG: Der gesicherte Stand wird erst UEBERSCHRIEBEN, wenn der neue
+	# nachgewiesen ist. Andersherum rollte der Rueckfall auf den kaputten
+	# Stand zurueck -- der Test tests/test-python-env.sh hat genau das
+	# gefunden (Umgebung blieb unbrauchbar, obwohl der Rueckfall lief).
+	if [ "$_ak_nachweis" != 1 ] || pruef_ok; then
+		mv "$_ak_neu" "$_ak_stand"
+		return 0
+	fi
+	rm -f "$_ak_neu"
+	warn "Nach dem Auffrischen ist die Umgebung nicht mehr nachweisbar."
+	if [ "$_ak_gesichert" != 1 ]; then
+		err "Es gibt keine Sicherung, auf die zurueckgegangen werden koennte."
+		return 2
+	fi
+	if ! pydep_stand_zurueck "$PY" "$_ak_stand"; then
+		err "Rueckfall gescheitert -- siehe $_ak_stand."
+		return 2
+	fi
+	if pruef_ok; then
+		warn "Alter Stand zurueckgespielt: $_ak_stand"
+		return 0
+	fi
+	err "Rueckfall installiert, Umgebung bleibt aber unbrauchbar."
+	return 2
+}
+
 if pruef_ok; then
 	# Auch auf einem fertigen Geraet das Werkzeug bereitstellen: Der naechste
 	# Abruf (neue Anforderung, neuere Fassung) soll uv benutzen. Ohne diesen
 	# Aufruf entstuende uv nie -- am Pi gemessen (5.11.): Lauf gruen, kein uv.
 	uv_bereitstellen || true
+
+	# --- Fassungen aktuell halten -----------------------------------------
+	#
+	# Bisher endete Modul 50 hier: "laeuft, also nichts zu tun". Damit blieb
+	# eine Fassung, die beim letzten Neubau geholt wurde, fuer immer stehen --
+	# auch wenn inzwischen eine Sicherheitsluecke geschlossen wurde.
+	log ""
+	log "Fassungen"
+	if is_dry_run; then
+		info "[wuerde auffrischen] $(pydep_liste "$REQUIREMENTS" | tr '\n' ' ')"
+	else
+		# shellcheck disable=SC2046
+		auffrischen $(pydep_liste "$REQUIREMENTS") $ANZEIGE_PIP || {
+			err "Fassungen liessen sich nicht in einen brauchbaren Stand bringen."
+			log_close 2; exit 2
+		}
+	fi
+	log ""
 	log "Die Python-Umgebung ist bereit und nachweisbar."
 	info "venv: $VENV"
 	log_close 0; exit 0
@@ -319,7 +414,7 @@ else
 	uv_bereitstellen || true
 
 	# shellcheck disable=SC2046
-	pydep_ensure "$PY" $(pydep_liste "$REQUIREMENTS") || {
+	auffrischen --ohne-nachweis $(pydep_liste "$REQUIREMENTS") || {
 		err "Abhaengigkeiten nicht hergestellt (Anforderungen: $REQUIREMENTS)."
 		log_close 2; exit 2
 	}

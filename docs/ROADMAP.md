@@ -27,22 +27,13 @@ zram wird nicht angefasst, wenn es läuft.
       zu sichernden Dateien** plus Reserve pruefen (Summe steht vor dem
       Kopieren fest, DESIGN-Regel „Neustart mit Fortsetzung"). Die 100 MB
       bleiben Untergrenze.
-- [ ] **Obergrenze für `numpy` (und Pillow) entscheiden.** `requirements.txt`
-      verlangt `numpy>=1.26` — ohne Obergrenze holt pip die jeweils neueste
-      Fassung. Im Testvenv stand deshalb einmal `numpy 2.5.4` statt `1.26.4`.
-      Das ist eine Frage der *Anforderung*, nicht des pip-Aufrufs: `pydep_ensure`
-      installiert seit 4.11. ohne `--upgrade` (nur die nicht erfüllten
-      Anforderungen), und für eine fehlende Anforderung holt pip so oder so die
-      neueste. Zu entscheiden: Obergrenze (`numpy>=1.26,<3`) setzen oder die
-      Abweichung bewusst zulassen — gemessen ist bisher nur 1.26.x am Pi.
-- [ ] **`uv pip compile` als Lock für `requirements.txt`** — der letzte offene
-      Teil von uv. Sonst ist uv fertig: Modul 50 nutzt es (eigenes
-      Werkzeug-venv `tools/uv`, harte Zeitgrenze `CHIMERA_UV_FRIST`, Schalter
-      `CHIMERA_UV=aus`, Rückfall auf pip), am Pi gemessen 53–58 s statt
-      82–85 s in Modul 50 (Beleg:
-      `docs/messungen/2026-11-05-vorab-laden-und-uv.md`). Offen: Lock
-      erzeugen, einspielen und die Obergrenzen-Frage (Punkt darüber) darüber
-      lösen.
+- [ ] **Obergrenze für `numpy` (und Pillow) — nur bei einem echten Bruch.**
+      Entschieden (smilez, 5.11.): immer die neueste kompatible Fassung, also
+      keine Obergrenze auf Verdacht (DESIGN, Regel „Immer die neueste
+      kompatible Fassung"). Der Installer frischt seit 5.11. bei jedem Lauf
+      auf und rollt bei einem Bruch auf den gesicherten Stand zurück. Offen
+      ist damit keine Entscheidung mehr, sondern nur der Anlass: Tritt ein
+      Bruch auf, wird die Grenze gesetzt und der Fall hier vermerkt.
 
 ## Phase ACP — Chimera als Agent für Editoren und IDEs (DESIGN: Regel „ACP“)
 

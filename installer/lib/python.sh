@@ -110,81 +110,97 @@ uv_bereitstellen() {
 # Anforderungen in ein venv bringen -- uv zuerst, pip als Rueckfall.
 # $1 Python des venv, $2.. Anforderungen. rc 0 = ohne Fehler durchgelaufen
 # (das Ergebnis prueft der Aufrufer nach, nicht dieser Exitcode).
+#
+# Vorgabe ist `--upgrade` (smilez, 5.11.2026): Ein Abhaengigkeit kann auf dem
+# Geraet schon liegen und dabei veraltet sein -- eine vorhandene Fassung ist
+# noch kein Beweis fuer eine aktuelle. Bei den Sicherheitsluecken, die
+# regelmaessig Updates verlangen, waere "nur Fehlendes holen" ein Stand, der
+# nie aelter aussieht als beim ersten Lauf. Abschalten mit
+# CHIMERA_PIP_UPGRADE=aus (Messen, Notaus) -- gelesen an dieser einen Stelle.
 pydep_holen() {
 	_ph_py="$1"; shift
+	_ph_up=""
+	[ "${CHIMERA_PIP_UPGRADE:-an}" != aus ] && _ph_up="--upgrade"
 	_ph_uv="$(uv_weg 2>/dev/null)" || _ph_uv=""
 	# Der Schalter gilt auch fuer die NUTZUNG, nicht nur fuers Anlegen --
 	# sonst laesst sich ohne uv nicht messen (am Pi 5.11. aufgefallen: Lauf
 	# mit CHIMERA_UV=aus benutzte trotzdem uv).
 	uv_an || _ph_uv=""
 	if [ -n "$_ph_uv" ]; then
-		info "uv: hole $*"
+		info "uv: hole $*${_ph_up:+ ($_ph_up)}"
 		# Harte Zeitgrenze: ein haengender Abruf darf den Lauf nicht
 		# festhalten. timeout gibt es in BusyBox und in Debian; fehlt es,
 		# laeuft der Aufruf ohne Grenze (besser als gar kein uv).
 		set +e
 		if command -v timeout >/dev/null 2>&1; then
-			timeout "${CHIMERA_UV_FRIST:-600}" "$_ph_uv" pip install \
+			timeout "${CHIMERA_UV_FRIST:-600}" "$_ph_uv" pip install $_ph_up \
 				--python "$_ph_py" "$@"
 		else
-			"$_ph_uv" pip install --python "$_ph_py" "$@"
+			"$_ph_uv" pip install $_ph_up --python "$_ph_py" "$@"
 		fi
 		_ph_rc=$?
 		set -e
 		[ "$_ph_rc" = 0 ] && return 0
 		warn "uv: Exitcode $_ph_rc -- derselbe Abruf geht ueber pip."
 	fi
-	# pip, wie vor uv. Kein --upgrade: pip holt eine Fassung, die die
-	# Anforderung erfuellt.
+	# pip, wie vor uv -- mit demselben Schalter.
 	set +e
-	printf '%s\n' "$@" | grep -v '^$' | xargs "$_ph_py" -m pip install
+	printf '%s\n' "$@" | grep -v '^$' | xargs "$_ph_py" -m pip install $_ph_up
 	_ph_rc=$?
 	set -e
 	return "$_ph_rc"
 }
 
-# Herstellen: fehlende/zu alte Anforderungen holen, dann nachmessen.
+# Herstellen: Anforderungen auf den neuesten kompatiblen Stand bringen, dann
+# nachmessen.
 # $1 Python des venv, $2.. Anforderungen. Benennt, was es tat.
 # rc 0 alles erfuellt (vorher oder jetzt), 1 pip lief, Ergebnis stimmt
 # trotzdem nicht, 2 nicht pruefbar.
+#
+# `--upgrade` ist Vorgabe (siehe pydep_holen): Es wird NICHT vorher
+# entschieden, ob etwas fehlt -- eine vorhandene Fassung kann veraltet sein,
+# und genau das soll der Installer abfangen. Der Vorabstand (pydep_fehlend)
+# dient nur noch der Anzeige und der Nachmessung.
 pydep_ensure() {
 	_pe_py="$1"; shift
 	[ $# -gt 0 ] || return 0
 	_pe_f="$(pydep_fehlend "$_pe_py" "$@")"; _pe_rc=$?
 	[ "$_pe_rc" = 2 ] && { err "Python nicht ausfuehrbar: $_pe_py"; return 2; }
-	if [ "$_pe_rc" = 0 ]; then
+	if [ "${CHIMERA_PIP_UPGRADE:-an}" = aus ] && [ "$_pe_rc" = 0 ]; then
 		info "Python-Abhaengigkeiten erfuellt: $*"
 		return 0
 	fi
-	_pe_holt=""
-	while IFS='	' read -r _pe_a _pe_ist; do
-		[ -n "$_pe_a" ] || continue
-		if [ "$_pe_ist" = fehlt ]; then
-			info "fehlt: $_pe_a"
-		else
-			info "zu alt: $_pe_a (ist $_pe_ist)"
-		fi
-		_pe_holt="$_pe_holt
-$_pe_a"
-	done <<EOF
+	if [ "$_pe_rc" = 0 ]; then
+		info "Python-Abhaengigkeiten erfuellt -- Fassungen werden gegen den neuesten Stand geprueft."
+	else
+		while IFS='	' read -r _pe_a _pe_ist; do
+			[ -n "$_pe_a" ] || continue
+			if [ "$_pe_ist" = fehlt ]; then
+				info "fehlt: $_pe_a"
+			else
+				info "zu alt: $_pe_a (ist $_pe_ist)"
+			fi
+		done <<EOF
 $_pe_f
 EOF
+	fi
+	# Geholt wird die volle Liste: Was fehlt, kommt damit ohnehin; was da ist
+	# und veraltet ist, wird erneuert; was aktuell ist, bleibt unveraendert.
+	_pe_holt="$(printf '%s\n' "$@")"
 	if is_dry_run; then
 		info "[wuerde installieren]$(printf '%s' "$_pe_holt" | tr '\n' ' ')"
 		return 0
 	fi
-	# Nur die betroffenen, nicht die ganze Liste -- und zwar ohne
-	# `--upgrade`: pip holt eine Fassung, die die Anforderung erfuellt.
-	# Mit `--upgrade` zieht pip auch dann die jeweils neueste, wenn die
-	# vorhandene genuegt. (Der Fall "numpy 2.5.4 statt 1.26.4" kam nicht
-	# daher, sondern von der Anforderung ohne Obergrenze; offener Punkt
-	# in docs/ROADMAP.md.)
-	#
-	# Und der Abruf wird UMWARTET, nicht abgebrochen: Fehlt das Netz,
-	# pausiert die Schleife, bis es zurueck ist (Vorgabe smilez: Downloads
-	# und Abhaengigkeiten in derselben Warte-Schleife wie network_fetch,
-	# Vorbild rag4ll bg-downloader). Erst wenn das Netz steht und pip
-	# trotzdem scheitert, ist es ein Befund.
+	# Ohne Netz nicht minutenlang warten, wenn die Umgebung schon steht: Dann
+	# ist der Abruf eine Auffrischung, kein Herstellen. Fehlt dagegen etwas,
+	# gilt die Warte-Schleife (unten) -- dort haengt der Betrieb an ihr.
+	if [ "$_pe_rc" = 0 ] && command -v network_erreichbar >/dev/null 2>&1; then
+		_pe_nz=0; network_erreichbar || _pe_nz=$?
+		if [ "$_pe_nz" = 1 ]; then
+			warn "Kein Netz -- Fassungen bleiben, wie sie sind (Umgebung ist vollstaendig)."
+			return 0
+		fi
+	fi
 	# shellcheck disable=SC2086
 	_pe_versuche="${CHIMERA_PIP_VERSUCHE:-3}"
 	# uv einmal bereitstellen (nur anlegen, wenn es fehlt). Scheitert es,
@@ -218,4 +234,48 @@ EOF
 	err "Nach pip weiterhin nicht erfuellt:"
 	printf '%s\n' "$_pe_f" | sed 's/^/    /' >&2
 	return 1
+}
+
+# --- Stand der Umgebung: sichern und zurueckholen -------------------------
+#
+# "Immer aktuell" heisst auch: Ein Update kann die Umgebung brechen. Dann
+# muss der vorherige Stand zurueck, ohne dass jemand von Hand eingreift.
+# Der Stand ist ein `pip freeze` -- exakte Fassungen, direkt wieder
+# installierbar -- und gleichzeitig der Beleg, welche Fassungen liefen.
+#
+# Leere Ausgabe ist kein Stand: Ein freeze, das nichts liefert, wuerde beim
+# Rueckfall eine leere Umgebung "wiederherstellen" und hiesse still Erfolg.
+
+pydep_stand_sichern() {
+	# $1 Python, $2 Zieldatei
+	_ps_py="$1"; _ps_z="$2"
+	mkdir -p "$(dirname "$_ps_z")" 2>/dev/null || true
+	set +e
+	"$_ps_py" -m pip freeze >"$_ps_z.teil" 2>/dev/null
+	_ps_rc=$?
+	set -e
+	if [ "$_ps_rc" != 0 ] || [ ! -s "$_ps_z.teil" ]; then
+		rm -f "$_ps_z.teil"
+		return 1
+	fi
+	mv "$_ps_z.teil" "$_ps_z"
+	return 0
+}
+
+# Zurueck auf den gesicherten Stand. Bewusst mit pip, nicht mit uv: Der
+# Notausstieg soll nur von Dingen abhaengen, die immer da sind.
+pydep_stand_zurueck() {
+	# $1 Python, $2 Sicherung
+	_pz_py="$1"; _pz_z="$2"
+	[ -s "$_pz_z" ] || return 2
+	set +e
+	if command -v timeout >/dev/null 2>&1; then
+		timeout "${CHIMERA_UV_FRIST:-600}" "$_pz_py" -m pip install \
+			--no-deps --no-input -r "$_pz_z" >/dev/null 2>&1
+	else
+		"$_pz_py" -m pip install --no-deps --no-input -r "$_pz_z" >/dev/null 2>&1
+	fi
+	_pz_rc=$?
+	set -e
+	return "$_pz_rc"
 }

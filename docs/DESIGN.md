@@ -2637,6 +2637,46 @@ toter Ballast. Messreihe und Zahlen:
 spart rund 30 s (82–85 s → 53–58 s), es liegt im eigenen Werkzeug-venv, hat
 eine harte Zeitgrenze und fällt bei jedem Fehler auf `pip` zurück.
 
+### Regel „Immer die neueste kompatible Fassung“ — kein Lock
+
+Vorgabe smilez (5.11.2026): *„bei den aktuellen Massen an Sicherheitslücken,
+die Updates erfordern, wäre [ein eingefrorener Stand] blöd … ich hätte gerne
+immer die neuesten Versionen, die mit allem anderen kompatibel sind.“*
+
+**Kein Lock.** `uv pip compile` würde die Anforderungen einmal auflösen und
+exakte Fassungen festschreiben — `Pillow==13.0.0` bliebe 13.0.0, bis jemand
+die Datei neu kompiliert. Reproduzierbar, aber genau das Gegenteil von dem,
+was hier gebraucht wird: Eine geschlossene Lücke erreichte das Gerät erst
+beim nächsten Neukompilieren. Ein Lock lohnt sich, wenn mehrere Geräte exakt
+gleich laufen müssen oder ein Fehler nur bei einer Fassung auftritt — beides
+haben wir nicht.
+
+**Stattdessen wird bei jedem Lauf aufgefrischt** (`--upgrade` ist Vorgabe in
+`lib/python.sh`, Schalter `CHIMERA_PIP_UPGRADE=aus` zum Messen):
+
+1. **Stand sichern** — `pip freeze` nach `state/python-stand.txt`. Das ist
+   gleichzeitig der Beleg, welche Fassungen liefen (Diagnose „gestern ging
+   es noch“).
+2. **Auffrischen** — uv/pip holt die neueste Fassung, die die Anforderung
+   erfüllt. Was fehlt, kommt damit ohnehin; was aktuell ist, bleibt.
+3. **Nachweisen** — bringt das Auffrischen den Nachweis zu Fall, ist es ein
+   Befund. Die Sicherung wird **erst danach** überschrieben (andersherum
+   rollte der Rückfall auf den kaputten Stand zurück — der Test hat genau
+   das gefunden).
+4. **Im Zweifel zurück** — der gesicherte Stand wird zurückgespielt; nur
+   wenn auch das scheitert, endet das Modul mit rc 2.
+
+**Kein Pin auf Verdacht.** Obergrenzen (`numpy<3`) kommen erst hinein, wenn
+ein Bruch real auftritt und gemessen ist — nicht vorbeugend, denn jede
+Obergrenze ist ein Update, das nicht ankommt.
+
+**Ohne Netz keine Warteschleife**, solange die Umgebung vollständig ist: Der
+Abruf ist dann eine Auffrischung, kein Herstellen. Fehlt dagegen etwas, gilt
+die Warte-Schleife — dort hängt der Betrieb an ihr.
+
+Was das kostet, ist gemessen (Pi, 5.11.): `uv pip install --upgrade -r
+requirements.txt` gegen den Index = **888 ms**, „Would make no changes“.
+
 
 
 ### Architekturregel 10e — Jeder Lauf hinterlässt ein Protokoll
@@ -4024,6 +4064,7 @@ einen Verweis liest, soll verstehen, **worum es geht**, ohne nachzuschlagen.
 - **10r** — Der Agent ist ein eigener Nutzer, und was root ausführt, kann er nicht ändern
 - **10s** — Root gibt es nur auf Rückfrage, auf Zeit, und nicht für den Agenten selbst
 - **Warte-Schleife** — Kein Download bricht bei einem Netzaussetzer ab
+- **Immer die neueste kompatible Fassung** — Kein Lock: jeder Lauf gleicht gegen den Index ab, sichert den Stand und rollt bei Bruch zurück
 - **Installerhelfer** — Der Installer läuft nie unter einem Dienst und nie in der SSH-Sitzung
 - **ACP** — Chimera ist ein Agent für Editoren, erreichbar über eine Transportschicht am Gateway
 - **MQTT** — Ein Broker in Rust löst gespeicherte Moods auf dem Display aus

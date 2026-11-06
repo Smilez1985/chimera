@@ -372,6 +372,25 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Python-Abhängigkeiten werden bei jedem Lauf aufgefrischt — kein Lock.**
+  Vorgabe smilez (5.11.): *immer die neueste Fassung, die mit allem anderen
+  kompatibel ist.* Ein Abhängigkeit kann vor dem ersten Installerlauf auf dem
+  Gerät liegen und dabei veraltet sein; „läuft, also nichts zu tun" hieße,
+  eine geschlossene Sicherheitslücke nie einzusammeln. `--upgrade` ist damit
+  Vorgabe in `pydep_holen` (`CHIMERA_PIP_UPGRADE=aus` schaltet es ab), und
+  Modul 50 endet nicht mehr vorzeitig mit „bereit", wenn die Umgebung steht.
+  Ablauf: `pip freeze` nach `state/python-stand.txt` → auffrischen →
+  Nachweis → bei Bruch den gesicherten Stand zurückspielen (erst dann wird
+  die Sicherung überschrieben; andersherum rollt der Rückfall auf den
+  kaputten Stand — der neue Test hat genau das gefunden). Ohne Netz keine
+  Warte-Schleife, solange die Umgebung vollständig ist (Auffrischung, kein
+  Herstellen). `uv pip compile` als Lock ist damit **verworfen**: Es friert
+  Fassungen ein und liefert Updates erst beim Neukompilieren. Gemessen am Pi:
+  die Auffrischprüfung kostet 888 ms („Would make no changes").
+  Tests `test-python-env.sh` 63 ok (Stand-Sicherung, „Fassungen
+  unverändert", Bruch → Rückfall → Umgebung wieder messbar; Gegenprobe ohne
+  die Prüfung nach der Änderung → kein Rückfall, Mutation per `cmp` belegt),
+  `test-uv.sh` 28 ok (Vorgabe `--upgrade`, Schalter aus).
 - **uv für Modul 50 eingeführt und am Pi gemessen**
   (`docs/messungen/2026-11-05-vorab-laden-und-uv.md`). Je Lauf kalt
   (venv, pip-/uv-Cache weg), sieben Läufe: ohne uv 82–85 s in Modul 50

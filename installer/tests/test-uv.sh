@@ -109,10 +109,26 @@ _rc=0; PATH="$stub:$PATH" uv_bereitstellen || _rc=$?
 : >"$UV_LOG"; : >"$PY_LOG"
 _rc=0; pydep_holen "$(uv_verzeichnis)/bin/python" Pillow numpy || _rc=$?
 check "pydep_holen mit uv: rc 0" "$_rc" "0"
-grep -q 'pip install --python' "$UV_LOG" && ok "uv bekommt 'pip install --python'" \
+grep -q 'pip install' "$UV_LOG" && ok "uv wird als Installationsweg benutzt" \
 	|| bad "uv wurde nicht als Installationsweg benutzt"
+grep -q -- '--python' "$UV_LOG" && ok "uv bekommt '--python <venv>'" \
+	|| bad "uv fehlt --python"
+grep -q -- '--upgrade' "$UV_LOG" && ok "Vorgabe: --upgrade geht mit" \
+	|| bad "Vorgabe ohne --upgrade -- alte Fassungen blieben stehen"
 grep -q 'Pillow numpy' "$UV_LOG" && ok "Anforderungen kommen bei uv an" || bad "Anforderungen fehlen"
 check "pip wurde dabei nicht gerufen" "$(grep -c . "$PY_LOG" || true)" "0"
+
+# --- 4a. Auf wunsch ohne --upgrade (Messen, Notaus) --------------------
+: >"$UV_LOG"; : >"$PY_LOG"
+_rc=0; CHIMERA_PIP_UPGRADE=aus pydep_holen "$(uv_verzeichnis)/bin/python" Pillow || _rc=$?
+check "CHIMERA_PIP_UPGRADE=aus: rc 0" "$_rc" "0"
+grep -q -- '--upgrade' "$UV_LOG" && bad "Schalter 'aus' ignoriert (uv)" \
+	|| ok "CHIMERA_PIP_UPGRADE=aus: kein --upgrade (uv)"
+: >"$UV_LOG"; : >"$PY_LOG"
+_rc=0; CHIMERA_UV=aus CHIMERA_PIP_UPGRADE=aus \
+	pydep_holen "$(uv_verzeichnis)/bin/python" Pillow || _rc=$?
+grep -q -- '--upgrade' "$PY_LOG" && bad "Schalter 'aus' ignoriert (pip)" \
+	|| ok "CHIMERA_PIP_UPGRADE=aus: kein --upgrade (pip)"
 
 # --- 4b. Schalter gilt auch fuer die Nutzung ---------------------------
 # Ohne diese Pruefung laesst sich "mit uv" und "ohne uv" nicht vergleichen

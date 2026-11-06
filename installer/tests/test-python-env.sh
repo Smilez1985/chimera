@@ -101,6 +101,9 @@ mkbaum() {
 	# Wheels). uv selbst einzurichten ginge nur ueber PyPI -- genau das darf
 	# dieser Test nicht. Geprueft wird uv in tests/test-uv.sh.
 	CHIMERA_UV=aus; export CHIMERA_UV
+	# Auffrischen nur, wo es geprueft wird (Fall 9/10): Sonst faehrt jeder
+	# Lauf einen --upgrade-Abruf, und der Test misst die Uhr statt den Code.
+	CHIMERA_PIP_UPGRADE=aus; export CHIMERA_PIP_UPGRADE
 	mkdir -p "$(dirname "$CHIMERA_MANIFEST")" "$CHIMERA_LOG_DIR"
 	MANIFEST="$CHIMERA_MANIFEST"
 }
@@ -462,7 +465,11 @@ _vpy="$WURZEL/opt/chimera/productive/venv/bin/python"
 _starts="$W/nachweis-starts"
 if [ -x "$_vpy" ] && [ ! -e "$_vpy.echt" ]; then
 	mv "$_vpy" "$_vpy.echt"
-	printf '#!/bin/sh\ncase " $* " in *chimera*|*nachweis.py*) echo x >>"%s";; esac\nexec "%s" "$@"\n' \
+	# Gezaehlt wird nur der Nachweis (nachweis.py), nicht jeder Python-Start:
+	# Seit dem 5.11. frischt Modul 50 die Fassungen auf und braucht dafuer
+	# eigene Starts (freeze, Versionsmessung). Die Zusage lautet "der Nachweis
+	# kostet EINEN Start" -- eine Zahl ueber alle Starts saegte daran nicht.
+	printf '#!/bin/sh\ncase " $* " in *nachweis.py*) echo x >>"%s";; esac\nexec "%s" "$@"\n' \
 		"$_starts" "$_vpy.echt" >"$_vpy"
 	chmod +x "$_vpy"
 fi
@@ -520,6 +527,94 @@ contains "kein Netz: Warteschleife greift (Meldung)" "$OUT" "Kein Netz"
 contains "kein Netz: benannter Abbruch" "$OUT" "pip-Abruf abgebrochen"
 check "kein Netz: rc 2" "$RC" "2"
 OUT="$_out_alt"
+
+# --- Fall 9: gesunder Lauf frischt auf und legt den Stand ab --------------
+# Vorgabe smilez (5.11.2026): Immer die neueste Fassung, die mit allem
+# anderen kompatibel ist. Ein Abhaengigkeit kann vor dem ersten Installerlauf
+# auf dem Geraet liegen und dabei veraltet sein -- "laeuft, also nichts zu
+# tun" waere der Stand fuer immer. Der Stand wird gesichert, damit ein
+# misslungenes Auffrischen zurueckgerollt werden kann.
+mkbaum "auffrischen"
+setze_anforderungen
+CHIMERA_PIP_UPGRADE=an; export CHIMERA_PIP_UPGRADE
+PATH="$W/bin-dpkg:$PATH" fahr run
+check "Auffrischen: erster Lauf rc 0" "$RC" "0"
+STAND="$WURZEL/opt/chimera/state/python-stand.txt"
+if [ -s "$STAND" ]; then ok "Stand der Umgebung liegt in state/python-stand.txt"
+else bad "keine Standsicherung angelegt"; fi
+grep -q '^Pillow==' "$STAND" 2>/dev/null && ok "Sicherung nennt die Fassungen (Pillow==)" \
+	|| bad "Sicherung ohne Fassungen"
+PATH="$W/bin-dpkg:$PATH" fahr run
+check "Auffrischen: zweiter Lauf rc 0" "$RC" "0"
+contains "zweiter Lauf: Fassungen bleiben" "$OUT" "Fassungen unveraendert"
+
+# --- Fall 10: Auffrischen bricht die Umgebung -> Rueckfall ----------------
+# Die Schutzfunktion: Ein Update kann ein Paket beschaedigen. Der Nachweis
+# merkt es (er ist die Zusage, nicht der Exitcode von pip), der gesicherte
+# Stand kommt zurueck, und der Lauf endet nicht mit einer kaputten Umgebung.
+# Nachgestellt: Eine Huelle um den venv-Python macht bei `pip install
+# --upgrade` das Pillow-Verzeichnis kaputt und behauptet Erfolg; beim
+# Rueckfall (`pip install -r <stand>`, ohne --upgrade) reicht sie weiter an
+# das echte Python, und pip stellt die Fassung wieder her.
+_vpy="$WURZEL/opt/chimera/productive/venv/bin/python"
+if [ -x "$_vpy" ]; then
+	# Die Attrappen-Wheels sind leere Module -- importierbar ist dort nichts.
+	# "Kaputt" heisst deshalb: die Metadaten (dist-info) sind weg, also ist
+	# die Fassung nicht mehr messbar. Genau das sieht der Nachweis.
+	_sp="$("$_vpy" -c 'import sysconfig; print(sysconfig.get_path("purelib"))' 2>/dev/null)"
+	_di="$(ls "$_sp" 2>/dev/null | grep -i '^pillow.*dist-info' | head -1)"
+	if [ -n "$_di" ] && [ -d "$_sp/$_di" ]; then
+		[ -e "$_vpy.echt" ] || mv "$_vpy" "$_vpy.echt"
+		cat >"$_vpy" <<HUELLE
+#!/bin/sh
+case " \$* " in
+*"-m pip install --upgrade "*)
+	mv "$_sp/$_di" "$_sp/$_di.weg" 2>/dev/null
+	exit 0 ;;
+esac
+exec "$_vpy.echt" "\$@"
+HUELLE
+		chmod +x "$_vpy"
+		PATH="$W/bin-dpkg:$PATH" fahr run
+		check "Bruch beim Auffrischen: Lauf bleibt gruen (rc 0)" "$RC" "0"
+		contains "Bruch: Nachweis schlaegt an" "$OUT" "nicht mehr nachweisbar"
+		contains "Bruch: alter Stand zurueckgespielt" "$OUT" "Alter Stand zurueckgespielt"
+		if ls "$_sp" 2>/dev/null | grep -qi '^pillow.*dist-info'; then
+			ok "nach dem Rueckfall ist Pillow wieder messbar"
+		else bad "Rueckfall hat Pillow nicht wiederhergestellt"; fi
+
+		# Gegenprobe: Ohne Nachweis nach der Aenderung bliebe die Umgebung
+		# kaputt und der Lauf meldete trotzdem Erfolg -- genau der stille
+		# Erfolg, den die Regel verbietet.
+		mv "$BAUM/installer/steps/50-python.sh" "$BAUM/installer/steps/50-python.sh.orig"
+		# Gezielt die Zusage "erst nachweisen, dann glauben" aushebeln --
+		# ein Muster, das nur "if pruef_ok" sucht, trifft inzwischen den
+		# Rueckfall-Zweig und misst nichts (Gegenprobe lief ins Leere).
+		sed 's/\[ "\$_ak_nachweis" != 1 \] || pruef_ok; then/true; then/' \
+			"$BAUM/installer/steps/50-python.sh.orig" \
+			>"$BAUM/installer/steps/50-python.sh"
+		rm -rf "$_sp/$_di.weg"
+		if cmp -s "$BAUM/installer/steps/50-python.sh.orig" \
+		          "$BAUM/installer/steps/50-python.sh"; then
+			bad "Gegenprobe: Mutation griff nicht (Datei unveraendert)"
+		else
+			PATH="$W/bin-dpkg:$PATH" fahr run >/dev/null 2>&1 || true
+			if printf '%s' "$OUT" | grep -q "Alter Stand zurueckgespielt"; then
+				bad "Gegenprobe: Rueckfall trotz ausgehebelter Pruefung"
+			else
+				# Die Zusage steht und faellt mit der Pruefung nach der
+				# Aenderung: Ohne sie bleibt die kaputte Umgebung stehen --
+				# deshalb genau diese Mutation.
+				ok "Gegenprobe: ohne Nachweis kein Rueckfall"
+			fi
+		fi
+		mv "$BAUM/installer/steps/50-python.sh.orig" "$BAUM/installer/steps/50-python.sh"
+		# Umgebung fuer den Abschluss wiederherstellen
+		[ -d "$_sp/$_di" ] || mv "$_sp/$_di.weg" "$_sp/$_di" 2>/dev/null || true
+	else
+		printf '  uebersprungen  Bruch beim Auffrischen (keine Pillow-Metadaten)\n'
+	fi
+fi
 
 printf '\nErgebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
