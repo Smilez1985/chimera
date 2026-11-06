@@ -9,11 +9,13 @@ Stand: 2026-11-04. Pre-Alpha.
 
 ---
 
-## Phase 0 — Blaupause ✅ (läuft)
+## Phase 0 — Blaupause ✅
 
-- [ ] Hardware-Revision der vorhandenen Whisplay prüfen (**V2?**)
-- [ ] `uname -r`, `/lib/modules/$(uname -r)/build`, `modinfo snd-soc-wm8960`
-      auf dem Zielgerät notieren (Checkliste in `docs/HARDWARE.md`, Abschnitt „Vor dem ersten Start prüfen")
+Erledigt bis auf einen Punkt, der nicht am Rechner zu klären ist: die
+**Whisplay-Revision (V2?)**. Das Board hat kein HAT-EEPROM, die Revision ist
+nur physisch zu lesen (Aufdruck) — und zwar vor dem ersten Tastendruck, weil
+auf V1 die Button-Leitung 5 V führt. Alles andere aus der Checkliste steht
+gemessen in `docs/HARDWARE.md`, Abschnitt „Ergebnisse am chimera-pi".
 
 ---
 
@@ -23,10 +25,6 @@ Vorgaben smilez (2.11.): Der Installer fasst **nur an, was fehlt oder wegen
 einer neuen Version aktualisiert werden muss**; er läuft nie in der SSH-Sitzung;
 zram wird nicht angefasst, wenn es läuft.
 
-- [ ] **Platzpruefung vor dem Snapshot:** Statt fester 100 MB die **Groesse der
-      zu sichernden Dateien** plus Reserve pruefen (Summe steht vor dem
-      Kopieren fest, DESIGN-Regel „Neustart mit Fortsetzung"). Die 100 MB
-      bleiben Untergrenze.
 - [ ] **Obergrenze für `numpy` (und Pillow) — nur bei einem echten Bruch.**
       Entschieden (smilez, 5.11.): immer die neueste kompatible Fassung, also
       keine Obergrenze auf Verdacht (DESIGN, Regel „Immer die neueste

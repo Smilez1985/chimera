@@ -294,3 +294,24 @@ Minuten Neuflashen, derselbe Fehlschlag auf dem eMMC kostet einen PC.
 - [ ] Beim Radxa: `lsblk` — läuft das System vom eMMC? Gibt es einen
       bootfähigen Wechseldatenträger als Rettungsweg? (siehe „eMMC ändert das
       Risiko beim Radxa")
+
+### Ergebnisse am chimera-pi (6.11.2026)
+
+Gemessen auf dem Prüfgerät: Raspberry Pi Zero 2 W Rev 1.0, DietPi.
+
+| Prüfung | Ergebnis |
+|---|---|
+| `uname -r` | `6.18.59+rpt-rpi-v8` (Beta-Kernel, CVE-Grund — siehe Changelog) |
+| `/lib/modules/$(uname -r)/build` | vorhanden — Voraussetzung, um das Whisplay-Tonmodul zu bauen |
+| `snd-soc-wm8960` | **geladen** (`lsmod`). `modinfo` ist auf dem Gerät nicht installiert; das geladene Modul ist der stärkere Beleg |
+| `snd_soc_whisplay_soundcard` | geladen, über `snd_soc_core` mit `wm8960` und `bcm2835_i2s` verbunden |
+| ALSA-Geräte | Karte 0 „Whisplay Sound" (`wm8960-hifi-0`), je ein Playback- und ein Capture-Gerät |
+| Aufnahme | 2 s, 16 kHz, mono → 64 044 B; Pegel **max 1432, rms 333** — echtes Signal, keine Stille (ein Exitcode 0 allein hätte auch ein stummes Mikrofon bedeutet) |
+| Wiedergabe derselben Datei | Exitcode 0 |
+| Speicher unter Last | Dienst aktiv, `free -m`: 462 MB gesamt, 276 benutzt, **185 verfügbar**; Swap 16,3 GB (270 MB benutzt) |
+
+**Whisplay-Revision (V2?): nicht auslesbar.** Das Board hat kein HAT-EEPROM
+(`/proc/device-tree/hat` fehlt), die Revision steht also nirgends im System.
+Sie ist **vor dem ersten Tastendruck** physisch zu prüfen (Aufdruck auf der
+Platine) — Begründung im Abschnitt „Whisplay": Auf V1 führt die
+Button-Leitung 5 V.

@@ -711,6 +711,15 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   nicht gemessen.
 
 ### Geprüft
+- **Hardware-Checkliste am chimera-pi (6.11.):** Kernel
+  `6.18.59+rpt-rpi-v8` mit vorhandenem `/lib/modules/.../build`,
+  `snd-soc-wm8960` und `snd_soc_whisplay_soundcard` geladen, ALSA-Karte
+  „Whisplay Sound" mit Playback und Capture, Aufnahme (2 s, 16 kHz) mit
+  Pegel max 1432 / rms 333 — also echtes Signal, keine Stille — und
+  Wiedergabe mit Exitcode 0; unter Last 185 MB von 462 MB verfügbar.
+  Offen bleibt die Whisplay-Revision (V2?): Das Board hat kein HAT-EEPROM,
+  sie ist nur physisch zu lesen. Alles in `docs/HARDWARE.md`,
+  Abschnitt „Ergebnisse am chimera-pi".
 - **Ein Faden für die drei LED-Kanäle: gebaut, gemessen, verworfen**
   (3.11., Pi Zero 2 W). Die gemeinsame Kantenplanung spart 18 % der
   LED-Taktlast, wenn alle Kanäle denselben Tastgrad haben (Weiß), kostet
