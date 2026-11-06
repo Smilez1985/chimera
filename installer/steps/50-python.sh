@@ -231,6 +231,19 @@ log ""
 auffrischen() {
 	_ak_nachweis=1
 	[ "${1:-}" = --ohne-nachweis ] && { _ak_nachweis=0; shift; }
+	# Dieselbe Anforderung kommt zweimal, wenn requirements.txt und das
+	# Anzeigenprofil sie beide nennen (Pillow, numpy -- am Pi im Protokoll
+	# gesehen: "hole Pillow>=10.0.0 numpy>=1.26 Pillow>=10.0 numpy>=1.26").
+	# pip stoert das nicht, dem Protokoll sieht man es aber an.
+	_ak_liste=""
+	for _ak_a in "$@"; do
+		case " $_ak_liste " in
+			*" $_ak_a "*) continue ;;
+		esac
+		_ak_liste="$_ak_liste $_ak_a"
+	done
+	# shellcheck disable=SC2086
+	set -- $_ak_liste
 	_ak_stand="$(rootpath "$CHIMERA_STATE")/python-stand.txt"
 	_ak_neu="$_ak_stand.neu"
 	_ak_gesichert=0
