@@ -231,10 +231,11 @@ log ""
 auffrischen() {
 	_ak_nachweis=1
 	[ "${1:-}" = --ohne-nachweis ] && { _ak_nachweis=0; shift; }
-	# Dieselbe Anforderung kommt zweimal, wenn requirements.txt und das
-	# Anzeigenprofil sie beide nennen (Pillow, numpy -- am Pi im Protokoll
-	# gesehen: "hole Pillow>=10.0.0 numpy>=1.26 Pillow>=10.0 numpy>=1.26").
-	# pip stoert das nicht, dem Protokoll sieht man es aber an.
+	# Exakt gleiche Anforderungen einmal entfernen: Wenn requirements.txt und
+	# das Anzeigenprofil dasselbe Paket nennen, kommen sie sonst zweimal an
+	# (am Pi im Protokoll gesehen). Unterschiedliche Fassungen desselben
+	# Pakets bleiben bewusst beide stehen -- pip erfuellt dann beide, und
+	# eine stille Auswahl der "strengeren" waere geraten (Regel 10g).
 	_ak_liste=""
 	for _ak_a in "$@"; do
 		case " $_ak_liste " in
