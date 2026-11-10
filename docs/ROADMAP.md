@@ -576,6 +576,25 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
 Die vier Muster aus `docs/DESIGN.md`, Abschnitt „Übernommene Muster aus OpenMinis (nachgebaut, nicht kopiert)" sind gebaut und verdrahtet.
 Offen bleibt:
 
+- [ ] **Zu entscheiden (smilez): Nutzer des Ausführers** — derselbe Nutzer
+      `chimera` (Trennung der Bauform) oder ein eigener Nutzer, dem das
+      Arbeitsverzeichnis gehört (Trennung durch den Kernel). DESIGN, Regel
+      „Wer prüft, führt aus“. Vor dem Bau zu klären, weil es Pfadschema und
+      Installer bestimmt.
+- [ ] **Ausführer `chimera-werk` (Rust):** Crate im Workspace, Socket,
+      Zeilenrahmen aus `gemein::zeile`, kein Netz. Prüfen und Ausführen von
+      `run_command`, `read_file`, `write_file`, `list_dir` nach den Regeln
+      aus `agent/safety.py`; Regeldatei unter `/opt/chimera/`; Protokoll je
+      Aufruf.
+- [ ] **Dienst umstellen:** `agent/tools.py` reicht die vier Werkzeuge an den
+      Socket weiter und startet nichts mehr selbst; läuft der Ausführer
+      nicht, wird nichts ausgeführt und der Grund genannt.
+- [ ] **Gleichwertigkeit belegen:** die Fälle aus `tests/test_agent.py` gegen
+      den Prozess, Mengen der abgelehnten und angenommenen Befehle vorher
+      und nachher; Test, der rot wird, sobald der Dienst wieder selbst
+      startet.
+- [ ] **Installer:** Unit, Socket, Rechte und Rückbau-Gegenstück (10l) für
+      den Ausführer; am Pi einspielen und Speicher im Ruhezustand messen.
 - [ ] Auslagern bei `Action.OFFLOAD`: erkannt wird es, getan noch nicht
 - [ ] Schleifenzustand auf die RGB-LED (braucht Hardware)
 - [ ] **Regel 10q, Messen:** `VmRSS`/`VmHWM`/`VmSwap` je Arbeitsschritt ins

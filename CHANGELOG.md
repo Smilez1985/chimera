@@ -20,6 +20,14 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Blaupause: Regel „Wer prüft, führt aus“ — Werkzeuge laufen in einem
+  eigenen Prozess, den der Agent nicht ändern kann.** Vorgabe smilez
+  (10.11.): eine unabhängige Kontrollinstanz vor der Werkzeugausführung,
+  ausdrücklich nicht als zweites Sprachmodell. Heute prüft und startet
+  derselbe Prozess (`agent/tools.py`); künftig liegen Prüfung und Ausführung
+  zusammen in einem eigenen Rust-Prozess mit Socket und ohne Netz, nicht im
+  Gateway. Nur Design und Roadmap (Phase 6) — gebaut ist noch nichts; offen
+  ist, unter welchem Nutzer der Ausführer läuft.
 - **ACP-Transportschicht** (`rust/crates/acp/src/transport.rs`): Der Kern
   kennt nur einen `Strom` aus JSON-Zeilen; `Stdio` hängt ihn an stdin/stdout
   (der Fall, den eine IDE erwartet), weitere Transporte (Unix-Socket,

@@ -3219,6 +3219,88 @@ befüllt werden, `productive/` erst im Installerlauf.
   jeder einzelne Befehl bestätigt wird, wird als Option angeboten.
   Vorgabe ist die Zeitfreigabe.
 
+### Regel „Wer prüft, führt aus“ — Werkzeuge laufen in einem eigenen Prozess, den der Agent nicht ändern kann
+
+Vorgabe smilez (10.11.2026): eine **unabhängige Kontrollinstanz** vor der
+Werkzeugausführung — **ausdrücklich nicht als zweites Sprachmodell**.
+
+**Das Problem.** Ein Modell, das selbst beurteilt, ob sein Befehl harmlos
+ist, rechtfertigt sich im Zweifel selbst. Das ist bei Chimera schon heute
+nicht der Fall: `agent/safety.py` prüft mit festen Regeln, kein Modell
+urteilt. Aber die Prüfung läuft **im selben Prozess** wie die
+Agentenschleife, und derselbe Prozess startet danach das Programm
+(`agent/tools.py`: `check_command`, dann `subprocess.run`). Unabhängig ist
+sie damit in der Logik, nicht in der Bauform — ein Fehler in der Schleife
+kann die Prüfung auslassen.
+
+**Die Regel.**
+
+1. **Kein zweites Modell.** Ein Richter-Modell kostet bei jedem
+   Werkzeugaufruf Tokens und Zeit und lässt sich täuschen wie das erste.
+   Geprüft wird mit festen, lesbaren Regeln; was die Regeln nicht
+   entscheiden können, entscheidet der Nutzer (Regel 10s), nie ein Modell.
+2. **Wer prüft, führt aus.** Ein Prozess, der nur „ja“ oder „nein“ sagt,
+   während der Agent selbst startet, ist keine Schranke — die Frage lässt
+   sich auslassen. Darum liegen Prüfung **und** Ausführung zusammen in
+   einem eigenen Prozess (Arbeitsname `chimera-werk`). Der Agent schickt
+   den Wunsch und bekommt das Ergebnis; er startet nichts mehr, was das
+   Modell gewählt hat.
+3. **Was umzieht:** `run_command`, `read_file`, `write_file`, `list_dir` —
+   also alles, was heute über `check_command` und `safe_path` läuft. Nur die
+   Befehle umzuziehen wäre die halbe Trennung. `set_face` bleibt im Dienst
+   (Anzeige, kein Programmstart).
+4. **Was bleibt:** `preflight` (Argumente reparieren und gegen die
+   Beschreibung prüfen) und `loopguard` (Schleifen erkennen) bleiben in der
+   Agentenschleife — sie beurteilen das Verhalten des Modells, nicht ein
+   Recht. Der Ausführer verlässt sich nicht darauf: Was über den Socket
+   kommt, ist Eingabe und wird dort noch einmal geprüft (Regel 5p).
+5. **Rust, eigener Socket, kein Netz.** Der Prozess läuft dauernd und
+   wartet nicht auf das Modell (Regel 14): eine Crate im Workspace,
+   Zeilenrahmen aus `gemein::zeile`, Socket unter `/run/chimera/`,
+   `IPAddressDeny=any`, keine Schlüssel.
+6. **Nicht im Gateway.** Das Gateway hat Netz und hält die Schlüssel
+   (Regel 5n). Vom Modell gewählte Programme dort zu starten gäbe ihnen
+   genau die Rechte, die 5n dem Agenten nimmt.
+7. **Die Regeln liegen dort, wo der Agent nicht schreiben kann** — unter
+   `/opt/chimera/` (Regel 10r), nicht im Arbeitsverzeichnis. Der heutige
+   Schreibschutz für `src/chimera/agent/safety.py` in `Limits.protected`
+   wird damit überflüssig.
+8. **Jeder Aufruf wird protokolliert** (Regel 10e): Werkzeug, Urteil,
+   Grund, Exitcode, Dauer. Eine Ablehnung geht mit Begründung an das Modell
+   zurück, wie heute — sonst versucht es dasselbe noch einmal.
+
+**Was die Regel nicht leistet.** Die eigentliche Schranke bleiben die
+Rechte des Nutzers (Regel 10r). Der eigene Prozess verhindert, dass der
+Agent die Prüfung auslässt oder ändert; er verhindert keinen Fehler in den
+Regeln selbst.
+
+**Zu entscheiden (smilez): unter welchem Nutzer läuft der Ausführer?**
+
+- **Derselbe Nutzer `chimera`:** Die Trennung ist dann eine der Bauform —
+  im Dienst gibt es keinen Code mehr, der vom Modell gewählte Programme
+  startet. Der Kernel erzwingt sie aber nicht: Der Dienst könnte weiterhin
+  selbst Prozesse starten (er tut es heute für `arecord`, `aplay` und
+  `dtoverlay`) und das Arbeitsverzeichnis direkt beschreiben.
+- **Ein eigener Nutzer**, dem das Arbeitsverzeichnis gehört: Dann setzt
+  der Kernel die Trennung durch, und das Protokoll ist für den Agenten
+  nicht änderbar. Preis: ein weiterer Nutzer samt Rückbau (Regel 10l) und
+  eine neue Aufteilung von `data/` in „gehört dem Agenten“ (Gedächtnis,
+  Moods) und „gehört dem Ausführer“ (Arbeitsordner).
+
+**Gegenprobe.**
+
+- Die bestehenden Fälle aus `tests/test_agent.py` laufen **gegen den
+  Prozess**, nicht gegen eine nachgebaute Prüfung. `shlex.split` und sein
+  Rust-Gegenstück können in Randfällen verschieden zerlegen; gemessen wird
+  die Menge der abgelehnten und angenommenen Befehle vorher und nachher.
+- Der Dienst enthält keinen Weg mehr, einen vom Modell gewählten Befehl zu
+  starten: Ein Test wird rot, sobald `agent/tools.py` wieder selbst
+  startet.
+- Läuft der Ausführer nicht, wird **nichts** ausgeführt und das Modell
+  erfährt den Grund — kein Rückfall auf die Ausführung im Dienst.
+- Speicher im Ruhezustand wird am Pi gemessen (Vergleichswert:
+  `chimera-tor --dienst` mit 1,6 MB RSS, 3.11.).
+
 ---
 
 ### Regel „Mojo“ — jeder Fehler wird bemerkt, mit Ursache benannt, versucht, nachgeprüft und laut gemeldet
@@ -4091,6 +4173,7 @@ einen Verweis liest, soll verstehen, **worum es geht**, ohne nachzuschlagen.
 - **ACP** — Chimera ist ein Agent für Editoren, erreichbar über eine Transportschicht am Gateway
 - **MQTT** — Ein Broker in Rust löst gespeicherte Moods auf dem Display aus
 - **Sprechende Namen** — Eine Regel, ein Befehl, ein Baustein heißt nach dem, was er tut
+- **Wer prüft, führt aus** — Werkzeuge laufen in einem eigenen Prozess, den der Agent nicht ändern kann
 - **Mojo** — jeder Fehler wird bemerkt, mit Ursache benannt, versucht, nachgeprüft und laut gemeldet
 - **13a** — Vor jedem Push wird geprüft, und die Prüfung beweist ihre Sehfähigkeit
 - **14** — Was dauernd läuft und nicht auf das Modell wartet, ist Rust
