@@ -271,3 +271,44 @@ source_commit_festhalten() {
 	[ "$(cat "$2" 2>/dev/null)" = "$_sf_c" ] || return 1
 	printf '%s' "$_sf_c"
 }
+
+# --- Der Rust-Baum: Hash und Stand ---------------------------------------
+#
+# Das Gateway-Binary haengt am INHALT von rust/, nicht am Commit: Ein
+# Doku-Commit laesst den Baum stehen, und ein Commit mit Rust-Aenderung sagt
+# noch nicht, ob das Binary dazu neu gebaut wurde. Gehasht wird jede Datei des
+# Baums ausser target/ (reiner Bauabfall); die Pfade werden sortiert und samt
+# ihrer Summen gehasht -- Umbenennen zaehlt mit, nur der Zeitstempel nicht.
+#
+# Wird von Schritt 55 und von tools/gateway-binary.sh benutzt: Der Installer
+# vergleicht damit, ob das Binary zu diesem Baum gebaut wurde.
+rust_baum_hash() { # $1 Verzeichnis; Ausgabe: Hash oder nichts
+	[ -d "$1" ] || return 0
+	_rbh_l="$(mktemp "${TMPDIR:-/tmp}/chimera-baum.XXXXXX" 2>/dev/null)" || return 0
+	(
+		cd "$1" || exit 1
+		find . -path ./target -prune -o -type f -print | LC_ALL=C sort | \
+			while IFS= read -r _rb_f; do
+				printf '%s  %s\n' "$(network_checksum "$_rb_f")" "$_rb_f"
+			done
+	) >"$_rbh_l" 2>/dev/null
+	_rbh_h="$(network_checksum "$_rbh_l")"
+	rm -f "$_rbh_l"
+	[ -n "$_rbh_h" ] && printf '%s' "$_rbh_h"
+	return 0
+}
+
+# Den Stand des abgelegten Binaries festhalten (state/rust-stand): Quelle ist
+# die .stand-Datei neben dem Binary. Eine lokale Datei (CHIMERA_RUST_LOKAL) hat
+# keinen Stand -- dann bleibt die Datei, wie sie ist. Atomar ueber eine
+# Nebendatei, und am Ergebnis geprueft.
+rust_stand_schreiben() { # $1 standdatei (leer = nichts zu tun)
+	[ -n "${1:-}" ] && [ -f "$1" ] && [ -s "$1" ] || return 0
+	_rsf_z="$(rootpath "${CHIMERA_STATE:-/opt/chimera/state}")/rust-stand"
+	mkdir -p "$(dirname "$_rsf_z")" 2>/dev/null || return 1
+	cp "$1" "$_rsf_z.neu" 2>/dev/null || { rm -f "$_rsf_z.neu"; return 1; }
+	[ -s "$_rsf_z.neu" ] || { rm -f "$_rsf_z.neu"; return 1; }
+	mv "$_rsf_z.neu" "$_rsf_z" || { rm -f "$_rsf_z.neu"; return 1; }
+	[ "$(cat "$_rsf_z" 2>/dev/null)" = "$(cat "$1" 2>/dev/null)" ] || return 1
+	return 0
+}

@@ -20,7 +20,7 @@ The test ignores them.
 | [3. Gateway](#3-gateway--gateway) | `chimera-tor` |
 | [4. Anzeige & Hardware](#4-anzeige--hardware--display--hardware) | `python3 -m chimera.displays` |
 | [5. Betrieb](#5-betrieb--operations) | `log-abgleich.sh` |
-| [6. Entwicklung](#6-entwicklung--development) | `tools/*.py`, `installer/run-tests.sh` |
+| [6. Entwicklung](#6-entwicklung--development) | `tools/*.py`, `tools/gateway-binary.sh`, `installer/run-tests.sh` |
 | [7. Umgebungsvariablen](#7-umgebungsvariablen--environment-variables) | `CHIMERA_*` |
 
 Exitcodes: `0` in Ordnung / ok, `1` Befund / finding, `2` Aufruf oder
@@ -213,6 +213,7 @@ Braucht `CHIMERA_LOG_RAM` und `CHIMERA_LOG_KARTE`. / Needs both variables.
 | `python3 tools/check-globals.py` | Namen finden, die gelesen, aber nie definiert werden. / Find names read as globals but never defined. |
 | `python3 tools/contact-sheet.py [ZIEL.png]` | Moods nebeneinander zeichnen. / Draw moods side by side. |
 | `python3 tools/import-noisy-moods.py PFAD [ZIEL.json]` | Noisys 41 Moods als Startbestand übernehmen. / Import Noisy's 41 moods. |
+| `tools/gateway-binary.sh BINARY [--commit KURZ] [--ohne-probe]` | Ein gebautes `chimera-tor` nach `gateway/` legen, mit Prüfsumme und Stand. Prüft Lauf und Version. / Place a built `chimera-tor` in `gateway/` with checksum and stand. |
 
 Langläufer immer abgekoppelt starten (nicht im Turn warten). / Always start
 long runs detached.
@@ -230,7 +231,7 @@ in `/opt/chimera/config/.env`. Never print keys or commit them.
 | Variable | Wirkung / Effect |
 |---|---|
 | `CHIMERA_WEB_PASSWORT` | Web-Passwort im Klartext, nur für diesen Lauf; der Installer trägt den Hash ein. / Plain web password for this run only; the installer stores the hash. |
-| `CHIMERA_RUST_LOKAL` | Pfad zu einem selbst gebauten `chimera-tor` statt des CI-Prerelease. / Path to a self-built `chimera-tor` instead of the CI prerelease. |
+| `CHIMERA_RUST_LOKAL` | Pfad zu einem selbst gebauten `chimera-tor` statt des ausgelieferten aus `gateway/`. / Path to a self-built `chimera-tor` instead of the shipped one. |
 | `CHIMERA_ANZEIGE` | Anzeigetyp festlegen, wenn die Erkennung nichts wählt. / Force a display type. |
 | `CHIMERA_MIKRO_NEU` | `1`: Mikrofonmessung wiederholen. / Repeat the microphone measurement. |
 

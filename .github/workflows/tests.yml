@@ -122,7 +122,8 @@ jobs:
             dash)    SH="dash" ;;
             busybox) SH="busybox sh" ;;
           esac
-          { find installer -name '*.sh' -o -name 'chimera-install'; echo chimera-installer.sh; } | while read -r f; do
+          { find installer -name '*.sh' -o -name 'chimera-install';
+            echo chimera-installer.sh; find tools -name '*.sh'; } | while read -r f; do
             $SH -n "$f" || { printf 'Syntaxfehler: %s\n' "$f"; exit 1; }
           done
 

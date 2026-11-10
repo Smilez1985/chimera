@@ -394,23 +394,18 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       10.11.: sie werden benötigt), gehen aber selbst durch das Gateway:
       `urllib` und `discover()` fallen weg, der Transport ist der Socket.
       Reihenfolge siehe „Sperre fuer den Agent-Dienst“.
-- [ ] **Schritt 55: fester Name, Binary aus dem Startbaum** (smilez,
-      10.11.; DESIGN Regel 14, „Welches Binary“). Heute sucht Schritt 55
-      `rust-<Commit>` als Prerelease: nach einem Doku-Commit Befund (am Pi
-      10.11.: `rust-e26bc2d`, HTTP 404, rc 1), bei einer frischen
-      Installation aus einem Zip gar kein Binary und damit kein Gateway.
-      Soll: fester, sprechender Name; gebaut für jedes Release und
-      bei Bedarf für Tests am chimera-pi, nicht bei jeder Änderung; ein Zip bringt sein Binary mit und der
-      Installer nimmt es. Anknüpfen an den vorhandenen Weg
-      `CHIMERA_RUST_LOKAL` (Prüfsumme, Laufprobe, Version). Berührt:
-      `steps/55-rust.sh`, `tests/test-rust.sh` samt
-      `counter-check-rust.sh`, `.github/workflows/rust.yml`,
-      `docs/INSTALLER.md` (Modul 55), `docs/CLI.md`, `docs/CI.md`.
-      **Entschieden (10.11.):** Das Binary liegt als Datei im Repo
-      (ZIP-Shipping: Repo als Zip holen, auf dem Pi entpacken, daraus
-      installieren). Abgelegt wird es von einem CI-Lauf oder mit einem
-      Commit von uns. **Vorher zu klären:** Ort und Dateiname (außerhalb
-      von `rust/`).
+- [ ] **Schritt 55 — gebaut** (smilez, 10.11.; DESIGN Regel 14): Das Binary
+      liegt in `gateway/` im Repo (`chimera-tor-aarch64`, daneben `.sha256`
+      und `.stand`); Schritt 55 nimmt es aus dem Startbaum, prüft Prüfsumme,
+      Architektur, Laufprobe und Version und legt es ab. Kein Netz, kein
+      Commit, kein Prerelease. Ist `rust/` neuer als das Binary, wird das
+      gemeldet (kein Befund). Tests: `test-rust.sh` 77 Prüfungen,
+      `counter-check-rust.sh` 12 Mutationen. **Offen:**
+      `.github/workflows/rust.yml` veröffentlicht weiterhin das Prerelease
+      `rust-<commit>` — es wird vom Installer nicht mehr gebraucht.
+      Entweder fällt es weg, oder ein CI-Lauf legt das Binary selbst in
+      `gateway/` ab und committet. Weniger wichtig: ein zweiter
+      Architektur-Eintrag (`armv7`), falls ein Board ihn braucht.
 - [ ] **Installer: Sitzungs-Socket nach einem Lauf:** `chimera-sitzung.socket`
       blieb nach einem Lauf von Schritt 99 inaktiv („Socket service already
       active, refusing“), der Dienst lief ohne Sitzungs-Socket weiter. Der

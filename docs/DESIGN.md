@@ -3801,13 +3801,33 @@ Vorteil, sondern eine zweite Toolchain. Es bleibt bei einer.
   Dateien unter `rust/` außer `target/`. Ein Binary unter `rust/` würde
   diesen Hash ändern; es gehört an einen Ort außerhalb.
 
-  **Offen (smilez):**
-  - Ort und Dateiname im Repo.
-  - Ob der Installer meldet, wenn `rust/` neuer ist als das Binary. Heute
-    prüft er Prüfsumme und `VERSION`. Möglich wäre, neben dem Binary den
-    Hash des `rust/`-Baums abzulegen, aus dem es gebaut wurde — der
-    Installer rechnet ihn ohnehin. Ein Abbruch darf daraus nicht werden,
-    weil der Unterschied zwischen zwei Fassungen der Normalfall ist.
+  **Entschieden (smilez, 10.11.2026): `gateway/chimera-tor-aarch64`.**
+  Das Binary liegt in einem eigenen Ordner `gateway/` in der Repo-Wurzel
+  (klein geschrieben wie `docs/`, `rust/`, `installer/`); der Dateiname
+  bleibt der, den Code und CI schon benutzen. Daneben zwei kleine Dateien,
+  beide von der CI bzw. vom Ablege-Werkzeug geschrieben:
+  `chimera-tor-aarch64.sha256` (Prüfsumme, wie heute am Release) und
+  `chimera-tor-aarch64.stand` (`<commit> <hash des rust/-Baums> <version>`
+  — derselbe Aufbau wie `state/rust-stand`). Der Ordner liegt außerhalb von
+  `rust/`, damit der Hash des Rust-Baums unberührt bleibt.
+
+  **Der Installer meldet den Unterschied, bricht aber nicht ab** (smilez,
+  10.11.: „ja"): Ist der `rust/`-Baum im Startbaum neuer als der, aus dem
+  das Binary gebaut wurde, steht das im Protokoll; das Binary bleibt
+  trotzdem liegen und der Exitcode ändert sich nicht. Zwischen zwei
+  Fassungen ist das der Normalfall.
+
+  **Schritt 55 braucht damit kein Netz:** Er nimmt das Binary aus dem
+  Startbaum, prüft Prüfsumme, Architektur, Laufprobe und Version und legt
+  es ab. Kein Prerelease, kein Commit, kein `state/quelle-commit` — eine
+  frische Installation aus einem Zip hat damit ein Gateway.
+
+  **Abgelegt wird eine neue Fassung mit einem Werkzeug**
+  (`tools/gateway-binary.sh`): Es kopiert ein gebautes Binary, schreibt
+  Prüfsumme und Stand daneben und prüft vorher, dass es läuft und die
+  `VERSION` der Quelle nennt. Die CI baut das Binary auf `ubuntu-24.04-arm`
+  und führt es dort aus (Regel 14); das Ablegen ist ein Commit von uns oder
+  ein CI-Lauf.
 - **Ablage:** `/opt/chimera/bin/chimera-tor`, Besitzer root, Modus 755,
   Manifest-Art `datei` mit der Prüfsumme als Angabe. Rückbau 55 entfernt
   die Datei, `bin/` nur, wenn sie leer ist. Der Schritt startet nichts;

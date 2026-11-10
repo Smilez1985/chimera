@@ -74,6 +74,11 @@ shell_files() {
 	# Der Einstieg in der Repo-Wurzel (fehlt er, etwa in einer Kopie nur
 	# von installer/, wird er uebergangen).
 	[ -f "$REPO_DIR/chimera-installer.sh" ] && echo "$REPO_DIR/chimera-installer.sh"
+	# Die Werkzeuge in tools/: sie laufen auf dem Entwicklungsrechner und
+	# gehoeren damit zu dem, was portabel bleiben muss.
+	for _tp in "$REPO_DIR"/tools/*.sh; do
+		[ -f "$_tp" ] && echo "$_tp"
+	done
 	[ -f "$REPO_DIR/uninstaller/chimera-uninstall" ] &&
 		echo "$REPO_DIR/uninstaller/chimera-uninstall"
 }

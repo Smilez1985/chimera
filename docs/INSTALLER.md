@@ -468,31 +468,34 @@ neu, und `arecord -D chimera_mikro` nimmt auf.
 
 ### Modul 55 — Rust-Binary (`chimera-tor`)
 
-Holt das Gateway-Binary (DESIGN Regel 14) und legt es nach
-`/opt/chimera/bin/chimera-tor` (root, 755). Er startet nichts.
+Nimmt das Gateway-Binary aus dem Startbaum (DESIGN Regel 14) und legt es
+nach `/opt/chimera/bin/chimera-tor` (root, 755). Er startet nichts und
+braucht **kein Netz**: Das Binary liegt mit im Repo.
 
-- **Commit:** aus `state/quelle-commit` (von Schritt 00 beim Klonen
-  geschrieben, 7 Zeichen). Leer oder fehlend ⇒ Befund (rc 1) mit Hinweis,
-  kein Raten, kein „neuestes Prerelease“.
-- **Unveränderter rust/-Baum:** Ein Doku-Commit lässt `rust/` stehen — dann
-  ist kein neues Binary nötig. `state/rust-stand` (`<commit> <hash des
-  rust/-Baums> <version>`) hält den Stand fest, aus dem das abgelegte Binary
-  gebaut wurde. Bei gleichem Hash, gleicher Version und geprüftem Binary
-  bleibt es liegen (rc 0, „Rust unverändert seit …“) — ohne Netz, ohne
-  Befund, ohne CI-Build. Geprüft wird dabei trotzdem: Prüfsumme wie im
-  Manifest, Lauf, Version. Ein geänderter Baum oder eine neue `VERSION`
-  hebt das Stillhalten auf (die Version steht im Binary). Fehlt das Binary,
-  wird `rust-<commit aus dem Stand>` geholt, nicht das des neuen Commits.
-  `CHIMERA_RUST_BAUM` ersetzt den Baum (Tests).
-- **Quelle:** `https://github.com/Smilez1985/chimera/releases/download/rust-<commit>/`
-  mit `chimera-tor-aarch64` und `chimera-tor-aarch64.sha256`.
-  `CHIMERA_RUST_URL` ersetzt die Basis (Tests, Spiegel).
-- **Prüfung:** SHA-256 aus der `.sha256`-Datei; Abweichung ⇒ nichts
-  abgelegt, benannter Abbruch (I4). Danach `chimera-tor --version` gegen
-  `VERSION` der Quelle (rc 2, wenn das Binary nicht läuft).
-- **Architektur:** nur `aarch64`. Anderes ⇒ Befund, nichts geladen.
+- **Quelle:** `<Startbaum>/gateway/chimera-tor-aarch64`, daneben
+  `chimera-tor-aarch64.sha256` (Prüfsumme) und
+  `chimera-tor-aarch64.stand` (`<commit> <hash des rust/-Baums> <version>`).
+  Der Startbaum ist der Baum, aus dem der Schritt läuft — nach dem Neustart
+  aus `source/` also `source/`. Ein Zip bringt `gateway/` mit.
+- **Prüfung:** Prüfsumme gegen die `.sha256`-Datei (fehlt sie, ist das ein
+  benannter Abbruch), dann die Laufprobe: `--version` muss `chimera-tor
+  <VERSION der Quelle>` melden. Was nie gestartet wurde, ist eine
+  Behauptung (Regel 14).
+- **Hinweis, kein Befund:** Ist der `rust/`-Baum im Startbaum neuer als
+  der, aus dem das Binary gebaut wurde, steht das im Protokoll. Das Binary
+  wird trotzdem abgelegt (smilez, 10.11.: „ja") — zwischen zwei Fassungen
+  ist das der Normalfall.
+- **Architektur:** nur `aarch64`. Anderes ⇒ Befund (rc 1), nichts abgelegt.
 - **Idempotent:** Liegt schon ein Binary mit gleicher Prüfsumme, passiert
-  nichts. Eine fremde Datei am Zielort wird nie überschrieben.
+  nichts weiter als die Prüfung („Schon vorhanden und geprüft").
+- **Fremde Datei:** Steht am Zielort eine Datei, die nicht im Manifest
+  steht, wird sie nie überschrieben (rc 2).
+- **`CHIMERA_RUST_LOKAL`:** ein selbst gebautes Binary statt des
+  ausgelieferten (Entwicklung). Prüfsumme, Laufprobe und Version gelten
+  unverändert; einen Stand hat es nicht.
+- **Ablegen einer neuen Fassung:** `tools/gateway-binary.sh <binary>
+  [--commit <kurz>]` — prüft Lauf und Version, schreibt Binary, Prüfsumme
+  und Stand nach `gateway/`.
 - **Rückbau:** `uninstaller/steps/55-remove-rust.sh` entfernt, was im
   Manifest steht (Modul `55-rust`).
 

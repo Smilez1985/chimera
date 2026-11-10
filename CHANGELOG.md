@@ -20,6 +20,18 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Das Gateway-Binary liegt im Repo:** `gateway/chimera-tor-aarch64`
+  (2,0 MB, aarch64-musl, gebaut von der CI für `fa7edfb`) mit
+  `chimera-tor-aarch64.sha256` und `chimera-tor-aarch64.stand`
+  (`<commit> <hash des rust/-Baums> <version>`). Damit bringt ein Zip von
+  GitHub das Binary mit: Wer das Repo als Zip holt, auf dem Pi entpackt und
+  daraus installiert, braucht für das Gateway kein Netz.
+- **`tools/gateway-binary.sh`:** legt ein gebautes Binary ab und schreibt
+  Prüfsumme und Stand dazu; prüft vorher, dass es läuft und die `VERSION`
+  der Quelle nennt (`--ohne-probe` für fremde Architekturen, mit Warnung).
+- **`rust_baum_hash` und `rust_stand_schreiben` liegen in
+  `installer/lib/source.sh`** statt in Schritt 55 — das Ablege-Werkzeug
+  braucht dieselben Funktionen; zwei Fassungen würden auseinanderlaufen.
 - **`chimera-installer.sh` in der Repo-Wurzel — der Einstieg für den
   Nutzer** (smilez, 10.11.; Vorbild `setup.sh` in rag4ll und `install.sh`
   in llmcf). `sudo sh chimera-installer.sh` aus dem Klon oder dem
@@ -414,6 +426,18 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Schritt 55 nimmt das Binary aus dem Startbaum, nicht aus einem
+  Prerelease.** Kein Netz, kein Commit, kein `state/quelle-commit` mehr: Er
+  prüft die `.sha256`-Datei daneben, die Architektur, startet das Binary und
+  vergleicht `--version` mit der `VERSION` der Quelle, dann legt er es ab.
+  Ist der `rust/`-Baum im Startbaum neuer als der, aus dem das Binary gebaut
+  wurde, steht das im Protokoll — **ohne Befund** (smilez, 10.11.: „ja"),
+  denn zwischen zwei Fassungen ist das der Normalfall. Fehlt das Binary im
+  Startbaum, ist das ein Befund (rc 1) mit Hinweis, wohin es gehört.
+  `CHIMERA_RUST_URL` entfällt (der Schritt holt nichts nach),
+  `CHIMERA_RUST_LOKAL` bleibt für selbst gebaute Binaries. Tests neu:
+  `test-rust.sh` 77 Prüfungen, `counter-check-rust.sh` 12 Mutationen, beide
+  unter sh, dash und BusyBox grün.
 - **Blaupause: Das Gateway-Binary bekommt einen festen Namen und kommt aus
   dem Startbaum** (smilez, 10.11.; DESIGN Regel 14). Bisher sucht Schritt 55
   ein Prerelease `rust-<Commit>` — der Name wechselt mit jedem Commit, und
@@ -655,6 +679,14 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Der Geheimnis-Prüfer hielt eine Anschrift aus dem Gateway-Binary für
+  eine private Mailadresse.** Ein statisch gelinktes Programm bringt
+  Zeichenketten fremder Bibliotheken mit (`appro@openssl.org` aus dem
+  OpenSSL-Anteil); die Textsuche darauf blockierte den Push. Eine
+  Binärdatei wird jetzt auch **am Inhalt** erkannt (NUL-Byte in den ersten
+  2 KB), nicht nur an der Endung, und die übersprungenen Dateien werden
+  benannt („1 Binaerdatei(en) uebersprungen") statt verschwiegen. Dieselbe
+  Grenze wie die Endungsliste, die es schon gab.
 - **`test-einstieg.sh` war in der CI unter BusyBox rot** (`c385136`). Der
   Test ersetzte `id` durch eine Attrappe im Suchpfad. Die BusyBox der CI
   (Ubuntu `busybox-static` 1.36.1) nimmt ihre eingebauten Befehle vor dem
@@ -783,14 +815,10 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Prüfsumme heraus; jetzt bricht die Prüfung benannt ab.
 
 ### Bekannte Einschränkungen
-- **Schritt 55 endet nach einem Doku-Commit mit Befund,** wenn davor ein
-  Commit `rust/` geändert hat: Zum Kopf gibt es kein Prerelease, weil die CI
-  nur bei Änderungen unter `rust/` baut. Am Pi am 10.11. so gelaufen
-  (`rust-e26bc2d`, HTTP 404, Exitcode 1); das bisherige Binary läuft
-  weiter. Abhilfe: den Rust-Job von Hand anstoßen. Aus demselben Grund
-  bekäme eine frische Installation aus einem Zip (ohne `.git`) kein Binary
-  und damit kein Gateway. Der Umbau steht in der ROADMAP (Phase 4d,
-  „Schritt 55: fester Name“).
+- **Die CI veröffentlicht weiterhin ein Prerelease `rust-<commit>`**, das
+  der Installer nicht mehr braucht: Seit dem Umbau von Schritt 55 nimmt er
+  das Binary aus `gateway/`. Es schadet nicht, es kostet nur einen Release
+  je Rust-Änderung. Steht in der ROADMAP (Phase 4d).
 - **`MemoryMax=` wirkt auf dem Pi nicht.** Der RPi-Kernel startet mit
   `cgroup_disable=memory`. Gemessen: 150 MB unter `MemoryMax=20M` liefen
   durch. Regel 10q setzt deshalb auf Selbstbegrenzung, die noch nicht
