@@ -71,6 +71,9 @@ shell_files() {
 		is_meta_test "$_sf" || echo "$_sf"
 	done
 	[ -f "$ROOT/chimera-install" ] && echo "$ROOT/chimera-install"
+	# Der Einstieg in der Repo-Wurzel (fehlt er, etwa in einer Kopie nur
+	# von installer/, wird er uebergangen).
+	[ -f "$REPO_DIR/chimera-installer.sh" ] && echo "$REPO_DIR/chimera-installer.sh"
 	[ -f "$REPO_DIR/uninstaller/chimera-uninstall" ] &&
 		echo "$REPO_DIR/uninstaller/chimera-uninstall"
 }

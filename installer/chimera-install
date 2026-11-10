@@ -129,7 +129,9 @@ fi
 if [ "$MODE" = run ] && [ "$HELFER_AUFTRAG" != 1 ] && [ "${CHIMERA_HELFER:-0}" != 1 ]; then
 	if [ "$(id -u)" != 0 ]; then
 		err "Dieser Lauf braucht root -- und er laeuft nie in der aufrufenden Sitzung."
-		err "  sudo sh $0 $*"
+		# CHIMERA_EINSTIEG setzt chimera-installer.sh (Repo-Wurzel): Der Hinweis
+		# nennt die Datei, die der Nutzer aufgerufen hat.
+		err "  sudo sh ${CHIMERA_EINSTIEG:-$0} $*"
 		exit 2
 	fi
 	_ah_neu=""

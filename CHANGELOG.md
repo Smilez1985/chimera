@@ -20,6 +20,17 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **`chimera-installer.sh` in der Repo-Wurzel — der Einstieg für den
+  Nutzer** (smilez, 10.11.; Vorbild `setup.sh` in rag4ll und `install.sh`
+  in llmcf). `sudo sh chimera-installer.sh` aus dem Klon oder dem
+  entpackten Zip; die Datei reicht an `installer/chimera-install` weiter,
+  mit denselben Optionen und demselben Exitcode. Fehlt der innere
+  Installer, bricht sie benannt ab. Der Hinweis „mit sudo neu starten“
+  nennt jetzt die Datei, die aufgerufen wurde. Tests:
+  `installer/tests/test-einstieg.sh` (16 Prüfungen, Vergleich mit dem
+  inneren Installer statt eines nachgebauten Sollwerts) und
+  `counter-check-einstieg.sh` (fünf Mutationen, jede rot am erwarteten
+  Punkt). Portabilitätstest und Syntaxlauf der CI erfassen die Datei.
 - **Blaupause: Regel „Wer prüft, führt aus“ — Werkzeuge laufen in einem
   eigenen Prozess, den der Agent nicht ändern kann.** Vorgabe smilez
   (10.11.): eine unabhängige Kontrollinstanz vor der Werkzeugausführung,
@@ -427,8 +438,9 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   10.11.): Der Nutzer ruft ihn aus seinem Betriebssystem auf. Heute heißen
   die Einstiege `installer/chimera-install` und
   `uninstaller/chimera-uninstall`, ohne Endung. Nur Design (Regel
-  „Installerhelfer“) und Roadmap (Phase 8) — umbenannt ist nichts; die
-  Namen legt smilez fest.
+  „Installerhelfer“) und Roadmap (Phase 8). Gebaut ist danach der Einstieg
+  `chimera-installer.sh` (siehe „Hinzugefügt“); die inneren Dateien heißen
+  weiter wie bisher.
 - **Blaupause: Bauplan für die Sperre des Agent-Dienstes** (DESIGN 5n,
   „Bauplan, Stufe 1“): jede berührte Stelle mit Ist und Soll, dazu der
   Vorrang von Regel 5l bei der `.env` — drei Stellen im Design und der

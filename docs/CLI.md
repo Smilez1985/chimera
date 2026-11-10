@@ -78,9 +78,15 @@ Umgebung bei einem Lauf (Auswahl, alle in Abschnitt 7) / Environment for a run
 
 Beispiele / Examples:
 
-    sudo sh installer/chimera-install --dry-run
-    sudo env CHIMERA_WEB_PASSWORT='…' sh installer/chimera-install
-    sudo sh installer/chimera-install --only 99
+    sudo sh chimera-installer.sh --dry-run
+    sudo env CHIMERA_WEB_PASSWORT='…' sh chimera-installer.sh
+    sudo sh chimera-installer.sh --only 99
+
+Einstieg ist `chimera-installer.sh` in der Repo-Wurzel (Klon oder
+entpacktes Zip). Die Datei reicht an `installer/chimera-install` weiter:
+dieselben Optionen, derselbe Exitcode. / The entry point is
+`chimera-installer.sh` in the repository root (clone or unpacked zip). It
+hands over to `installer/chimera-install`: same options, same exit code.
 
 ### `chimera-uninstall`
 

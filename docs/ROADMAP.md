@@ -711,22 +711,22 @@ Entwurf steht in `docs/INSTALLER.md`. Der Installer traegt die
 Plattformfrage, deshalb eigene Phase und nicht am Ende angehaengt.
 
 ### 8a — Geruest
-- [ ] **Der Einstieg ist eine `.sh`** (smilez, 10.11.; DESIGN, Regel
-      „Installerhelfer“): Der Nutzer ruft den Installer aus seinem
-      Betriebssystem auf (DietPi). Vorlagen: rag4ll (`setup.sh` in der
-      Repo-Wurzel) und llmcf (`install.sh`). Berührt, nachgesehen 10.11.:
-      22 Dateien nennen `chimera-install`, davon sieben mit Pfad —
-      `service.sh` (Boot-Abgleich), `mojo.rs`, der Neustart aus `source/`
-      (`chimera-install` Zeile 141 und 272), `test_cli_doku.py`,
-      `test-portability.sh`, `tests.yml` und sieben Installertests; dazu
-      `docs/CLI.md` und `docs/INSTALLER.md`. Der Deinstallierer
-      (`chimera-uninstall`, ebenfalls ohne Endung und nicht ausführbar
-      markiert) zieht mit. **Namen und Ort legt smilez fest.**
-- [ ] **Übergang für den alten Namen:** Eine bestehende Installation ruft
-      im Boot-Abgleich `installer/chimera-install --hardware` auf, und der
-      Neustart aus `source/` sucht dieselbe Datei. Ein Stand ohne den alten
-      Namen bricht sie (Versionierung: ein Versionssprung bricht keine
-      Installation).
+- [ ] **Einstieg `chimera-installer.sh` — gebaut** (Repo-Wurzel; smilez,
+      10.11.; DESIGN, Regel „Installerhelfer“): reicht an
+      `installer/chimera-install` weiter, gleiche Optionen, gleicher
+      Exitcode. **Offen:** ein Einstieg für den Deinstallierer
+      (`uninstaller/chimera-uninstall` trägt keine Endung und ist in Git
+      nicht ausführbar markiert); ob die innere Datei ebenfalls eine Endung
+      bekommt (22 Dateien nennen sie, der Boot-Abgleich bestehender
+      Installationen ruft sie auf); der Installationsbefehl in der README.
+- [ ] **Abgleich mit den Vorlagen** (rag4ll `setup.sh` und
+      `install-rag.sh`, llmcf `install.sh`; gelesen 10.11.). Chimera hat
+      davon: Kopie in ein festes Verzeichnis mit Neustart von dort,
+      Schritte mit Exitcodes, Manifest, Protokoll je Lauf, `--dry-run`.
+      Es fehlen: die Frage nach der Ollama-Adresse beim ersten Lauf (Modul
+      95 ist geplant; beide Vorlagen fragen mit Vorgabe, wenn kein
+      Terminal da ist) und ein Schlussbild, das sagt, wo was liegt und wie
+      man startet (der Lauf endet heute mit „Fertig: N Modul(e)“).
 - [ ] `--dry-run` und `--check` in den Modulen tatsaechlich auswerten
       (werden bisher nur durchgereicht)
 - [ ] `VERSION` ins System stempeln, `chimera --version`

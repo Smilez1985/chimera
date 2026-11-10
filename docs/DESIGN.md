@@ -3899,11 +3899,19 @@ und dort soll man einem Programm ansehen, was es ist. Die `.sh` darf eine
 andere Datei aufrufen. Vorlagen sind die Installer von rag4ll und llmcf
 (nachgesehen 10.11.): rag4ll hat `setup.sh` in der Repo-Wurzel als
 einzigen sichtbaren Einstieg, der an die eigentlichen Installer
-weiterreicht; llmcf hat `install.sh` in der Wurzel. Stand in Chimera:
-`installer/chimera-install` und `uninstaller/chimera-uninstall` tragen
-keine Endung, in der Repo-Wurzel liegt kein Einstieg, und die README nennt
-keinen Installationsbefehl. Der Umbau steht in der ROADMAP (Phase 8); die
-neuen Namen legt smilez fest.
+weiterreicht; llmcf hat `install.sh` in der Wurzel. 
+
+**Entschieden und gebaut (smilez, 10.11.2026): `chimera-installer.sh` in
+der Repo-Wurzel.** Die Datei reicht nur weiter an
+`installer/chimera-install` — dieselben Optionen, derselbe Exitcode, keine
+zweite Prüfung. Die innere Datei behält ihren Namen: Der Boot-Abgleich
+bestehender Installationen und der Neustart aus `source/` rufen sie auf,
+ein Übergang ist damit nicht nötig. Lehnt der Installer einen Lauf ohne
+root ab, nennt der Hinweis den Einstieg, den der Nutzer aufgerufen hat.
+
+Offen: ein Einstieg für den Deinstallierer
+(`uninstaller/chimera-uninstall` trägt keine Endung), ob die innere Datei
+ebenfalls eine Endung bekommt, und der Installationsbefehl in der README.
 
 `chimera-hardware.service` ist der **Boot-Abgleich der Hardware**, nicht die
 SSH-Schicht. Die Abkopplung ist eine eigene Sache und steht **im Installercode

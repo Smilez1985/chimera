@@ -108,6 +108,10 @@ schlägt den Neustartwunsch.
 
 ## 2. Modulaufbau
 
+**Einstieg:** `sudo sh chimera-installer.sh` in der Repo-Wurzel. Die Datei
+reicht an `installer/chimera-install` weiter, der die Module der Nummer
+nach aufruft (DESIGN, Regel „Installerhelfer“).
+
 | # | Modul | Aufgabe |
 |---|---|---|
 | 00 | `source` | lokale SSOT-Kopie `source/`; der Läufer startet daraus neu (Baustein 2) |
