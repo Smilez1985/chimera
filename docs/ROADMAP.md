@@ -5,7 +5,7 @@ Was noch fehlt, nach Priorität. Entscheidungen und Begründungen stehen in
 `CHANGELOG.md`** — hier steht nur, was aussteht; ein Haken gibt es deshalb
 nicht mehr.
 
-Stand: 2026-11-04. Pre-Alpha.
+Stand: 2026-11-10. Pre-Alpha.
 
 ---
 
@@ -355,10 +355,12 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       genügt nicht, systemd liest `EnvironmentFile=` als root und reicht die
       Werte durch; der Dienst bekommt eine eigene Datei ohne Geheimnisse.
       Der Rückfall „ohne Gateway direkt“ in `provider/setup.py` fällt weg.
-      Ohne `IPAddressAllow=localhost`, wenn der Dienst es nicht braucht (am
-      Gerät belegen).
+      Ohne `IPAddressAllow=localhost` (am Pi belegt, 10.11.: der Socket
+      zum Gateway antwortet auch ohne die Freigabe). Bauplan mit allen
+      berührten Stellen: DESIGN 5n, „Bauplan, Stufe 1“.
       **Reihenfolge der Sicherheitsarbeit** (smilez, 10.11.: nach
-      Wichtigkeit; Einstufung notes): 1. diese Sperre, 2. Ausführer
+      Wichtigkeit; Einstufung notes, von smilez genehmigt): 1. diese
+      Sperre, 2. Ausführer
       `chimera-sohelper` (Phase 6), 3. Claude-Zugänge ins Gateway zusammen
       mit der Schwärzung, 4. Positivliste für `web_abruf` und Rückfrage.
       Folge von 1 vor 3: Ein Gerät mit Claude-Schlüssel hat bis Schritt 3
@@ -388,6 +390,16 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       10.11.: sie werden benötigt), gehen aber selbst durch das Gateway:
       `urllib` und `discover()` fallen weg, der Transport ist der Socket.
       Reihenfolge siehe „Sperre fuer den Agent-Dienst“.
+- [ ] **Schritt 55 nach einem Doku-Commit:** Ändert ein Commit `rust/`
+      und folgt ihm ein Doku-Commit, gibt es zum Kopf kein Prerelease — die
+      CI baut nur bei Änderungen unter `rust/`. Schritt 55 misst den Baum
+      als geändert, sucht `rust-<Kopf>` und endet mit Befund (am Pi 10.11.:
+      `rust-e26bc2d` → HTTP 404, rc 1; das alte Binary läuft weiter). Der
+      Installer klont flach (`--depth 1`) und kann den letzten Commit mit
+      Rust-Änderung nicht selbst bestimmen. Abhilfe heute: den Rust-Job
+      von Hand anstoßen (`workflow_dispatch`). Zu entscheiden: die CI baut
+      für jeden Commit auf `entwicklung`, oder der Stand nennt den Commit
+      der letzten Rust-Änderung.
 - [ ] **Installer: Sitzungs-Socket nach einem Lauf:** `chimera-sitzung.socket`
       blieb nach einem Lauf von Schritt 99 inaktiv („Socket service already
       active, refusing“), der Dienst lief ohne Sitzungs-Socket weiter. Der
@@ -489,6 +501,11 @@ Rust-Teile im selben Cargo-Workspace wie das Gateway (Regel 14).
 - [ ] Rückbau-Gegenstücke (10l) für Nutzer `chimera-post`, Units, Sockets.
 
 ## Phase 4f — Persönlichkeit und Selbstentwicklung (DESIGN 8e–8h)
+
+Reihenfolge (smilez, 10.11.): nach der Sicherheitsarbeit aus Phase 4d und 6 —
+eins nach dem anderen. Stand im Code (10.11. nachgesehen): Es gibt
+`GRUNDLAGEN.md` (`agent/memory.py`) und den festen `SYSTEM_TEMPLATE`
+(`agent/loop.py`); die Dateien aus Regel 8e gibt es noch nicht.
 
 - [ ] `data/ich/` mit SOUL, IDENTITY, RULES, USER, TRAITS, BOOTSTRAP als
       `*.example`-Vorlagen. `SYSTEM_TEMPLATE` schrumpft auf den
@@ -683,6 +700,22 @@ Entwurf steht in `docs/INSTALLER.md`. Der Installer traegt die
 Plattformfrage, deshalb eigene Phase und nicht am Ende angehaengt.
 
 ### 8a — Geruest
+- [ ] **Der Einstieg ist eine `.sh`** (smilez, 10.11.; DESIGN, Regel
+      „Installerhelfer“): Der Nutzer ruft den Installer aus seinem
+      Betriebssystem auf (DietPi). Vorlagen: rag4ll (`setup.sh` in der
+      Repo-Wurzel) und llmcf (`install.sh`). Berührt, nachgesehen 10.11.:
+      22 Dateien nennen `chimera-install`, davon sieben mit Pfad —
+      `service.sh` (Boot-Abgleich), `mojo.rs`, der Neustart aus `source/`
+      (`chimera-install` Zeile 141 und 272), `test_cli_doku.py`,
+      `test-portability.sh`, `tests.yml` und sieben Installertests; dazu
+      `docs/CLI.md` und `docs/INSTALLER.md`. Der Deinstallierer
+      (`chimera-uninstall`, ebenfalls ohne Endung und nicht ausführbar
+      markiert) zieht mit. **Namen und Ort legt smilez fest.**
+- [ ] **Übergang für den alten Namen:** Eine bestehende Installation ruft
+      im Boot-Abgleich `installer/chimera-install --hardware` auf, und der
+      Neustart aus `source/` sucht dieselbe Datei. Ein Stand ohne den alten
+      Namen bricht sie (Versionierung: ein Versionssprung bricht keine
+      Installation).
 - [ ] `--dry-run` und `--check` in den Modulen tatsaechlich auswerten
       (werden bisher nur durchgereicht)
 - [ ] `VERSION` ins System stempeln, `chimera --version`

@@ -944,6 +944,14 @@ Agent bekommt Netz nur, „wenn die Security Gates den Zugriff durchwinken“.
    abgelehnt. Braucht ein Werkzeug Netz, ist es ein Werkzeug des Gateways
    (Regel 5r).
 
+**Vorrang bei Widerspruch (10.11.2026).** An drei Stellen sagt dieses
+Dokument noch, der Agent lese die `.env`: im Pfadschema der Regel 10r
+(`config/ root:chimera 750, .env 640`), in Regel 5t („der Agent liest dort
+die `.env`“) und im Installer, der genau das einrichtet. Regel 5l sagt das
+Gegenteil (`root:chimera-tor`, der Agent kann sie nicht lesen). Es gilt 5l
+zusammen mit dieser Verschärfung; die drei Stellen werden mit dem Bau der
+Sperre angeglichen.
+
 **Die Tore** — alle am Gateway (smilez, 10.11.2026):
 
 | Tor | Stand |
@@ -974,12 +982,47 @@ sieht, und ersetzt keine Auftragsverarbeitung.
 | Umgebung des Dienstes | enthält `ANTHROPIC_API_KEY`, `ANTHROPIC_OAUTH_TOKEN`, `CHIMERA_TELEGRAM_TOKEN`, `CHIMERA_WEB_PASSWORT_HASH` (aus `EnvironmentFile=`); die drei Zugänge sind auf diesem Gerät leer |
 | Was dort über den direkten Weg läuft (Startprotokoll) | nichts: Ollama geht über das Gateway, Claude und Telegram sind nicht eingerichtet |
 
+Nachgemessen am 10.11. abends: Mit `IPAddressDeny=any` **ohne**
+`IPAddressAllow=localhost` antwortet das Gateway dem Prozess über den
+Unix-Socket weiter (`status` und die Modell-Liste des Ollama-Servers im
+LAN); `127.0.0.1:8080` und das Internet sind zu. Die Freigabe für localhost
+wird also nicht gebraucht.
+
+**Bauplan, Stufe 1 — die Sperre** (gegen den Code geprüft, 10.11.):
+
+| Stelle | Heute | Wird |
+|---|---|---|
+| `installer/lib/service.sh`, Unit des Dienstes | `EnvironmentFile=$CHIMERA_CONFIG/.env`, keine Netzsperre | lädt die `.env` nicht; `IPAddressDeny=any` ohne Freigabe |
+| `installer/lib/service.sh`, `service_bereiche` | `config/` `root:chimera 750`, `.env` `root:chimera 640` | `.env` `root:chimera-tor`, für den Agenten unlesbar (Regel 5l) |
+| `installer/lib/gateway.sh`, `gateway_ablagen` | setzt `config/` auf 751, „Agent liest dort die .env“ | Kommentar und Rechte nach 5l |
+| `provider/setup.py`, `build_registry` | ohne Gateway direkter Weg, `discover()` | ohne Gateway kein Anbieter, mit Grund gemeldet |
+| `tests/test_gateway_provider.py` | prüft „ohne Gateway bleibt der direkte Weg“ | prüft das Gegenteil |
+| `installer/tests/test-service.sh` | prüft „liest die .env“ | prüft, dass die Unit sie nicht lädt und die Sperre trägt; Gegenprobe in `counter-check-service.sh` |
+| Bestehende Installation | `.env` gehört `root:chimera` | Übergang im Installer (Versionierung: ein Versionssprung bricht keine Installation) |
+
+Kein neues Modul und kein neuer Schritt: Alles knüpft an Schritt 98
+(Dienst) und Schritt 99 (Gateway) an. `provider/ollama.py`,
+`provider/anthropic.py` und `bot/telegram.py` bleiben in Stufe 1
+unverändert — ihr Umbau auf den Socket kommt mit den Claude-Zugängen im
+Gateway. Bis dahin scheitert ein direkter Aufruf an der Sperre und wird als
+„nicht verfügbar“ gemeldet.
+
+**Was der Dienst aus der `.env` braucht, und woher es künftig kommt:**
+
+| Name | Stand |
+|---|---|
+| `OLLAMA_MODEL` | braucht der Gateway-Connector (`provider/gateway.py`) als Vorgabe; auf dem Prüfgerät leer. Kein Geheimnis. Offen: bis `wahl.json` gebaut ist, über den Socket oder eine eigene Datei ohne Geheimnisse |
+| `OLLAMA_API_BASE`, `OLLAMA_HOST` | nur der direkte Weg — entfällt |
+| `ANTHROPIC_API_KEY`, `ANTHROPIC_OAUTH_TOKEN` | Schlüssel — gehören dem Gateway |
+| `CHIMERA_TELEGRAM_TOKEN`, `CHIMERA_TELEGRAM_ALLOWED` | Schlüssel — gehören dem Gateway; `__main__.py` fragt heute das Token ab, um die eigene Tür zu öffnen. Wie das künftig läuft, hängt an der offenen Telegram-Frage |
+| `CHIMERA_ANZEIGE` | kommt aus `/run/chimera/anzeige.env`, nicht aus der `.env` — bleibt |
+
 **Entschieden (smilez, 10.11.2026):**
 
 - **`provider/` und `bot/telegram.py` bleiben** — siehe Punkt 1.
 - **Alle Tore liegen am Gateway** — siehe „Die Tore“.
 - **Reihenfolge nach Wichtigkeit** — die Einstufung steht in der ROADMAP
-  (Phase 4d, „Sperre fuer den Agent-Dienst“).
+  (Phase 4d, „Sperre fuer den Agent-Dienst“) und ist genehmigt (10.11.).
 
 **Der Installer hat eigene Regeln** (Regel „Installerhelfer“, Regel 13,
 Regel 10r): Er läuft als root, abgekoppelt als `chimera-installhelper`, nie
@@ -2799,6 +2842,11 @@ Paketindex, auf dem Gerät.
 Sonst entstehen Doppelimplementierungen — dieselbe Logik zweimal, subtil
 unterschiedlich, monatelang unbemerkt.
 
+Bekräftigt (smilez, 10.11.2026): Erst nachsehen, **was schon da ist, was die
+Änderung berührt und wo sie anknüpft** — nie neben eine bestehende Struktur
+bauen. Und jeden Schritt **mit der Blaupause vergleichen**: Weicht der Bau
+von diesem Dokument ab, wird zuerst das Dokument geändert.
+
 Was ungeprüft bleibt, wird **als ungeprüft benannt**. Eine ehrliche Lücke
 ist brauchbar, eine geratene Antwort nicht. Deshalb steht in diesem
 Dokument an mehreren Stellen „zu prüfen, nicht anzunehmen".
@@ -3760,6 +3808,18 @@ Vorgabe smilez (2.11.): Der Installer darf **nicht** unter
 `chimera-hardware.service` laufen; er läuft abgekoppelt als eigener Dienst
 `chimera-installhelper`, **nur wenn er aufgerufen wird**, nicht dauerhaft. Und:
 **Die SSH-Sitzung darf nie abreißen, nur weil Chimera ein Update bekommt.**
+
+**Der Einstieg ist eine `.sh`-Datei** (Vorgabe smilez, 10.11.2026): Der
+Nutzer ruft den Installer aus seinem Betriebssystem heraus auf (DietPi),
+und dort soll man einem Programm ansehen, was es ist. Die `.sh` darf eine
+andere Datei aufrufen. Vorlagen sind die Installer von rag4ll und llmcf
+(nachgesehen 10.11.): rag4ll hat `setup.sh` in der Repo-Wurzel als
+einzigen sichtbaren Einstieg, der an die eigentlichen Installer
+weiterreicht; llmcf hat `install.sh` in der Wurzel. Stand in Chimera:
+`installer/chimera-install` und `uninstaller/chimera-uninstall` tragen
+keine Endung, in der Repo-Wurzel liegt kein Einstieg, und die README nennt
+keinen Installationsbefehl. Der Umbau steht in der ROADMAP (Phase 8); die
+neuen Namen legt smilez fest.
 
 `chimera-hardware.service` ist der **Boot-Abgleich der Hardware**, nicht die
 SSH-Schicht. Die Abkopplung ist eine eigene Sache und steht **im Installercode

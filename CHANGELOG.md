@@ -403,6 +403,21 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Blaupause: Regel 10g bekräftigt** (smilez, 10.11.): erst nachsehen, was
+  da ist, was die Änderung berührt und wo sie anknüpft; mit der Blaupause
+  vergleichen, bevor gebaut wird. Die Reihenfolge der Sicherheitsarbeit
+  (Sperre, Ausführer, Claude ins Gateway mit Schwärzung, übrige Tore) ist
+  genehmigt und steht in der ROADMAP.
+- **Blaupause: Der Einstieg des Installers wird eine `.sh`** (smilez,
+  10.11.): Der Nutzer ruft ihn aus seinem Betriebssystem auf. Heute heißen
+  die Einstiege `installer/chimera-install` und
+  `uninstaller/chimera-uninstall`, ohne Endung. Nur Design (Regel
+  „Installerhelfer“) und Roadmap (Phase 8) — umbenannt ist nichts; die
+  Namen legt smilez fest.
+- **Blaupause: Bauplan für die Sperre des Agent-Dienstes** (DESIGN 5n,
+  „Bauplan, Stufe 1“): jede berührte Stelle mit Ist und Soll, dazu der
+  Vorrang von Regel 5l bei der `.env` — drei Stellen im Design und der
+  Installer sagen noch, der Agent lese sie.
 - **Blaupause: Regel 5n verschärft — Netz ausschließlich über das Gateway,
   ohne Rückfall.** Vorgabe smilez (10.11.): Alles, was Chimera tut und Netz
   braucht, geht über das Gateway, und nur wenn dessen Tore den Aufruf
@@ -733,6 +748,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Prüfsumme heraus; jetzt bricht die Prüfung benannt ab.
 
 ### Bekannte Einschränkungen
+- **Schritt 55 endet nach einem Doku-Commit mit Befund,** wenn davor ein
+  Commit `rust/` geändert hat: Zum Kopf gibt es kein Prerelease, weil die CI
+  nur bei Änderungen unter `rust/` baut. Am Pi am 10.11. so gelaufen
+  (`rust-e26bc2d`, HTTP 404, Exitcode 1); das bisherige Binary läuft
+  weiter. Abhilfe: den Rust-Job von Hand anstoßen. Steht in der ROADMAP
+  (Phase 4d).
 - **`MemoryMax=` wirkt auf dem Pi nicht.** Der RPi-Kernel startet mit
   `cgroup_disable=memory`. Gemessen: 150 MB unter `MemoryMax=20M` liefen
   durch. Regel 10q setzt deshalb auf Selbstbegrenzung, die noch nicht
@@ -774,6 +795,11 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   nicht gemessen.
 
 ### Geprüft
+- **Netzsperre ohne localhost-Freigabe am chimera-pi (10.11.):** Ein Prozess
+  unter dem Nutzer `chimera` mit `IPAddressDeny=any` erreicht das Gateway
+  über den Unix-Socket (`status`, Modell-Liste des Ollama-Servers im LAN);
+  `127.0.0.1:8080` und das Internet sind zu. `IPAddressAllow=localhost`
+  wird nicht gebraucht.
 - **Hardware-Checkliste am chimera-pi (6.11.):** Kernel
   `6.18.59+rpt-rpi-v8` mit vorhandenem `/lib/modules/.../build`,
   `snd-soc-wm8960` und `snd_soc_whisplay_soundcard` geladen, ALSA-Karte
