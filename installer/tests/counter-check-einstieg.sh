@@ -50,6 +50,11 @@ else
 	bad "unveraendert schon rot -- Gegenprobe nicht aussagekraeftig"
 	tail -5 "$G/basis.txt"
 fi
+# Braucht eine Pruefung einen gewoehnlichen Nutzer und meldet der Test sie
+# als uebersprungen, laesst sich ihre Mutation hier nicht messen.
+HINWEIS_PRUEFBAR=1
+grep -q 'uebersprungen  ohne root' "$G/basis.txt" && HINWEIS_PRUEFBAR=0
+
 _k="$(baum kopie)"
 if CHIMERA_EINSTIEG_BAUM="$_k" sh "$TEST" >"$G/kopie.txt" 2>&1; then
 	ok "Kopie des Baums gruen"
@@ -97,15 +102,19 @@ mutation ohne-pruefung chimera-installer.sh \
 	'/^if \[ ! -f "\$INSTALLER" \]; then$/,/^fi$/d' \
 	"ohne inneren Installer: benannt"
 
-# M4: Der Einstieg nennt sich nicht -- der Hinweis zeigt auf die innere Datei.
-mutation einstieg-nicht-genannt chimera-installer.sh \
-	'/^export CHIMERA_EINSTIEG$/d' \
-	"Hinweis nennt den Einstieg"
+if [ "$HINWEIS_PRUEFBAR" = 1 ]; then
+	# M4: Der Einstieg nennt sich nicht -- der Hinweis zeigt auf die innere Datei.
+	mutation einstieg-nicht-genannt chimera-installer.sh \
+		'/^export CHIMERA_EINSTIEG$/d' \
+		"Hinweis nennt den Einstieg"
 
-# M5: Der innere Installer liest den Namen nicht (alter Stand).
-mutation hinweis-alt installer/chimera-install \
-	's|\${CHIMERA_EINSTIEG:-\$0}|$0|' \
-	"Hinweis nennt den Einstieg"
+	# M5: Der innere Installer liest den Namen nicht (alter Stand).
+	mutation hinweis-alt installer/chimera-install \
+		's|\${CHIMERA_EINSTIEG:-\$0}|$0|' \
+		"Hinweis nennt den Einstieg"
+else
+	printf '  uebersprungen  M4, M5 (Hinweis ohne root): hier nicht messbar, der Test ueberspringt die Pruefung\n'
+fi
 
 printf '\nErgebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

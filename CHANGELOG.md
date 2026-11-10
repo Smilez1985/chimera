@@ -655,6 +655,14 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **`test-einstieg.sh` war in der CI unter BusyBox rot** (`c385136`). Der
+  Test ersetzte `id` durch eine Attrappe im Suchpfad. Die BusyBox der CI
+  (Ubuntu `busybox-static` 1.36.1) nimmt ihre eingebauten Befehle vor dem
+  Suchpfad; `id -u` meldete dort 0, und der Test brach an seiner eigenen
+  Schutzprüfung ab. Jetzt schützt eine `systemd-run`-Attrappe vor einem
+  echten Lauf (in keiner Shell eingebaut), und die eine Prüfung, die einen
+  gewöhnlichen Nutzer braucht, wird dort als übersprungen gemeldet, nicht
+  als grün. Nachgestellt mit derselben BusyBox aus dem Ubuntu-Archiv.
 - **Der Installerlauf hinterlässt sein Protokoll jetzt vollständig auf der
   Karte** — auch nach dem `exec`-Neustart in Modul 00 (Regel 10e). Ursache am
   Pi gemessen: `HELFER_UMGEBUNG` reichte `CHIMERA_LOG_DIR` an den Helfer

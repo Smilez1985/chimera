@@ -13,10 +13,19 @@
 #   * ohne den inneren Installer: benannter Abbruch, rc 2
 #   * der Hinweis "mit sudo neu starten" nennt den Einstieg
 #
-# Sicherung: Jeder Aufruf laeuft mit einer id-Attrappe (meldet 1000). Ein
-# Einstieg, der die Optionen verliert, wuerde sonst als root einen ECHTEN
-# Installerlauf starten -- genau diese Mutation faehrt die Gegenprobe. Wirkt
-# die Attrappe nicht, bricht der Test ab, statt es darauf ankommen zu lassen.
+# Sicherung: Ein Einstieg, der die Optionen verliert, wuerde als root einen
+# ECHTEN Installerlauf starten -- genau diese Mutation faehrt die Gegenprobe.
+# Davor steht eine systemd-run-Attrappe im Suchpfad: Ohne systemd-run koppelt
+# der Installer keinen Lauf ab. Wirkt sie nicht, bricht der Test ab, statt es
+# darauf ankommen zu lassen.
+#
+# Warum nicht ueber eine id-Attrappe: Die BusyBox der CI (Ubuntu
+# busybox-static 1.36.1) nimmt ihre eingebauten Befehle VOR dem Suchpfad --
+# `id -u` meldet dort 0, egal was im Suchpfad liegt (CI-Lauf 42914638466).
+# systemd-run ist in keiner Shell eingebaut. Die id-Attrappe bleibt fuer die
+# eine Pruefung, die einen gewoehnlichen Nutzer braucht; wo sie nicht wirkt
+# und der Test als root laeuft, wird diese Pruefung als uebersprungen
+# gemeldet, nicht als gruen.
 #
 # CHIMERA_EINSTIEG_BAUM ueberstimmt den geprueften Baum -- damit faehrt
 # counter-check-einstieg.sh denselben Test gegen verfaelschte Fassungen.
@@ -50,8 +59,9 @@ bilanz() {
 printf '=== Einstieg chimera-installer.sh ===\n'
 
 # --- Attrappen ------------------------------------------------------------
-# id meldet einen gewoehnlichen Nutzer; systemd-run und systemctl schreiben
-# jeden Aufruf mit und scheitern. Kein Aufruf dieses Tests darf dort ankommen.
+# systemd-run und systemctl schreiben jeden Aufruf mit und scheitern. Kein
+# Aufruf dieses Tests darf dort ankommen. id meldet einen gewoehnlichen
+# Nutzer -- in Shells, die den Suchpfad vor ihren eingebauten Befehlen fragen.
 S="$W/attrappen"; mkdir -p "$S" "$W/logs"
 GESTARTET="$W/gestartet"; : >"$GESTARTET"
 printf '#!/bin/sh\n[ "${1:-}" = -u ] && { echo 1000; exit 0; }\nexit 1\n' >"$S/id"
@@ -61,13 +71,23 @@ done
 chmod 755 "$S/id" "$S/systemd-run" "$S/systemctl"
 
 # Der Einstieg startet den Installer mit `sh` -- genau diese Shell muss die
-# Attrappe sehen.
-_wer="$(PATH="$S:$PATH" sh -c 'id -u' 2>/dev/null || true)"
-if [ "$_wer" != 1000 ]; then
-	bad "Schutz-Attrappe wirkt nicht (id -u meldet '$_wer') -- Test nicht ausfuehrbar"
+# Attrappe sehen. Geprueft am Ergebnis: ein Probeaufruf muss mitgeschrieben
+# sein.
+PATH="$S:$PATH" sh -c 'systemd-run --probe' >/dev/null 2>&1 || true
+if ! grep -q '^systemd-run --probe$' "$GESTARTET"; then
+	bad "Schutz-Attrappe wirkt nicht (systemd-run nicht ersetzt) -- Test nicht ausfuehrbar"
 	bilanz; exit 1
 fi
-ok "Schutz-Attrappe wirkt (id -u meldet 1000)"
+: >"$GESTARTET"
+ok "Schutz-Attrappe wirkt (systemd-run ist ersetzt)"
+
+# Sieht der Installer hier einen gewoehnlichen Nutzer? Entweder ist der
+# Aufrufer einer, oder die id-Attrappe wirkt.
+_wer="$(PATH="$S:$PATH" sh -c 'id -u' 2>/dev/null || true)"
+case "$_wer" in
+	''|0) OHNE_ROOT=0 ;;
+	*)    OHNE_ROOT=1 ;;
+esac
 
 # $1 Programm, Rest: seine Argumente. Setzt OUT und RC.
 fahr() {
@@ -129,12 +149,16 @@ fi
 # Ein echter Lauf (keine Option) als gewoehnlicher Nutzer: abgelehnt, mit dem
 # Befehl, der stattdessen gilt. Der soll die Datei nennen, die der Nutzer
 # aufgerufen hat.
-fahr "$E"
-check "ohne root: abgelehnt (rc 2)" "$RC" 2
-if printf '%s' "$OUT" | grep -qF "sudo sh $E"; then
-	ok "Hinweis nennt den Einstieg"
+if [ "$OHNE_ROOT" = 1 ]; then
+	fahr "$E"
+	check "ohne root: abgelehnt (rc 2)" "$RC" 2
+	if printf '%s' "$OUT" | grep -qF "sudo sh $E"; then
+		ok "Hinweis nennt den Einstieg"
+	else
+		bad "Hinweis nennt den Einstieg -- Ausgabe: $OUT"
+	fi
 else
-	bad "Hinweis nennt den Einstieg -- Ausgabe: $OUT"
+	printf '  uebersprungen  ohne root: Hinweis nennt den Einstieg (Lauf als root, und diese Shell nimmt ihr eingebautes id)\n'
 fi
 
 # --- 8. Kein Aufruf hat einen Lauf gestartet --------------------------------
