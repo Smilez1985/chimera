@@ -1011,11 +1011,47 @@ Gateway. Bis dahin scheitert ein direkter Aufruf an der Sperre und wird als
 
 | Name | Stand |
 |---|---|
-| `OLLAMA_MODEL` | braucht der Gateway-Connector (`provider/gateway.py`) als Vorgabe; auf dem Prüfgerät leer. Kein Geheimnis. Offen: bis `wahl.json` gebaut ist, über den Socket oder eine eigene Datei ohne Geheimnisse |
+| `OLLAMA_MODEL` | braucht der Gateway-Connector (`provider/gateway.py`) als Vorgabe; auf dem Prüfgerät leer. Kein Geheimnis. Weg: siehe „Modellwahl nach dem Vorbild des Forks“ |
 | `OLLAMA_API_BASE`, `OLLAMA_HOST` | nur der direkte Weg — entfällt |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_OAUTH_TOKEN` | Schlüssel — gehören dem Gateway |
 | `CHIMERA_TELEGRAM_TOKEN`, `CHIMERA_TELEGRAM_ALLOWED` | Schlüssel — gehören dem Gateway; `__main__.py` fragt heute das Token ab, um die eigene Tür zu öffnen. Wie das künftig läuft, hängt an der offenen Telegram-Frage |
 | `CHIMERA_ANZEIGE` | kommt aus `/run/chimera/anzeige.env`, nicht aus der `.env` — bleibt |
+
+**Modellwahl nach dem Vorbild des Forks** (Hinweis smilez, 10.11.2026: der
+eigene Fork von openclawgotchi; gelesen sind die Beschreibungen der PRs #5,
+#15 und #16 und der Code des Zweigs `fix/ollama-placeholder-root-bug`, der
+auf den beiden anderen aufbaut). Was der Fork tut:
+
+- Die Wahl ist **gespeicherter Zustand auf dem Gerät**
+  (`data/active_model.json`: Modell und Adresse), kein Wert der
+  Konfiguration. Beim Start gilt sie vor der Voreinstellung;
+  `OLLAMA_MODEL` bestimmt nur das Modell der Voreinstellung `ollama`.
+- Die Adresse wird an **einer** Stelle aufgelöst: gespeicherte Wahl, dann
+  laufende Verbindung, dann Umgebung. Anlass war ein Fehler: Eine zweite
+  Stelle griff auf den Platzhalter zurück und überschrieb die gespeicherte
+  echte Adresse.
+- Angeboten werden die Modelle, die der Server mit `tools` meldet
+  (`/api/tags`, `/api/show`), mit einem Rückfall auf alle.
+- Der Platzhalter gilt als nicht gesetzt. Der Installer fragt beim ersten
+  Lauf nach der Adresse und überspringt die Frage, wenn eine echte
+  eingetragen ist.
+
+| Fork | Chimera heute |
+|---|---|
+| Adresse auf dem Gerät gespeichert | gebaut: `config/anbieter/<id>.json` beim Gateway (Regel 5t) |
+| Platzhalter gilt als nicht gesetzt | gebaut (`ollama.rs`) |
+| `tools` gemessen | gebaut im Katalog. Die Auswahl im Dienst (`provider/setup.py`) nimmt aber das dem Namen nach größte Modell, und `op: chat` ohne Modell nimmt das erste der Liste — beide ohne Blick auf `tools` |
+| Wahl gespeichert | nicht gebaut (`wahl.json`, Regel 5t) |
+| Installer fragt nach der Adresse | nicht gebaut (Modul 95 ist geplant); das Gateway findet den Server über die Netzsuche (Regel 5k) |
+| `/model` in Telegram | nicht gebaut |
+
+**Folge für die Sperre** (Lesart notes, zu bestätigen): Die Wahl gehört
+dorthin, wo die Adresse liegt — ans Gateway. Der Dienst braucht
+`OLLAMA_MODEL` dann nicht aus der `.env`: Nennt er kein Modell, entscheidet
+das Gateway an einer Stelle (gespeicherte Wahl, dann `OLLAMA_MODEL` aus
+seiner eigenen Umgebung, dann das erste Modell mit `tools`). Eine
+Abweichung vom Fork ist schon entschieden (Regel 5l): Die Adresse wird
+nicht im Chat gesetzt.
 
 **Entschieden (smilez, 10.11.2026):**
 
@@ -3717,13 +3753,48 @@ Vorteil, sondern eine zweite Toolchain. Es bleibt bei einer.
   Binary und SHA-256. Grund: CI-Artefakte sind ohne Token nicht ladbar
   (gemessen HTTP 401), ein Prerelease-Asset anonym. Es ist kein
   `vX.Y.Z`-Tag; die Release-Kanäle (höchstes `vX.Y.Z`) ignorieren es.
-- **Welches Binary:** Der Installer lädt immer **genau das Binary zum
-  Commit der Quelle**, nie „das neueste“. Schritt 00 hält den Commit
-  beim Klonen in `state/quelle-commit` fest (kurze Form, 7 Zeichen); ein
-  Startbaum ohne `.git` (Zip, Paket) hat keinen Commit, dann bleibt die
-  Datei leer und der Schritt sagt das benannt, statt zu raten. Gibt es
-  zum Commit kein Prerelease, bricht Schritt 55 benannt ab (ohne Rückfall
-  auf einen anderen Stand): Binary und Quelle müssen zusammenpassen.
+- **Welches Binary — entschieden (smilez, 10.11.2026):**
+  1. **Der Name ist fest und sprechend** und ändert sich nie. Ein Name aus
+     dem Commit wechselt mit jedem Commit und sagt niemandem etwas (Regel
+     „Sprechende Namen“).
+  2. **Gebaut wird nur, wenn sich `rust/` geändert hat.** Ein Doku-Commit
+     braucht kein neues Binary und darf keines verlangen.
+  3. **Für ein Release wird vorkompiliert;** der Nutzer holt es nur ab.
+  4. **Ein Zip bringt sein Binary mit, und der Installer nimmt immer
+     dieses.** Wer das Repo als Zip holt und den Installer startet, braucht
+     für das Gateway kein Netz — nur für die Abhängigkeiten, die der
+     Installer selbst lädt.
+
+  **Stand im Code (10.11., abweichend):** Schritt 55 sucht
+  `rust-<Commit>` als Prerelease. Folgen: Nach einem Doku-Commit gibt es
+  zum Kopf kein Prerelease (am Pi gemessen: HTTP 404, Befund). Ein
+  Startbaum ohne `.git` hat keinen Commit; bei einer frischen Installation
+  aus einem Zip endet Schritt 55 mit „ohne Commit kein Binary“, und
+  Schritt 99 richtet das Gateway nicht ein (im Code gelesen, nicht
+  ausgeführt). Der Name `rust-<kurzer commit>` aus dem Absatz darüber gilt
+  nur noch, bis der Umbau gebaut ist.
+
+  **Woran der Umbau anknüpft:** Schritt 55 kann schon ein Binary aus einer
+  lokalen Datei nehmen (`CHIMERA_RUST_LOKAL`), mit Prüfsumme, Laufprobe und
+  Versionsvergleich gegen `VERSION`. „Das Binary aus dem Startbaum“ ist
+  derselbe Weg mit festem Ort, kein neuer.
+
+  **Offen (smilez): wie das Binary in den Startbaum kommt.** Ein Zip von
+  GitHub („Download ZIP“) und ein `git pull` enthalten nur, was im Repo
+  liegt — und dort liegt heute kein Binary.
+  - *Im Repo:* Die CI legt das Binary nach jeder Rust-Änderung in den
+    Baum. Zip und Pull bringen es dann beide mit, ohne weiteren Abruf.
+    Preis: Die Historie wächst um das Binary je Rust-Änderung (gemessen:
+    2,0 MB je Binary, bisher 23 Commits mit Rust-Änderung, `.git` heute
+    18 MB).
+  - *Im Release-Paket:* Die CI baut ein Zip mit Binary und hängt es ans
+    Release. Das Repo bleibt klein; ein Klon oder ein GitHub-Zip hat dann
+    kein Binary und muss es unter dem festen Namen laden.
+
+  Daran hängt auch, woran der Installer erkennt, dass Binary und Quelle
+  zusammenpassen: Heute prüft er Prüfsumme und `VERSION`; solange
+  `VERSION` in der Pre-Alpha gleich bleibt, fiele ein altes Binary neben
+  neuer Quelle nicht auf.
 - **Ablage:** `/opt/chimera/bin/chimera-tor`, Besitzer root, Modus 755,
   Manifest-Art `datei` mit der Prüfsumme als Angabe. Rückbau 55 entfernt
   die Datei, `bin/` nur, wenn sie leer ist. Der Schritt startet nichts;

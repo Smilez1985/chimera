@@ -403,6 +403,19 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Blaupause: Das Gateway-Binary bekommt einen festen Namen und kommt aus
+  dem Startbaum** (smilez, 10.11.; DESIGN Regel 14). Bisher sucht Schritt 55
+  ein Prerelease `rust-<Commit>` — der Name wechselt mit jedem Commit, und
+  eine frische Installation aus einem Zip bekäme gar kein Gateway.
+  Entschieden: fester Name, Bau nur bei Änderung an `rust/`, fürs Release
+  vorkompiliert, ein Zip bringt sein Binary mit. Nur Design und Roadmap —
+  gebaut ist nichts; offen ist, ob das Binary im Repo oder im
+  Release-Paket liegt.
+- **Blaupause: Modellwahl nach dem Vorbild des eigenen Forks von
+  openclawgotchi** (smilez, 10.11.; DESIGN 5n): gespeicherte Wahl, eine
+  Stelle für die Auflösung, nur Modelle mit `tools`. Der Abgleich nennt,
+  was Chimera davon schon hat (Adresse beim Gateway, Platzhalter, Katalog
+  mit `tools`) und was fehlt (gespeicherte Wahl, Frage im Installer).
 - **Blaupause: Regel 10g bekräftigt** (smilez, 10.11.): erst nachsehen, was
   da ist, was die Änderung berührt und wo sie anknüpft; mit der Blaupause
   vergleichen, bevor gebaut wird. Die Reihenfolge der Sicherheitsarbeit
@@ -752,8 +765,10 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Commit `rust/` geändert hat: Zum Kopf gibt es kein Prerelease, weil die CI
   nur bei Änderungen unter `rust/` baut. Am Pi am 10.11. so gelaufen
   (`rust-e26bc2d`, HTTP 404, Exitcode 1); das bisherige Binary läuft
-  weiter. Abhilfe: den Rust-Job von Hand anstoßen. Steht in der ROADMAP
-  (Phase 4d).
+  weiter. Abhilfe: den Rust-Job von Hand anstoßen. Aus demselben Grund
+  bekäme eine frische Installation aus einem Zip (ohne `.git`) kein Binary
+  und damit kein Gateway. Der Umbau steht in der ROADMAP (Phase 4d,
+  „Schritt 55: fester Name“).
 - **`MemoryMax=` wirkt auf dem Pi nicht.** Der RPi-Kernel startet mit
   `cgroup_disable=memory`. Gemessen: 150 MB unter `MemoryMax=20M` liefen
   durch. Regel 10q setzt deshalb auf Selbstbegrenzung, die noch nicht

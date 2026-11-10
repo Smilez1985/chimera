@@ -382,7 +382,11 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       gilt `OLLAMA_MODEL`; das Vorschlagen des größten Modells
       (`provider/setup.py`, `_target_for`) wird durch „erstes Modell mit
       `tools`“ ersetzt. Ein Modell, das nicht ausgewählt ist, wird nie
-      geladen.
+      geladen. Vorbild ist der eigene Fork von openclawgotchi (smilez,
+      10.11.): gespeicherte Wahl, eine Stelle für die Auflösung, nur
+      Modelle mit `tools`, Frage nach der Adresse im Installer. Abgleich
+      mit dem Stand in Chimera: DESIGN 5n, „Modellwahl nach dem Vorbild
+      des Forks“.
 - [ ] **Der Dienst verliert sein Netz** (5n): Er ruft heute Ollama und
       Anthropic noch selbst über `urllib` auf (`IPAddressDeny` ist leer);
       der Weg über das Gateway ist nur ein zusätzlicher Pfad, `discover()`
@@ -390,16 +394,19 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       10.11.: sie werden benötigt), gehen aber selbst durch das Gateway:
       `urllib` und `discover()` fallen weg, der Transport ist der Socket.
       Reihenfolge siehe „Sperre fuer den Agent-Dienst“.
-- [ ] **Schritt 55 nach einem Doku-Commit:** Ändert ein Commit `rust/`
-      und folgt ihm ein Doku-Commit, gibt es zum Kopf kein Prerelease — die
-      CI baut nur bei Änderungen unter `rust/`. Schritt 55 misst den Baum
-      als geändert, sucht `rust-<Kopf>` und endet mit Befund (am Pi 10.11.:
-      `rust-e26bc2d` → HTTP 404, rc 1; das alte Binary läuft weiter). Der
-      Installer klont flach (`--depth 1`) und kann den letzten Commit mit
-      Rust-Änderung nicht selbst bestimmen. Abhilfe heute: den Rust-Job
-      von Hand anstoßen (`workflow_dispatch`). Zu entscheiden: die CI baut
-      für jeden Commit auf `entwicklung`, oder der Stand nennt den Commit
-      der letzten Rust-Änderung.
+- [ ] **Schritt 55: fester Name, Binary aus dem Startbaum** (smilez,
+      10.11.; DESIGN Regel 14, „Welches Binary“). Heute sucht Schritt 55
+      `rust-<Commit>` als Prerelease: nach einem Doku-Commit Befund (am Pi
+      10.11.: `rust-e26bc2d`, HTTP 404, rc 1), bei einer frischen
+      Installation aus einem Zip gar kein Binary und damit kein Gateway.
+      Soll: fester, sprechender Name; gebaut nur bei Änderung an `rust/`;
+      fürs Release vorkompiliert; ein Zip bringt sein Binary mit und der
+      Installer nimmt es. Anknüpfen an den vorhandenen Weg
+      `CHIMERA_RUST_LOKAL` (Prüfsumme, Laufprobe, Version). Berührt:
+      `steps/55-rust.sh`, `tests/test-rust.sh` samt
+      `counter-check-rust.sh`, `.github/workflows/rust.yml`,
+      `docs/INSTALLER.md` (Modul 55), `docs/CLI.md`, `docs/CI.md`.
+      **Vorher zu entscheiden:** Binary im Repo oder im Release-Paket.
 - [ ] **Installer: Sitzungs-Socket nach einem Lauf:** `chimera-sitzung.socket`
       blieb nach einem Lauf von Schritt 99 inaktiv („Socket service already
       active, refusing“), der Dienst lief ohne Sitzungs-Socket weiter. Der
