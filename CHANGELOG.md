@@ -26,8 +26,9 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   ausdrücklich nicht als zweites Sprachmodell. Heute prüft und startet
   derselbe Prozess (`agent/tools.py`); künftig liegen Prüfung und Ausführung
   zusammen in einem eigenen Rust-Prozess mit Socket und ohne Netz, nicht im
-  Gateway. Nur Design und Roadmap (Phase 6) — gebaut ist noch nichts; offen
-  ist, unter welchem Nutzer der Ausführer läuft.
+  Gateway. Er läuft unter einem eigenen Systemnutzer `chimera-sohelper`
+  (secops helper), dem der Arbeitsordner gehört. Nur Design und Roadmap
+  (Phase 6) — gebaut ist noch nichts; offen ist das Pfadschema.
 - **ACP-Transportschicht** (`rust/crates/acp/src/transport.rs`): Der Kern
   kennt nur einen `Strom` aus JSON-Zeilen; `Stdio` hängt ihn an stdin/stdout
   (der Fall, den eine IDE erwartet), weitere Transporte (Unix-Socket,
@@ -411,7 +412,10 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   durch); der Ausführer hat nie Netz. Dazu der am Pi gemessene Stand: Die
   Unit trägt keine Netzsperre, ein Prozess unter dem Nutzer `chimera`
   erreicht Internet und LAN, die Namen der Zugänge stehen in der Umgebung
-  des Dienstes. Nur Design und Roadmap — die Sperre ist nicht gebaut.
+  des Dienstes. `provider/` und `bot/telegram.py` bleiben, gehen aber selbst
+  durch das Gateway. Alle Tore liegen am Gateway: zu den heutigen kommen
+  die Schwärzung vor der Cloud, eine Positivliste für `web_abruf` und die
+  Rückfrage beim Nutzer. Nur Design und Roadmap — nichts davon ist gebaut.
 - **ACP-Bibliothek gemessen und verworfen: der Mindestumfang wird selbst
   gebaut.** Die Rust-Crate `agent-client-protocol` (3.6.0 und 5.0.0) gegen
   denselben JSON-RPC-Zeilenrahmen mit `serde_json` — gleiche Arbeit, gleiche

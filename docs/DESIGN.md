@@ -921,9 +921,12 @@ Agent bekommt Netz nur, „wenn die Security Gates den Zugriff durchwinken“.
 
 1. **Ausschließlich heißt: kein zweiter Weg.** Ist das Gateway nicht
    erreichbar, gibt es kein Netz — keinen Rückfall auf einen direkten Aufruf
-   aus dem Dienst. Der Rückfall in `provider/setup.py` („Ohne Gateway bleibt
-   der direkte Weg“) und die eigenen Netzaufrufe in `provider/anthropic.py`,
-   `provider/ollama.py` (samt `discover()`) und `bot/telegram.py` fallen weg.
+   aus dem Dienst. `provider/` und `bot/telegram.py` **bleiben** (smilez,
+   10.11.: sie werden benötigt), gehen aber selbst durch das Gateway: Ihr
+   Transport ist der Socket, nicht `urllib`. Weg fallen der Rückfall in
+   `provider/setup.py` („Ohne Gateway bleibt der direkte Weg“), die eigenen
+   Aufrufe in `provider/anthropic.py`, `provider/ollama.py` und
+   `bot/telegram.py` und die Netzsuche `discover()`.
 2. **Die Sperre setzt der Kernel, nicht der Code:** `IPAddressDeny=any` in
    der Unit des Dienstes. Solange sie fehlt, ist Punkt 1 eine Absprache.
 3. **Schlüssel kommen nicht in den Dienst — und Dateirechte genügen dafür
@@ -934,13 +937,31 @@ Agent bekommt Netz nur, „wenn die Security Gates den Zugriff durchwinken“.
    Geheimnisse.
 4. **Tore am Gateway: feste Regeln, kein Modell** (wie in der Regel „Wer
    prüft, führt aus“). Ein Aufruf geht nur hinaus, wenn jedes Tor ihn
-   durchlässt; sonst bekommt der Dienst eine Ablehnung mit Grund. Der
-   Socket-Vertrag in `dienst.rs` prüft heute: bekannter Auftrag, bekannter
-   und eingeschalteter Anbieter. Welche Tore dazukommen, ist offen (unten).
+   durchlässt; sonst bekommt der Dienst eine Ablehnung mit Grund. Alle Tore
+   liegen am Gateway; die Liste steht unter „Die Tore“.
 5. **Der Ausführer hat nie Netz.** `Limits.allow_network` entfällt, Programme
    der Liste `NETWORK` (`curl`, `wget`, `git`, `ssh` …) werden immer
    abgelehnt. Braucht ein Werkzeug Netz, ist es ein Werkzeug des Gateways
    (Regel 5r).
+
+**Die Tore** — alle am Gateway (smilez, 10.11.2026):
+
+| Tor | Stand |
+|---|---|
+| Bekannter Auftrag, bekannter und eingeschalteter Anbieter | gebaut (`dienst.rs`) |
+| Schwärzung vor der Cloud | nicht gebaut |
+| Positivliste der Ziele für `web_abruf` | nicht gebaut; die Web-Werkzeuge selbst (Regel 5r) fehlen noch |
+| Rückfrage beim Nutzer | nicht gebaut; Weg wie in Regel 10s (Telegram-Knopf oder Web), wann sie auslöst, ist festzulegen |
+
+**Schwärzung vor der Cloud (Entwurf).** Gilt für Cloud-Anbieter, nicht für
+Ollama im eigenen Netz. Ersetzt wird, was ein festes Muster hat (private
+Adressen, MAC-Adressen, Mailadressen, Schlüssel und Token, Pfade mit
+Nutzernamen), dazu eine vom Nutzer gepflegte Liste (Namen, Firmen,
+Hostnamen) — erraten wird nichts. Derselbe Wert bekommt in einer Sitzung
+denselben Platzhalter; die Antwort wird vor der Rückgabe zurückübersetzt,
+auch in Werkzeugaufrufen und über die Stückgrenzen eines Stroms hinweg. Das
+ist Pseudonymisierung, keine Anonymisierung: Sie verringert, was die Cloud
+sieht, und ersetzt keine Auftragsverarbeitung.
 
 **Gemessen am chimera-pi (10.11.2026)** — der Stand, gegen den gebaut wird:
 
@@ -953,21 +974,34 @@ Agent bekommt Netz nur, „wenn die Security Gates den Zugriff durchwinken“.
 | Umgebung des Dienstes | enthält `ANTHROPIC_API_KEY`, `ANTHROPIC_OAUTH_TOKEN`, `CHIMERA_TELEGRAM_TOKEN`, `CHIMERA_WEB_PASSWORT_HASH` (aus `EnvironmentFile=`); die drei Zugänge sind auf diesem Gerät leer |
 | Was dort über den direkten Weg läuft (Startprotokoll) | nichts: Ollama geht über das Gateway, Claude und Telegram sind nicht eingerichtet |
 
-**Zu entscheiden (smilez):**
+**Entschieden (smilez, 10.11.2026):**
 
-- **Reihenfolge.** Bisher: erst die Claude-Zugänge ins Gateway, dann die
-  Sperre — sonst verliert ein Gerät mit Claude-Schlüssel seinen Anbieter.
-  Die Alternative ist die Sperre sofort; auf dem Prüfgerät ginge dabei
-  nichts verloren, Claude wäre aber bis zum Gateway-Connector nirgends
-  nutzbar.
-- **Welche Tore** über den heutigen Stand hinaus: Schwärzung vor der Cloud,
-  Positivliste der Ziele für `web_abruf`, Rückfrage beim Nutzer.
-- **`IPAddressAllow=localhost`:** Der Socket zum Gateway ist ein
-  Unix-Socket. Ob der Dienst TCP auf localhost überhaupt braucht, ist nicht
-  geprüft; mit der Freigabe erreicht er die Web-Oberfläche.
-- **Der Installer** lädt als root direkt (apt, pip, git, das Rust-Binary) —
-  er richtet das Gateway erst ein und kann nicht hindurch. Gelesen ist die
-  Vorgabe als Regel für den Betrieb; zu bestätigen.
+- **`provider/` und `bot/telegram.py` bleiben** — siehe Punkt 1.
+- **Alle Tore liegen am Gateway** — siehe „Die Tore“.
+- **Reihenfolge nach Wichtigkeit** — die Einstufung steht in der ROADMAP
+  (Phase 4d, „Sperre fuer den Agent-Dienst“).
+
+**Der Installer hat eigene Regeln** (Regel „Installerhelfer“, Regel 13,
+Regel 10r): Er läuft als root, abgekoppelt als `chimera-installhelper`, nie
+in der aufrufenden Sitzung, und lädt direkt (apt, pip, git, das
+Rust-Binary) — er richtet das Gateway erst ein. Im Code nachgesehen
+(10.11.): `chimera-install` lehnt einen echten Lauf ohne root ab,
+`helfer_starten` ruft `systemd-run` ohne `User=` auf.
+
+**Offen:**
+
+- **Telegram.** Das Gateway holt heute schon selbst ab (`telegram.rs`:
+  Abholen, Positivliste, Weitergabe an die Sitzung); `bot/telegram.py` holt
+  ebenfalls selbst ab (`getUpdates` über `urllib`). Was `bot/telegram.py`
+  behält, wenn das Netz beim Gateway liegt, ist festzulegen — zwei Abholer
+  je Token schließt Telegram aus (409).
+- **`IPAddressAllow=localhost`.** Der Socket zum Gateway ist ein
+  Unix-Socket. Im Quelltext des Dienstes steht TCP auf localhost nur in der
+  Ollama-Suche (`discover()`), die wegfällt; mit der Freigabe erreichte der
+  Dienst die Web-Oberfläche. Vorschlag: keine Freigabe, am Gerät belegen.
+- **Updates im Betrieb.** Das Bild oben führt „Update“ unter dem, was über
+  das Gateway läuft; der Installer lädt direkt. Ob die Selbstaktualisierung
+  (ROADMAP Phase 8f) durch das Gateway soll, ist nicht entschieden.
 
 **Steuerkanal:** Die CLI (`chimera -f`, `chimera status`) ist ein Client
 desselben Sockets. Sie öffnet nie selbst eine Anzeige (Anlass: der
@@ -3296,7 +3330,7 @@ kann die Prüfung auslassen.
 2. **Wer prüft, führt aus.** Ein Prozess, der nur „ja“ oder „nein“ sagt,
    während der Agent selbst startet, ist keine Schranke — die Frage lässt
    sich auslassen. Darum liegen Prüfung **und** Ausführung zusammen in
-   einem eigenen Prozess (Arbeitsname `chimera-werk`). Der Agent schickt
+   einem eigenen Prozess (`chimera-sohelper`). Der Agent schickt
    den Wunsch und bekommt das Ergebnis; er startet nichts mehr, was das
    Modell gewählt hat.
 3. **Was umzieht:** `run_command`, `read_file`, `write_file`, `list_dir` —
@@ -3328,18 +3362,19 @@ Rechte des Nutzers (Regel 10r). Der eigene Prozess verhindert, dass der
 Agent die Prüfung auslässt oder ändert; er verhindert keinen Fehler in den
 Regeln selbst.
 
-**Zu entscheiden (smilez): unter welchem Nutzer läuft der Ausführer?**
+**Entschieden (smilez, 10.11.2026): ein eigener Nutzer, `chimera-sohelper`**
+(secops helper). Nutzer, Unit und Programm tragen denselben Namen, wie bei
+`chimera-tor`. Keiner der vorhandenen Nutzer kommt in Frage (am Pi
+nachgesehen): `chimera` führt den Agenten aus, `chimera-tor` hat Netz und
+Schlüssel, `dietpi` hat `sudo` ohne Passwort; root scheidet aus. Der
+Ausführer bekommt **weniger** Rechte als der Agent: keine Hardware-Gruppen,
+kein Netz, keine Schlüssel, kein `sudo`, keine Anmeldung. Ihm gehört der
+Arbeitsordner — damit setzt der Kernel die Trennung durch, und das
+Protokoll ist für den Agenten nicht änderbar.
 
-- **Derselbe Nutzer `chimera`:** Die Trennung ist dann eine der Bauform —
-  im Dienst gibt es keinen Code mehr, der vom Modell gewählte Programme
-  startet. Der Kernel erzwingt sie aber nicht: Der Dienst könnte weiterhin
-  selbst Prozesse starten (er tut es heute für `arecord`, `aplay` und
-  `dtoverlay`) und das Arbeitsverzeichnis direkt beschreiben.
-- **Ein eigener Nutzer**, dem das Arbeitsverzeichnis gehört: Dann setzt
-  der Kernel die Trennung durch, und das Protokoll ist für den Agenten
-  nicht änderbar. Preis: ein weiterer Nutzer samt Rückbau (Regel 10l) und
-  eine neue Aufteilung von `data/` in „gehört dem Agenten“ (Gedächtnis,
-  Moods) und „gehört dem Ausführer“ (Arbeitsordner).
+**Offen:** das Pfadschema — wo der Arbeitsordner liegt und wie `data/` in
+„gehört dem Agenten“ (Gedächtnis, Moods) und „gehört dem Ausführer“ geteilt
+wird — und das Rückbau-Gegenstück (Regel 10l).
 
 **Gegenprobe.**
 

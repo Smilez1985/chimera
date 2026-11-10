@@ -347,21 +347,29 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       nur vorwärts, ein Header-Satz für Token- und Chat-Weg). Zeitgrenzen
       (5 s Verbindung / 300 s Aufruf) gelten schon für Ollama. Dazu 5q: Cache-Marken je Adapter, `Reply.cache`,
       Byte-Test mit Gegenprobe; Anthropic-TTL am Gerät nachmessen.
-- [ ] **Sperre fuer den Agent-Dienst:** `.env` für ihn unlesbar (Regel 5l,
-      `root:chimera-tor 640`) und `IPAddressDeny=any`, mit Test „Dienst
-      kommt nicht ins LAN, Gateway-Socket bleibt erreichbar“. Erst wenn
-      auch die Claude-Zugänge im Gateway laufen, sonst verliert der
-      Python-Dienst seine Anbieter. (Am Pi gemessen: mit dem Profil
-      erreicht der Dienst Ollama über den Socket, das LAN nicht.)
-      **Ergänzt 10.11.** (DESIGN 5n, Verschärfung): Unlesbar machen genügt
-      nicht — die Unit lädt die `.env` über `EnvironmentFile=`, systemd liest
-      sie als root, die Werte stehen in der Umgebung des Dienstes (am Pi
-      gemessen). Die Unit darf sie nicht laden; der Dienst bekommt eine
-      eigene Datei ohne Geheimnisse. `IPAddressAllow=localhost` lässt die
-      Web-Oberfläche (`:8080`) erreichbar — prüfen, ob der Dienst TCP auf
-      localhost braucht. Der Rückfall „ohne Gateway direkt“ in
-      `provider/setup.py` fällt weg. Die Reihenfolge (erst Claude ins
-      Gateway oder Sperre sofort) ist neu zu entscheiden.
+- [ ] **Sperre fuer den Agent-Dienst — zuerst** (DESIGN 5n, Verschärfung):
+      `IPAddressDeny=any` in der Unit, mit Test „Dienst kommt nicht ins LAN,
+      Gateway-Socket bleibt erreichbar“ (am Pi gemessen: mit dem Profil
+      erreicht ein Prozess den Socket, Internet und LAN nicht). Die Unit lädt
+      die `.env` nicht mehr — unlesbar machen (`root:chimera-tor 640`)
+      genügt nicht, systemd liest `EnvironmentFile=` als root und reicht die
+      Werte durch; der Dienst bekommt eine eigene Datei ohne Geheimnisse.
+      Der Rückfall „ohne Gateway direkt“ in `provider/setup.py` fällt weg.
+      Ohne `IPAddressAllow=localhost`, wenn der Dienst es nicht braucht (am
+      Gerät belegen).
+      **Reihenfolge der Sicherheitsarbeit** (smilez, 10.11.: nach
+      Wichtigkeit; Einstufung notes): 1. diese Sperre, 2. Ausführer
+      `chimera-sohelper` (Phase 6), 3. Claude-Zugänge ins Gateway zusammen
+      mit der Schwärzung, 4. Positivliste für `web_abruf` und Rückfrage.
+      Folge von 1 vor 3: Ein Gerät mit Claude-Schlüssel hat bis Schritt 3
+      kein Claude (auf dem Prüfgerät ist keiner eingerichtet).
+- [ ] **Tore am Gateway** (DESIGN 5n, „Die Tore“; smilez, 10.11.: alle
+      Tore liegen am Gateway): **Schwärzung vor der Cloud** (Muster und
+      Nutzerliste, stabile Platzhalter je Sitzung, Rückübersetzung auch in
+      Werkzeugaufrufen und über Stückgrenzen eines Stroms; nur
+      Cloud-Anbieter), **Positivliste der Ziele für `web_abruf`** (mit den
+      Web-Werkzeugen aus 5r), **Rückfrage beim Nutzer** (Weg wie 10s; wann
+      sie auslöst, ist festzulegen). Jedes Tor mit Gegenprobe.
 - [ ] **Ollama im Gateway ganz abfragen** (5n, 5k): `/api/ps` (geladen,
       VRAM, Ablauf), die Zeiten aus der Antwort (`load_duration`,
       `total_duration`, `eval_duration`), `keep_alive` und Vorladen des
@@ -376,8 +384,10 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
 - [ ] **Der Dienst verliert sein Netz** (5n): Er ruft heute Ollama und
       Anthropic noch selbst über `urllib` auf (`IPAddressDeny` ist leer);
       der Weg über das Gateway ist nur ein zusätzlicher Pfad, `discover()`
-      scannt selbst. Reihenfolge: Anthropic ins Gateway, dann Sperre mit
-      Test, dann `provider/` und `bot/telegram.py` entfernen.
+      scannt selbst. `provider/` und `bot/telegram.py` **bleiben** (smilez,
+      10.11.: sie werden benötigt), gehen aber selbst durch das Gateway:
+      `urllib` und `discover()` fallen weg, der Transport ist der Socket.
+      Reihenfolge siehe „Sperre fuer den Agent-Dienst“.
 - [ ] **Installer: Sitzungs-Socket nach einem Lauf:** `chimera-sitzung.socket`
       blieb nach einem Lauf von Schritt 99 inaktiv („Socket service already
       active, refusing“), der Dienst lief ohne Sitzungs-Socket weiter. Der
@@ -411,7 +421,12 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       Zertifikat für alle ohne Proxy.
 - [ ] Rückbau-Gegenstücke (10l) und `migrate_from()` (`.env` von
       root:chimera auf root:chimera-tor).
-- [ ] Danach `provider/` und `bot/telegram.py` aus dem Dienst entfernen.
+- [ ] **Telegram: Aufgaben teilen.** Das Gateway holt schon selbst ab
+      (`telegram.rs`: Abholen, Positivliste, Weitergabe an die Sitzung),
+      `bot/telegram.py` holt ebenfalls selbst ab (`getUpdates` über
+      `urllib`). `bot/telegram.py` bleibt (smilez, 10.11.) — festlegen, was
+      es behält, wenn das Netz beim Gateway liegt; zwei Abholer je Token
+      schließt Telegram aus (409).
 - [ ] Später, eigener Entwurf: Renderer und Paneltreiber in Rust (Regel 14,
       Stufe 2).
 
@@ -585,12 +600,13 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
 Die vier Muster aus `docs/DESIGN.md`, Abschnitt „Übernommene Muster aus OpenMinis (nachgebaut, nicht kopiert)" sind gebaut und verdrahtet.
 Offen bleibt:
 
-- [ ] **Zu entscheiden (smilez): Nutzer des Ausführers** — derselbe Nutzer
-      `chimera` (Trennung der Bauform) oder ein eigener Nutzer, dem das
-      Arbeitsverzeichnis gehört (Trennung durch den Kernel). DESIGN, Regel
-      „Wer prüft, führt aus“. Vor dem Bau zu klären, weil es Pfadschema und
-      Installer bestimmt.
-- [ ] **Ausführer `chimera-werk` (Rust):** Crate im Workspace, Socket,
+- [ ] **Pfadschema für den Ausführer festlegen** (DESIGN, Regel „Wer prüft,
+      führt aus“): Entschieden ist ein eigener Systemnutzer
+      `chimera-sohelper` (smilez, 10.11.), dem der Arbeitsordner gehört.
+      Offen: wo der Ordner liegt und wie `data/` zwischen Agent
+      (Gedächtnis, Moods) und Ausführer geteilt wird. Vor dem Bau, weil es
+      Installer und Rückbau bestimmt.
+- [ ] **Ausführer `chimera-sohelper` (Rust):** Crate im Workspace, Socket,
       Zeilenrahmen aus `gemein::zeile`, kein Netz. Prüfen und Ausführen von
       `run_command`, `read_file`, `write_file`, `list_dir` nach den Regeln
       aus `agent/safety.py`; Regeldatei unter `/opt/chimera/`; Protokoll je
@@ -602,8 +618,9 @@ Offen bleibt:
       den Prozess, Mengen der abgelehnten und angenommenen Befehle vorher
       und nachher; Test, der rot wird, sobald der Dienst wieder selbst
       startet.
-- [ ] **Installer:** Unit, Socket, Rechte und Rückbau-Gegenstück (10l) für
-      den Ausführer; am Pi einspielen und Speicher im Ruhezustand messen.
+- [ ] **Installer:** Nutzer `chimera-sohelper` (ohne Anmeldung, ohne
+      Gruppen), Unit, Socket, Rechte und Rückbau-Gegenstück (10l); am Pi
+      einspielen und Speicher im Ruhezustand messen.
 - [ ] Auslagern bei `Action.OFFLOAD`: erkannt wird es, getan noch nicht
 - [ ] Schleifenzustand auf die RGB-LED (braucht Hardware)
 - [ ] **Regel 10q, Messen:** `VmRSS`/`VmHWM`/`VmSwap` je Arbeitsschritt ins
