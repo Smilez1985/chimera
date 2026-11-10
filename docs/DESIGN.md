@@ -915,6 +915,60 @@ Gruppe). Ein Agent, der über ein Werkzeug Unsinn macht, kann weder
 Schlüssel abziehen noch selbst ins Netz. Er kann nur das Gateway bitten,
 und das Gateway führt nur Anbieteraufrufe aus, keine beliebigen URLs.
 
+**Verschärfung (Vorgabe smilez, 10.11.2026):** „Alles, was Chimera mitbringt
+und tut und Netz braucht, geht ausschließlich über das Gateway“ — und der
+Agent bekommt Netz nur, „wenn die Security Gates den Zugriff durchwinken“.
+
+1. **Ausschließlich heißt: kein zweiter Weg.** Ist das Gateway nicht
+   erreichbar, gibt es kein Netz — keinen Rückfall auf einen direkten Aufruf
+   aus dem Dienst. Der Rückfall in `provider/setup.py` („Ohne Gateway bleibt
+   der direkte Weg“) und die eigenen Netzaufrufe in `provider/anthropic.py`,
+   `provider/ollama.py` (samt `discover()`) und `bot/telegram.py` fallen weg.
+2. **Die Sperre setzt der Kernel, nicht der Code:** `IPAddressDeny=any` in
+   der Unit des Dienstes. Solange sie fehlt, ist Punkt 1 eine Absprache.
+3. **Schlüssel kommen nicht in den Dienst — und Dateirechte genügen dafür
+   nicht.** systemd liest `EnvironmentFile=` als root und gibt die Werte an
+   den Prozess; eine für den Dienst unlesbare `.env` steht trotzdem in
+   seiner Umgebung. Die Unit des Dienstes lädt die `.env` deshalb nicht.
+   Was er an Einstellungen braucht, bekommt er aus einer eigenen Datei ohne
+   Geheimnisse.
+4. **Tore am Gateway: feste Regeln, kein Modell** (wie in der Regel „Wer
+   prüft, führt aus“). Ein Aufruf geht nur hinaus, wenn jedes Tor ihn
+   durchlässt; sonst bekommt der Dienst eine Ablehnung mit Grund. Der
+   Socket-Vertrag in `dienst.rs` prüft heute: bekannter Auftrag, bekannter
+   und eingeschalteter Anbieter. Welche Tore dazukommen, ist offen (unten).
+5. **Der Ausführer hat nie Netz.** `Limits.allow_network` entfällt, Programme
+   der Liste `NETWORK` (`curl`, `wget`, `git`, `ssh` …) werden immer
+   abgelehnt. Braucht ein Werkzeug Netz, ist es ein Werkzeug des Gateways
+   (Regel 5r).
+
+**Gemessen am chimera-pi (10.11.2026)** — der Stand, gegen den gebaut wird:
+
+| Messung | Ergebnis |
+|---|---|
+| `chimera.service`: `IPAddressDeny`, `IPAddressAllow` | beide leer |
+| Prozess unter dem Nutzer `chimera`, ohne Sperre | erreicht das Internet (`1.1.1.1:443`) und einen Rechner im LAN |
+| derselbe Prozess mit `IPAddressDeny=any`, `IPAddressAllow=localhost` | Internet und LAN zu (Zeitüberschreitung); `127.0.0.1:8080`, die Web-Oberfläche des Gateways, bleibt offen |
+| laufender Dienst, offene TCP/UDP-Sockets | keine, nur Unix-Sockets |
+| Umgebung des Dienstes | enthält `ANTHROPIC_API_KEY`, `ANTHROPIC_OAUTH_TOKEN`, `CHIMERA_TELEGRAM_TOKEN`, `CHIMERA_WEB_PASSWORT_HASH` (aus `EnvironmentFile=`); die drei Zugänge sind auf diesem Gerät leer |
+| Was dort über den direkten Weg läuft (Startprotokoll) | nichts: Ollama geht über das Gateway, Claude und Telegram sind nicht eingerichtet |
+
+**Zu entscheiden (smilez):**
+
+- **Reihenfolge.** Bisher: erst die Claude-Zugänge ins Gateway, dann die
+  Sperre — sonst verliert ein Gerät mit Claude-Schlüssel seinen Anbieter.
+  Die Alternative ist die Sperre sofort; auf dem Prüfgerät ginge dabei
+  nichts verloren, Claude wäre aber bis zum Gateway-Connector nirgends
+  nutzbar.
+- **Welche Tore** über den heutigen Stand hinaus: Schwärzung vor der Cloud,
+  Positivliste der Ziele für `web_abruf`, Rückfrage beim Nutzer.
+- **`IPAddressAllow=localhost`:** Der Socket zum Gateway ist ein
+  Unix-Socket. Ob der Dienst TCP auf localhost überhaupt braucht, ist nicht
+  geprüft; mit der Freigabe erreicht er die Web-Oberfläche.
+- **Der Installer** lädt als root direkt (apt, pip, git, das Rust-Binary) —
+  er richtet das Gateway erst ein und kann nicht hindurch. Gelesen ist die
+  Vorgabe als Regel für den Betrieb; zu bestätigen.
+
 **Steuerkanal:** Die CLI (`chimera -f`, `chimera status`) ist ein Client
 desselben Sockets. Sie öffnet nie selbst eine Anzeige (Anlass: der
 Display-Vorfall vom 16.10.). Läuft der Dienst nicht, sagt sie das.

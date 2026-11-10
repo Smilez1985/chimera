@@ -353,6 +353,15 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       auch die Claude-Zugänge im Gateway laufen, sonst verliert der
       Python-Dienst seine Anbieter. (Am Pi gemessen: mit dem Profil
       erreicht der Dienst Ollama über den Socket, das LAN nicht.)
+      **Ergänzt 10.11.** (DESIGN 5n, Verschärfung): Unlesbar machen genügt
+      nicht — die Unit lädt die `.env` über `EnvironmentFile=`, systemd liest
+      sie als root, die Werte stehen in der Umgebung des Dienstes (am Pi
+      gemessen). Die Unit darf sie nicht laden; der Dienst bekommt eine
+      eigene Datei ohne Geheimnisse. `IPAddressAllow=localhost` lässt die
+      Web-Oberfläche (`:8080`) erreichbar — prüfen, ob der Dienst TCP auf
+      localhost braucht. Der Rückfall „ohne Gateway direkt“ in
+      `provider/setup.py` fällt weg. Die Reihenfolge (erst Claude ins
+      Gateway oder Sperre sofort) ist neu zu entscheiden.
 - [ ] **Ollama im Gateway ganz abfragen** (5n, 5k): `/api/ps` (geladen,
       VRAM, Ablauf), die Zeiten aus der Antwort (`load_duration`,
       `total_duration`, `eval_duration`), `keep_alive` und Vorladen des

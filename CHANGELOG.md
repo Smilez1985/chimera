@@ -402,6 +402,16 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Blaupause: Regel 5n verschärft — Netz ausschließlich über das Gateway,
+  ohne Rückfall.** Vorgabe smilez (10.11.): Alles, was Chimera tut und Netz
+  braucht, geht über das Gateway, und nur wenn dessen Tore den Aufruf
+  durchlassen (feste Regeln, kein Modell). Neu im Design: kein direkter Weg
+  aus dem Dienst mehr, auch nicht als Rückfall; die Unit des Dienstes lädt
+  die `.env` nicht (Dateirechte genügen nicht, systemd reicht die Werte
+  durch); der Ausführer hat nie Netz. Dazu der am Pi gemessene Stand: Die
+  Unit trägt keine Netzsperre, ein Prozess unter dem Nutzer `chimera`
+  erreicht Internet und LAN, die Namen der Zugänge stehen in der Umgebung
+  des Dienstes. Nur Design und Roadmap — die Sperre ist nicht gebaut.
 - **ACP-Bibliothek gemessen und verworfen: der Mindestumfang wird selbst
   gebaut.** Die Rust-Crate `agent-client-protocol` (3.6.0 und 5.0.0) gegen
   denselben JSON-RPC-Zeilenrahmen mit `serde_json` — gleiche Arbeit, gleiche
