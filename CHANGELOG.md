@@ -407,11 +407,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   dem Startbaum** (smilez, 10.11.; DESIGN Regel 14). Bisher sucht Schritt 55
   ein Prerelease `rust-<Commit>` — der Name wechselt mit jedem Commit, und
   eine frische Installation aus einem Zip bekäme gar kein Gateway.
-  Entschieden: fester Name, Bau nur bei Änderung an `rust/`, fürs Release
-  vorkompiliert, ein Zip bringt sein Binary mit. Nur Design und Roadmap —
+  Entschieden: fester Name, Bau für jedes Release und bei Bedarf für
+  Tests auf der Hardware, ein Zip bringt sein Binary mit. Nur Design und Roadmap —
   gebaut ist nichts. Das Binary liegt künftig als Datei im Repo
   (ZIP-Shipping: Repo als Zip holen, auf dem Pi entpacken, daraus
-  installieren); offen sind Ort, Dateiname und wer es ablegt.
+  installieren), abgelegt von einem CI-Lauf oder mit einem Commit; offen
+  sind Ort und Dateiname.
 - **Blaupause: Modellwahl nach dem Vorbild des eigenen Forks von
   openclawgotchi** (smilez, 10.11.; DESIGN 5n): gespeicherte Wahl, eine
   Stelle für die Auflösung, nur Modelle mit `tools`. Der Abgleich nennt,

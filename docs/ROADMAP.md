@@ -399,8 +399,8 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       `rust-<Commit>` als Prerelease: nach einem Doku-Commit Befund (am Pi
       10.11.: `rust-e26bc2d`, HTTP 404, rc 1), bei einer frischen
       Installation aus einem Zip gar kein Binary und damit kein Gateway.
-      Soll: fester, sprechender Name; gebaut nur bei Änderung an `rust/`;
-      fürs Release vorkompiliert; ein Zip bringt sein Binary mit und der
+      Soll: fester, sprechender Name; gebaut für jedes Release und
+      bei Bedarf für Tests am chimera-pi, nicht bei jeder Änderung; ein Zip bringt sein Binary mit und der
       Installer nimmt es. Anknüpfen an den vorhandenen Weg
       `CHIMERA_RUST_LOKAL` (Prüfsumme, Laufprobe, Version). Berührt:
       `steps/55-rust.sh`, `tests/test-rust.sh` samt
@@ -408,9 +408,9 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       `docs/INSTALLER.md` (Modul 55), `docs/CLI.md`, `docs/CI.md`.
       **Entschieden (10.11.):** Das Binary liegt als Datei im Repo
       (ZIP-Shipping: Repo als Zip holen, auf dem Pi entpacken, daraus
-      installieren). **Vorher zu klären:** Ort und Dateiname (außerhalb
-      von `rust/`), wer es ablegt (CI oder notes), Abgleich von Binary
-      und Quelle.
+      installieren). Abgelegt wird es von einem CI-Lauf oder mit einem
+      Commit von uns. **Vorher zu klären:** Ort und Dateiname (außerhalb
+      von `rust/`).
 - [ ] **Installer: Sitzungs-Socket nach einem Lauf:** `chimera-sitzung.socket`
       blieb nach einem Lauf von Schritt 99 inaktiv („Socket service already
       active, refusing“), der Dienst lief ohne Sitzungs-Socket weiter. Der
