@@ -409,8 +409,9 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   eine frische Installation aus einem Zip bekäme gar kein Gateway.
   Entschieden: fester Name, Bau nur bei Änderung an `rust/`, fürs Release
   vorkompiliert, ein Zip bringt sein Binary mit. Nur Design und Roadmap —
-  gebaut ist nichts; offen ist, ob das Binary im Repo oder im
-  Release-Paket liegt.
+  gebaut ist nichts. Das Binary liegt künftig als Datei im Repo
+  (ZIP-Shipping: Repo als Zip holen, auf dem Pi entpacken, daraus
+  installieren); offen sind Ort, Dateiname und wer es ablegt.
 - **Blaupause: Modellwahl nach dem Vorbild des eigenen Forks von
   openclawgotchi** (smilez, 10.11.; DESIGN 5n): gespeicherte Wahl, eine
   Stelle für die Auflösung, nur Modelle mit `tools`. Der Abgleich nennt,

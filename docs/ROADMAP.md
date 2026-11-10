@@ -406,7 +406,11 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       `steps/55-rust.sh`, `tests/test-rust.sh` samt
       `counter-check-rust.sh`, `.github/workflows/rust.yml`,
       `docs/INSTALLER.md` (Modul 55), `docs/CLI.md`, `docs/CI.md`.
-      **Vorher zu entscheiden:** Binary im Repo oder im Release-Paket.
+      **Entschieden (10.11.):** Das Binary liegt als Datei im Repo
+      (ZIP-Shipping: Repo als Zip holen, auf dem Pi entpacken, daraus
+      installieren). **Vorher zu klären:** Ort und Dateiname (außerhalb
+      von `rust/`), wer es ablegt (CI oder notes), Abgleich von Binary
+      und Quelle.
 - [ ] **Installer: Sitzungs-Socket nach einem Lauf:** `chimera-sitzung.socket`
       blieb nach einem Lauf von Schritt 99 inaktiv („Socket service already
       active, refusing“), der Dienst lief ohne Sitzungs-Socket weiter. Der

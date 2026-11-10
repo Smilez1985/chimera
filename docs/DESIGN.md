@@ -3779,22 +3779,34 @@ Vorteil, sondern eine zweite Toolchain. Es bleibt bei einer.
   Versionsvergleich gegen `VERSION`. „Das Binary aus dem Startbaum“ ist
   derselbe Weg mit festem Ort, kein neuer.
 
-  **Offen (smilez): wie das Binary in den Startbaum kommt.** Ein Zip von
-  GitHub („Download ZIP“) und ein `git pull` enthalten nur, was im Repo
-  liegt — und dort liegt heute kein Binary.
-  - *Im Repo:* Die CI legt das Binary nach jeder Rust-Änderung in den
-    Baum. Zip und Pull bringen es dann beide mit, ohne weiteren Abruf.
-    Preis: Die Historie wächst um das Binary je Rust-Änderung (gemessen:
-    2,0 MB je Binary, bisher 23 Commits mit Rust-Änderung, `.git` heute
-    18 MB).
-  - *Im Release-Paket:* Die CI baut ein Zip mit Binary und hängt es ans
-    Release. Das Repo bleibt klein; ein Klon oder ein GitHub-Zip hat dann
-    kein Binary und muss es unter dem festen Namen laden.
+  **Entschieden (smilez, 10.11.2026): Das fertige Binary liegt als Datei
+  im Repo.** „ZIP-Shipping“ heißt: Der Nutzer holt das Repo als Zip,
+  entpackt es auf dem Pi und installiert aus dem entpackten Baum. Ein Zip
+  von GitHub enthält nur, was im Repo liegt — also liegt das Binary dort.
+  Ändert sich `rust/`, liegt danach eine neue Fassung auf Git. Gebaut wird
+  es von GitHub Actions oder von notes, nie auf dem Pi; der Installer holt
+  nur das fertige Binary.
 
-  Daran hängt auch, woran der Installer erkennt, dass Binary und Quelle
-  zusammenpassen: Heute prüft er Prüfsumme und `VERSION`; solange
-  `VERSION` in der Pre-Alpha gleich bleibt, fiele ein altes Binary neben
-  neuer Quelle nicht auf.
+  Stand (10.11.): Im Repo liegt kein Binary. Gemessen: 2,0 MB je Binary,
+  bisher 23 Commits mit Rust-Änderung, `.git` 18 MB — die Historie wächst
+  um das Binary je Rust-Änderung.
+
+  **Randbedingung aus dem Code:** Schritt 55 bildet seinen Hash über alle
+  Dateien unter `rust/` außer `target/`. Ein Binary unter `rust/` würde
+  diesen Hash ändern; es gehört an einen Ort außerhalb.
+
+  **Offen (smilez):**
+  - Ort und Dateiname im Repo.
+  - Wer die neue Fassung ablegt: die CI (der Rust-Job baut bei jeder
+    Änderung an `rust/`, testet auf arm64, führt das Binary aus und hat
+    `contents: write`; es fehlt der Schritt, der das Binary committet)
+    oder notes zusammen mit der Rust-Änderung.
+  - Woran der Installer erkennt, dass Binary und Quelle zusammenpassen:
+    Heute prüft er Prüfsumme und `VERSION`; solange `VERSION` in der
+    Pre-Alpha gleich bleibt, fiele ein altes Binary neben neuer Quelle
+    nicht auf. Vorschlag notes: neben dem Binary den Hash des
+    `rust/`-Baums ablegen, aus dem es gebaut wurde — der Installer rechnet
+    ihn ohnehin.
 - **Ablage:** `/opt/chimera/bin/chimera-tor`, Besitzer root, Modus 755,
   Manifest-Art `datei` mit der Prüfsumme als Angabe. Rückbau 55 entfernt
   die Datei, `bin/` nur, wenn sie leer ist. Der Schritt startet nichts;
