@@ -94,12 +94,14 @@ log ""
 
 log "Whisplay HAT"
 case "$WHISPLAY_STATE" in
-	present) info "erkannt (product_id=${WHISPLAY_PID:-?} product_ver=${WHISPLAY_VER:-?})" ;;
+	present) info "EEPROM gelesen (product_id=${WHISPLAY_PID:-?} product_ver=${WHISPLAY_VER:-?})" ;;
 	foreign) warn "Fremder HAT im EEPROM -- kein PiSugar-Board" ;;
-	absent)  info "kein EEPROM lesbar (HAT nicht aufgesteckt oder ohne EEPROM)" ;;
+	absent)  info "kein HAT-EEPROM (bei der WM8960-Fassung normal)" ;;
 esac
-if [ "$WHISPLAY_STATE" = present ]; then
-	warn "Revision V1 gegen V2 ist am EEPROM noch nicht unterscheidbar."
+# Die Warnung haengt am Betrieb, nicht am EEPROM: Genau das Board ohne
+# EEPROM ist das, fuer das sie gedacht ist.
+if whisplay_in_betrieb; then
+	warn "Revision V1 gegen V2 ist nicht bestimmbar (kein EEPROM)."
 	warn "Auf V1 fuehrt die Button-Leitung 5 V -- ein Tastendruck kann das"
 	warn "Board stromlos schalten. Vor dem ersten Tastendruck klaeren."
 fi

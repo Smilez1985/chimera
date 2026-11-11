@@ -129,6 +129,31 @@ R="$(mkroot "Raspberry Pi Zero 2 W" "raspberrypi,model-zero-2-w" dietpi)"
 load "$R"; check "kein HAT" "$(detect_whisplay)" "absent||"
 rm -rf "$R"
 
+# Unser eigener Fall (WM8960-Fassung): kein EEPROM, aber die Soundkarte
+# laeuft. Vorher galt das als "HAT nicht aufgesteckt" -- und die
+# V1-Warnung erschien genau hier nie.
+R="$(mkroot "Raspberry Pi Zero 2 W" "raspberrypi,model-zero-2-w" dietpi)"
+mkdir -p "$R/proc/device-tree/sound"
+printf 'pisugar,whisplay-soundcard\0' >"$R/proc/device-tree/sound/compatible"
+load "$R"
+check "ohne EEPROM bleibt absent" "$(detect_whisplay)" "absent||"
+if whisplay_in_betrieb; then _wb=0; else _wb=1; fi
+check "Soundkarte allein => in Betrieb" "$_wb" "0"
+rm -rf "$R"
+
+R="$(mkroot "Raspberry Pi Zero 2 W" "raspberrypi,model-zero-2-w" dietpi)"
+mkdir -p "$R/proc/device-tree/hat"
+printf 'PiSugar\0' >"$R/proc/device-tree/hat/vendor"
+printf '0x0001\0' >"$R/proc/device-tree/hat/product_id"
+load "$R"
+WHISPLAY_STATE=present
+if whisplay_in_betrieb; then _wb=0; else _wb=1; fi
+check "EEPROM => in Betrieb" "$_wb" "0"
+WHISPLAY_STATE=absent
+if whisplay_in_betrieb; then _wb=0; else _wb=1; fi
+check "nichts davon => nicht in Betrieb" "$_wb" "1"
+rm -rf "$R"
+
 echo "== Profile =="
 load "$(mkroot "" "" "")"
 check "Pi ist unterstuetzt"        "$(profile_get rpi_zero2w supported)"   "yes"

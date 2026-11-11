@@ -728,6 +728,17 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Die V1-Warnung hing am HAT-EEPROM, das unser Board nicht hat**: Die
+  Meldung „Auf V1 führt die Button-Leitung 5 V — ein Tastendruck kann das
+  Board stromlos schalten" erschien nur bei `present`, also auf unserem
+  Gerät **nie** — genau dort, wo sie gebraucht wird. Sie hängt jetzt an
+  `whisplay_in_betrieb()`: Soundkarte im Gerätebaum (das Overlay legt sie
+  an, der eigene Treiber beweist das Board) oder EEPROM. Die Meldung „HAT
+  nicht aufgesteckt oder ohne EEPROM" hieß es bei aufgestecktem HAT —
+  jetzt „kein HAT-EEPROM (bei der WM8960-Fassung normal)". Am Pi gemessen:
+  `sound/compatible` = `pisugar,whisplay-soundcard`, kein
+  `/proc/device-tree/hat`. Test: 50 ok (sh, dash, BusyBox), Gegenprobe
+  (nur EEPROM fragen) macht genau einen Fall rot.
 - **Der Geheimnis-Prüfer hielt eine Anschrift aus dem Gateway-Binary für
   eine private Mailadresse.** Ein statisch gelinktes Programm bringt
   Zeichenketten fremder Bibliotheken mit (eine Anschrift eines

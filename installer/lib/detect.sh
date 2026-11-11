@@ -117,13 +117,18 @@ detect_overlay_dir() {
 
 # --- Whisplay HAT ---------------------------------------------------------
 #
-# Der HAT hat ein EEPROM, das der Kernel in den Geraetebaum einhaengt. Damit
-# ist die Platine erkennbar, ohne draufzuschauen.
+# **Unser Board hat kein HAT-EEPROM** (gemessen 6.11.: kein
+# /proc/device-tree/hat). Nur die ES8389-Fassung traegt eines. Wer hier
+# auf "present" wartet, wartet bei uns fuer immer.
 #
-# OFFEN: ob sich daraus V1 gegen V2 unterscheiden laesst. Bekannt ist nur
-# product_id 0x0001. Solange das nicht geklaert ist, bleibt die Warnung
-# stehen -- auf V1 fuehrt die Button-Leitung 5 V und ein Tastendruck kann
-# das Board stromlos schalten.
+# Was bei uns tatsaechlich etwas sagt, ist der Treiber selbst: Das Overlay
+# legt die Soundkarte an (`/proc/device-tree/sound/compatible`), und die
+# ist im Betrieb nachweisbar. Deshalb fragt `whisplay_in_betrieb()` nach
+# der Soundkarte und nur ersatzweise nach dem EEPROM.
+#
+# Die Revision V1 gegen V2 ist ueber beides NICHT unterscheidbar -- das
+# bleibt physisch zu pruefen. Auf V1 fuehrt die Button-Leitung 5 V und ein
+# Tastendruck kann das Board stromlos schalten.
 detect_whisplay() {
 	_dw_vendor="$(read_dt /proc/device-tree/hat/vendor || true)"
 	_dw_pid="$(read_dt /proc/device-tree/hat/product_id || true)"
@@ -170,5 +175,22 @@ whisplay_soundcard_live() {
 	case "$_wl" in
 		*"pisugar,whisplay-soundcard"*) return 0 ;;
 	esac
+	return 1
+}
+
+# Ist ein Whisplay HAT in Betrieb? **Die eine Stelle**, an der das
+# entschieden wird.
+#
+# Reihenfolge nach Beweiskraft: Die Soundkarte entsteht nur, wenn das
+# Overlay laedt -- sie ist der Beweis, dass das Board steckt und der
+# Treiber laeuft. Das EEPROM ist es bei uns nicht (es fehlt), also fragt
+# diese Funktion danach nur ersatzweise -- fuer die ES8389-Fassung, die
+# eines hat und deren Overlay die Soundkarte anders nennt.
+#
+# Vorgabe smilez (11.11.): "unser selbstgebauter Displaytreiber ... der
+# funktioniert" -- also wird der Treiber gefragt, nicht die Platine.
+whisplay_in_betrieb() {
+	whisplay_soundcard_live && return 0
+	[ "${WHISPLAY_STATE:-}" = present ] && return 0
 	return 1
 }
