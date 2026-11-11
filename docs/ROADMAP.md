@@ -399,6 +399,25 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       gewählten Modells; Anzeige „geladen / kalt“ und letzte Antwortzeit je
       Modell im Ollama-Modul. Der Dienst fragt dafür das Gateway, nicht den
       Server.
+- [ ] **Native Werkzeugaufrufe (Regel „Aufrufe, nicht Text“, smilez 12.11.)**, in vier Stufen:
+      1. **Gateway trägt Werkzeuge** (`rust/crates/tor/src/ollama.rs`):
+         `tools` durchreichen, `tool_calls` zurückgeben, neutrales Format mit
+         Serialisierern (Ollama Objekt, OpenAI String, Anthropic
+         `input_schema`/`tool_use`), `content: ""` kein Fehler, `stream`
+         ausdrücklich gesetzt.
+      2. **Agent nutzt sie** (`src/chimera/agent/loop.py`): Schemas aus
+         `Toolbox.schemas()` mitschicken, Aufrufe über `tools.call()` →
+         `chimera-sohelper`, Ergebnis als `role:"tool"` in den Verlauf;
+         Text-Protokoll bleibt Rückfall, wenn der Katalog keine Werkzeuge
+         misst.
+      3. **Web-Werkzeuge** `web_suche`/`web_abruf` am Gateway (5r): erst
+         kostenlose Quellen (eigene SearXNG-Instanz, Ollama-Cloud-Konto),
+         dann die mit Schlüssel (Tavily, Exa, Brave nur ohne Cache).
+      4. **Schalter `stream`** in GUI, CLI und Telegram (`/stream`), Wert in
+         `wahl.json`; Vorgabe aus.
+      Grenzen: `max_werkzeuge_je_turn` 8, `max_werkzeuge_je_runde` 3,
+      Ergebnis auf 4000 Zeichen gekürzt (wie im Fork), Loop-Erkennung bei
+      dreimal gleichem Aufruf.
 - [ ] **Der Dienst verliert sein Netz** (5n): Er ruft heute Ollama und
       Anthropic noch selbst über `urllib` auf (`IPAddressDeny` ist leer);
       der Weg über das Gateway ist nur ein zusätzlicher Pfad, `discover()`

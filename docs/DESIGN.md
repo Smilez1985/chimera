@@ -1788,6 +1788,56 @@ Release neu geprüft.
 - **Quellen werden gezeigt:** Telegram und Web hängen die URLs an die
   Antwort.
 
+### Architekturregel „Aufrufe, nicht Text“ — das Gateway trägt Werkzeuge, der Ausführer führt sie aus
+
+**Entschieden (smilez, 12.11.2026):** Native Tool-Calls werden gebaut. Das
+Text-Protokoll `TOOL: name {json}` bleibt **Rückfall** für Modelle, deren
+Katalog keine Werkzeuge misst — nie beides gleichzeitig (zwei Wege zu
+demselben Werkzeug sind die Fehlerklasse aus 10g).
+
+**Formate: alle, jedes für seinen Fall, mit Universaladapter.** Nachgeprüft
+am 12.11. (Quellen in Klammern):
+
+| | Werkzeugbeschreibung | Aufruf in der Antwort | Ergebnis zurück |
+|---|---|---|---|
+| Ollama `/api/chat` | `tools[].{type:"function",function:{name,description,parameters}}` | `message.tool_calls[].function.arguments` = **Objekt** (`api/types.go`) | `{"role":"tool","content":…,"tool_name":…}` |
+| OpenAI-kompatibel | wie oben | `arguments` = **JSON-String** (`openai/openai.go` marshalisiert) | `role:"tool"` + `tool_call_id` |
+| Anthropic | `tools[].{name,description,input_schema}` | Block `{"type":"tool_use","id","name","input"}` | `user`-Nachricht mit `tool_result` + `tool_use_id` |
+
+**Intern gilt ein neutrales Format** (`name`/`description`/`parameters`), je
+Anbieter ein Serialisierer. Warum nicht OpenAI als Nenner: Anthropic hat
+kein `function`-Objekt, kein `type`, ein anderes Ergebnisformat — man würde
+ständig hin und zurück übersetzen. Der Adapter nimmt Argumente **als Objekt
+oder als String** an (`untagged`) und hält sie intern als Objekt; an der
+Grenze wird genau einmal konvertiert.
+
+**`content: ""` ist kein Fehler.** Ollama und Anthropic liefern bei reinem
+Werkzeugaufruf leeren Text. „Leer" ist nur, wenn **weder** Text **noch**
+Aufruf kommt. Abbruch der Schleife: keine Aufrufe mehr.
+
+**Mehrere Aufrufe je Antwort** sind erlaubt (beide Anbieter können das) und
+werden in der Reihenfolge ihrer `index` (Ollama; im Strom Teilstücke
+zusammenkleben) bzw. ihrer Blockposition (Anthropic) abgearbeitet. Grenzen
+in `wahl.json`: `max_werkzeuge_je_turn` (Vorgabe 8) und
+`max_werkzeuge_je_runde` (Vorgabe 3).
+
+**Wer führt aus:** unverändert der Agent, über `chimera-sohelper` (Regel
+„Wer prüft, führt aus"). Das Gateway trägt nur Schema und Aufruf hin und
+zurück; es führt **kein** Agentenwerkzeug aus. Ausnahmen sind die
+Gateway-eigenen Werkzeuge `web_suche`/`web_abruf` (5r) — Netz und Schlüssel
+liegen dort, nicht beim Agenten.
+
+**IDs:** Ollamas `id` ist `omitempty` und fehlt in Doku-Beispielen — nicht
+als Verbindungsschlüssel benutzen; korreliert wird über `tool_name` und
+Reihenfolge. Anthropic `tool_use_id` ist Pflicht. Beim Übersetzen zwischen
+Formaten werden IDs neu vergeben.
+
+**Streaming ist umschaltbar** (`stream` in `wahl.json`, Vorgabe **aus**):
+aus = eine Antwort, keine Akkumulation. An = NDJSON, Teilstücke je `index`
+zusammenkleben, Werkzeuge erst nach `done` ausführen. Der Schalter gehört in
+GUI, CLI und Telegram (`/stream`). Ollama hat `stream` default **true** —
+das Gateway setzt den Wert immer ausdrücklich.
+
 ### Architekturregel 5b, Ergänzung — Die Abo-Anmeldung ist Opt-in mit Hinweis
 
 Anthropics Policy erlaubt Abo-OAuth „exclusively“ für Claude Code und eigene

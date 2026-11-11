@@ -189,12 +189,18 @@ class GatewayOllama(Connector):
         return list(self._models)
 
     def call(self, prompt: str, history: list[dict],
-             system: str | None = None, *, model: str | None = None, **kw) -> str:
+             system: str | None = None, *, model: str | None = None,
+             werkzeuge: list[dict] | None = None, **kw) -> str:
         anfrage = {
             "op": "chat", "anbieter": "ollama",
             "modell": model or self.default_model or "",
             "system": system or "", "verlauf": list(history), "prompt": prompt,
         }
+        # Werkzeuge im neutralen Format (Regel „Aufrufe, nicht Text“) -- das Gateway uebersetzt sie.
+        if werkzeuge:
+            anfrage["werkzeuge"] = list(werkzeuge)
+        if kw.get("stream"):
+            anfrage["stream"] = True
         try:
             a = anfragen(anfrage, warten=WARTEN_CHAT, pfad=self.pfad)
         except Unavailable:
@@ -203,4 +209,6 @@ class GatewayOllama(Connector):
         if not a.get("ok"):
             raise _fehler(a)
         self.host = a.get("host", self.host)
-        return a["text"]
+        # Ein Aufruf ohne Text ist gueltig (DESIGN, Regel „Aufrufe, nicht Text“): die Liste traegt ihn.
+        self.letzte_werkzeuge = list(a.get("werkzeuge") or [])
+        return a.get("text", "")

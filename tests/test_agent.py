@@ -170,6 +170,67 @@ with tempfile.TemporaryDirectory() as td:
     ok("unbekanntes Werkzeug gemeldet") if "gibt es nicht" in tb.call("quatsch", {}) \
         else bad("stillschweigend")
 
+print("== Native Werkzeugaufrufe (DESIGN, Regel „Aufrufe, nicht Text“) ==")
+# Der Anbieter liefert strukturierte Aufrufe -- kein Text-Protokoll.
+from chimera.provider.base import Access, CostClass, Reply  # noqa: E402
+
+
+class StubConn:
+    name = "stub"
+    context_window = 200_000
+    access = Access.LOCAL
+    cost = CostClass.FREE
+
+
+class StubRegistry:
+    """Erste Antwort: zwei Aufrufe, dann eine Antwort ohne Aufrufe."""
+
+    def __init__(self):
+        self.antworten = [
+            Reply("", "stub", "m", Access.LOCAL, CostClass.FREE,
+                  werkzeuge=[{"name": "list_dir", "argumente": {"path": "a"}},
+                             {"name": "quatsch", "argumente": {}}]),
+            Reply("Fertig.", "stub", "m", Access.LOCAL, CostClass.FREE),
+        ]
+        self.gesehen = []
+
+    def resolve(self, task):
+        return [(StubConn(), "m")]
+
+    def call(self, task, prompt, history=None, system=None, **kw):
+        self.gesehen.append({"verlauf": [dict(m) for m in (history or [])], **kw})
+        return self.antworten.pop(0)
+
+
+with tempfile.TemporaryDirectory() as td:
+    from chimera.agent.sohelper import Ausfuehrer
+    tb = Toolbox(td, ausfuehrer=Ausfuehrer(Path(td) / "kein.sock"))
+    reg = StubRegistry()
+    res = Agent(reg, tb).run("was liegt da?")
+    check("Antwort ohne Aufrufe beendet den Lauf", res.text, "Fertig.")
+    check("Schemas gingen mit", "werkzeuge" in reg.gesehen[0], True)
+    check("Schema ist neutral (name/description/parameters)",
+          sorted(reg.gesehen[0]["werkzeuge"][0]), ["description", "name", "parameters"])
+    # Der zweite Aufruf sieht den Verlauf: assistant mit tool_calls, dann
+    # role:"tool" mit dem Namen -- so korreliert Ollama den Aufruf.
+    verlauf = reg.gesehen[1]["verlauf"]
+    arten = [m["role"] for m in verlauf]
+    check("Verlauf endet mit dem Werkzeugergebnis", arten[-1], "tool")
+    mit_aufrufen = [m for m in verlauf if m.get("tool_calls")]
+    check("die Aufrufe stehen in der Assistenten-Nachricht", len(mit_aufrufen), 1)
+    check("beide Aufrufe sind dort verzeichnet",
+          len(mit_aufrufen[0]["tool_calls"]), 2)
+    check("Argumente gehen als Objekt in den Verlauf",
+          isinstance(mit_aufrufen[0]["tool_calls"][0]["function"]["arguments"], dict), True)
+    werkzeuge = [m for m in verlauf if m["role"] == "tool"]
+    check("zwei Aufrufe protokolliert", len(werkzeuge), 2)
+    check("Ergebnis nennt das Werkzeug", werkzeuge[0]["tool_name"], "list_dir")
+    check("ohne Ausfuehrer wird nichts getan, aber gesagt",
+          "nicht erreichbar" in werkzeuge[0]["content"], True)
+    check("unbekanntes Werkzeug als Fehlertext",
+          "gibt es nicht" in werkzeuge[1]["content"], True)
+    check("Werkzeugaufrufe mitgezaehlt", res.tool_calls, 2)
+
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(1 if FAIL else 0)

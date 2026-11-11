@@ -15,7 +15,7 @@ und **sehen können, was gerade zieht** (Regel 5h).
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 
@@ -81,6 +81,9 @@ class Reply:
     access: Access
     cost: CostClass
     fell_back: bool = False   # ein vorheriger Anbieter hat nicht geliefert
+    #: Werkzeugaufrufe der Antwort (DESIGN, Regel „Aufrufe, nicht Text“), neutral:
+    #: ``[{"name": ..., "argumente": {...}, "id": ...}]``. Leer heißt: keiner.
+    werkzeuge: list[dict] = field(default_factory=list)
 
     def __str__(self) -> str:
         return self.text
@@ -114,11 +117,19 @@ class Connector(ABC):
         Rückfall auf. Netzabfragen gehören zwischengespeichert.
         """
 
+    #: Werkzeugaufrufe der letzten Antwort, gesetzt von ``call`` (Regel „Aufrufe, nicht Text“).
+    letzte_werkzeuge: list[dict] = ()
+
     @abstractmethod
     def call(self, prompt: str, history: list[dict],
              system: str | None = None, *, model: str | None = None,
              **kw) -> str:
-        """Das Modell aufrufen. Wirft ``LLMError`` bei Fehlschlag."""
+        """Das Modell aufrufen. Wirft ``LLMError`` bei Fehlschlag.
+
+        Werkzeugaufrufe der Antwort stehen danach in ``self.letzte_werkzeuge``
+        (neutral, siehe ``Reply.werkzeuge``) — der Rückgabewert bleibt Text,
+        damit der Vertrag nicht an jeder Stelle bricht.
+        """
 
     def models(self) -> list[str]:
         """Verfügbare Modelle, soweit abfragbar. Leer heißt: unbekannt."""

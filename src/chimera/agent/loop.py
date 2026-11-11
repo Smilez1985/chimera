@@ -16,13 +16,12 @@ Hier laufen die Teile zusammen. Der Ablauf je Umlauf:
       ↓
     ausführen, vermerken ── Ergebnis geht zurück ins Gespräch
 
-Die Anbieterschicht liefert bisher nur Text, keine strukturierten
-Werkzeugaufrufe. Deshalb werden sie **aus dem Text gelesen** — dasselbe
-Verfahren, das openclawgotchi für seine Steuerbefehle benutzt. Das ist
-nicht die elegante Lösung, aber es funktioniert mit jedem Anbieter, auch
-mit kleinen lokalen Modellen, die keine Werkzeug-Schnittstelle haben.
-Wenn die Anbieter später echte Werkzeugaufrufe liefern, kommt das
-daneben, nicht anstelle.
+**Zwei Wege, nativ zuerst** (DESIGN Regel „Aufrufe, nicht Text“, smilet 12.11.): Liefert der
+Anbieter strukturierte Werkzeugaufrufe (``Reply.werkzeuge``), werden sie
+ausgeführt und die Runde geht zurück ans Modell. Meldet er keine, wird wie
+bisher ein ``TOOL: name {json}`` aus dem Text gelesen — das trägt Modelle
+ohne Werkzeug-Schnittstelle. Der Textweg bleibt also Rückfall, nicht
+Ersatz: zwei Wege gleichzeitig wären die Fehlerklasse aus 10g.
 """
 
 from __future__ import annotations
@@ -37,6 +36,9 @@ from .loopguard import Config as GuardConfig
 from .loopguard import Level, LoopGuard
 from .preflight import PreflightError, preflight
 from .tools import Toolbox
+
+#: Wie viele native Aufrufe je Runde ausgeführt werden (DESIGN, Regel „Aufrufe, nicht Text“).
+MAX_WERKZEUGE_JE_RUNDE = 3
 
 log = logging.getLogger(__name__)
 
@@ -94,6 +96,9 @@ class Agent:
         self.task = task
         self.max_turns = max_turns
         self.guard = LoopGuard(guard, known_tools=toolbox.names())
+        #: Werkzeugschemas mitschicken? Aus, wenn das Modell sie nicht kann
+        #: (fehlt noch: Entscheidung aus dem gemessenen `tools`, ROADMAP Regel „Aufrufe, nicht Text“).
+        self._nativ = True
         self.history: list[dict] = []
         #: Rückruf für den Zustand — damit das Gesicht zeigt, was läuft.
         self.on_state = on_state
@@ -192,10 +197,31 @@ class Agent:
                         "Fang bitte ein neues an.",
                         steps, provider, model, fell_back, self.guard.calls)
 
-            reply = self.registry.call(self.task, "", self.history, system)
+            reply = self.registry.call(
+                self.task, "", self.history, system,
+                **({"werkzeuge": self.tools.schemas()} if self._nativ else {}))
             provider, model = reply.provider, reply.model
             fell_back = fell_back or reply.fell_back
             text = reply.text
+
+            # 1. Nativ: das Modell hat Werkzeuge aufgerufen (DESIGN, Regel „Aufrufe, nicht Text“).
+            #    Ein Aufruf ohne Text ist gueltig -- hier wird nicht auf
+            #    `text` geschaut, sondern auf die Liste.
+            if reply.werkzeuge:
+                aufrufe = reply.werkzeuge[:MAX_WERKZEUGE_JE_RUNDE]
+                self.history.append({
+                    "role": "assistant", "content": text,
+                    # Ollama-Form; die Uebersetzung je Anbieter macht das
+                    # Gateway (Regel „Aufrufe, nicht Text“), hier steht das neutrale Ergebnis.
+                    "tool_calls": [{"function": {"name": a["name"],
+                                                 "arguments": a.get("argumente", {})}}
+                                   for a in aufrufe],
+                })
+                for a in aufrufe:
+                    out = self._fuehre_aus(a["name"], a.get("argumente") or {}, steps)
+                    self.history.append({"role": "tool", "content": out,
+                                         "tool_name": a["name"]})
+                continue
 
             call = CALL_RE.search(text)
             if not call:
@@ -266,6 +292,41 @@ class Agent:
         return Result(
             text or "Ich komme hier nicht weiter.",
             steps, provider, model, fell_back, self.guard.calls)
+
+    def _fuehre_aus(self, name: str, args: dict, steps: list[Step]) -> str:
+        """Ein Werkzeug ausführen, das das Modell selbst benannt hat (Regel „Aufrufe, nicht Text“).
+
+        Dieselben Schranken wie im Textweg: unbekanntes Werkzeug, Schleife,
+        Sicherheit — die sitzt in der Toolbox. Die Argumente kommen hier
+        schon als Objekt; repariert werden muss nichts.
+        """
+        spec = self.tools.get(name)
+        if spec is None:
+            out = (f"Fehler: Werkzeug {name!r} gibt es nicht. "
+                   f"Verfügbar: {', '.join(self.tools.names())}.")
+            self.guard.record(name, args, out)
+            steps.append(Step("error", out, name))
+            return out
+        verdict = self.guard.check(name, args)
+        if verdict.level is Level.STOP:
+            out = verdict.message or "Angehalten."
+            steps.append(Step("blocked", out, name))
+            self._state("verwirrt")
+            return out
+        if verdict.level is Level.BLOCK:
+            out = verdict.message or "Aufruf verhindert."
+            self.guard.record(name, args, out)
+            steps.append(Step("blocked", out, name))
+            self._state("verwirrt")
+            return out
+        if verdict.level is Level.WARN and verdict.message:
+            steps.append(Step("warn", verdict.message, name))
+
+        self._state("arbeitet")
+        out = self.tools.call(name, args)
+        self.guard.record(name, args, out)
+        steps.append(Step("tool", out[:80], name))
+        return out
 
     def _compact(self) -> None:
         """Den Verlauf verdichten.

@@ -20,6 +20,20 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Native Werkzeugaufrufe, Stufe 1 und 2** (DESIGN, Regel „Aufrufe, nicht
+  Text“; smilez 12.11.): Das Gateway trägt `tools` in der Form von Ollama
+  durch (`{"type":"function","function":{…}}`), setzt `stream` immer
+  ausdrücklich (Ollama hat sonst default **true**) und gibt Aufrufe als
+  `werkzeuge: [{name, argumente, id?}]` zurück. `content: ""` ist dabei kein
+  Fehler mehr — „leer“ ist nur, wenn **weder** Text **noch** Aufruf kommt.
+  Argumente werden als Objekt **oder** JSON-String angenommen und intern als
+  Objekt gehalten (Ollama schickt Objekte, die OpenAI-Form Strings).
+  Der Agent schickt seine Schemas mit; kommt ein Aufruf zurück, läuft er über
+  `tools.call()` — also durch `chimera-sohelper`, kein zweiter Weg. Das
+  Text-Protokoll `TOOL: …` bleibt Rückfall für Modelle, die keine Aufrufe
+  liefern. Tests: 3 in `ollama` (Form, leerer Text, Reihenfolge nach `index`),
+  12 in `test_agent` (Verlauf mit `role:"tool"`, unbekanntes Werkzeug, ohne
+  Ausführer nichts getan).
 - **`/model` in Telegram** (`telegram.rs`): `/model` zeigt die Modellliste des
   Servers, markiert die geltende Wahl und benennt Modelle, die gemessen keine
   Werkzeuge können; `/model 3` oder `/model <name>` zieht den Verweis

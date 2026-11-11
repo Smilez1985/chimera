@@ -58,6 +58,71 @@ fn agent(global: Duration) -> ureq::Agent {
         .into()
 }
 
+/// Werkzeugbeschreibung im neutralen Format (`name`, `description`,
+/// `parameters`) nach Ollama/OpenAI: `{"type":"function","function":{...}}`.
+/// Rein (DESIGN, Regel „Aufrufe, nicht Text“).
+pub fn werkzeuge_nach_ollama(neutral: &Value) -> Value {
+    let liste = neutral
+        .as_array()
+        .map(|l| {
+            l.iter()
+                .filter(|w| w.get("name").and_then(Value::as_str).is_some_and(|n| !n.is_empty()))
+                .map(|w| {
+                    json!({"type": "function", "function": {
+                        "name": w["name"],
+                        "description": w["description"],
+                        "parameters": w["parameters"],
+                    }})
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    Value::Array(liste)
+}
+
+/// Argumente eines Aufrufs als Objekt. Ollama schickt ein Objekt, die
+/// OpenAI-Form einen JSON-**String** (`openai/openai.go` marshalisiert) --
+/// intern gilt immer das Objekt (DESIGN, Regel „Aufrufe, nicht Text“). Was sich nicht lesen laesst,
+/// wird als `{"_roh": <text>}` weitergegeben statt verschluckt.
+pub fn argumente_als_objekt(v: &Value) -> Map<String, Value> {
+    match v {
+        Value::Object(m) => m.clone(),
+        Value::String(t) => match serde_json::from_str::<Value>(t) {
+            Ok(Value::Object(m)) => m,
+            _ => Map::from_iter([("_roh".to_string(), json!(t))]),
+        },
+        Value::Null => Map::new(),
+        anderes => Map::from_iter([("_roh".to_string(), anderes.clone())]),
+    }
+}
+
+/// Die Werkzeugaufrufe einer Antwort, normalisiert: `[{"name", "argumente",
+/// "id"?}]`, in der Reihenfolge ihres `index`. Leer heisst: kein Aufruf.
+pub fn aufrufe_aus(roh: &Value) -> Vec<Value> {
+    let mut liste: Vec<(i64, Value)> = roh["message"]["tool_calls"]
+        .as_array()
+        .map(|l| {
+            l.iter()
+                .enumerate()
+                .filter_map(|(pos, t)| {
+                    let name = t["function"]["name"].as_str()?.to_string();
+                    let idx = t["function"]["index"].as_i64().unwrap_or(pos as i64);
+                    let mut e = json!({
+                        "name": name,
+                        "argumente": Value::Object(argumente_als_objekt(&t["function"]["arguments"])),
+                    });
+                    if let Some(id) = t["id"].as_str().filter(|i| !i.is_empty()) {
+                        e["id"] = json!(id);
+                    }
+                    Some((idx, e))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    liste.sort_by_key(|(i, _)| *i);
+    liste.into_iter().map(|(_, e)| e).collect()
+}
+
 /// Der Anfragekoerper fuer `/api/chat`. Rein, damit er sich pruefen laesst.
 pub fn chat_koerper(modell: &str, anfrage: &Value) -> Value {
     let mut nachrichten: Vec<Value> = Vec::new();
@@ -70,16 +135,29 @@ pub fn chat_koerper(modell: &str, anfrage: &Value) -> Value {
     if let Some(p) = anfrage.get("prompt").and_then(Value::as_str).filter(|p| !p.is_empty()) {
         nachrichten.push(json!({"role": "user", "content": p}));
     }
-    json!({"model": modell, "messages": nachrichten, "stream": false})
+    let mut k = json!({"model": modell, "messages": nachrichten,
+                       // Ollama hat `stream` default TRUE -- der Wert wird immer gesetzt (Regel „Aufrufe, nicht Text“).
+                       "stream": anfrage["stream"].as_bool().unwrap_or(false)});
+    if let Some(w) = anfrage.get("werkzeuge").filter(|w| !w.is_null()) {
+        let ollama = werkzeuge_nach_ollama(w);
+        if ollama.as_array().is_some_and(|a| !a.is_empty()) {
+            k["tools"] = ollama;
+        }
+    }
+    k
 }
 
 /// Aus Ollamas Antwort die Antwort des Gateways machen.
+///
+/// `content: ""` ist bei einem Werkzeugaufruf der Normalfall (DESIGN, Regel „Aufrufe, nicht Text“) --
+/// „leer" ist nur, wenn weder Text noch Aufruf kommt.
 pub fn chat_antwort(roh: &Value, modell: &str, host: &str) -> Value {
     let text = roh["message"]["content"].as_str().unwrap_or("");
-    if text.is_empty() {
+    let aufrufe = aufrufe_aus(roh);
+    if text.is_empty() && aufrufe.is_empty() {
         return fehlerantwort("leer", "Ollama lieferte eine leere Antwort.");
     }
-    json!({
+    let mut a = json!({
         "ok": true,
         "text": text,
         "anbieter": "ollama",
@@ -89,7 +167,11 @@ pub fn chat_antwort(roh: &Value, modell: &str, host: &str) -> Value {
             "eingabe": roh["prompt_eval_count"].as_u64(),
             "ausgabe": roh["eval_count"].as_u64(),
         },
-    })
+    });
+    if !aufrufe.is_empty() {
+        a["werkzeuge"] = Value::Array(aufrufe);
+    }
+    a
 }
 
 fn nicht_eingerichtet() -> Value {
@@ -506,6 +588,54 @@ pub(crate) mod tests {
         // von dem die Messung sagt, dass es keine Werkzeuge kann.
         let k2 = json!({"modelle": {"a": {"tools": true}, "b": {"tools": false}}});
         assert_eq!(modell_waehlen(&liste, &k2, &["b".to_string()]).unwrap(), "a");
+    }
+
+    #[test]
+    fn werkzeuge_gehen_in_der_form_von_ollama_raus_und_stream_wird_gesetzt() {
+        let neutral = json!([{"name": "read_file", "description": "lesen",
+                              "parameters": {"type": "object", "properties": {"path": {"type": "string"}}}}]);
+        let k = chat_koerper("m", &json!({"prompt": "x", "werkzeuge": neutral}));
+        assert_eq!(k["tools"][0]["type"], "function");
+        assert_eq!(k["tools"][0]["function"]["name"], "read_file");
+        assert_eq!(k["tools"][0]["function"]["parameters"]["type"], "object");
+        assert_eq!(k["stream"], false, "Ollama hat sonst default true");
+        assert_eq!(chat_koerper("m", &json!({"prompt": "x", "stream": true}))["stream"], true);
+        // Ohne Werkzeuge kein leeres Feld -- Ollama soll nichts annehmen.
+        assert!(chat_koerper("m", &json!({"prompt": "x"})).get("tools").is_none());
+    }
+
+    #[test]
+    fn ein_aufruf_ohne_text_ist_kein_fehler_und_argumente_werden_objekt() {
+        // Ollama: arguments als Objekt, content leer.
+        let roh = json!({"message": {"role": "assistant", "content": "",
+            "tool_calls": [{"function": {"index": 0, "name": "read_file",
+                                         "arguments": {"path": "a.txt"}}}]}});
+        let a = chat_antwort(&roh, "m", "h");
+        assert_eq!(a["ok"], true, "{a}");
+        assert_eq!(a["text"], "");
+        assert_eq!(a["werkzeuge"][0]["name"], "read_file");
+        assert_eq!(a["werkzeuge"][0]["argumente"]["path"], "a.txt");
+
+        // OpenAI-Form: arguments als JSON-String.
+        let roh2 = json!({"message": {"content": null, "tool_calls": [
+            {"id": "call_1", "function": {"name": "list_dir", "arguments": "{\"path\": \"\"}"}}]}});
+        let b = chat_antwort(&roh2, "m", "h");
+        assert_eq!(b["werkzeuge"][0]["argumente"]["path"], "");
+        assert_eq!(b["werkzeuge"][0]["id"], "call_1");
+
+        // Beides leer bleibt ein Fehler.
+        let leer = chat_antwort(&json!({"message": {"content": ""}}), "m", "h");
+        assert_eq!(leer["fehler"]["code"], "leer");
+    }
+
+    #[test]
+    fn mehrere_aufrufe_kommen_in_der_reihenfolge_ihres_index() {
+        let roh = json!({"message": {"content": "", "tool_calls": [
+            {"function": {"index": 1, "name": "zweit", "arguments": {}}},
+            {"function": {"index": 0, "name": "erst", "arguments": {}}}]}});
+        let a = chat_antwort(&roh, "m", "h");
+        assert_eq!(a["werkzeuge"][0]["name"], "erst");
+        assert_eq!(a["werkzeuge"][1]["name"], "zweit");
     }
 
     #[test]

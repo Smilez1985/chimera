@@ -199,6 +199,7 @@ class Registry:
         for conn, model in candidates:
             try:
                 text = conn.call(prompt, history, system, model=model, **kw)
+                werkzeuge = list(getattr(conn, "letzte_werkzeuge", ()) or [])
                 fell_back = wanted is not None and (
                     conn.name != wanted.provider
                     or (wanted.model is not None and model != wanted.model)
@@ -210,6 +211,7 @@ class Registry:
                     access=conn.access,
                     cost=conn.cost,
                     fell_back=fell_back,
+                    werkzeuge=werkzeuge,
                 )
             except Unavailable as exc:
                 errors.append(f"{conn.label}: nicht verfügbar ({exc})")
