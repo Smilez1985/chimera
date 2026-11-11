@@ -355,7 +355,7 @@ _KOPIE_VOR="$(summe "$FR/root/opt/chimera/bin/chimera-sohelper")"
 # Test ohne Meldung (in der CI passiert, lokal nicht).
 set +e
 _LOGV="$(env CHIMERA_ROOT="$FR/root" CHIMERA_MANIFEST="$FR/root/opt/chimera/state/manifest.tsv" \
-	CHIMERA_LOG_DIR="$FR/logs" sh -c '. "$0/installer/lib/common.sh"; . "$0/installer/lib/network.sh"; . "$0/installer/lib/manifest.sh"; . "$0/installer/lib/source.sh"; . "$0/installer/lib/binary.sh"; BINARY_REPO="$1"; binary_aus_baum sohelper 99-sohelper' "$WT" "$WT" 2>&1)"
+	CHIMERA_LOG_DIR="$FR/logs" CHIMERA_ARCH=aarch64 sh -c '. "$0/installer/lib/common.sh"; . "$0/installer/lib/network.sh"; . "$0/installer/lib/manifest.sh"; . "$0/installer/lib/source.sh"; . "$0/installer/lib/binary.sh"; BINARY_REPO="$1"; binary_aus_baum sohelper 99-sohelper' "$WT" "$WT" 2>&1)"
 _RC2=$?
 set -e
 check "fremdes Modul: rc 0 (kein Fremdkoerper)" "$_RC2" "0"
