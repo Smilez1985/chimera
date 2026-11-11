@@ -222,9 +222,16 @@ long runs detached.
 
 ## 7. Umgebungsvariablen / Environment variables
 
-Werte für den Dienst stehen in `/opt/chimera/config/.env` (Vorlage
-`.env.example`). Schlüssel nie in Ausgaben oder ins Repo. / Service values live
-in `/opt/chimera/config/.env`. Never print keys or commit them.
+**Zwei Dateien, zwei Leser.** Die `.env` (`/opt/chimera/config/.env`,
+Vorlage `.env.example`, `root:chimera-tor` 0640) liest **nur das Gateway**;
+systemd reicht die Werte als root hinein, der Dienst sieht sie nicht. Der
+Dienst liest `config/dienst.env` — dort stehen ausschließlich Namen, die
+**kein Geheimnis** sind (heute nur `OLLAMA_MODEL`).
+
+Schlüssel nie in Ausgaben oder ins Repo. / **Two files, two readers.** The
+`.env` is read by the **gateway only** (`root:chimera-tor`, 0640); the
+service reads `config/dienst.env`, which holds non-secrets only (currently
+`OLLAMA_MODEL`). Never print keys or commit them.
 
 ### Beim Installieren / During install
 
@@ -239,8 +246,8 @@ in `/opt/chimera/config/.env`. Never print keys or commit them.
 
 | Variable | Wirkung / Effect |
 |---|---|
-| `OLLAMA_API_BASE` | Adresse des Ollama-Servers. / Ollama server address. |
-| `OLLAMA_MODEL` | Standardmodell (optional), z. B. `llama3.2:3b`. / Default model (optional). |
+| `OLLAMA_API_BASE` | Adresse des Ollama-Servers — **nur das Gateway**. / Ollama server address, **gateway only**. |
+| `OLLAMA_MODEL` | Steht in `config/dienst.env`, nicht hier: der Dienst liest sie. / Lives in `config/dienst.env`, read by the service. |
 | `ANTHROPIC_API_KEY` | Anthropic-Schlüssel. / Anthropic key. |
 | `ANTHROPIC_OAUTH_TOKEN` | Anthropic-Abo-Anmeldung. / Anthropic subscription login. |
 | `CHIMERA_TELEGRAM_TOKEN` | Bot-Token vom BotFather; leer = Telegram aus. / Bot token; empty = off. |

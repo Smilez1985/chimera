@@ -196,16 +196,16 @@ Begründung und Wortlaut: `docs/DESIGN.md` Regel 10k.
 
 ### Whisplay-Revision
 
-Der HAT hat ein EEPROM, das sich auslesen lässt:
+**Gemessen, nicht angenommen** (6.11.2026, `docs/HARDWARE.md` und
+`docs/DISPLAYS.md`): Unser Exemplar mit dem WM8960 hat **kein
+programmiertes HAT-EEPROM** — `/proc/device-tree/hat/` fehlt. Nur die
+ES8389-Fassung trägt eines, und dort steht `vendor` / `product_id`.
 
-    /proc/device-tree/hat/vendor      → "PiSugar"
-    /proc/device-tree/hat/product_id  → "0x0001"
-
-Damit ist die Platine erkennbar, ohne draufzuschauen. Ob sich daraus auch
-**V1 gegen V2** unterscheiden lässt, ist noch offen — das gehört zu den
-ersten Dingen, die Modul 10 auf echter Hardware beantworten muss. Bis
-dahin bleibt die Warnung bestehen: V1 kann sich beim Tastendruck selbst
-abschalten.
+Damit ist die Revision **nicht** über das EEPROM bestimmbar. Es bleibt
+bei der physischen Prüfung vor dem ersten Tastendruck; die Warnung gilt
+weiter: V1 kann sich beim Tastendruck selbst abschalten. Wer die Erkennung
+über das EEPROM vermisst, irrt sich nicht über das Ziel, aber über das
+Gerät — es ist auf diesem Board schlicht nicht da.
 
 ### Was sich am echten Gerät gezeigt hat
 

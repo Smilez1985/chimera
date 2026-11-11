@@ -438,6 +438,14 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **`docs/INSTALLER.md`: das HAT-EEPROM gibt es auf unserem Board nicht**
+  (gemessen 6.11., `HARDWARE.md`/`DISPLAYS.md`): kein
+  `/proc/device-tree/hat/`, nur die ES8389-Fassung trägt eines. Die Revision
+  bleibt physisch zu prüfen.
+- **`docs/CLI.md`: zwei Dateien, zwei Leser** — die `.env` liest nur das
+  Gateway (`root:chimera-tor` 0640), der Dienst liest `config/dienst.env`
+  (heute nur `OLLAMA_MODEL`). `OLLAMA_API_BASE` ist damit eindeutig eine
+  Gateway-Einstellung.
 - **Das Gateway ordnet ausgehende Ziele ein** (DESIGN 5n): `ip_im_lan` gilt
   künftig auch für ausgehende Verbindungen, geprüft wird die aufgelöste
   Adresse und jeder Sprung. Lokal und LAN ohne Rückfrage, Internet nur für
