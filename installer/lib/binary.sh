@@ -198,8 +198,8 @@ binary_aus_baum() {
 			return 2
 		fi
 		if [ -n "$_ba_fremd_modul" ] && [ "$_ba_eigen" != "$_ba_summe" ]; then
-			warn "$_ba_bin steht unter einem anderen Schritt im Manifest, aber mit anderer Prüfsumme."
-			warn "  Sie wird ersetzt; der alte Eintrag bleibt stehen (Rückbau sieht ihn)."
+			warn "$_ba_bin steht unter einem anderen Schritt im Manifest, aber mit anderer Pruefsumme."
+			warn "  Sie wird ersetzt; der alte Eintrag bleibt stehen (Rueckbau sieht ihn)."
 			_ba_fremd_modul=""
 		fi
 	fi

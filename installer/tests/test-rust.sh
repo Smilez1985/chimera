@@ -350,9 +350,14 @@ cp "$WT/sohelper/chimera-sohelper-aarch64" "$FR/root/opt/chimera/bin/chimera-soh
 printf 'z\t55-rust\tdatei\t/opt/chimera/bin/chimera-sohelper\t%s\n' \
 	"$(summe "$FR/root/opt/chimera/bin/chimera-sohelper")" >"$FR/root/opt/chimera/state/manifest.tsv"
 _KOPIE_VOR="$(summe "$FR/root/opt/chimera/bin/chimera-sohelper")"
+# `set +e`: ohne das bricht `set -e` bei einer Zuweisung ab, deren
+# Befehlsersetzung einen Fehlercode liefert -- der Lauf endete dann mitten im
+# Test ohne Meldung (in der CI passiert, lokal nicht).
+set +e
 _LOGV="$(env CHIMERA_ROOT="$FR/root" CHIMERA_MANIFEST="$FR/root/opt/chimera/state/manifest.tsv" \
 	CHIMERA_LOG_DIR="$FR/logs" sh -c '. "$0/installer/lib/common.sh"; . "$0/installer/lib/network.sh"; . "$0/installer/lib/manifest.sh"; . "$0/installer/lib/source.sh"; . "$0/installer/lib/binary.sh"; BINARY_REPO="$1"; binary_aus_baum sohelper 99-sohelper' "$WT" "$WT" 2>&1)"
 _RC2=$?
+set -e
 check "fremdes Modul: rc 0 (kein Fremdkoerper)" "$_RC2" "0"
 hat "fremdes Modul: sagt 'schon vorhanden'" "$_LOGV" "Schon vorhanden und geprueft"
 check "fremdes Modul: Datei unveraendert" "$(summe "$FR/root/opt/chimera/bin/chimera-sohelper")" "$_KOPIE_VOR"
