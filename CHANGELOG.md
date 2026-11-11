@@ -815,10 +815,11 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Prüfsumme heraus; jetzt bricht die Prüfung benannt ab.
 
 ### Bekannte Einschränkungen
-- **Die CI veröffentlicht weiterhin ein Prerelease `rust-<commit>`**, das
-  der Installer nicht mehr braucht: Seit dem Umbau von Schritt 55 nimmt er
-  das Binary aus `gateway/`. Es schadet nicht, es kostet nur einen Release
-  je Rust-Änderung. Steht in der ROADMAP (Phase 4d).
+- **Die CI veröffentlicht kein Prerelease mehr von selbst** (smilez,
+  11.11.): Der Installer nimmt das Binary aus `gateway/`. Gebaut und
+  geprüft wird bei jeder Änderung an `rust/` weiter; veröffentlicht nur
+  noch auf Wunsch (`workflow_dispatch` mit `prerelease: true`), wenn eines
+  zum Testen gebraucht wird.
 - **`MemoryMax=` wirkt auf dem Pi nicht.** Der RPi-Kernel startet mit
   `cgroup_disable=memory`. Gemessen: 150 MB unter `MemoryMax=20M` liefen
   durch. Regel 10q setzt deshalb auf Selbstbegrenzung, die noch nicht

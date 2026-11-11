@@ -3745,14 +3745,15 @@ Vorteil, sondern eine zweite Toolchain. Es bleibt bei einer.
   Debian und Armbian (10a, Board und Betriebssystem bleiben getrennte
   Achsen). Später kommt `armv7` dazu, falls ein 32-Bit-Board in die
   Profiltabelle (10c) aufgenommen wird.
-- Gebaut wird in der **CI** (GitHub Actions). Das Binary hängt am
-  Release mit **SHA-256** daneben. Der Installer lädt das Binary zum
-  Tag, prüft die Prüfsumme und bricht bei Abweichung benannt ab (I4).
-  Für Pre-Alpha ohne Versions-Tag (GLOBAL: ungetaggt) veröffentlicht die
-  CI auf `entwicklung` ein **Prerelease `rust-<kurzer commit>`** mit
-  Binary und SHA-256. Grund: CI-Artefakte sind ohne Token nicht ladbar
-  (gemessen HTTP 401), ein Prerelease-Asset anonym. Es ist kein
-  `vX.Y.Z`-Tag; die Release-Kanäle (höchstes `vX.Y.Z`) ignorieren es.
+- Gebaut und geprüft wird in der **CI** (GitHub Actions) — bei jeder
+  Änderung an `rust/` oder `VERSION`. Dort läuft das Binary auch, auf einem
+  arm64-Runner: ein Artefakt, das nie gestartet wurde, ist eine Behauptung.
+  **Veröffentlicht wird nur auf Wunsch** (smilez, 11.11.2026): Der
+  Installer nimmt das Binary aus `gateway/` im Repo und braucht kein
+  Prerelease. Gebraucht wird eines nur zum Testen; dann von Hand mit
+  `workflow_dispatch` und `prerelease: true`. Das Tag heißt
+  `rust-<kurzer commit>`, nie `vX.Y.Z` — Pre-Alpha bleibt ungetaggt, und
+  die Release-Kanäle (höchstes `vX.Y.Z`) ignorieren es.
 - **Welches Binary — entschieden (smilez, 10.11.2026):**
   1. **Der Name ist fest und sprechend** und ändert sich nie. Ein Name aus
      dem Commit wechselt mit jedem Commit und sagt niemandem etwas (Regel
@@ -3766,40 +3767,12 @@ Vorteil, sondern eine zweite Toolchain. Es bleibt bei einer.
      für das Gateway kein Netz — nur für die Abhängigkeiten, die der
      Installer selbst lädt.
 
-  **Stand im Code (10.11., abweichend):** Schritt 55 sucht
-  `rust-<Commit>` als Prerelease. Folgen: Nach einem Doku-Commit gibt es
-  zum Kopf kein Prerelease (am Pi gemessen: HTTP 404, Befund). Ein
-  Startbaum ohne `.git` hat keinen Commit; bei einer frischen Installation
-  aus einem Zip endet Schritt 55 mit „ohne Commit kein Binary“, und
-  Schritt 99 richtet das Gateway nicht ein (im Code gelesen, nicht
-  ausgeführt). Der Name `rust-<kurzer commit>` aus dem Absatz darüber gilt
-  nur noch, bis der Umbau gebaut ist.
-
-  **Woran der Umbau anknüpft:** Schritt 55 kann schon ein Binary aus einer
-  lokalen Datei nehmen (`CHIMERA_RUST_LOKAL`), mit Prüfsumme, Laufprobe und
-  Versionsvergleich gegen `VERSION`. „Das Binary aus dem Startbaum“ ist
-  derselbe Weg mit festem Ort, kein neuer.
-
-  **Entschieden (smilez, 10.11.2026): Das fertige Binary liegt als Datei
-  im Repo.** „ZIP-Shipping“ heißt: Der Nutzer holt das Repo als Zip,
-  entpackt es auf dem Pi und installiert aus dem entpackten Baum. Ein Zip
-  von GitHub enthält nur, was im Repo liegt — also liegt das Binary dort.
-  Es liegt dort **unter festem Namen**. Eine neue Fassung kommt mit jedem
-  Release und bei Bedarf für Tests am chimera-pi. Abgelegt wird sie auf
-  einem von zwei Wegen: Ein CI-Lauf baut sie und legt sie ins Repo, oder
-  wir laden sie mit einem Commit hoch. Gebaut wird nie auf dem Pi; der
-  Installer holt nur das fertige Binary.
-
-  Folge: Zwischen zwei Fassungen darf der Quelltext unter `rust/` neuer
-  sein als das Binary. Der Installer nimmt das Binary aus dem Baum.
-
-  Stand (10.11.): Im Repo liegt kein Binary. Gemessen: 2,0 MB je Binary,
-  bisher 23 Commits mit Rust-Änderung, `.git` 18 MB — die Historie wächst
-  um das Binary je Rust-Änderung.
-
-  **Randbedingung aus dem Code:** Schritt 55 bildet seinen Hash über alle
-  Dateien unter `rust/` außer `target/`. Ein Binary unter `rust/` würde
-  diesen Hash ändern; es gehört an einen Ort außerhalb.
+  **Gebaut (11.11.2026):** Schritt 55 nimmt das Binary aus dem Startbaum,
+  prüft Prüfsumme, Architektur, Laufprobe und Version und legt es ab — kein
+  Netz, kein Commit. Am Pi belegt: Modul 55 in 1 s, Lauf ohne Befund.
+  Eine neue Fassung legt `tools/gateway-binary.sh` ab (Prüfsumme und Stand
+  dazu). Das frühere Prerelease-Verfahren (`rust-<commit>`) ist damit
+  abgelöst.
 
   **Entschieden (smilez, 10.11.2026): `gateway/chimera-tor-aarch64`.**
   Das Binary liegt in einem eigenen Ordner `gateway/` in der Repo-Wurzel

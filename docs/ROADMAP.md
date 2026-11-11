@@ -400,12 +400,11 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       Architektur, Laufprobe und Version und legt es ab. Kein Netz, kein
       Commit, kein Prerelease. Ist `rust/` neuer als das Binary, wird das
       gemeldet (kein Befund). Tests: `test-rust.sh` 77 Prüfungen,
-      `counter-check-rust.sh` 12 Mutationen. **Offen:**
-      `.github/workflows/rust.yml` veröffentlicht weiterhin das Prerelease
-      `rust-<commit>` — es wird vom Installer nicht mehr gebraucht.
-      Entweder fällt es weg, oder ein CI-Lauf legt das Binary selbst in
-      `gateway/` ab und committet. Weniger wichtig: ein zweiter
-      Architektur-Eintrag (`armv7`), falls ein Board ihn braucht.
+      `counter-check-rust.sh` 13 Mutationen. **Prerelease abgeschaltet**
+      (smilez, 11.11.): gebaut und geprüft wird bei jeder Rust-Änderung,
+      veröffentlicht nur auf Wunsch (`workflow_dispatch` mit
+      `prerelease: true`). **Offen:** ein zweiter Architektur-Eintrag
+      (`armv7`), falls ein Board ihn braucht.
 - [ ] **Installer: Sitzungs-Socket nach einem Lauf:** `chimera-sitzung.socket`
       blieb nach einem Lauf von Schritt 99 inaktiv („Socket service already
       active, refusing“), der Dienst lief ohne Sitzungs-Socket weiter. Der

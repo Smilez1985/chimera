@@ -809,7 +809,7 @@ Zeile nicht belegen kann, hat eine Änderung gebaut, die niemand installiert.
 | 40 Anzeige/Ton | Busse, Overlays, Hersteller-Tonmodul, `/etc/asound.conf`, `config.txt` (mit Sicherung) | Anzeige, Ton |
 | 46 Mikrofon | Aufnahmepegel messen, ALSA-Karte | Mikrofon |
 | 50 Python | venv, Abhängigkeiten, **und den Code nach `/opt/chimera/productive/code`** (Prüfsumme gegen `source/`) | Python-Umgebung, **alle Code-Änderungen** |
-| 55 Rust | `chimera-tor` nach `/opt/chimera/bin` aus dem Prerelease `rust-<commit>` | Gateway, Mojo |
+| 55 Rust | `chimera-tor` nach `/opt/chimera/bin`, aus `gateway/` im Startbaum | Gateway, Mojo |
 | 98 Dienst | `chimera.service` (+ Drop-in), `chimera-sitzung.socket`, `chimera-hardware.service`, `chimera-logabgleich.service`/`.timer`, Dienstnutzer, `/etc/chimera/.env` | Dienst, Statuszeile, Hardware-Abgleich |
 | 99 Gateway | Nutzer `chimera-tor`, `chimera-tor.socket`/`.service`, `chimera-sitzung.socket`-Rechte | Gateway |
 

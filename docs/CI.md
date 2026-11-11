@@ -39,10 +39,10 @@ GitHub **vor** dem Start des Runners; ein Vorschalt-Job in `tests.yml`
 hätte den Runner schon bezahlt. `VERSION` gehört dazu, weil das Binary seine
 Version im Namen trägt und eine neue `VERSION` die Stillhalte-Regel aufhebt.
 
-Ein Lauf dieses Workflows ist damit **immer** eine echte Änderung — deshalb
-veröffentlicht er das Prerelease `rust-<commit>` direkt (vorher war das an
-`workflow_dispatch` gebunden, und nach jedem Rust-Commit musste von Hand
-nachgestoßen werden; der Job baute dabei zweimal).
+Ein Lauf dieses Workflows ist damit **immer** eine echte Änderung. Gebaut
+und geprüft wird jederzeit; **veröffentlicht** wird nur auf Wunsch
+(`workflow_dispatch` mit `prerelease: true`) — der Installer nimmt das
+Binary aus `gateway/` im Repo und braucht kein Prerelease (11.11.2026).
 
 Von Hand geht es weiterhin jederzeit — `workflow_dispatch` ignoriert
 Pfadfilter:

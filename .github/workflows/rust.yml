@@ -15,7 +15,13 @@ name: Rust
 # in Modul 55 auf -- dann wird ein neues Binary gebraucht.
 #
 # `workflow_dispatch` ignoriert Pfadfilter: Von Hand laesst sich der Job
-# jederzeit anstossen (z. B. um das Prerelease zu einem Commit nachzuziehen).
+# jederzeit anstossen -- mit oder ohne Prerelease.
+#
+# Seit 11.11.2026 ist das Prerelease AUS (smilez): Der Installer nimmt das
+# Binary aus `gateway/`, das im Repo liegt. Gebaut und geprueft wird bei
+# jeder Aenderung an `rust/` weiter; veroeffentlicht nur auf Wunsch
+# (`workflow_dispatch` mit `prerelease: true`), wenn es zum Testen gebraucht
+# wird.
 
 on:
   push:
@@ -30,6 +36,11 @@ on:
       - 'VERSION'
       - '.github/workflows/rust.yml'
   workflow_dispatch:
+    inputs:
+      prerelease:
+        description: "Prerelease rust-<commit> veroeffentlichen (nur zum Testen)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -41,8 +52,8 @@ jobs:
     # und das gebaute Binary wird hier auch ausgefuehrt -- ein Artefakt,
     # das nie gestartet wurde, ist eine Behauptung (DESIGN Regel 14).
     runs-on: ubuntu-24.04-arm
-    # Nur dieser Job darf schreiben: er veroeffentlicht das Pre-Alpha-
-    # Binary als Prerelease (anonym ladbar, Artefakte sind es nicht).
+    # Schreiben nur, wenn ein Prerelease veroeffentlicht wird (auf Wunsch,
+    # siehe oben). Der Schritt haengt an derselben Bedingung.
     permissions:
       contents: write
     defaults:
@@ -108,18 +119,15 @@ jobs:
           path: ausgabe/
           if-no-files-found: error
 
-      - name: Prerelease rust-<commit> (nur entwicklung, kein Versions-Tag)
-        # Der Installer holt das Binary ohne Anmeldung (DESIGN 14). Das Tag
-        # heisst rust-<kurzer commit>, nie vX.Y.Z: Pre-Alpha bleibt ungetaggt
-        # im Sinne der Release-Kanaele. Gleicher Commit = gleicher Name,
-        # ein erneuter Lauf ersetzt die Dateien, nicht das Tag.
+      - name: Prerelease rust-<commit> (nur auf Wunsch)
+        # Der Installer nimmt das Binary aus `gateway/` im Repo (DESIGN 14);
+        # ein Prerelease braucht er nicht mehr. Veröffentlicht wird nur, wenn
+        # es zum Testen angefordert wird -- von Hand mit `prerelease: true`.
         #
-        # Seit 4.11. auch bei Push: Dieser Workflow laeuft nur noch, wenn
-        # `rust/` oder `VERSION` sich geaendert hat -- ein Lauf hier ist also
-        # immer eine echte Aenderung am Binary. Frueher war das Publizieren
-        # an `workflow_dispatch` gebunden; dann musste nach jedem Rust-Commit
-        # von Hand nachgestossen werden (und der Job baute zweimal).
-        if: github.ref == 'refs/heads/entwicklung'
+        # Das Tag heisst rust-<kurzer commit>, nie vX.Y.Z: Pre-Alpha bleibt
+        # ungetaggt im Sinne der Release-Kanaele. Gleicher Commit = gleicher
+        # Name, ein erneuter Lauf ersetzt die Dateien, nicht das Tag.
+        if: github.event_name == 'workflow_dispatch' && inputs.prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
