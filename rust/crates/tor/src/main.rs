@@ -419,12 +419,7 @@ fn main() -> ExitCode {
                     return ExitCode::from(2);
                 }
             };
-            let listener = match pfad {
-                Some(p) => dienst::binden(&p),
-                None => dienst::von_systemd().ok_or_else(|| {
-                    "kein Socket von systemd uebergeben (LISTEN_FDS) und kein --socket PFAD".to_string()
-                }),
-            };
+            let listener = gemein::socket::oeffnen(pfad.as_deref());
             match listener {
                 // Exitcode 2: Konfiguration falsch, ein Neustart hilft nicht.
                 Err(e) => {

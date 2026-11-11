@@ -3527,11 +3527,24 @@ sauber, Rauchtest über den Socket:
   `run`, `read`, `write`, `list`. Die Antworttexte sind dieselben wie in
   `tools.py`, damit das Modell keinen Unterschied sieht. Ein Faden je
   Verbindung, damit ein langer Befehl „bist du da?" nicht blockiert.
-- **Offen (nächster Schritt):** Nutzer `chimera-sohelper`, Ordner
-  `/opt/chimera/sohelper` (700), Unit mit Socket und `IPAddressDeny=any`,
-  Installer-Modul; **Gleichheitstest gegen die Python-Seite**
+- **Offen (nächster Schritt):** **Gleichheitstest gegen die Python-Seite**
   (`tests/test_agent.py` über den Socket); danach die Umstellung von
   `agent/tools.py` und das Entfernen des alten Wegs.
+
+**Gebaut (11.11.2026, Schritt 1b).** Nutzer, Ordner, Units und
+Installer-Modul stehen (`99-sohelper`, `lib/sohelper.sh`, Rückbau in
+`uninstaller/steps/99-remove-sohelper.sh`): Systemnutzer
+`chimera-sohelper` ohne Home und ohne Gruppen, Arbeitsordner
+`/opt/chimera/sohelper` (700, Eigentum des Ausführers, geprüft statt
+angenommen), Socket-Aktivierung wie beim Gateway (`/run/chimera/sohelper.sock`,
+`SocketGroup=chimera`, 0660 — nur der Agent darf fragen), Dienst mit
+`IPAddressDeny=any` und `InaccessiblePaths=/opt/chimera/config`, Nachweis
+über einen echten `--ping` und `NRestarts=0`. Damit der Socket unter
+`/run/chimera` liegt, ohne dass der Ausführer dort schreiben darf, kommt er
+— wie beim Gateway — von systemd (`LISTEN_FDS`, Handle 3); die
+Socket-Anbindung liegt für beide Programme in `gemein::socket`
+(`von_systemd`, `binden`, `oeffnen`), damit sie nicht zweimal verschieden
+prüft (Regel 10g).
 
 **Das Binary des Ausführers liegt im Repo unter `sohelper/`** (smilez,
 11.11.2026) — derselbe Weg wie beim Gateway (Regel 14, „Binary im Repo"):

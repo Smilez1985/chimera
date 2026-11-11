@@ -18,7 +18,6 @@ use gemein::protokoll::{melden, Stufe};
 use gemein::zeile;
 use serde_json::{json, Value};
 use std::io::BufReader;
-use std::os::unix::io::FromRawFd;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -241,40 +240,6 @@ pub fn lauschen(listener: UnixListener) -> ! {
     unreachable!("incoming() endet nicht")
 }
 
-/// Den von systemd uebergebenen Socket holen (`LISTEN_FDS`, Handle 3).
-/// `None`, wenn der Prozess nicht per Socket-Aktivierung gestartet wurde.
-pub fn von_systemd() -> Option<UnixListener> {
-    let pid: u32 = std::env::var("LISTEN_PID").ok()?.parse().ok()?;
-    if pid != std::process::id() {
-        return None;
-    }
-    let n: u32 = std::env::var("LISTEN_FDS").ok()?.parse().ok()?;
-    if n != 1 {
-        melden(Stufe::Fehler, &format!("LISTEN_FDS={n}, erwartet 1."));
-        return None;
-    }
-    // SAFETY: systemd uebergibt Handle 3 genau dann, wenn LISTEN_PID und
-    // LISTEN_FDS gesetzt sind (sd_listen_fds(3)); niemand sonst besitzt es.
-    Some(unsafe { UnixListener::from_raw_fd(3) })
-}
-
-/// Selbst an einen Pfad binden. Eine alte Socket-Datei, hinter der niemand
-/// mehr lauscht, wird ersetzt; antwortet dort noch jemand, ist es ein
-/// Fehler (zwei Gateways nebeneinander waeren einer zu viel).
-pub fn binden(pfad: &Path) -> Result<UnixListener, String> {
-    if pfad.exists() {
-        if UnixStream::connect(pfad).is_ok() {
-            return Err(format!("{} wird schon bedient", pfad.display()));
-        }
-        std::fs::remove_file(pfad).map_err(|e| format!("alter Socket nicht entfernbar: {e}"))?;
-    }
-    let l = UnixListener::bind(pfad).map_err(|e| format!("bind {}: {e}", pfad.display()))?;
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(pfad, std::fs::Permissions::from_mode(0o660))
-        .map_err(|e| format!("Rechte auf {}: {e}", pfad.display()))?;
-    Ok(l)
-}
-
 /// Eine Anfrage an ein laufendes Gateway (fuer `--ping` und den Installer).
 pub fn anfragen(pfad: &Path, anfrage: &Value) -> Result<Value, String> {
     let mut s = UnixStream::connect(pfad).map_err(|e| format!("{}: {e}", pfad.display()))?;
@@ -308,7 +273,7 @@ mod tests {
     }
 
     fn starten(pfad: &Path) {
-        let l = binden(pfad).expect("binden");
+        let l = gemein::socket::binden(pfad).expect("binden");
         std::thread::spawn(move || lauschen(l));
     }
 
@@ -358,7 +323,7 @@ mod tests {
     fn socket_hat_nur_besitzer_und_gruppe() {
         use std::os::unix::fs::PermissionsExt;
         let p = tmp("modus");
-        let _l = binden(&p).unwrap();
+        let _l = gemein::socket::binden(&p).unwrap();
         let m = std::fs::metadata(&p).unwrap().permissions().mode() & 0o777;
         assert_eq!(m, 0o660);
         let _ = std::fs::remove_file(&p);
@@ -368,7 +333,7 @@ mod tests {
     fn zweites_binden_auf_einen_lebenden_socket_scheitert() {
         let p = tmp("doppelt");
         starten(&p);
-        assert!(binden(&p).unwrap_err().contains("schon bedient"));
+        assert!(gemein::socket::binden(&p).unwrap_err().contains("schon bedient"));
         let _ = std::fs::remove_file(&p);
     }
 
@@ -377,7 +342,7 @@ mod tests {
         let p = tmp("verwaist");
         drop(UnixListener::bind(&p).unwrap()); // Datei bleibt, niemand lauscht
         assert!(p.exists());
-        assert!(binden(&p).is_ok());
+        assert!(gemein::socket::binden(&p).is_ok());
         let _ = std::fs::remove_file(&p);
     }
 
@@ -386,7 +351,7 @@ mod tests {
         // LISTEN_PID zeigt auf einen fremden Prozess: nicht uebernehmen.
         std::env::set_var("LISTEN_PID", "1");
         std::env::set_var("LISTEN_FDS", "1");
-        assert!(von_systemd().is_none());
+        assert!(gemein::socket::von_systemd().is_none());
         std::env::remove_var("LISTEN_PID");
         std::env::remove_var("LISTEN_FDS");
     }

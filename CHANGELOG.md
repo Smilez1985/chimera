@@ -20,6 +20,22 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Der Ausführer ist eingerichtet** (Schritt 1b, entschieden 10./11.11.):
+  Systemnutzer `chimera-sohelper` (kein Home, keine Anmeldung, keine Gruppe
+  außer der eigenen), Arbeitsordner `/opt/chimera/sohelper` (700, Eigentum
+  des Ausführers — nach dem Setzen geprüft, nicht angenommen),
+  Socket-Aktivierung über `/run/chimera/sohelper.sock` (Gruppe `chimera`,
+  0660: nur der Agent darf fragen), Dienst mit `IPAddressDeny=any` und
+  `InaccessiblePaths=/opt/chimera/config` (das venv ja, die Schlüssel
+  nein). Nachweis über einen echten `--ping` und `NRestarts=0`. Neues Modul
+  `99-sohelper` mit Rückbau (`99-remove-sohelper`); 59 Tests, 8 Mutationen
+  in der Gegenprobe (offener Socket, falsche Gruppe, fehlende Netzsperre,
+  sichtbare Schlüssel, offener Arbeitsordner, ausgefallener Nachweis,
+  Zusatzgruppen).
+- **Socket-Anbindung einmal statt zweimal** (`gemein::socket`): `von_systemd`
+  (Socket-Aktivierung, Handle 3), `binden` (mit Prüfung „wird schon
+  bedient?" und 0660) und `oeffnen`. Gateway und Ausführer nehmen dieselbe
+  Funktion; `chimera-tor` bindet sein Verhalten unverändert.
 - **Das Binary des Ausführers liegt im Repo** (`sohelper/chimera-sohelper-aarch64`,
   entschieden 11.11.): derselbe Weg wie beim Gateway — Prüfsumme und Stand
   daneben, aus dem Startbaum eingespielt, nie auf dem Gerät gebaut. Der
@@ -448,6 +464,14 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **`chimera-sohelper` kennt `--version` und `--ping`:** dieselbe Form wie
+  beim Gateway (`chimera-sohelper <VERSION>`), damit Ablage und Installer
+  am Programm selbst prüfen können statt am Exitcode von systemctl.
+- **Modul 55 legt beide Rust-Binaries ab** (`chimera-tor` **und**
+  `chimera-sohelper`); die Prüfung (Prüfsumme, Architektur, Laufprobe,
+  fremde Datei, Manifest) steht in `installer/lib/binary.sh` und wird von
+  Schritt 99-sohelper mitbenutzt. Fehlt eines der beiden, ist das ein
+  Befund (rc 1); das andere wird trotzdem abgelegt.
 - **Gateway-Binary neu gebaut und abgelegt** (nach 2.3a): `gateway/chimera-tor-aarch64`
   stammt jetzt aus dem CI-Lauf zu `cba71db` (Prüfsumme `e57433ad…`,
   `rust/`-Baum `068fecc3…`, Version `0.1.0-pre`), gelegt von

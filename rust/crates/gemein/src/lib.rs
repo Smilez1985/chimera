@@ -4,6 +4,7 @@
 //! - [`zeile`]: das Socket-Protokoll -- eine JSON-Zeile hin, eine zurueck
 //!   (Regel 5n, Grenze Python <-> Gateway).
 //! - [`protokoll`]: Zeilen fuer journald, mit Stufe als Praefix.
+//! - [`socket`]: an den Unix-Socket kommen -- von systemd oder selbst gebunden.
 
 /// Die Version kommt aus der VERSION-Datei im Repo-Root (einzige
 /// Wahrheitsquelle, GLOBAL). Die Cargo-Manifeste tragen bewusst 0.0.0.
@@ -98,6 +99,7 @@ pub mod zeile {
     }
 }
 
+pub mod socket;
 pub mod protokoll {
     //! Zeilen fuer journald. systemd liest das Praefix `<N>` als Stufe
     //! (sd-daemon(3)), dadurch filtert `journalctl -p` richtig.

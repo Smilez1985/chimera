@@ -46,14 +46,29 @@ binary_bauen() { # $1 Datei, $2 Version
 	chmod 755 "$1"
 }
 
+# Ein "Binary", das wie chimera-sohelper antwortet.
+soh_bauen() { # $1 Datei, $2 Version
+	printf '#!/bin/sh\n[ "${1:-}" = --version ] && { echo "chimera-sohelper %s"; exit 0; }\nexit 2\n' "$2" >"$1"
+	chmod 755 "$1"
+}
+
+# Das ausgelieferte Ausfuehrer-Binary in den Startbaum legen. Der Schritt legt
+# seit 11.11. beide Programme ab; fehlt eines, ist das ein Befund (rc 1).
+soh_ausliefern() { # $1 Version (leer = VERSION_SOLL)
+	mkdir -p "$T/sohelper"
+	soh_bauen "$T/sohelper/chimera-sohelper-aarch64" "${1:-$VERSION_SOLL}"
+	( cd "$T/sohelper" && sha256sum chimera-sohelper-aarch64 >chimera-sohelper-aarch64.sha256 )
+}
+
 # Startbaum: was der Schritt ausser der Wurzel braucht.
 mkbaum() { # $1 Name
 	T="$W/$1"
-	mkdir -p "$T/installer/steps" "$T/rust" "$T/gateway"
+	mkdir -p "$T/installer/steps" "$T/rust" "$T/gateway" "$T/sohelper"
 	cp "$STEP" "$T/installer/steps/55-rust.sh"
 	cp -r "$HERE/lib" "$T/installer/lib"
 	cp "$REPO/VERSION" "$T/VERSION"
 	printf 'a\n' >"$T/rust/Baum.txt"
+	soh_ausliefern
 }
 
 # Wurzel (was der Schritt anlegt) -- getrennt vom Startbaum.
@@ -106,9 +121,25 @@ hat "gut: Manifest Verzeichnis" "$(cat "$MANIFEST")" "verzeich"
 hat "gut: nennt die Quelle" "$OUT" "gateway/chimera-tor-aarch64"
 check "gut: Stand festgehalten" "$(wc -l <"$R/opt/chimera/state/rust-stand")" "1"
 hat "gut: Stand nennt den Commit" "$(cat "$R/opt/chimera/state/rust-stand")" "abc1234"
+# Seit 11.11. legt derselbe Schritt auch den Ausfuehrer ab (eigener Ordner
+# sohelper/ im Repo). Beide Programme, ein Lauf, eine Pruefung.
+SOH="$R/opt/chimera/bin/chimera-sohelper"
+check "gut: Ausfuehrer liegt da" "$([ -x "$SOH" ] && echo ja || echo nein)" "ja"
+check "gut: Ausfuehrer laeuft" "$("$SOH" --version)" "chimera-sohelper $VERSION_SOLL"
+hat "gut: Ausfuehrer im Manifest" "$(cat "$MANIFEST")" "chimera-sohelper"
 # Kein Netz: der Schritt darf keine Netzfunktion anfassen. Beleg: er laeuft
 # mit einer Probekliste, die nirgends hinfuehrt, und braucht trotzdem nichts.
 hat_nicht "gut: nichts Fremdes im Zielverzeichnis" "$(ls "$R/opt/chimera/bin")" "neu"
+
+# --- 1b. Nur der Ausfuehrer fehlt: Befund, das Gateway kommt trotzdem ------
+mkbaum ohne_soh; mkroot ohne_soh; ausliefern; rm -rf "$T/sohelper"
+fahr run
+check "Ausfuehrer fehlt: rc 1 (Befund)" "$RC" "1"
+check "Ausfuehrer fehlt: Gateway trotzdem abgelegt" \
+	"$([ -x "$R/opt/chimera/bin/chimera-tor" ] && echo ja || echo nein)" "ja"
+check "Ausfuehrer fehlt: Ausfuehrer nicht abgelegt" \
+	"$([ -e "$R/opt/chimera/bin/chimera-sohelper" ] && echo da || echo weg)" "weg"
+hat "Ausfuehrer fehlt: benannt" "$OUT" "sohelper"
 
 # --- 2. Kein Binary im Startbaum ------------------------------------------
 mkbaum leer; mkroot leer

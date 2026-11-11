@@ -663,11 +663,13 @@ Offen bleibt:
       abgelehnt, Pfadschutz mit Symlink-Auflösung, Ausgabetexte wie in
       `tools.py`. **Offen:** Nutzer `chimera-sohelper` und Ordner
       `/opt/chimera/sohelper` (700), Unit mit Socket und
-      `IPAddressDeny=any`, Installer-Modul samt Rückbau; **Gleichheitstest
-      gegen die Python-Seite** (die Fälle aus `tests/test_agent.py` über den
-      Socket). Der Ausführer darf das venv benutzen (Interpreter, Pakete),
-      die Unit sperrt aber `InaccessiblePaths=/opt/chimera/config` — die
-      Schlüssel sieht er nicht (entschieden 11.11.).
+      Installer-Modul samt Rückbau; **Gleichheitstest gegen die
+      Python-Seite** (die Fälle aus `tests/test_agent.py` über den Socket).
+      Der Ausführer darf das venv benutzen (Interpreter, Pakete), die Unit
+      sperrt aber `InaccessiblePaths=/opt/chimera/config` — die Schlüssel
+      sieht er nicht (entschieden 11.11.). **Nutzer, Ordner und Unit sind
+      gebaut** (11.11.: `lib/sohelper.sh`, Schritt `99-sohelper`, Rückbau);
+      am Gerät noch nicht eingespielt.
 - [ ] **Dienst umstellen:** `agent/tools.py` reicht die vier Werkzeuge an den
       Socket weiter und startet nichts mehr selbst; läuft der Ausführer
       nicht, wird nichts ausgeführt und der Grund genannt.
@@ -675,9 +677,11 @@ Offen bleibt:
       den Prozess, Mengen der abgelehnten und angenommenen Befehle vorher
       und nachher; Test, der rot wird, sobald der Dienst wieder selbst
       startet.
-- [ ] **Installer:** Nutzer `chimera-sohelper` (ohne Anmeldung, ohne
-      Gruppen), Unit, Socket, Rechte und Rückbau-Gegenstück (10l); am Pi
-      einspielen und Speicher im Ruhezustand messen.
+- [ ] **Am Gerät einspielen und messen:** denselben Stand auf den
+      chimera-pi bringen (Module 55 und 99-sohelper), `--ping` über den
+      Socket, `IPAddressDeny` und `InaccessiblePaths` nachsehen und den
+      Speicher im Ruhezustand messen (Vergleichswert: `chimera-tor --dienst`
+      mit 1,6 MB RSS, 3.11.).
 - [ ] Auslagern bei `Action.OFFLOAD`: erkannt wird es, getan noch nicht
 - [ ] Schleifenzustand auf die RGB-LED (braucht Hardware)
 - [ ] **Regel 10q, Messen:** `VmRSS`/`VmHWM`/`VmSwap` je Arbeitsschritt ins

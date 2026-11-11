@@ -466,11 +466,15 @@ Gemessen am chimera-pi: `rechts` mit dem Grund „links: klirrt“ (Oberwellen
 links +2 bis −3 dB, rechts −23 bis −47 dB). Ein zweiter Lauf misst nicht
 neu, und `arecord -D chimera_mikro` nimmt auf.
 
-### Modul 55 — Rust-Binary (`chimera-tor`)
+### Modul 55 — Rust-Binaries (`chimera-tor`, `chimera-sohelper`)
 
-Nimmt das Gateway-Binary aus dem Startbaum (DESIGN Regel 14) und legt es
-nach `/opt/chimera/bin/chimera-tor` (root, 755). Er startet nichts und
-braucht **kein Netz**: Das Binary liegt mit im Repo.
+Nimmt **beide** Binaries aus dem Startbaum (DESIGN Regel 14) und legt sie
+nach `/opt/chimera/bin/` (root, 755): `chimera-tor` und, seit 11.11.2026,
+`chimera-sohelper` aus `sohelper/`. Er startet nichts und braucht **kein
+Netz**: Die Binaries liegen mit im Repo. Die Prüfung steht einmal in
+`installer/lib/binary.sh` — Schritt 99-sohelper nimmt dieselbe, damit es
+keine zweite, leiser prüfende Fassung gibt (Regel 10g). Fehlt eines der
+beiden, ist das ein Befund (rc 1); das andere wird trotzdem abgelegt.
 
 - **Quelle:** `<Startbaum>/gateway/chimera-tor-aarch64`, daneben
   `chimera-tor-aarch64.sha256` (Prüfsumme) und
@@ -524,6 +528,40 @@ weil der Socket der Gruppe des Agent-Dienstes gehört. Die Logik steht in
   Agent-Dienst. Der Python-Dienst hält bis Phase 4d Schritt 3 die
   Anbieter selbst; die Sperre jetzt trennte ihn vom Ollama-Server.
 - **Rückbau:** `uninstaller/steps/99-remove-gateway.sh` (Modul `99-gateway`).
+
+### Modul 99-sohelper — Ausführer (Nutzer, Ordner, Socket, Dienst)
+
+Richtet `chimera-sohelper` als eigenen Dienst ein (DESIGN, Regel „Wer
+prüft, führt aus"). Läuft **nach** 98, weil der Socket der Gruppe des
+Agent-Dienstes gehört, und legt sein Binary selbst ab, falls Schritt 55 es
+nicht hat (dieselbe Prüfung, `lib/binary.sh`). Die Logik steht in
+`lib/sohelper.sh`, der Schritt ruft nur auf.
+
+- **Nutzer:** `chimera-sohelper`, Systemnutzer ohne Home, ohne Anmeldung,
+  **ohne jede Gruppe** außer der eigenen — weniger Rechte als der Agent.
+- **Arbeitsordner:** `/opt/chimera/sohelper`, Eigentum des Ausführers,
+  Modus 700. Das Elternverzeichnis `/opt/chimera` gehört root: Der Agent
+  kommt weder hinein noch kann er den Ordner ersetzen (Regel 10r). Rechte
+  werden nach dem Setzen **geprüft** (Eigentümer und Modus), nicht
+  angenommen.
+- **Socket-Aktivierung:** `chimera-sohelper.socket` hält
+  `/run/chimera/sohelper.sock` (Besitzer `chimera-sohelper`, Gruppe
+  `chimera`, 0660, `RemoveOnStop`). Deshalb braucht der Ausführer kein
+  Schreibrecht an `/run/chimera` — systemd legt den Socket an.
+- **Dienst:** `chimera-sohelper.service` mit `IPAddressDeny=any` (kein
+  Netz), `InaccessiblePaths=/opt/chimera/config` (das venv ja, die
+  Schlüssel nein), `ProtectSystem=strict`, `ReadWritePaths` nur im
+  Arbeitsordner, `RestartPreventExitStatus=2`. **Kein** `MemoryMax=`: Der
+  Speicher-Controller ist auf dem Pi aus, die Zeile wäre stiller Erfolg
+  (DESIGN 10q).
+- **Nachweis am Ergebnis:** ein echter `chimera-sohelper --ping` am
+  Socket, danach `is-active` und `NRestarts=0`.
+- **Ohne Binary:** rc 1; der Agent arbeitet weiter mit seinen eigenen
+  Werkzeugen, nichts wird eingerichtet.
+- **Rückbau:** `uninstaller/steps/99-remove-sohelper.sh` (Modul
+  `99-sohelper`). Entfernt Units, Binary (nur mit passender Prüfsumme),
+  den Arbeitsordner (nur wenn leer — was der Agent dort arbeiten ließ,
+  bleibt) und den Nutzer (nur wenn der Installer ihn anlegte).
 
 ### Modul 50 — Python-Umgebung (venv)
 

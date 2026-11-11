@@ -14,7 +14,7 @@
 //! Netzprogramme werden immer abgelehnt (Regel 5n).
 
 use std::io::{BufReader, Write};
-use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -27,10 +27,12 @@ fn usage() -> ! {
         "chimera-sohelper -- Ausfuehrer des Agenten (DESIGN, Regel \"Wer prueft, fuehrt aus\")\n\
          \n\
          Aufruf:\n\
-         \x20 chimera-sohelper --socket <pfad> --arbeit <verzeichnis>\n\
+         \x20 chimera-sohelper --arbeit <verzeichnis> [--socket <pfad>]\n\
+         \x20 chimera-sohelper --ping [pfad]   fragen, ob er antwortet\n\
          \x20 chimera-sohelper --version   Version ausgeben\n\
          \n\
-         Der Socket gehoert dem Ausfuehrer, die Gruppe dem Agenten (0660) --\n\
+         Im Betrieb kommt der Socket von systemd (LISTEN_FDS); --socket bindet
+         selbst (Sandbox, Tests). Der Socket gehoert dem Ausfuehrer, die Gruppe dem Agenten (0660) --\n\
          nur er darf fragen. --arbeit ist die Wurzel aller Pfade; ausserhalb\n\
          wird nichts gelesen und nichts geschrieben."
     );
@@ -38,7 +40,6 @@ fn usage() -> ! {
 }
 
 struct Einstellung {
-    socket: PathBuf,
     arbeit: PathBuf,
     grenzen: Grenzen,
     start: Instant,
@@ -59,6 +60,14 @@ fn main() {
                 std::process::exit(0);
             }
             "--socket" => socket = args.next().map(PathBuf::from),
+            // "bist du da?" fuer den Installer: ein echter Aufruf ueber den
+            // Socket, kein Exitcode von systemctl (wie beim Gateway).
+            "--ping" => {
+                let pfad = args
+                    .next()
+                    .unwrap_or_else(|| "/run/chimera/sohelper.sock".to_string());
+                std::process::exit(pingen(Path::new(&pfad)));
+            }
             "--arbeit" => arbeit = args.next().map(PathBuf::from),
             "-h" | "--help" => usage(),
             _ => {
@@ -67,7 +76,7 @@ fn main() {
             }
         }
     }
-    let (Some(socket), Some(arbeit)) = (socket, arbeit) else {
+    let Some(arbeit) = arbeit else {
         usage()
     };
     if !arbeit.is_dir() {
@@ -75,34 +84,25 @@ fn main() {
         std::process::exit(2);
     }
 
+    // Der Socket kommt von systemd (Socket-Aktivierung) oder aus --socket.
+    // Dieselbe Funktion wie beim Gateway: Ein alter, verwaister Socket wird
+    // ersetzt, ein bedienter ist ein Fehler (DESIGN Regel 14).
+    let listener = match gemein::socket::oeffnen(socket.as_deref()) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(2);
+        }
+    };
+
     let mut st = Einstellung {
-        socket,
         arbeit,
         grenzen: Grenzen::default(),
         start: Instant::now(),
         anfragen: 0,
     };
 
-    // Ein alter Socket aus einem abgebrochenen Lauf darf den Start nicht
-    // verhindern -- er gehört uns (der Ordner ist unserer).
-    if Path::new(&st.socket).exists() {
-        let _ = std::fs::remove_file(&st.socket);
-    }
-    if let Some(d) = st.socket.parent() {
-        let _ = std::fs::create_dir_all(d);
-    }
-    let listener = match UnixListener::bind(&st.socket) {
-        Ok(l) => l,
-        Err(e) => {
-            eprintln!("Socket nicht anlegbar ({}): {e}", st.socket.display());
-            std::process::exit(2);
-        }
-    };
-    eprintln!(
-        "<6>chimera-sohelper bereit: {} (Arbeit: {})",
-        st.socket.display(),
-        st.arbeit.display()
-    );
+    eprintln!("<6>chimera-sohelper bereit (Arbeit: {})", st.arbeit.display());
 
     for strom in listener.incoming() {
         match strom {
@@ -123,8 +123,43 @@ fn main() {
     }
 }
 
-fn bedienen(
-    strom: UnixStream,
+/// Eine Frage an einen laufenden Ausführer: `{"op":"ping"}` hin, Antwort zurück
+/// auf stdout. Exitcode 0 nur, wenn wirklich geantwortet wurde.
+fn pingen(pfad: &Path) -> i32 {
+    let strom = match UnixStream::connect(pfad) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("{}: {e}", pfad.display());
+            return 1;
+        }
+    };
+    let _ = strom.set_read_timeout(Some(Duration::from_secs(10)));
+    let mut schreiber = match strom.try_clone() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("{e}");
+            return 1;
+        }
+    };
+    let anfrage = json!({ "op": "ping" });
+    if let Err(e) = gemein::zeile::schreiben(&mut schreiber, &anfrage) {
+        eprintln!("Anfrage nicht geschrieben: {e}");
+        return 1;
+    }
+    let mut leser = BufReader::new(strom);
+    match gemein::zeile::lesen(&mut leser, gemein::zeile::MAX_BYTES) {
+        Ok(antwort) => {
+            println!("{antwort}");
+            0
+        }
+        Err(e) => {
+            eprintln!("Antwort nicht gelesen: {e}");
+            1
+        }
+    }
+}
+
+fn bedienen(    strom: UnixStream,
     arbeit: &Path,
     grenzen: &Grenzen,
     start: Instant,
