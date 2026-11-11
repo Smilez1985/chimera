@@ -12,11 +12,11 @@
 set -eu
 
 _HERE="$(cd "$(dirname "$0")/../.." && pwd)"
-. "$_HERE/lib/common.sh"
-. "$_HERE/lib/network.sh"
-. "$_HERE/lib/manifest.sh"
-. "$_HERE/lib/service.sh"
-. "$_HERE/lib/sohelper.sh"
+. "$_HERE/installer/lib/common.sh"
+. "$_HERE/installer/lib/network.sh"
+. "$_HERE/installer/lib/manifest.sh"
+. "$_HERE/installer/lib/service.sh"
+. "$_HERE/installer/lib/sohelper.sh"
 
 CHIMERA_STEP="99-sohelper"; export CHIMERA_STEP
 

@@ -64,10 +64,24 @@ def binary() -> Path | None:
     return None
 
 
+class NichtAusfuehrbar(RuntimeError):
+    """Das Binary laeuft auf dieser Maschine nicht (fremde Architektur)."""
+
+
 class Ausfuehrer:
     """Ein laufender Ausführer in einem erfundenen Arbeitsordner."""
 
     def __init__(self, prog: Path):
+        # Erst fragen, ob das Binary hier ueberhaupt laufen kann: Ein
+        # aarch64-Binary auf einem x86-Runner endet mit "Exec format error" —
+        # das ist kein Gleichheitsbefund, sondern ein fehlender Prüfling.
+        try:
+            probe = subprocess.run([str(prog), "--version"], capture_output=True,
+                                   text=True, timeout=60)
+        except OSError as exc:
+            raise NichtAusfuehrbar(f"{prog}: {exc}") from exc
+        if probe.returncode != 0:
+            raise NichtAusfuehrbar(f"{prog} --version: rc {probe.returncode}")
         self.dir = Path(tempfile.mkdtemp(prefix="sohelper-gleich-"))
         self.arbeit = self.dir / "arbeit"
         self.arbeit.mkdir()
@@ -271,7 +285,12 @@ def main() -> int:
         print("  übersprungen: kein Binary (erst bauen: cargo build --release -p chimera-sohelper)")
         return 0
     print(f"  Binary: {prog}")
-    a = Ausfuehrer(prog)
+    try:
+        a = Ausfuehrer(prog)
+    except NichtAusfuehrbar as exc:
+        print(f"  übersprungen: {exc}")
+        print("  (ein fremdarchitektonisches Binary ist kein Gleichheitsbefund)")
+        return 0
     try:
         befehle_vergleichen(a)
         zerlegen_vergleichen(a)

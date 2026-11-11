@@ -86,6 +86,9 @@ def mutation(name: str, alt: str, neu: str, erwartete_zeile: str, ziel: Path):
 
 def main() -> int:
     print("=== Gegenprobe: Gleichheit safety.py <-> chimera-sohelper ===")
+    if not Path(CARGO).is_file():
+        print(f"  übersprungen: kein cargo ({CARGO}) — die Rust-Seite ist nicht baubar")
+        return 0
     ziel = Path(tempfile.mkdtemp(prefix="sohelper-gp-"))
 
     env = dict(os.environ)
