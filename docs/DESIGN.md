@@ -988,7 +988,11 @@ Unix-Socket weiter (`status` und die Modell-Liste des Ollama-Servers im
 LAN); `127.0.0.1:8080` und das Internet sind zu. Die Freigabe für localhost
 wird also nicht gebraucht.
 
-**Bauplan, Stufe 1 — die Sperre** (gegen den Code geprüft, 10.11.):
+**Bauplan, Stufe 1 — die Sperre (gebaut 11.11.2026).** Was unten steht,
+ist umgesetzt; am Pi noch nicht eingespielt. Ein Punkt hat sich beim Bauen
+geändert: Die `.env` darf Schritt 98 nicht anfassen — den Nutzer
+`chimera-tor` gibt es erst in Schritt 99, ein `chown` dort wäre ein stiller
+Fehlschlag. Sie gehört jetzt Schritt 99.
 
 | Stelle | Heute | Wird |
 |---|---|---|

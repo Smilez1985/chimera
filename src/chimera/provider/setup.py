@@ -19,7 +19,7 @@ import logging
 from .anthropic import ClaudeApiConnector, ClaudeSubscriptionConnector
 from .base import CostClass
 from . import gateway
-from .ollama import OllamaConnector, discover
+# Der direkte Ollama-Weg ist entfallen (Regel 5n): kein Netz im Dienst.
 from .registry import Registry, Strategy, Target
 
 log = logging.getLogger(__name__)
@@ -48,13 +48,14 @@ def build_registry(*, probe_network: bool = True) -> tuple[Registry, list[str]]:
     reg = Registry()
     notes: list[str] = []
 
-    # --- Gateway (Regel 5n) -----------------------------------------------
-    # Antwortet das Gateway, laeuft Ollama ueber ihn: der Dienst braucht dann
-    # weder Adresse noch Netz. Ohne Gateway bleibt der direkte Weg -- bis
-    # IPAddressDeny=any fuer den Dienst gesetzt wird (docs/ROADMAP.md).
+    # --- Ollama: nur ueber das Gateway (Regel 5n) -------------------------
+    # Der Dienst hat kein Netz mehr (IPAddressDeny=any in der Unit): Ein
+    # direkter Weg waere nicht langsam, sondern unmoeglich. Deshalb gibt es
+    # keinen Rueckfall mehr -- antwortet das Gateway nicht, ist der Anbieter
+    # "nicht verfuegbar", und die Kette faellt auf den naechsten zurueck.
+    tor = gateway.GatewayOllama()
+    reg.register(tor)
     if gateway.erreichbar():
-        tor = gateway.GatewayOllama()
-        reg.register(tor)
         grund = tor.why_unavailable()
         notes.append("Gateway: erreichbar ✓")
         notes.append("Ollama (ueber das Gateway): "
@@ -62,32 +63,9 @@ def build_registry(*, probe_network: bool = True) -> tuple[Registry, list[str]]:
         if not grund and tor.models():
             ms = tor.models()
             notes.append(f"  Modelle: {', '.join(ms[:6])}" + (" …" if len(ms) > 6 else ""))
-        return _claude(reg, notes)
-
-    # --- Ollama direkt (ohne Gateway) -------------------------------------
-    ollama = OllamaConnector()
-    if not ollama.configured and probe_network:
-        found = discover()
-        if found:
-            ollama = OllamaConnector(base_url=found[0])
-            notes.append(f"Ollama gefunden: {found[0]}")
-            if len(found) > 1:
-                notes.append(f"  weitere: {', '.join(found[1:])}")
-        else:
-            notes.append("Ollama: nicht gefunden (kein Server im Netz erreichbar)")
-    elif ollama.configured:
-        grund = ollama.why_unavailable()
-        notes.append(f"Ollama: {ollama.base_url}" + (f" — {grund}" if grund else " ✓"))
     else:
-        notes.append("Ollama: nicht eingerichtet")
-
-    if ollama.configured:
-        reg.register(ollama)
-        if ollama.is_available():
-            models = ollama.models()
-            if models:
-                notes.append(f"  Modelle: {', '.join(models[:6])}"
-                             + (" …" if len(models) > 6 else ""))
+        notes.append("Gateway: nicht erreichbar -- Ollama ist nicht verfuegbar.")
+        notes.append("  (Der Dienst hat kein eigenes Netz; der Socket ist der eine Weg.)")
 
     return _claude(reg, notes)
 

@@ -426,6 +426,18 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Der Agent-Dienst hat kein Netz mehr und liest die `.env` nicht**
+  (DESIGN 5n, Verschärfung; smilez 10.11./11.11.). Die Unit trägt
+  `IPAddressDeny=any` und lädt statt der `.env` eine eigene
+  `config/dienst.env`, die der Installer aus einer Erlaubnisliste schreibt
+  (`OLLAMA_MODEL` — kein Geheimnis). Grund: systemd liest
+  `EnvironmentFile=` als root und reicht die Werte an den Prozess durch;
+  eine für den Dienst unlesbare `.env` stünde trotzdem in seiner Umgebung.
+  Die `.env` gehört jetzt `root:chimera-tor` — gesetzt in Schritt 99, weil
+  der Nutzer erst dort entsteht (in Schritt 98 wäre der `chown` ein stiller
+  Fehlschlag). `provider/setup.py` hat keinen Rückfall mehr auf den
+  direkten Weg: Ohne Gateway ist Ollama „nicht verfügbar", und das
+  Protokoll sagt warum. Am Pi **noch nicht eingespielt**.
 - **Schritt 55 nimmt das Binary aus dem Startbaum, nicht aus einem
   Prerelease.** Kein Netz, kein Commit, kein `state/quelle-commit` mehr: Er
   prüft die `.sha256`-Datei daneben, die Architektur, startet das Binary und

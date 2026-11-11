@@ -121,5 +121,21 @@ mutation abgleich-ganzer-installer \
 	's|^ExecStart=/bin/sh \$SERVICE_INSTALLER --hardware$|ExecStart=/bin/sh $SERVICE_INSTALLER|' \
 	"Boot-Abgleich ruft nur die Hardware-Module"
 
+# M13: Die Unit laedt wieder die .env -- systemd reicht die Schluessel durch,
+# auch wenn die Datei fuer den Dienst unlesbar ist (Regel 5n).
+mutation dienst-laedt-env \
+	's|^EnvironmentFile=-\$CHIMERA_CONFIG/dienst.env$|EnvironmentFile=$CHIMERA_CONFIG/.env|' \
+	"laedt die .env nicht"
+
+# M14: Die Netzsperre fehlt -- der Agent kaeme wieder selbst ins LAN.
+mutation ohne-netzsperre \
+	'/^IPAddressDeny=any$/d' \
+	"kein Netz im Dienst (IPAddressDeny=any)"
+
+# M15: Es gibt keine eigene Umgebung fuer den Dienst.
+mutation ohne-dienstumgebung \
+	'/^EnvironmentFile=-\$CHIMERA_CONFIG\/dienst.env$/d' \
+	"Dienstumgebung ohne Geheimnisse (dienst.env)"
+
 printf '\nErgebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

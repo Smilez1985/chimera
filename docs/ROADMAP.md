@@ -347,24 +347,17 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       nur vorwärts, ein Header-Satz für Token- und Chat-Weg). Zeitgrenzen
       (5 s Verbindung / 300 s Aufruf) gelten schon für Ollama. Dazu 5q: Cache-Marken je Adapter, `Reply.cache`,
       Byte-Test mit Gegenprobe; Anthropic-TTL am Gerät nachmessen.
-- [ ] **Sperre fuer den Agent-Dienst — zuerst** (DESIGN 5n, Verschärfung):
-      `IPAddressDeny=any` in der Unit, mit Test „Dienst kommt nicht ins LAN,
-      Gateway-Socket bleibt erreichbar“ (am Pi gemessen: mit dem Profil
-      erreicht ein Prozess den Socket, Internet und LAN nicht). Die Unit lädt
-      die `.env` nicht mehr — unlesbar machen (`root:chimera-tor 640`)
-      genügt nicht, systemd liest `EnvironmentFile=` als root und reicht die
-      Werte durch; der Dienst bekommt eine eigene Datei ohne Geheimnisse.
-      Der Rückfall „ohne Gateway direkt“ in `provider/setup.py` fällt weg.
-      Ohne `IPAddressAllow=localhost` (am Pi belegt, 10.11.: der Socket
-      zum Gateway antwortet auch ohne die Freigabe). Bauplan mit allen
-      berührten Stellen: DESIGN 5n, „Bauplan, Stufe 1“.
-      **Reihenfolge der Sicherheitsarbeit** (smilez, 10.11.: nach
-      Wichtigkeit; Einstufung notes, von smilez genehmigt): 1. diese
-      Sperre, 2. Ausführer
-      `chimera-sohelper` (Phase 6), 3. Claude-Zugänge ins Gateway zusammen
-      mit der Schwärzung, 4. Positivliste für `web_abruf` und Rückfrage.
-      Folge von 1 vor 3: Ein Gerät mit Claude-Schlüssel hat bis Schritt 3
-      kein Claude (auf dem Prüfgerät ist keiner eingerichtet).
+- [ ] **Sperre fuer den Agent-Dienst — gebaut, am Pi noch nicht eingespielt**
+      (11.11.). Die Unit laedt die `.env` nicht mehr und traegt
+      `IPAddressDeny=any`; der Dienst bekommt `config/dienst.env` mit einer
+      Erlaubnisliste von Namen ohne Geheimnisse (`OLLAMA_MODEL`); die `.env`
+      gehört `root:chimera-tor` (Schritt 99, weil den Nutzer erst Schritt 99
+      anlegt); `provider/setup.py` hat keinen Rückfall mehr auf den direkten
+      Weg, ohne Gateway ist der Anbieter „nicht verfügbar". Tests:
+      `test-service.sh` 73, `counter-check-service.sh` 16,
+      `test-gateway.sh` 115, `test_gateway_provider.py` 30.
+      **Offen:** `counter-check-gateway.sh` ist rot („geheim-offen") — auch
+      ohne diese Änderung, also älter als sie; ansehen. Und einspielen.
 - [ ] **Tore am Gateway** (DESIGN 5n, „Die Tore“; smilez, 10.11.: alle
       Tore liegen am Gateway): **Schwärzung vor der Cloud** (Muster und
       Nutzerliste, stabile Platzhalter je Sitzung, Rückübersetzung auch in

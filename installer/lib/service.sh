@@ -110,7 +110,15 @@ Group=$CHIMERA_DIENSTNUTZER
 EOF
 	[ -n "$_su_gr" ] && printf 'SupplementaryGroups=%s\n' "$_su_gr"
 	cat <<EOF
-EnvironmentFile=$CHIMERA_CONFIG/.env
+# KEINE .env (DESIGN Regel 5n, Verschaerfung): systemd liest EnvironmentFile=
+# als root und gibt die Werte an den Prozess -- eine fuer den Dienst
+# unlesbare .env stuende trotzdem in seiner Umgebung. Was er an
+# Einstellungen braucht (kein Geheimnis), steht in dienst.env.
+EnvironmentFile=-$CHIMERA_CONFIG/dienst.env
+# Der Dienst kommt nicht ins Netz: Internet und LAN sind zu, nur der
+# Unix-Socket zum Gateway bleibt (Regel 5n). Am Pi gemessen: mit diesem
+# Profil antwortet der Socket, 127.0.0.1:8080 und 1.1.1.1 sind zu.
+IPAddressDeny=any
 # Welche Anzeige steckt: vom Boot-Abgleich (Schritt 40) je Boot frisch
 # geschrieben. Fehlt die Datei, laeuft der Dienst blind und sagt es.
 EnvironmentFile=-$CHIMERA_RUN_ANZEIGE
@@ -280,6 +288,42 @@ service_nutzer() {
 	return 0
 }
 
+# Die Umgebung des Dienstes: eine eigene Datei OHNE Geheimnisse
+# (DESIGN 5n, Verschaerfung). Quelle ist die .env; uebernommen wird nur, was
+# in dieser Liste steht -- eine zweite Liste von Geheimnissen entsteht damit
+# nicht, es ist eine Erlaubnisliste fuer Namen, die der Dienst ohnehin
+# braucht. Kommt ein Name dazu, gehoert er hierher UND in die Doku.
+#
+# Was der Dienst sieht, waehlt der Installer; was er nicht sieht (Schluessel,
+# Telegram-Token), bleibt in der .env und damit beim Gateway.
+SERVICE_ENV_NAMEN="OLLAMA_MODEL"
+
+service_dienst_env() {
+	_sde_c="$(rootpath "$CHIMERA_CONFIG")"
+	_sde_z="$_sde_c/dienst.env"
+	if is_dry_run; then
+		info "[wuerde schreiben] $_sde_z (nur: $SERVICE_ENV_NAMEN)"
+		return 0
+	fi
+	: >"$_sde_z.neu" || { err "dienst.env nicht schreibbar: $_sde_z"; return 2; }
+	if [ -f "$_sde_c/.env" ]; then
+		for _sde_n in $SERVICE_ENV_NAMEN; do
+			_sde_w="$(sed -n "s/^$_sde_n=//p" "$_sde_c/.env" | head -1)"
+			[ -n "$_sde_w" ] && printf '%s=%s\n' "$_sde_n" "$_sde_w" >>"$_sde_z.neu"
+		done
+	fi
+	chmod 640 "$_sde_z.neu" 2>/dev/null || true
+	chown "root:$CHIMERA_DIENSTNUTZER" "$_sde_z.neu" 2>/dev/null || true
+	mv -f "$_sde_z.neu" "$_sde_z" || { rm -f "$_sde_z.neu"; return 2; }
+	# Nach dem Ablegen: es gibt keine Geheimnisse darin. Beleg statt Annahme.
+	if grep -qE '^(ANTHROPIC|CHIMERA_TELEGRAM|CHIMERA_WEB)' "$_sde_z" 2>/dev/null; then
+		err "dienst.env enthaelt einen Namen, der dort nicht hingehoert."
+		return 2
+	fi
+	info "Dienstumgebung: $_sde_z (nur $SERVICE_ENV_NAMEN)"
+	return 0
+}
+
 # Bereiche und Rechte herstellen (DESIGN 10r): Home 700 dem Nutzer, darin
 # data/ und logs/productive; config/ root:chimera 750, .env 640. Am
 # Ergebnis geprueft (stat), nicht am Exitcode von chown.
@@ -304,11 +348,15 @@ service_bereiche() {
 	_sb_c="$(rootpath "$CHIMERA_CONFIG")"
 	if [ -d "$_sb_c" ]; then
 		chown "root:$_sb_u" "$_sb_c" 2>/dev/null; chmod 750 "$_sb_c"
-		[ -f "$_sb_c/.env" ] && { chown "root:$_sb_u" "$_sb_c/.env" 2>/dev/null; chmod 640 "$_sb_c/.env"; }
+		# Die .env selbst ruehrt dieser Schritt nicht an: Sie gehoert dem
+		# Gateway-Nutzer (Regel 5l), und den legt erst Schritt 99 an. Ein
+		# chown hier waere ein stiller Fehlschlag. Der Dienst bekommt aus
+		# dienst.env nur, was kein Geheimnis ist.
 		if [ "$(stat -c '%G %a' "$_sb_c" 2>/dev/null)" != "$_sb_u 750" ]; then
 			err "config/ nicht fuer $_sb_u lesbar gemacht (ist: $(stat -c '%G %a' "$_sb_c" 2>/dev/null))"
 			return 2
 		fi
+		service_dienst_env || return 2
 	else
 		warn "config/ fehlt -- Schritt 50 legt sie an; der Dienst startet ohne .env nicht."
 		return 2

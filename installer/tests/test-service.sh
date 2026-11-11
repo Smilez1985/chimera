@@ -172,7 +172,12 @@ hat "Ruhezeit-Abgleich laeuft als Dienstnutzer" "$TD" "User=chimera"
 # -- und mit ihm die Protokolle des laufenden Hauptdienstes.
 hat_nicht "Ruhezeit-Abgleich loescht den RAM-Ordner nicht" "$TD" "RuntimeDirectory"
 hat "Timer alle 5 Minuten" "$TT" "OnUnitActiveSec=5min"
-hat "liest die .env" "$U" "EnvironmentFile=/opt/chimera/config/.env"
+# Regel 5n, Verschaerfung: Die Unit laedt die .env NICHT mehr -- systemd
+# liest sie als root und gaebe die Werte an den Prozess weiter, auch wenn die
+# Datei fuer ihn unlesbar ist. Sie bekommt eine eigene Datei ohne Geheimnisse.
+hat_nicht "laedt die .env nicht" "$U" "EnvironmentFile=/opt/chimera/config/.env"
+hat "Dienstumgebung ohne Geheimnisse (dienst.env)" "$U" "EnvironmentFile=-/opt/chimera/config/dienst.env"
+hat "kein Netz im Dienst (IPAddressDeny=any)" "$U" "IPAddressDeny=any"
 
 # --- 2. Erstlauf: Nutzer, Manifest, Start, Nachweis -----------------------
 M="$R/opt/chimera/state/manifest.tsv"

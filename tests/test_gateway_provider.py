@@ -153,9 +153,18 @@ check("es ist der Gateway-Connector", type(reg.connector("ollama")).__name__, "G
 check("Protokoll nennt das Gateway", any("Gateway: erreichbar" in n for n in notes), True)
 check("Protokoll nennt keine Adresse, nur den Host", any("ollama.example:11434" in n for n in notes), True)
 
+# Ohne Gateway gibt es keinen Ollama-Anbieter mehr, der arbeitet (Regel 5n):
+# Der Dienst hat kein Netz, ein direkter Weg waere unmoeglich. Der Anbieter
+# ist eingetragen, aber nicht verfuegbar -- die Kette faellt auf den naechsten
+# zurueck, und das Protokoll sagt warum.
 os.environ["CHIMERA_TOR_SOCKET"] = os.path.join(TMP, "weg.sock")
-reg2, _ = setup.build_registry(probe_network=False)
-check("ohne Gateway bleibt der direkte Weg", type(reg2.connector("ollama")).__name__ if reg2.connector("ollama") else None, None)
+reg2, notes2 = setup.build_registry(probe_network=False)
+_o2 = reg2.connector("ollama")
+check("ohne Gateway: Anbieter eingetragen, aber nicht verfuegbar",
+      bool(_o2) and not _o2.is_available(), True)
+check("ohne Gateway: es wird nichts direkt geholt", type(_o2).__name__, "GatewayOllama")
+check("ohne Gateway: das Protokoll sagt es",
+      any("nicht erreichbar" in n for n in notes2), True)
 
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")

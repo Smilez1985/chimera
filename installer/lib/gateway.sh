@@ -146,6 +146,16 @@ gateway_ablagen() {
 		# Gateway kommt nur das Durchgangsrecht dazu. state/ bleibt dem
 		# Agent verschlossen (Regel 10r): 710 root:chimera-tor, nur das
 		# Gateway darf hindurch, ein Agent kommt nicht einmal ans Manifest.
+		# Die .env gehoert dem Gateway (Regel 5l): Der Agent-Dienst liest sie
+		# nicht mehr, er hat seine eigene dienst.env (Schritt 98).
+		_ga_env="$(rootpath "$CHIMERA_CONFIG")/.env"
+		if [ -f "$_ga_env" ]; then
+			chown "root:$CHIMERA_TOR_NUTZER" "$_ga_env" 2>/dev/null
+			chmod 640 "$_ga_env"
+			if [ "$(stat -c '%G %a' "$_ga_env" 2>/dev/null)" != "$CHIMERA_TOR_NUTZER 640" ]; then
+				warn "Rechte der .env nicht gesetzt (ist: $(stat -c '%G %a' "$_ga_env" 2>/dev/null))"
+			fi
+		fi
 		chmod 751 "$(rootpath "$CHIMERA_CONFIG")" 2>/dev/null || true
 		chown "root:$CHIMERA_TOR_NUTZER" "$(rootpath "$CHIMERA_STATE")" 2>/dev/null || true
 		chmod 710 "$(rootpath "$CHIMERA_STATE")" 2>/dev/null || true
