@@ -107,7 +107,7 @@ pub fn befehl_pruefen(befehl: &str, g: &Grenzen) -> Result<Befehl, Abgelehnt> {
     let klein = befehl.trim().to_lowercase();
     for bad in GEFAEHRLICH {
         if klein.contains(bad) {
-            return Err(Abgelehnt(format!("Abgelehnt: enthält {bad:?}.")));
+            return Err(Abgelehnt(format!("Abgelehnt: enthält '{bad}'.")));
         }
     }
     // Ersetzung und Mehrzeiligkeit: ohne Shell bedeutungslos, mit Shell
@@ -136,16 +136,16 @@ pub fn befehl_pruefen(befehl: &str, g: &Grenzen) -> Result<Befehl, Abgelehnt> {
         .map(|s| s.to_string_lossy().to_lowercase())
         .unwrap_or_default();
     if GESPERRT.contains(&exe.as_str()) {
-        return Err(Abgelehnt(format!("{exe:?} ist gesperrt.")));
+        return Err(Abgelehnt(format!("'{exe}' ist gesperrt.")));
     }
     if INTERPRETER.contains(&exe.as_str()) {
         return Err(Abgelehnt(format!(
-            "Kein verschachtelter Interpreter ({exe:?})."
+            "Kein verschachtelter Interpreter ('{exe}')."
         )));
     }
     if NETZ.contains(&exe.as_str()) {
         return Err(Abgelehnt(format!(
-            "{exe:?} geht ins Netz, das ist hier nicht erlaubt."
+            "'{exe}' geht ins Netz, das ist hier nicht freigegeben."
         )));
     }
     Ok(Befehl { argv, nutzt_netz: false })
@@ -175,7 +175,7 @@ pub fn zerlegen(zeile: &str) -> Result<Vec<String>, Abgelehnt> {
                         Some(z) => wort.push(z),
                         None => {
                             return Err(Abgelehnt(
-                                "Befehl nicht lesbar: fehlendes schließendes Anführungszeichen".into(),
+                                "Befehl nicht lesbar: No closing quotation".into(),
                             ))
                         }
                     }
@@ -194,14 +194,14 @@ pub fn zerlegen(zeile: &str) -> Result<Vec<String>, Abgelehnt> {
                             }
                             None => {
                                 return Err(Abgelehnt(
-                                    "Befehl nicht lesbar: Backslash am Ende".into(),
+                                    "Befehl nicht lesbar: No escaped character".into(),
                                 ))
                             }
                         },
                         Some(z) => wort.push(z),
                         None => {
                             return Err(Abgelehnt(
-                                "Befehl nicht lesbar: fehlendes schließendes Anführungszeichen".into(),
+                                "Befehl nicht lesbar: No closing quotation".into(),
                             ))
                         }
                     }
@@ -213,7 +213,7 @@ pub fn zerlegen(zeile: &str) -> Result<Vec<String>, Abgelehnt> {
                     Some(z) => wort.push(z),
                     None => {
                         return Err(Abgelehnt(
-                            "Befehl nicht lesbar: Backslash am Ende".into(),
+                            "Befehl nicht lesbar: No escaped character".into(),
                         ))
                     }
                 }

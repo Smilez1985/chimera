@@ -20,6 +20,20 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Gleichheit gegen die Python-Seite belegt** (`tests/test_sohelper_gleichheit.py`):
+  dieselben Befehle und Pfade gehen durch `safety.py` **und** durch einen
+  laufenden `chimera-sohelper`; verglichen wird das Urteil und der Text der
+  Ablehnung. 45 Fälle, darunter Anführungszeichen, Backslash, leere
+  Argumente, Symlink-Flucht und die Zerlegung (Ausgabe von `printf`
+  gegen `shlex.split`). **Dabei vier Unterschiede gefunden und behoben:**
+  die Rust-Seite zitierte mit `"` statt `'` (wie Pythons `repr`), sagte
+  „nicht erlaubt" statt „nicht freigegeben", und bei kaputten
+  Anführungszeichen stand eine deutsche Übersetzung statt der Meldung von
+  `shlex` („No closing quotation"). Die Texte sind jetzt gleich — das
+  Modell soll keinen Unterschied sehen. Gegenprobe
+  (`tests/gegenprobe_sohelper_gleichheit.py`): vier Verfälschungen, jede
+  wird rot (`sudo` wieder erlaubt, Netzprogramme durch, Backslash schützt
+  nicht mehr, anderer Text).
 - **Der Ausführer ist eingerichtet** (Schritt 1b, entschieden 10./11.11.):
   Systemnutzer `chimera-sohelper` (kein Home, keine Anmeldung, keine Gruppe
   außer der eigenen), Arbeitsordner `/opt/chimera/sohelper` (700, Eigentum

@@ -673,10 +673,9 @@ Offen bleibt:
 - [ ] **Dienst umstellen:** `agent/tools.py` reicht die vier Werkzeuge an den
       Socket weiter und startet nichts mehr selbst; läuft der Ausführer
       nicht, wird nichts ausgeführt und der Grund genannt.
-- [ ] **Gleichwertigkeit belegen:** die Fälle aus `tests/test_agent.py` gegen
-      den Prozess, Mengen der abgelehnten und angenommenen Befehle vorher
-      und nachher; Test, der rot wird, sobald der Dienst wieder selbst
-      startet.
+- [ ] **Der Dienst startet nichts mehr selbst:** ein Test, der rot wird,
+      sobald `agent/tools.py` wieder einen vom Modell gewählten Befehl
+      startet (gehört zur Umstellung, CHANGELOG 11.11.).
 - [ ] **Am Gerät einspielen und messen:** denselben Stand auf den
       chimera-pi bringen (Module 55 und 99-sohelper), `--ping` über den
       Socket, `IPAddressDeny` und `InaccessiblePaths` nachsehen und den

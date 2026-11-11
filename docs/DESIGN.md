@@ -3527,9 +3527,14 @@ sauber, Rauchtest über den Socket:
   `run`, `read`, `write`, `list`. Die Antworttexte sind dieselben wie in
   `tools.py`, damit das Modell keinen Unterschied sieht. Ein Faden je
   Verbindung, damit ein langer Befehl „bist du da?" nicht blockiert.
-- **Offen (nächster Schritt):** **Gleichheitstest gegen die Python-Seite**
-  (`tests/test_agent.py` über den Socket); danach die Umstellung von
-  `agent/tools.py` und das Entfernen des alten Wegs.
+- **Gleichheit belegt (11.11.2026):** `tests/test_sohelper_gleichheit.py`
+  schickt dieselben Befehle und Pfade durch `safety.py` und durch einen
+  laufenden Ausführer (45 Fälle, Urteil **und** Text); vier Abweichungen
+  kamen dabei ans Licht und wurden auf der Rust-Seite behoben (Zitatform,
+  Wortlaut der Netzsperre, Meldung von `shlex`). Gegenprobe mit vier
+  Verfälschungen, jede wird rot.
+- **Offen (nächster Schritt):** die Umstellung von `agent/tools.py` auf den
+  Socket und das Entfernen des alten Wegs.
 
 **Gebaut (11.11.2026, Schritt 1b).** Nutzer, Ordner, Units und
 Installer-Modul stehen (`99-sohelper`, `lib/sohelper.sh`, Rückbau in
