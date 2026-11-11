@@ -832,6 +832,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Die Wahl sah einen leeren Katalog, weil der Anbieter anders heißt**
+  (`dienst.rs`, am Gerät gemessen 11.11.): Die Netzsuche legt den Server als
+  `ollama-192-168-178-100` an, der Dienst fragt `ollama` über die Adresse aus
+  der `.env` — der Katalog lag unter der gefundenen Id, die Wahl unter
+  `ollama` fand nichts und meldete `kein_modell`. `katalog_fuer` sucht jetzt
+  zuerst unter der Id, dann unter **derselben Adresse**. Test mit beiden
+  Namen (`der_katalog_der_netzsuche_gilt_auch_fuer_den_namen_ollama`).
 - **Das Kontextfenster kam nie aus einer Messung** (`provider/gateway.py`):
   Der Dienst las den Katalog flach (`.get(modell)`), das Gateway legt ihn
   aber als `{"stand": …, "modelle": {…}}` ab (`daten::katalog_lesen`) —

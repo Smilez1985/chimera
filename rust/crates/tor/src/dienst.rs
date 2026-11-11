@@ -84,7 +84,10 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
         },
         "modelle" => match anfrage.get("anbieter").and_then(Value::as_str) {
             Some(a) => match ollama_adresse(a, stand) {
-                Ok(adr) => ollama::op_modelle(adr.as_deref(), &crate::daten::katalog_lesen(&stand.daten, a)),
+                Ok(adr) => ollama::op_modelle(
+                    adr.as_deref(),
+                    &katalog_fuer(a, adr.as_deref(), stand),
+                ),
                 Err(f) => f,
             },
             None => zeile::fehlerantwort("anbieter_fehlt", "Die Abfrage braucht ein Feld \"anbieter\"."),
@@ -147,7 +150,7 @@ fn chat(id: &str, anfrage: &Value, stand: &Stand) -> Value {
         Ok(None) => return ollama::op_chat(None, anfrage, &json!({})),
         Err(f) => return f,
     };
-    let mut katalog = crate::daten::katalog_lesen(&stand.daten, id);
+    let mut katalog = katalog_fuer(id, Some(&adr), stand);
     let a = ollama::op_chat(Some(&adr), anfrage, &katalog);
     let genannt = anfrage.get("modell").and_then(Value::as_str).is_some_and(|m| !m.is_empty());
     if a["fehler"]["code"] == "kein_modell" && !genannt && !katalog_gemessen(&katalog) {
@@ -158,6 +161,37 @@ fn chat(id: &str, anfrage: &Value, stand: &Stand) -> Value {
         }
     }
     a
+}
+
+/// Der gespeicherte Katalog zu einem Anbieter.
+///
+/// Warum nicht einfach `katalog_lesen(id)`: Die Netzsuche vergibt eigene Ids
+/// (`ollama-192-168-178-100`), waehrend der Dienst den Anbieter `ollama` mit
+/// der Adresse aus der `.env` fragt. Am 11.11. am Geraet gemessen: der
+/// Katalog lag unter der gefundenen Id, die Wahl unter `ollama` sah einen
+/// leeren Katalog. Gesucht wird deshalb zuerst unter der Id, dann unter der
+/// **gleichen Adresse**.
+fn katalog_fuer(id: &str, adresse: Option<&str>, stand: &Stand) -> Value {
+    let eigen = crate::daten::katalog_lesen(&stand.daten, id);
+    let gefuellt = |k: &Value| k["modelle"].as_object().map(|m| !m.is_empty()).unwrap_or(false);
+    if gefuellt(&eigen) {
+        return eigen;
+    }
+    let Some(adr) = adresse else { return eigen };
+    let (liste, _) = crate::daten::anbieter_laden(&stand.daten);
+    for (i, a) in &liste {
+        if i == id || a["typ"] != "ollama" {
+            continue;
+        }
+        if ollama::adresse_aus(a["adresse"].as_str()).as_deref() != Some(adr) {
+            continue;
+        }
+        let k = crate::daten::katalog_lesen(&stand.daten, i);
+        if gefuellt(&k) {
+            return k;
+        }
+    }
+    eigen
 }
 
 /// Hat der Katalog mindestens eine echte Messung? `tools: null` ist keine.
@@ -492,6 +526,37 @@ mod tests_anbieter {
         let a = antworten(&json!({"op": "chat", "anbieter": "lan", "prompt": "x"}), &s);
         assert_eq!(a["ok"], true, "{a}");
         assert_eq!(a["modell"], "klug", "die Zahl im Namen darf nicht entscheiden: {a}");
+        h.join().unwrap();
+    }
+
+    #[test]
+    fn der_katalog_der_netzsuche_gilt_auch_fuer_den_namen_ollama() {
+        // Am Geraet gemessen (11.11.): Die Netzsuche legt den Anbieter als
+        // `ollama-192-168-178-100` an, der Dienst fragt `ollama` ueber die
+        // Adresse aus der `.env`. Ohne Adressabgleich sah die Wahl einen
+        // leeren Katalog und haette kein Modell genannt.
+        let (b, h) = ollama::tests::server(vec![
+            (200, r#"{"models":[{"name":"blind:7b"},{"name":"klug"}]}"#.into()), // op: modelle
+            (200, r#"{"models":[{"name":"blind:7b"},{"name":"klug"}]}"#.into()), // chat: modellliste
+            (200, r#"{"message":{"content":"ok"}}"#.into()),                     // chat
+        ]);
+        let (s, p) = stand_mit_daten("adressabgleich", Some(b.clone()));
+        crate::daten::anbieter_speichern(
+            &p,
+            "ollama-192-0-2-1",
+            &json!({"typ": "ollama", "bezeichnung": "L", "adresse": b, "auto": true}),
+        )
+        .unwrap();
+        crate::daten::katalog_speichern(
+            &p,
+            "ollama-192-0-2-1",
+            &json!({"stand": 7, "modelle": {"blind:7b": {"tools": false}, "klug": {"tools": true}}}),
+        )
+        .unwrap();
+        let m = antworten(&json!({"op": "modelle", "anbieter": "ollama"}), &s);
+        assert_eq!(m["wahl"], "klug", "Wahl ueber die Adresse: {m}");
+        let a = antworten(&json!({"op": "chat", "anbieter": "ollama", "prompt": "x"}), &s);
+        assert_eq!(a["modell"], "klug", "{a}");
         h.join().unwrap();
     }
 

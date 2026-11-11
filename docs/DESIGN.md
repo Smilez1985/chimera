@@ -1090,6 +1090,13 @@ Reihenfolge; danach entscheidet der Nutzer.
 baut die Regel nicht nach, sondern übernimmt den Namen für das Kontextfenster
 (5a). `provider/setup.py` nimmt die Wahl statt der Zahl im Modellnamen.
 
+**Der Katalog gehört zur Adresse, nicht zum Namen:** Die Netzsuche vergibt
+eigene Ids (`ollama-<host>`), während der Dienst denselben Server als
+`ollama` über die Adresse aus der `.env` fragt. Am Gerät gemessen (11.11.)
+lag der Katalog unter der gefundenen Id und die Wahl sah einen leeren.
+`dienst::katalog_fuer` sucht deshalb zuerst unter der Id, dann unter der
+gleichen Adresse — eine Stelle, kein zweiter Weg.
+
 **Folge für die Sperre** (Lesart notes, zu bestätigen): Die Wahl gehört
 dorthin, wo die Adresse liegt — ans Gateway. Der Dienst braucht
 `OLLAMA_MODEL` nicht aus der `.env`: Nennt er kein Modell, entscheidet
