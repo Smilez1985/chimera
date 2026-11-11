@@ -16,15 +16,12 @@ Vorprüfung — zwei Listen würden auseinanderdriften.
 from __future__ import annotations
 
 import logging
-import os
-import shutil
-import subprocess
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 from .preflight import ToolSpec
-from .safety import Limits, Rejected, check_command, clip, safe_path
+from .safety import Limits, Rejected, clip
+from .sohelper import Ausfuehrer, AusfuehrerFehler
 
 log = logging.getLogger(__name__)
 
@@ -43,10 +40,14 @@ class Toolbox:
     """Die Werkzeuge eines Agenten, gebunden an ein Arbeitsverzeichnis."""
 
     def __init__(self, root: Path | str, limits: Limits | None = None,
-                 *, face=None):
+                 *, face=None, ausfuehrer: Ausfuehrer | None = None):
         self.root = Path(root).resolve()
         self.limits = limits or Limits()
         self.face = face          # optional: Zustand fürs Gesicht
+        # Prüfung **und** Ausführung liegen beim Ausführer (DESIGN, Regel
+        # „Wer prüft, führt aus"). Der Dienst startet nichts mehr selbst --
+        # deshalb gibt es hier keinen zweiten Weg und keinen Rückfall.
+        self.ausfuehrer = ausfuehrer or Ausfuehrer()
         self._tools: dict[str, Tool] = {}
         self._register_default()
 
@@ -122,87 +123,37 @@ class Toolbox:
             ("mood",),
         ), self._set_face)
 
-    def _run_command(self, command: str) -> str:
-        cmd = check_command(command, self.limits)
-        try:
-            res = subprocess.run(
-                cmd.argv, shell=False, capture_output=True, text=True,
-                timeout=self.limits.timeout, cwd=str(self.root),
-            )
-        except subprocess.TimeoutExpired:
-            return f"Abgebrochen nach {self.limits.timeout}s."
-        except FileNotFoundError:
-            return f"Programm nicht gefunden: {cmd.argv[0]!r}"
+    def _frage(self, op: str, **felder) -> str:
+        """Eine Werkzeugfrage an den Ausführer — der einzige Weg.
 
-        out = ""
-        if res.stdout.strip():
-            out += res.stdout.strip() + "\n"
-        if res.stderr.strip():
-            out += f"[Fehlerausgabe] {res.stderr.strip()}\n"
-        if res.returncode != 0:
-            out += f"[Exitcode {res.returncode}]\n"
-        return out or "(keine Ausgabe)"
+        Kein Rückfall: Antwortet er nicht, wird **nichts** ausgeführt und
+        das Modell erfährt den Grund (DESIGN, Gegenprobe zur Regel).
+        """
+        try:
+            antwort = self.ausfuehrer.fragen(op, **felder)
+        except AusfuehrerFehler as exc:
+            log.warning("Ausführer nicht erreichbar: %s", exc)
+            return (f"Der Ausführer ist nicht erreichbar ({exc}). "
+                    "Es wurde nichts ausgeführt.")
+        if antwort.get("ok"):
+            return str(antwort.get("text", ""))
+        fehler = antwort.get("fehler") or {}
+        # Dieselbe Form wie bisher: "Abgelehnt: <Begründung>". Die Texte
+        # kommen aus dem Ausführer; sie sind mit der Python-Seite
+        # abgeglichen (tests/test_sohelper_gleichheit.py).
+        return f"Abgelehnt: {fehler.get('text', 'ohne Begründung')}"
+
+    def _run_command(self, command: str) -> str:
+        return self._frage("run", command=command)
 
     def _read_file(self, path: str) -> str:
-        p = safe_path(path, self.root, self.limits)
-        if not p.is_file():
-            return f"Keine Datei: {path}"
-        try:
-            return p.read_text(encoding="utf-8", errors="replace")
-        except Exception as exc:
-            return f"Nicht lesbar: {exc}"
+        return self._frage("read", path=path)
 
     def _write_file(self, path: str, content: str) -> str:
-        p = safe_path(path, self.root, self.limits, for_write=True)
-        data = content.encode("utf-8")
-        if len(data) > self.limits.max_write_bytes:
-            return (f"Zu groß: {len(data)} Bytes, erlaubt sind "
-                    f"{self.limits.max_write_bytes}.")
-        p.parent.mkdir(parents=True, exist_ok=True)
-        # Über eine Nachbardatei und Umbenennen -- ein abgebrochener
-        # Schreibvorgang darf keine halbe Datei hinterlassen (Regel 8a).
-        #
-        # Drei Dinge gehören dazu (DESIGN 5t, Review 11.11.):
-        # * Der Name der Nebendatei ist **je Schreiber verschieden** -
-        #   `mkstemp` vergibt ihn, ein fester Name liesse zwei Schreiber
-        #   dieselbe Datei benutzen.
-        # * Vor dem Umbenennen wird **geflusht** (`fsync`): ohne das steht
-        #   nach einem Stromausfall eine leere Datei am Ziel.
-        # * Bestehende **Rechte bleiben** (`copymode`), sonst macht ein
-        #   Ersetzen aus 0640 ein 0600.
-        fd, tmp_name = tempfile.mkstemp(
-            prefix=f".{p.name}.", suffix=".tmp", dir=str(p.parent))
-        try:
-            with os.fdopen(fd, "wb") as f:
-                f.write(data)
-                f.flush()
-                os.fsync(f.fileno())
-            if p.exists():
-                shutil.copymode(p, tmp_name)
-            os.replace(tmp_name, p)
-        except Exception:
-            try:
-                os.unlink(tmp_name)
-            except OSError:
-                pass
-            raise
-        return f"Geschrieben: {path} ({len(data)} Bytes)"
+        return self._frage("write", path=path, inhalt=content)
 
     def _list_dir(self, path: str = "") -> str:
-        p = safe_path(path or ".", self.root, self.limits)
-        if not p.is_dir():
-            return f"Kein Verzeichnis: {path or '.'}"
-        # Format bewusst eindeutig: Das Modell liest das als Text, und
-        # "logbuch.txt  12" wurde bereits als zwei Einträge missverstanden
-        # -- eine Datei und eine mysteriöse Zahl. Beim echten Lauf
-        # aufgefallen.
-        rows = []
-        for item in sorted(p.iterdir()):
-            if item.is_dir():
-                rows.append(f"{item.name}/ (Verzeichnis)")
-            else:
-                rows.append(f"{item.name} ({item.stat().st_size} Bytes)")
-        return "\n".join(rows) or "(leer)"
+        return self._frage("list", path=path)
 
     def _set_face(self, mood: str, hard: str = "") -> str:
         """Den Ausdruck setzen — das ist `FACE:` aus openclawgotchi.

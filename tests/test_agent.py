@@ -145,34 +145,30 @@ ok("Schätzung plausibel") if 20 < estimate_tokens(
     [{"role": "user", "content": "x" * 400}]) < 200 else bad("Schätzung daneben")
 
 print("== Werkzeuge ==")
+# Seit 11.11.2026 führt der Dienst nichts mehr selbst aus: Prüfung und
+# Ausführung liegen beim Ausführer (DESIGN, Regel „Wer prüft, führt aus").
+# Hier bleibt, was ohne ihn prüfbar ist -- die Werkzeuge sind da, und ohne
+# Ausführer wird **nichts** getan, sondern der Grund genannt.
+# Was er wirklich tut, prüft tests/test_tools_socket.py.
 with tempfile.TemporaryDirectory() as td:
-    tb = Toolbox(td)
+    from chimera.agent.sohelper import Ausfuehrer
+    tb = Toolbox(td, ausfuehrer=Ausfuehrer(Path(td) / "gibt-es-nicht.sock"))
     check("Werkzeuge da", "run_command" in tb.names(), True)
     check("Schemas vollständig", len(tb.schemas()), len(tb.names()))
-    ok("schreiben") if "Geschrieben" in tb.call("write_file", {"path": "a.txt", "content": "hallo"}) \
-        else bad("write_file kaputt")
-    check("lesen", tb.call("read_file", {"path": "a.txt"}), "hallo")
-    ok("auflisten") if "a.txt" in tb.call("list_dir", {}) else bad("list_dir kaputt")
-    ok("Befehl läuft") if "a.txt" in tb.call("run_command", {"command": "ls"}) \
-        else bad("run_command kaputt")
-    ok("Ausbruch abgelehnt") if "Abgelehnt" in tb.call("read_file", {"path": "../../etc/passwd"}) \
-        else bad("Ausbruch durchgelassen")
+    for werkzeug, args in (
+        ("run_command", {"command": "ls"}),
+        ("read_file", {"path": "a.txt"}),
+        ("write_file", {"path": "a.txt", "content": "x"}),
+        ("list_dir", {}),
+    ):
+        aus = tb.call(werkzeug, args)
+        ok(f"{werkzeug}: ohne Ausführer nichts getan") \
+            if "nicht erreichbar" in aus and "nichts ausgeführt" in aus \
+            else bad(f"{werkzeug}: {aus[:80]}")
+    check("ohne Ausführer keine Datei geschrieben",
+          any(Path(td).iterdir()), False)
     ok("unbekanntes Werkzeug gemeldet") if "gibt es nicht" in tb.call("quatsch", {}) \
         else bad("stillschweigend")
-
-    # DESIGN 5t: Schreiben über eine Nebendatei -- mit eigenem Namen je
-    # Schreiber, Flush vor dem Umbenennen und erhaltenen Rechten.
-    import os as _os
-    tb.call("write_file", {"path": "rechte.txt", "content": "eins"})
-    _ziel = _os.path.join(td, "rechte.txt")
-    _os.chmod(_ziel, 0o640)
-    tb.call("write_file", {"path": "rechte.txt", "content": "zwei"})
-    check("Rechte bleiben beim Ersetzen",
-          oct(_os.stat(_ziel).st_mode & 0o777), oct(0o640))
-    check("Inhalt ist der neue",
-          tb.call("read_file", {"path": "rechte.txt"}), "zwei")
-    _rest = [n for n in _os.listdir(td) if n.endswith(".tmp")]
-    check("keine Nebendatei bleibt liegen", _rest, [])
 
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")

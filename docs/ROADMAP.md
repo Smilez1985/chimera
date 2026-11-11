@@ -670,12 +670,9 @@ Offen bleibt:
       sieht er nicht (entschieden 11.11.). **Nutzer, Ordner und Unit sind
       gebaut** (11.11.: `lib/sohelper.sh`, Schritt `99-sohelper`, Rückbau);
       am Gerät noch nicht eingespielt.
-- [ ] **Dienst umstellen:** `agent/tools.py` reicht die vier Werkzeuge an den
-      Socket weiter und startet nichts mehr selbst; läuft der Ausführer
-      nicht, wird nichts ausgeführt und der Grund genannt.
-- [ ] **Der Dienst startet nichts mehr selbst:** ein Test, der rot wird,
-      sobald `agent/tools.py` wieder einen vom Modell gewählten Befehl
-      startet (gehört zur Umstellung, CHANGELOG 11.11.).
+- [ ] **Werkzeuge am Gerät durchschalten:** nach dem Einspielen von
+      55/99-sohelper die vier Werkzeuge einmal über den Socket benutzen
+      (der Code ist umgestellt, auf dem Pi aber noch nicht gelaufen).
 - [ ] **Am Gerät einspielen und messen:** denselben Stand auf den
       chimera-pi bringen (Module 55 und 99-sohelper), `--ping` über den
       Socket, `IPAddressDeny` und `InaccessiblePaths` nachsehen und den

@@ -3533,8 +3533,14 @@ sauber, Rauchtest über den Socket:
   kamen dabei ans Licht und wurden auf der Rust-Seite behoben (Zitatform,
   Wortlaut der Netzsperre, Meldung von `shlex`). Gegenprobe mit vier
   Verfälschungen, jede wird rot.
-- **Offen (nächster Schritt):** die Umstellung von `agent/tools.py` auf den
-  Socket und das Entfernen des alten Wegs.
+- **Umgestellt (11.11.2026):** `agent/tools.py` reicht die vier Werkzeuge
+  über `agent/sohelper.py` an den Socket; im Dienst gibt es keinen
+  Programmstart mehr. Kein Rückfall: ohne Ausführer wird nichts getan und
+  der Grund genannt. `set_face` bleibt im Dienst. Der Test
+  `tests/test_tools_socket.py` wird rot, sobald `tools.py` wieder
+  `subprocess` kennt oder ein Werkzeug selbst liest; **offen** ist der Lauf
+  am Gerät (Module 55/99 einspielen, Werkzeuge einmal benutzen, Speicher im
+  Ruhezustand messen).
 
 **Gebaut (11.11.2026, Schritt 1b).** Nutzer, Ordner, Units und
 Installer-Modul stehen (`99-sohelper`, `lib/sohelper.sh`, Rückbau in

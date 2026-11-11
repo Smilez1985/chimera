@@ -478,6 +478,19 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Der Agent führt nichts mehr selbst aus** (`src/chimera/agent/sohelper.py`,
+  `tools.py`): `run_command`, `read_file`, `write_file` und `list_dir` gehen
+  als eine JSON-Zeile an den Socket des Ausführers; geprüft und ausgeführt
+  wird dort. **Kein Rückfall:** Ist er nicht erreichbar, wird nichts getan
+  und der Grund genannt („Der Ausführer ist nicht erreichbar (…). Es wurde
+  nichts ausgeführt."). Die Texte bleiben dieselben wie bisher
+  („Abgelehnt: …"), damit das Modell keinen Unterschied sieht. `set_face`
+  bleibt im Dienst (Anzeige, kein Programmstart).
+  `tests/test_tools_socket.py` prüft, dass `tools.py` **kein `subprocess`
+  mehr kennt** (sonst gäbe es einen zweiten Weg) und dass die Anfragen so
+  über den Draht gehen, wie der Ausführer sie erwartet;
+  `tests/gegenprobe_tools_socket.py` macht die Zusage rot, wenn jemand den
+  zweiten Weg zurückholt (Import, Selbstlesen, verschluckter Fehler).
 - **`chimera-sohelper` kennt `--version` und `--ping`:** dieselbe Form wie
   beim Gateway (`chimera-sohelper <VERSION>`), damit Ablage und Installer
   am Programm selbst prüfen können statt am Exitcode von systemctl.
