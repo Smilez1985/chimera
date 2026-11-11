@@ -480,6 +480,10 @@ keine Änderung am Router.
   Die Kapazität muss gegen das Modell geprüft werden, das die Anfrage
   **tatsächlich bedient**. Bei Fallback über die Registry sonst gegen das
   falsche Fenster.
+  **Der Wert kommt aus der Abfrage des Servers** (`op: modelle`/`status`),
+  nicht aus einer Konstante im Connector (11.11.2026: `GatewayOllama` trug
+  `32_000` fest — falsch, sobald das Modell ein anderes Fenster hat). Ein
+  geratener Wert ist schlimmer als keiner: Er sieht wie eine Messung aus.
 
 ### Architekturregel 5b — Anthropic-Anmeldung wie im OpenMinis-PR
 
@@ -1385,7 +1389,16 @@ Beispiele, keine Vorgabe.
 - **Frist statt Löschen:** Fehlt ein Modell in der Abfrage, setzt der
   Katalog `fehlt_seit`; nach 7 Tagen verschwindet der Katalogeintrag, die
   Nutzeroptionen bleiben.
-- **Atomar schreiben:** Sidecar neben dem Ziel, dann `mv`.
+- **Atomar schreiben:** Sidecar neben dem Ziel, dann `mv`. Drei Dinge
+  gehören dazu (11.11.2026, nach einem Code-Review):
+  - **Der Name ist je Schreiber eindeutig** (Faden-Kennung oder Zähler).
+    Ein fester Name wie `.datei.neu` lässt zwei Fäden dieselbe Nebendatei
+    überschreiben — dann ist das Umbenennen gelungen und der Inhalt fremd.
+  - **Vor dem Umbenennen flushen** (`fsync`). Ohne das steht nach einem
+    Stromausfall eine leere Datei am Ziel; das ist genau der Fall aus
+    Regel 8a (still erledigt, Daten weg).
+  - **Bestehende Rechte bleiben** (`copymode`). Ein Ersetzen darf aus einer
+    0640-Datei keine 0644 machen.
 - **Format JSON-Dateien**, kein SQLite: kleiner Bestand, von Hand lesbar.
   SQLite bleibt dem Gedächtnisindex (8h).
 - **Kleinste Schreibrechte:** `ReadWritePaths` nennt nur
@@ -3693,6 +3706,24 @@ Installerlauf inaktiv geblieben war.
 13. **Schwärzung.** Befunde gehen in Protokolle und Meldungen; Heimverzeichnis,
     LAN-Adressen und Schlüssel erscheinen nie (Regel 13). Journalinhalt wird
     **nicht** in den Befund eingebettet, nur Zahlen.
+**Ein Lauf zur Zeit, und ein Cache antwortet nur auf seine Frage**
+(11.11.2026, nach einem Code-Review). Zwei Sätze, die zusammengehören, weil
+beide dasselbe verhindern: dass zwei Stellen dieselbe Wahrheit verschieden
+sehen.
+
+- **Eine Reparatur zur Zeit.** Timer, `OnFailure=` und Installer können
+  gleichzeitig `--miracle` starten. Ohne Sperre überschreiben sie sich beim
+  Hochzählen in `state/mojo-versuche.json` (Lost Update). Deshalb nimmt ein
+  reparierender Lauf eine **nicht blockierende** Sperre auf
+  `state/mojo.lock`; wer sie nicht bekommt, sagt das und endet mit eigenem
+  Exitcode — statt zu warten oder parallel zu laufen.
+- **Ein Cache antwortet nur auf die Frage, die er beantwortet hat.** Das
+  Oracle-Ergebnis gilt für die Prüfungen, die gelaufen sind. `--bereich netz`
+  fragt etwas Engeres; ein „alles in Ordnung" von vorhin beantwortet das
+  nicht. Ist ein Bereich genannt, wird der Cache **nicht** befragt — oder er
+  trägt den Bereich mit, und es wird verglichen. Ein Cache, der eine größere
+  Frage beantwortet als gestellt wurde, ist eine stille Falschaussage.
+
 14. **Nicht Teil dieser Regel:** Reparaturpläne mit Prüfsumme und berechneter
     Klasse (kommen mit der Freigabe durch den Nutzer in der Oberfläche, Regel
     5v), Reparaturen der Stufen 2 und 3, Fragen im Terminal (das Gerät hat

@@ -438,6 +438,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Drei Regeln nachgeschärft** (Review 11.11., nur Blaupause): Der
+  Cache eines Laufs beantwortet nur die Frage, die gestellt wurde
+  (`--bereich netz` hört nicht auf ein globales „ok"), eine Reparatur läuft
+  zur Zeit (`state/mojo.lock`, nicht blockierend), `context_window` kommt aus
+  der Serverabfrage statt aus einer Konstante, und atomares Schreiben heißt
+  jetzt vollständig: eindeutiger Sidecar-Name je Schreiber, `fsync` vor dem
+  Umbenennen, `copymode` für bestehende Rechte.
 - **`docs/INSTALLER.md`: das HAT-EEPROM gibt es auf unserem Board nicht**
   (gemessen 6.11., `HARDWARE.md`/`DISPLAYS.md`): kein
   `/proc/device-tree/hat/`, nur die ES8389-Fassung trägt eines. Die Revision

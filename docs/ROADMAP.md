@@ -41,6 +41,33 @@ zram wird nicht angefasst, wenn es läuft.
       **einmal zurückgefragt** (Web-Oberfläche oder Gespräch), ohne Antwort
       abgelehnt. Kein Verbindungsaufbau ohne Einordnung.
 
+## Phase Review 11.11. — fünf Code-Befunde, in dieser Reihenfolge
+
+Aus dem Code-Review vom 11.11. Jeder Punkt ist ein eigener Commit mit Test
+**und Gegenprobe** (die Regel steht in DESIGN: „Ein Cache antwortet nur auf
+seine Frage", „Atomar schreiben", 5a).
+
+- [ ] **2.1 Oracle-Cache beantwortet eine größere Frage als gestellt**
+      (`rust/crates/tor/src/main.rs`, `mojo_befehl`): Bei `--bereich netz`
+      filtert der Befehl die Prüfungen, befragt aber den globalen Cache; ein
+      „ok von vorhin" beendet den Lauf mit 0, ohne das Netz zu prüfen. Fix:
+      bei gesetztem Bereich nicht auf den Cache hören (oder Bereich im
+      Oracle mitführen und vergleichen).
+- [ ] **2.2 Keine Sperre gegen parallele Reparaturen**: Timer, `OnFailure=`
+      und Installer können gleichzeitig `--miracle` starten und
+      `state/mojo-versuche.json` gegenseitig überschreiben. Fix:
+      nicht blockierende `flock` auf `state/mojo.lock` im reparierenden Lauf,
+      eigener Exitcode wenn belegt.
+- [ ] **2.3a `context_window` ist geraten** (`provider/gateway.py`): fest
+      `32_000` statt des Werts aus der Serverabfrage. Fix: Fenster über
+      `op: modelle`/`status` holen; ohne Angabe gilt „unbekannt", nicht 32 000.
+- [ ] **2.5 Sidecar-Name ist nicht eindeutig** (`rust/crates/tor/src/daten.rs`):
+      `.{name}.neu` ist fest; zwei Fäden überschreiben sich. Fix: Kennung in
+      den Namen.
+- [ ] **2.9 Kein `fsync`, keine Rechte beim Schreiben**
+      (`agent/tools.py:162`): `write_bytes` → `replace` ohne Flush und ohne
+      `copymode`. Fix: flushen, Rechte erhalten.
+
 ## Phase ACP — Chimera als Agent für Editoren und IDEs (DESIGN: Regel „ACP“)
 
 Pflicht-Schnittstelle (smilez, 2.11.). **Entschieden: Der ACP-Server wird gebaut,
