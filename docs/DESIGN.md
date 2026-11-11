@@ -1050,9 +1050,9 @@ auf den beiden anderen aufbaut). Was der Fork tut:
 | Adresse auf dem Gerät gespeichert | gebaut: `config/anbieter/<id>.json` beim Gateway (Regel 5t) |
 | Platzhalter gilt als nicht gesetzt | gebaut (`ollama.rs`) |
 | `tools` gemessen | gebaut im Katalog. Die Auswahl im Dienst (`provider/setup.py`) nimmt aber das dem Namen nach größte Modell, und `op: chat` ohne Modell nimmt das erste der Liste — beide ohne Blick auf `tools` |
-| Wahl gespeichert | nicht gebaut (`wahl.json`, Regel 5t) |
+| Wahl gespeichert | `wahl.json` liegt (5h); `/model` schreibt hinein, die Wahl gilt vor der Serverreihenfolge |
 | Installer fragt nach der Adresse | nicht gebaut (Modul 95 ist geplant); das Gateway findet den Server über die Netzsuche (Regel 5k) |
-| `/model` in Telegram | nicht gebaut |
+| `/model` in Telegram | gebaut 12.11. (`telegram.rs`): Liste mit Markierung, `/model <nr\|name>` schreibt `wahl.json` |
 
 **Das Modell kommt vom Server** (smilez, 11.11.2026): *„ollama_modell muss
 aus der modell-liste die vom server abgerufen wird gepickt werden. ohne
@@ -1284,7 +1284,13 @@ Was er von der Wahl wissen muss (z. B. die Sprache), bekommt er über den
 Socket.
 
 **Telegram `/model`** bleibt, wie in openclawgotchi: Liste,
-Fähigkeiten, Auswahl, Reihenfolge. **„Set Ollama IP“ im Chat entfällt**
+Fähigkeiten, Auswahl, Reihenfolge. **Gebaut 12.11.2026** in der
+Gateway-Tür (`telegram.rs`): `/model` zeigt die Serverliste mit der
+geltenden Wahl markiert und benennt Modelle, die gemessen keine Werkzeuge
+können; `/model 3` oder `/model <name>` zieht den Verweis
+`ollama/<modell>` in `wahl.json` nach vorn (Doppelung raus, alles andere in
+der Datei bleibt). Geschrieben wird über `op: wahl_setzen`, also von der
+Stelle, der die Datei gehört (5l). **„Set Ollama IP“ im Chat entfällt**
 (smilez). Adressen werden auf der Web-Oberfläche eingetragen oder durch
 die Netzsuche gefunden.
 

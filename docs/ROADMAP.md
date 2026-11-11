@@ -325,7 +325,7 @@ Kann parallel zu Phase 4 laufen; berührt den Renderer nicht.
 - [ ] Aufgabenzuordnung konfigurierbar: Gespräch → Anthropic,
       Mood-Erfindung und Zusammenfassen → Ollama
 - [ ] Aus dem eigenen Fork übernehmen (Ideen, nicht Code —
-      `docs/DESIGN.md`, „Sprachmodelle: Provider-Schicht"): `/model`-Befehl zum Umschalten im Chat,
+      `docs/DESIGN.md`, „Sprachmodelle: Provider-Schicht"): ~~`/model`-Befehl zum Umschalten im Chat~~ (gebaut 12.11.),
       **persistente Modellwahl** über Neustarts, Platzhalter-Adresse als
       „nicht gesetzt" behandeln statt Verbindungsfehler, Installer fragt
       die Ollama-Adresse ab
@@ -450,8 +450,9 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       einen Browser auf einem anderen Rechner im LAN (der Pi hat 462 MB RAM)
       und liegt in einem Bereich der Nutzungsbedingungen, der nicht
       eindeutig ist.
-- [ ] **`wahl.json`** mit bevorzugter Liste (5h). Telegram im Gateway mit
-      `/model` und `/suche`.
+- [ ] **`wahl.json`** mit bevorzugter Liste (5h): Datei, Auflösung und
+      `/model` in Telegram sind gebaut (12.11.); offen sind die
+      Web-Oberfläche zum Sortieren und `/suche`.
 - [ ] **CLI** als Socket-Client, ohne eigene Anzeige.
 - [ ] HTTPS als Opt-in: Reverse-Proxy dokumentieren, selbstsigniertes
       Zertifikat für alle ohne Proxy.

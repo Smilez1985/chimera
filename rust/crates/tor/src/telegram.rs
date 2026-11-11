@@ -253,6 +253,9 @@ pub enum Entscheidung {
     Status,
     /// Verlauf der Sitzung leeren (wirkt auf die Sitzung, nicht auf die Tuer).
     Neu,
+    /// Modell zeigen oder waehlen (`/model`, `/model 3`, `/model name`).
+    /// Wirkt auf `wahl.json` (Daten des Gateways), nicht auf die Sitzung.
+    Modelle(String),
     /// In die Hauptsitzung fragen.
     Fragen(String),
 }
@@ -269,14 +272,56 @@ pub fn entscheiden(erlaubt: &BTreeSet<i64>, e: &Eingang) -> Entscheidung {
             "start" | "hilfe" | "help" => return Entscheidung::Hilfe,
             "status" => return Entscheidung::Status,
             "neu" | "reset" => return Entscheidung::Neu,
+            // Was hinter dem Befehl steht (Nummer oder Name), geht mit --
+            // leer heisst "zeig mir die Liste" (wie im Fork von openclawgotchi).
+            "model" | "modelle" => {
+                let arg = t.splitn(2, char::is_whitespace).nth(1).unwrap_or("").trim();
+                return Entscheidung::Modelle(arg.to_string());
+            }
             _ => {} // unbekannter Befehl: geht als Text an die Sitzung, wie bisher
         }
     }
     Entscheidung::Fragen(e.text.clone())
 }
 
-pub const HILFE: &str = "Ich bin Chimera. Schreib einfach los.\n/status -- was gerade laeuft\n/neu -- Gespraech von vorn";
+pub const HILFE: &str = "Ich bin Chimera. Schreib einfach los.\n/status -- was gerade laeuft\n/neu -- Gespraech von vorn\n/model -- Modelle zeigen, /model 3 oder /model <name> waehlen";
 pub const ABGEWIESEN: &str = "Wir kennen uns nicht. Ich rede nur mit Eingetragenen.";
+
+/// Die Modellliste als Text: die geltende Wahl ist markiert, ein gemessen
+/// untaugliches Modell wird benannt (DESIGN 5n). Rein.
+pub fn modell_text(modelle: &[String], katalog: &Value, wahl: Option<&str>) -> String {
+    if modelle.is_empty() {
+        return "Der Ollama-Server meldet kein Modell.".to_string();
+    }
+    let mut t = String::from("Modelle (Zahl oder Name schicken):\n");
+    for (i, m) in modelle.iter().enumerate() {
+        let merker = if Some(m.as_str()) == wahl { "\u{25b8}" } else { " " };
+        let ohne = katalog["modelle"][m]["tools"] == Value::Bool(false);
+        t.push_str(&format!(
+            "{merker} {}. {m}{}\n",
+            i + 1,
+            if ohne { "  (ohne Werkzeuge)" } else { "" }
+        ));
+    }
+    t
+}
+
+/// Neue Reihenfolge: der gewaehlte Verweis nach vorn, ohne Doppelung.
+/// Alles andere aus der Datei bleibt stehen (5h: ein Vorschlag, den niemand
+/// ueberschreibt -- hier wird nur eins vorgezogen). Rein.
+pub fn reihenfolge_mit(alt: &Value, verweis: &str) -> Value {
+    let mut liste = vec![json!(verweis)];
+    if let Some(a) = alt.get("reihenfolge").and_then(Value::as_array) {
+        for v in a {
+            if v.as_str() != Some(verweis) {
+                liste.push(v.clone());
+            }
+        }
+    }
+    let mut w = alt.as_object().cloned().unwrap_or_default();
+    w.insert("reihenfolge".into(), Value::Array(liste));
+    Value::Object(w)
+}
 
 /// Was ein Ereignis des Stroms in Telegram bewirkt, sonst `None`.
 ///
@@ -324,6 +369,7 @@ impl Tuer {
                 }
                 // Die Bestaetigung kommt als Ereignis `neu` ueber den Strom.
             }
+            Entscheidung::Modelle(arg) => self.modell_befehl(e.chat_id, &arg),
             Entscheidung::Fragen(text) => {
                 self.api.tippt(e.chat_id);
                 if let Err(f) = sitzung::fragen(&self.sitzung, TUER, &text, &format!("tg-{}", e.update_id)) {
@@ -332,6 +378,51 @@ impl Tuer {
                 }
             }
         }
+    }
+
+    /// `/model`: Liste zeigen oder eins waehlen. Geschrieben wird `wahl.json`
+    /// (Daten des Gateways, 5l) -- die Wahl gilt fuer die naechste Frage.
+    fn modell_befehl(&self, chat: i64, arg: &str) {
+        let stand = crate::dienst::Stand::neu();
+        let a = crate::dienst::antworten(&json!({"op": "modelle", "anbieter": "ollama"}), &stand);
+        if a["ok"] != true {
+            let grund = a["fehler"]["text"].as_str().unwrap_or("ohne Grund");
+            antworten(&self.api, chat, &format!("Die Modellliste kommt nicht: {grund}"));
+            return;
+        }
+        let modelle: Vec<String> = a["modelle"]
+            .as_array()
+            .map(|l| l.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .unwrap_or_default();
+        let katalog = crate::dienst::antworten(&json!({"op": "katalog_lesen", "id": "ollama"}), &stand)
+            ["katalog"]
+            .clone();
+        let wahl = a["wahl"].as_str().map(String::from);
+        if arg.is_empty() {
+            antworten(&self.api, chat, &modell_text(&modelle, &katalog, wahl.as_deref()));
+            return;
+        }
+        let name = arg
+            .trim()
+            .parse::<usize>()
+            .ok()
+            .and_then(|n| n.checked_sub(1))
+            .and_then(|i| modelle.get(i).cloned())
+            .or_else(|| modelle.iter().find(|m| m.as_str() == arg.trim()).cloned());
+        let Some(name) = name else {
+            antworten(&self.api, chat, "Das Modell kenne ich nicht. /model zeigt die Liste.");
+            return;
+        };
+        let verweis = format!("ollama/{name}");
+        let alt = crate::dienst::antworten(&json!({"op": "wahl_lesen"}), &stand)["wahl"].clone();
+        let neu = reihenfolge_mit(&alt, &verweis);
+        let w = crate::dienst::antworten(&json!({"op": "wahl_setzen", "wahl": neu}), &stand);
+        if w["ok"] != true {
+            let grund = w["fehler"]["text"].as_str().unwrap_or("ohne Grund");
+            antworten(&self.api, chat, &format!("Die Wahl liess sich nicht speichern: {grund}"));
+            return;
+        }
+        antworten(&self.api, chat, &format!("Gewaehlt: {name}. Es gilt ab der naechsten Frage."));
     }
 
     /// Ein Ereignis des Stroms an alle Eingetragenen schicken.
@@ -657,6 +748,43 @@ mod tests {
         assert_eq!(entscheiden(&liste(), &eingang(7, "/status")), Entscheidung::Status);
         assert_eq!(entscheiden(&liste(), &eingang(7, "/neu@chimera_bot")), Entscheidung::Neu);
         assert_eq!(entscheiden(&liste(), &eingang(7, "/reset")), Entscheidung::Neu);
+    }
+
+    #[test]
+    fn model_zeigt_die_liste_oder_nimmt_nummer_und_namen() {
+        assert_eq!(entscheiden(&liste(), &eingang(7, "/model")), Entscheidung::Modelle("".into()));
+        assert_eq!(entscheiden(&liste(), &eingang(7, "/model 3")), Entscheidung::Modelle("3".into()));
+        assert_eq!(
+            entscheiden(&liste(), &eingang(7, "/model@chimera_bot qwen2.5:14b")),
+            Entscheidung::Modelle("qwen2.5:14b".into())
+        );
+    }
+
+    #[test]
+    fn die_modellliste_markiert_die_wahl_und_benennt_untaugliche() {
+        let modelle = vec!["gross:27b".to_string(), "klein:14b".to_string(), "ocr".to_string()];
+        let katalog = json!({"modelle": {
+            "gross:27b": {"tools": true}, "klein:14b": {"tools": true}, "ocr": {"tools": false}
+        }});
+        let t = modell_text(&modelle, &katalog, Some("klein:14b"));
+        assert!(t.starts_with("Modelle (Zahl oder Name schicken):"), "{t}");
+        assert!(t.contains("  1. gross:27b\n"), "{t}");
+        assert!(t.contains("\u{25b8} 2. klein:14b\n"), "die Wahl ist markiert: {t}");
+        assert!(t.contains("3. ocr  (ohne Werkzeuge)"), "untauglich wird benannt: {t}");
+        assert_eq!(
+            modell_text(&[], &json!({}), None),
+            "Der Ollama-Server meldet kein Modell."
+        );
+    }
+
+    #[test]
+    fn die_wahl_wird_vorgezogen_ohne_doppelung_und_ohne_verlust() {
+        let alt = json!({"reihenfolge": ["ollama/a", "anthropic/x", "ollama/b"], "sprache": "de"});
+        let neu = reihenfolge_mit(&alt, "ollama/b");
+        assert_eq!(neu["reihenfolge"], json!(["ollama/b", "ollama/a", "anthropic/x"]));
+        assert_eq!(neu["sprache"], "de", "was sonst in der Datei steht, bleibt");
+        let leer = reihenfolge_mit(&json!({}), "ollama/a");
+        assert_eq!(leer["reihenfolge"], json!(["ollama/a"]));
     }
 
     #[test]

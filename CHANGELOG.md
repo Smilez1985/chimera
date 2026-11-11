@@ -20,6 +20,18 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **`/model` in Telegram** (`telegram.rs`): `/model` zeigt die Modellliste des
+  Servers, markiert die geltende Wahl und benennt Modelle, die gemessen keine
+  Werkzeuge können; `/model 3` oder `/model <name>` zieht den Verweis
+  `ollama/<modell>` in `wahl.json` nach vorn (ohne Doppelung, der Rest der
+  Datei bleibt). Geschrieben über `op: wahl_setzen` — die Tür schreibt nicht
+  selbst an der Datei vorbei. 3 Tests (Befehle mit Botnamen, Liste mit
+  Markierung und Hinweis, Reihenfolge ohne Verlust).
+- **Die Reihenfolge aus `wahl.json` gilt vor der Serverreihenfolge**
+  (`daten::bevorzugt`, `ollama::modell_waehlen`): Was der Nutzer vorn hat,
+  wird genommen — aber nur, wenn der Server das Modell noch meldet und die
+  Messung ihm nicht die Werkzeuge abspricht. Ohne Datei bleibt es bei der
+  Reihenfolge des Servers.
 - **Das Modell kommt aus der Serverliste** (`rust/crates/tor/src/ollama.rs`,
   `dienst.rs`): `ollama::modell_waehlen` ist der eine Ort für die Regel —
   ein genanntes Modell gilt; sonst das **erste in der Reihenfolge des
