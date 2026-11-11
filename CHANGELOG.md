@@ -437,7 +437,11 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   der Nutzer erst dort entsteht (in Schritt 98 wäre der `chown` ein stiller
   Fehlschlag). `provider/setup.py` hat keinen Rückfall mehr auf den
   direkten Weg: Ohne Gateway ist Ollama „nicht verfügbar", und das
-  Protokoll sagt warum. Am Pi **noch nicht eingespielt**.
+  Protokoll sagt warum. **Am chimera-pi belegt:** `IPAddressDeny=::/0
+  0.0.0.0/0`, Unit laedt nur `dienst.env` und `anzeige.env`, `.env` gehoert
+  `root:chimera-tor`, keine Schluesselnamen mehr in der Umgebung des
+  Dienstes, Socket antwortet, keine TCP-Sockets, 12 Module ohne Fehler,
+  `NRestarts=0`, beide Dienste aktiv.
 - **Schritt 55 nimmt das Binary aus dem Startbaum, nicht aus einem
   Prerelease.** Kein Netz, kein Commit, kein `state/quelle-commit` mehr: Er
   prüft die `.sha256`-Datei daneben, die Architektur, startet das Binary und

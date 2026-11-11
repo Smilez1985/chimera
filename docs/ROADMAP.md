@@ -347,17 +347,25 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       nur vorwärts, ein Header-Satz für Token- und Chat-Weg). Zeitgrenzen
       (5 s Verbindung / 300 s Aufruf) gelten schon für Ollama. Dazu 5q: Cache-Marken je Adapter, `Reply.cache`,
       Byte-Test mit Gegenprobe; Anthropic-TTL am Gerät nachmessen.
-- [ ] **Sperre fuer den Agent-Dienst — gebaut, am Pi noch nicht eingespielt**
-      (11.11.). Die Unit laedt die `.env` nicht mehr und traegt
-      `IPAddressDeny=any`; der Dienst bekommt `config/dienst.env` mit einer
-      Erlaubnisliste von Namen ohne Geheimnisse (`OLLAMA_MODEL`); die `.env`
-      gehört `root:chimera-tor` (Schritt 99, weil den Nutzer erst Schritt 99
-      anlegt); `provider/setup.py` hat keinen Rückfall mehr auf den direkten
-      Weg, ohne Gateway ist der Anbieter „nicht verfügbar". Tests:
-      `test-service.sh` 73, `counter-check-service.sh` 16,
-      `test-gateway.sh` 115, `test_gateway_provider.py` 30.
-      **Offen:** `counter-check-gateway.sh` ist rot („geheim-offen") — auch
-      ohne diese Änderung, also älter als sie; ansehen. Und einspielen.
+- [ ] **Sperre fuer den Agent-Dienst — gebaut und am Pi belegt** (11.11.).
+      **Am chimera-pi gemessen (`a2a7189`):** `chimera.service` traegt
+      `IPAddressDeny=::/0 0.0.0.0/0`; sie laedt nur `dienst.env` und
+      `anzeige.env`, nicht mehr die `.env`; die `.env` gehoert
+      `root:chimera-tor` (640); in der Umgebung des Dienstes stehen keine
+      Schluesselnamen mehr (`ANTHROPIC_*`, `CHIMERA_TELEGRAM_*`,
+      `OLLAMA_API_BASE` sind weg); der Unix-Socket zum Gateway antwortet
+      (`status`); der Dienst haelt keine TCP-Sockets; 12 Module ohne Fehler,
+      `NRestarts=0`, beide Dienste aktiv, Abgleich „entspricht der Quelle".
+      **Beobachtung, nicht Befund:** Der Dienst meldet „Kein Sprachmodell
+      erreichbar". Ursache ist der Ollama-Server: Der Pi erreicht
+      `<LAN>:11434` auch **als root ohne jede Sperre** nicht
+      (Zeitueberschreitung). `dienst.env` ist auf diesem Geraet leer, weil
+      `OLLAMA_MODEL` in der `.env` leer ist (kein Geheimnis, nichts zu
+      uebernehmen).
+      **Offen:** `IPAddressAllow` ist leer — der Dienst kommt auch nicht an
+      die Web-Oberflaeche (`127.0.0.1:8080`); gewollt, aber beim naechsten
+      Bedarf pruefen. Und: Claude im Dienst ist bis Schritt 3 des Plans weg
+      (Folge der Reihenfolge, so entschieden).
 - [ ] **Tore am Gateway** (DESIGN 5n, „Die Tore“; smilez, 10.11.: alle
       Tore liegen am Gateway): **Schwärzung vor der Cloud** (Muster und
       Nutzerliste, stabile Platzhalter je Sitzung, Rückübersetzung auch in
