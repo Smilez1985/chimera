@@ -1,0 +1,19 @@
+[package]
+name = "chimera-sohelper"
+description = "Ausfuehrer: prueft und fuehrt die Werkzeuge des Agenten aus (DESIGN, Regel 'Wer prueft, fuehrt aus')"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "sohelper"
+path = "src/lib.rs"
+
+[[bin]]
+name = "chimera-sohelper"
+path = "src/main.rs"
+
+[dependencies]
+serde_json.workspace = true
+gemein.workspace = true

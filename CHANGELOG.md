@@ -20,6 +20,18 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Ausführer `chimera-sohelper` (`rust/crates/sohelper`)** — der eigene
+  Prozess aus der Regel „Wer prüft, führt aus": Er nimmt Werkzeugwünsche
+  über einen Unix-Socket an (eine JSON-Zeile hin, eine zurück), prüft sie
+  und führt sie aus. Die Regeln sind aus `agent/safety.py` portiert, nicht
+  neu erfunden: Sperrliste (`sudo`, `su`, `doas`, `pkexec`), Interpreter,
+  Shell-Zeichen, gefährliche Muster, Ersetzung und Mehrzeiligkeit,
+  Pfadschutz mit Symlink-Auflösung, Ausgabe kürzen. **Kein Netz:** `curl`,
+  `wget`, `git` und Verwandte werden immer abgelehnt. Zerlegt wird wie
+  `shlex.split(posix=True)`. Die Antworttexte sind dieselben wie in
+  `tools.py`. 10 Regeltests, clippy sauber, Rauchtest über den Socket
+  (Schreiben, Lesen, Auflisten, gesperrter Befehl, Pfadflucht). Noch nicht
+  eingebunden: Nutzer, Ordner, Unit, Gleichheitstest gegen Python.
 - **Das Gateway-Binary liegt im Repo:** `gateway/chimera-tor-aarch64`
   (2,0 MB, aarch64-musl, gebaut von der CI für `fa7edfb`) mit
   `chimera-tor-aarch64.sha256` und `chimera-tor-aarch64.stand`

@@ -45,6 +45,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "chimera-sohelper"
+version = "0.0.0"
+dependencies = [
+ "gemein",
+ "serde_json",
+]
+
+[[package]]
 name = "chimera-tor"
 version = "0.0.0"
 dependencies = [

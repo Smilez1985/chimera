@@ -379,11 +379,18 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       gewählten Modells; Anzeige „geladen / kalt“ und letzte Antwortzeit je
       Modell im Ollama-Modul. Der Dienst fragt dafür das Gateway, nicht den
       Server.
-- [ ] **Modellwahl durch den Nutzer** (5h): bis zur Reihenfolge-Seite
-      gilt `OLLAMA_MODEL`; das Vorschlagen des größten Modells
-      (`provider/setup.py`, `_target_for`) wird durch „erstes Modell mit
-      `tools`“ ersetzt. Ein Modell, das nicht ausgewählt ist, wird nie
-      geladen. Vorbild ist der eigene Fork von openclawgotchi (smilez,
+- [ ] **Das Modell kommt aus der Serverliste** (smilez, 11.11.; DESIGN
+      5n, „Das Modell kommt vom Server“): `OLLAMA_MODEL` entfällt; gewählt
+      wird aus der Liste, die das Gateway vom Server holt, nach dem
+      gemessenen `tools` — nicht nach der Zahl im Namen
+      (`provider/setup.py`, `_size_of`). Ohne taugliches Modell ein
+      benannter Fehler (`kein_modell`), keine stille Auswahl. Danach die
+      Reihenfolge (5h): `wahl.json` entscheidet, bis dahin die Reihenfolge
+      des Servers.
+- [ ] **Ausführer `chimera-sohelper`: Arbeitsordner `/opt/chimera/sohelper`**
+      (smilez, 11.11.), Eigentümer `chimera-sohelper`, 700; das
+      Elternverzeichnis gehört root. Gedächtnis, Sitzungen und Moods
+      bleiben bei `chimera`. Vorbild ist der eigene Fork von openclawgotchi (smilez,
       10.11.): gespeicherte Wahl, eine Stelle für die Auflösung, nur
       Modelle mit `tools`, Frage nach der Adresse im Installer. Abgleich
       mit dem Stand in Chimera: DESIGN 5n, „Modellwahl nach dem Vorbild
@@ -623,17 +630,15 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
 Die vier Muster aus `docs/DESIGN.md`, Abschnitt „Übernommene Muster aus OpenMinis (nachgebaut, nicht kopiert)" sind gebaut und verdrahtet.
 Offen bleibt:
 
-- [ ] **Pfadschema für den Ausführer festlegen** (DESIGN, Regel „Wer prüft,
-      führt aus“): Entschieden ist ein eigener Systemnutzer
-      `chimera-sohelper` (smilez, 10.11.), dem der Arbeitsordner gehört.
-      Offen: wo der Ordner liegt und wie `data/` zwischen Agent
-      (Gedächtnis, Moods) und Ausführer geteilt wird. Vor dem Bau, weil es
-      Installer und Rückbau bestimmt.
-- [ ] **Ausführer `chimera-sohelper` (Rust):** Crate im Workspace, Socket,
-      Zeilenrahmen aus `gemein::zeile`, kein Netz. Prüfen und Ausführen von
-      `run_command`, `read_file`, `write_file`, `list_dir` nach den Regeln
-      aus `agent/safety.py`; Regeldatei unter `/opt/chimera/`; Protokoll je
-      Aufruf.
+- [ ] **Ausführer `chimera-sohelper` — Regeln und Socket gebaut** (11.11.;
+      `rust/crates/sohelper`): Regeln aus `safety.py` portiert (10 Tests),
+      Socket mit `ping`/`run`/`read`/`write`/`list`, Netzprogramme immer
+      abgelehnt, Pfadschutz mit Symlink-Auflösung, Ausgabetexte wie in
+      `tools.py`. **Offen:** Nutzer `chimera-sohelper` und Ordner
+      `/opt/chimera/sohelper` (700), Unit mit Socket und
+      `IPAddressDeny=any`, Installer-Modul samt Rückbau; **Gleichheitstest
+      gegen die Python-Seite** (die Fälle aus `tests/test_agent.py` über den
+      Socket).
 - [ ] **Dienst umstellen:** `agent/tools.py` reicht die vier Werkzeuge an den
       Socket weiter und startet nichts mehr selbst; läuft der Ausführer
       nicht, wird nichts ausgeführt und der Grund genannt.

@@ -1015,7 +1015,7 @@ Gateway. Bis dahin scheitert ein direkter Aufruf an der Sperre und wird als
 
 | Name | Stand |
 |---|---|
-| `OLLAMA_MODEL` | braucht der Gateway-Connector (`provider/gateway.py`) als Vorgabe; auf dem Prüfgerät leer. Kein Geheimnis. Weg: siehe „Modellwahl nach dem Vorbild des Forks“ |
+| `OLLAMA_MODEL` | **entfällt** (smilez, 11.11.): Das Modell wird aus der Liste gewählt, die der Server meldet — nicht aus einer Einstellung. Siehe „Das Modell kommt vom Server“ |
 | `OLLAMA_API_BASE`, `OLLAMA_HOST` | nur der direkte Weg — entfällt |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_OAUTH_TOKEN` | Schlüssel — gehören dem Gateway |
 | `CHIMERA_TELEGRAM_TOKEN`, `CHIMERA_TELEGRAM_ALLOWED` | Schlüssel — gehören dem Gateway; `__main__.py` fragt heute das Token ab, um die eigene Tür zu öffnen. Wie das künftig läuft, hängt an der offenen Telegram-Frage |
@@ -1048,6 +1048,23 @@ auf den beiden anderen aufbaut). Was der Fork tut:
 | Wahl gespeichert | nicht gebaut (`wahl.json`, Regel 5t) |
 | Installer fragt nach der Adresse | nicht gebaut (Modul 95 ist geplant); das Gateway findet den Server über die Netzsuche (Regel 5k) |
 | `/model` in Telegram | nicht gebaut |
+
+**Das Modell kommt vom Server** (smilez, 11.11.2026): *„ollama_modell muss
+aus der modell-liste die vom server abgerufen wird gepickt werden. ohne
+modell keine antwort."* Also:
+
+1. **Keine Einstellung als Quelle.** `OLLAMA_MODEL` verschwindet; die Liste
+   holt das Gateway ohnehin (`/api/tags` je Anbieter, Katalog nach Regel 5t).
+2. **Gewählt wird aus dieser Liste**, nach dem, was der Katalog gemessen hat
+   (`tools` aus `/api/show`) — nicht nach der Zahl im Modellnamen, wie es
+   `provider/setup.py` heute tut (`_size_of`).
+3. **Ohne Modell keine Antwort.** Meldet der Server keines (oder keines mit
+   `tools`), ist das ein benannter Fehler (`kein_modell`), kein stilles
+   Ausweichen auf irgendeinen Namen. Der Dienst sagt es im Protokoll.
+
+Offen dabei: die **Reihenfolge** mehrerer tauglicher Modelle. Bis
+`wahl.json` gebaut ist (Regel 5t), gilt die Liste des Servers in ihrer
+Reihenfolge; danach entscheidet der Nutzer.
 
 **Folge für die Sperre** (Lesart notes, zu bestätigen): Die Wahl gehört
 dorthin, wo die Adresse liegt — ans Gateway. Der Dienst braucht
@@ -3445,6 +3462,27 @@ kann die Prüfung auslassen.
    Grund, Exitcode, Dauer. Eine Ablehnung geht mit Begründung an das Modell
    zurück, wie heute — sonst versucht es dasselbe noch einmal.
 
+**Gebaut (11.11.2026): `rust/crates/sohelper`.** Zehn Regeltests, clippy
+sauber, Rauchtest über den Socket:
+
+- **Regeln portiert, nicht neu erfunden** (`lib.rs`): Sperrliste
+  (`sudo`, `su`, `doas`, `pkexec`), Interpreter (`sh`, `bash` …),
+  Shell-Zeichen, gefährliche Muster, Ersetzung und Mehrzeiligkeit,
+  Pfadschutz mit Auflösung über Symlinks, Kürzen der Ausgabe — dieselben
+  Grenzen wie `safety.py`. **Kein `allow_network`**: Netzprogramme
+  (`curl`, `wget`, `git`, `ssh` …) werden immer abgelehnt (Regel 5n).
+- **Zerlegen wie `shlex.split(posix=True)`**, mit Test (Anführungszeichen
+  halten zusammen, Backslash schützt).
+- **Socket** (`main.rs`): eine JSON-Zeile hin, eine zurück; Ops `ping`,
+  `run`, `read`, `write`, `list`. Die Antworttexte sind dieselben wie in
+  `tools.py`, damit das Modell keinen Unterschied sieht. Ein Faden je
+  Verbindung, damit ein langer Befehl „bist du da?" nicht blockiert.
+- **Offen (nächster Schritt):** Nutzer `chimera-sohelper`, Ordner
+  `/opt/chimera/sohelper` (700), Unit mit Socket und `IPAddressDeny=any`,
+  Installer-Modul; **Gleichheitstest gegen die Python-Seite**
+  (`tests/test_agent.py` über den Socket); danach die Umstellung von
+  `agent/tools.py` und das Entfernen des alten Wegs.
+
 **Was die Regel nicht leistet.** Die eigentliche Schranke bleiben die
 Rechte des Nutzers (Regel 10r). Der eigene Prozess verhindert, dass der
 Agent die Prüfung auslässt oder ändert; er verhindert keinen Fehler in den
@@ -3460,9 +3498,16 @@ kein Netz, keine Schlüssel, kein `sudo`, keine Anmeldung. Ihm gehört der
 Arbeitsordner — damit setzt der Kernel die Trennung durch, und das
 Protokoll ist für den Agenten nicht änderbar.
 
-**Offen:** das Pfadschema — wo der Arbeitsordner liegt und wie `data/` in
-„gehört dem Agenten“ (Gedächtnis, Moods) und „gehört dem Ausführer“ geteilt
-wird — und das Rückbau-Gegenstück (Regel 10l).
+**Der Arbeitsordner liegt im Installationsziel: `/opt/chimera/sohelper`**
+(smilez, 11.11.2026) — „im Installationsziel von chimera in einem
+Unterordner sohelper“. Er gehört dem Ausführer (700), nicht dem Agenten:
+Das Elternverzeichnis gehört root, der Agent kann ihn also weder lesen noch
+ersetzen. Gedächtnis, Sitzungen und Moods bleiben bei ihm
+(`/home/<nutzer>/chimera/data`); was er schreiben will, schreibt der
+Ausführer für ihn.
+
+**Offen:** das Rückbau-Gegenstück (Regel 10l) — beim Deinstallieren fällt
+`/opt/chimera` ohnehin weg, der Ordner ist dann Teil davon.
 
 **Gegenprobe.**
 
