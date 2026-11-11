@@ -735,6 +735,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **`write_file` schrieb nicht sicher** (`agent/tools.py`): Die Nebendatei
+  hatte einen festen Namen (zwei Schreiber teilten sie), es fehlte `fsync` vor
+  dem Umbenennen (nach Stromausfall eine leere Datei), und bestehende Rechte
+  gingen verloren (0640 wurde 0600). Jetzt: `mkstemp` vergibt den Namen je
+  Schreiber, `flush` + `fsync` vor `os.replace`, `copymode` erhält die Rechte,
+  und bei einem Fehler wird die Nebendatei weggeräumt. Test mit Gegenprobe
+  (ohne `copymode` → rot).
 - **Zwei Schreiber teilten sich dieselbe Nebendatei** (`daten.rs`,
   `.datei.neu` fest): Beim gleichzeitigen Zugriff über Gateway-Socket und
   `netzsuche`-Faden konnte das Umbenennen gelingen, während der Inhalt schon

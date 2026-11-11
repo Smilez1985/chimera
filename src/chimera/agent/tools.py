@@ -16,7 +16,10 @@ Vorprüfung — zwei Listen würden auseinanderdriften.
 from __future__ import annotations
 
 import logging
+import os
+import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -158,9 +161,31 @@ class Toolbox:
         p.parent.mkdir(parents=True, exist_ok=True)
         # Über eine Nachbardatei und Umbenennen -- ein abgebrochener
         # Schreibvorgang darf keine halbe Datei hinterlassen (Regel 8a).
-        tmp = p.with_suffix(p.suffix + ".tmp")
-        tmp.write_bytes(data)
-        tmp.replace(p)
+        #
+        # Drei Dinge gehören dazu (DESIGN 5t, Review 11.11.):
+        # * Der Name der Nebendatei ist **je Schreiber verschieden** -
+        #   `mkstemp` vergibt ihn, ein fester Name liesse zwei Schreiber
+        #   dieselbe Datei benutzen.
+        # * Vor dem Umbenennen wird **geflusht** (`fsync`): ohne das steht
+        #   nach einem Stromausfall eine leere Datei am Ziel.
+        # * Bestehende **Rechte bleiben** (`copymode`), sonst macht ein
+        #   Ersetzen aus 0640 ein 0600.
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{p.name}.", suffix=".tmp", dir=str(p.parent))
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
+            if p.exists():
+                shutil.copymode(p, tmp_name)
+            os.replace(tmp_name, p)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
         return f"Geschrieben: {path} ({len(data)} Bytes)"
 
     def _list_dir(self, path: str = "") -> str:

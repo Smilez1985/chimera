@@ -160,6 +160,20 @@ with tempfile.TemporaryDirectory() as td:
     ok("unbekanntes Werkzeug gemeldet") if "gibt es nicht" in tb.call("quatsch", {}) \
         else bad("stillschweigend")
 
+    # DESIGN 5t: Schreiben über eine Nebendatei -- mit eigenem Namen je
+    # Schreiber, Flush vor dem Umbenennen und erhaltenen Rechten.
+    import os as _os
+    tb.call("write_file", {"path": "rechte.txt", "content": "eins"})
+    _ziel = _os.path.join(td, "rechte.txt")
+    _os.chmod(_ziel, 0o640)
+    tb.call("write_file", {"path": "rechte.txt", "content": "zwei"})
+    check("Rechte bleiben beim Ersetzen",
+          oct(_os.stat(_ziel).st_mode & 0o777), oct(0o640))
+    check("Inhalt ist der neue",
+          tb.call("read_file", {"path": "rechte.txt"}), "zwei")
+    _rest = [n for n in _os.listdir(td) if n.endswith(".tmp")]
+    check("keine Nebendatei bleibt liegen", _rest, [])
+
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(1 if FAIL else 0)
