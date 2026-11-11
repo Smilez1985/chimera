@@ -134,6 +134,7 @@ from chimera.agent.loop import Agent  # noqa: E402
 
 class Antwort:
     provider, model, fell_back = "p", "m", False
+    werkzeuge = ()
 
     def __init__(self, text):
         self.text = text
@@ -146,7 +147,7 @@ class Registry:
     def resolve(self, task):
         return []
 
-    def call(self, task, a, history, system):
+    def call(self, task, a, history, system, **kw):
         t = self.texte.pop(0)
         if isinstance(t, Exception):
             raise t

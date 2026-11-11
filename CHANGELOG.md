@@ -861,6 +861,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **CI rot nach den nativen Werkzeugaufrufen** (`tests/test_gesicht_zustand.py`):
+  Die Attrappe der Registry nahm kein `**kw` an, und ihr Antwort-Objekt hatte
+  kein `werkzeuge` — beides ist jetzt Teil des Vertrags (ein Anbieter, der
+  Werkzeuge trägt, muss beides können). Der Loop liest das Feld zusätzlich
+  mit `getattr`, damit ein fremdes Antwort-Objekt ihn nicht mit `TypeError`
+  aus dem Lauf wirft. Lokal lief der Test grün, weil er die Attrappe nicht
+  mit Werkzeugen aufrief — der CI-Lauf hat es gefunden.
 - **Die Gegenprobe zu Modul 55 maß nichts mehr** (`counter-check-rust.sh`):
   Seit das Ablegen und Prüfen des Binaries in `installer/lib/binary.sh` liegt
   (`186a116`, `a8098b4`), zeigten 11 von 13 Mutationen auf Muster, die in

@@ -207,8 +207,9 @@ class Agent:
             # 1. Nativ: das Modell hat Werkzeuge aufgerufen (DESIGN, Regel „Aufrufe, nicht Text“).
             #    Ein Aufruf ohne Text ist gueltig -- hier wird nicht auf
             #    `text` geschaut, sondern auf die Liste.
-            if reply.werkzeuge:
-                aufrufe = reply.werkzeuge[:MAX_WERKZEUGE_JE_RUNDE]
+            aufrufe_nativ = list(getattr(reply, "werkzeuge", ()) or [])
+            if aufrufe_nativ:
+                aufrufe = aufrufe_nativ[:MAX_WERKZEUGE_JE_RUNDE]
                 self.history.append({
                     "role": "assistant", "content": text,
                     # Ollama-Form; die Uebersetzung je Anbieter macht das
