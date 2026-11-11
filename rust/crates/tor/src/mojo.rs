@@ -1367,6 +1367,36 @@ pub fn als_text(b: &Bericht) -> String {
 /// Wie lange ein Oracle-Ergebnis gilt. Aelter heisst: neu messen.
 pub const ORACLE_TTL: Duration = Duration::from_secs(6 * 3600);
 
+/// Eine laufende Reparatur. Solange dieser Wert lebt, haelt der Prozess die
+/// Sperre; danach gibt das Betriebssystem sie frei -- auch wenn er abstuerzt.
+///
+/// Warum es sie gibt (DESIGN, Regel "Mojo"): Timer, `OnFailure=` und der
+/// Installer koennen gleichzeitig `--miracle` starten. Ohne Sperre zaehlen
+/// zwei Laeufe denselben Fehlversuch hoch oder ueberschreiben ihn sich
+/// gegenseitig (`mojo-versuche.json`), und der Zaehler luegt danach.
+pub struct ReparaturSperre {
+    _datei: std::fs::File,
+}
+
+impl ReparaturSperre {
+    /// Sperre nehmen, ohne zu warten. `None` heisst: ein anderer Lauf
+    /// repariert gerade -- dann wird nicht gewartet und nicht mitgemacht.
+    pub fn nehmen(dir: &std::path::Path) -> Option<ReparaturSperre> {
+        let _ = std::fs::create_dir_all(dir);
+        let datei = std::fs::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(dir.join("mojo.lock"))
+            .ok()?;
+        match datei.try_lock() {
+            Ok(()) => Some(ReparaturSperre { _datei: datei }),
+            Err(_) => None,
+        }
+    }
+}
+
 /// Wo das letzte Oracle-Ergebnis liegt (Vorgabe; `--datei` ueberstimmt).
 pub fn oracle_pfad() -> std::path::PathBuf {
     std::path::PathBuf::from(
@@ -1414,6 +1444,25 @@ pub fn ablegen(bericht: &Value, pfad: Option<&std::path::Path>) {
 
 #[cfg(test)]
 mod tests {
+    // DESIGN, Regel Mojo: eine Reparatur zur Zeit. Der zweite Lauf darf
+    // nicht mitmachen und nicht warten -- die Sperre ist nicht blockierend.
+    #[test]
+    fn nur_eine_reparatur_gleichzeitig() {
+        let d = std::env::temp_dir().join(format!("mojo-lock-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let erste = super::ReparaturSperre::nehmen(&d).expect("erste Sperre");
+        assert!(
+            super::ReparaturSperre::nehmen(&d).is_none(),
+            "zweite Sperre muss scheitern, solange die erste lebt"
+        );
+        drop(erste);
+        assert!(
+            super::ReparaturSperre::nehmen(&d).is_some(),
+            "nach dem Freigeben muss sie wieder zu haben sein"
+        );
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     use super::*;
     use std::cell::RefCell;
     use std::collections::HashMap;

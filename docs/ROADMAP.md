@@ -53,7 +53,7 @@ seine Frage", „Atomar schreiben", 5a).
       „ok von vorhin" beendet den Lauf mit 0, ohne das Netz zu prüfen. Fix:
       bei gesetztem Bereich nicht auf den Cache hören (oder Bereich im
       Oracle mitführen und vergleichen).
-- [ ] **2.2 Keine Sperre gegen parallele Reparaturen**: Timer, `OnFailure=`
+- [x] **2.2 Keine Sperre gegen parallele Reparaturen** (`ReparaturSperre`, nicht blockierend): Timer, `OnFailure=`
       und Installer können gleichzeitig `--miracle` starten und
       `state/mojo-versuche.json` gegenseitig überschreiben. Fix:
       nicht blockierende `flock` auf `state/mojo.lock` im reparierenden Lauf,

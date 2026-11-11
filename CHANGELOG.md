@@ -735,6 +735,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Zwei Reparaturen konnten gleichzeitig laufen** (`--mojo --miracle`): Timer,
+  `OnFailure=` und Installer hätten denselben Fehlversuch doppelt gezählt oder
+  sich gegenseitig überschrieben (`mojo-versuche.json`). Ein reparierender Lauf
+  nimmt jetzt eine **nicht blockierende** Sperre auf `state/mojo.lock`
+  (`ReparaturSperre`); wer sie nicht bekommt, sagt es und endet mit 75
+  (`EX_TEMPFAIL`). Test mit Gegenprobe (ohne Sperre → rot).
 - **Der Oracle-Cache beantwortete eine größere Frage als gestellt**
   (`chimera-tor --mojo --miracle --bereich netz`): Lag ein Ergebnis mit
   `exitcode 0` von vorhin da, endete der Lauf sofort mit 0 — ohne das Netz zu

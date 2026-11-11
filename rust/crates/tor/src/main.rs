@@ -145,6 +145,25 @@ fn mojo_befehl(a: &[String]) -> ExitCode {
             return ExitCode::from(2);
         }
     }
+    // Eine Reparatur zur Zeit (DESIGN, Regel Mojo). Der Versuch, eine zweite
+    // zu starten, endet hier -- nicht in einer Warteschlange: Ein Lauf, der
+    // auf einen anderen wartet, repariert spaeter einen Zustand, den er nicht
+    // mehr kennt. Exitcode 75 heisst "spaeter noch einmal" (EX_TEMPFAIL).
+    let _sperre: Option<mojo::ReparaturSperre> = if fix {
+        match mojo::ReparaturSperre::nehmen(&zustand_dir()) {
+            Some(s) => Some(s),
+            None => {
+                melden(
+                    Stufe::Warnung,
+                    "Eine andere Reparatur laeuft bereits (state/mojo.lock) -- dieser Lauf tut nichts.",
+                );
+                return ExitCode::from(75);
+            }
+        }
+    } else {
+        None
+    };
+
     // Miracle greift auf das letzte Oracle-Ergebnis zurueck, wenn es nicht
     // aelter als 6 Stunden ist. Fehlt es (oder ist es alt), laeuft Oracle
     // zuerst -- Miracle prueft dann selbst, statt blind zu reparieren.
