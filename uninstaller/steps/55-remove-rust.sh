@@ -40,17 +40,23 @@ fi
 
 while IFS='	' read -r _pfad _soll; do
 	[ -n "$_pfad" ] || continue
-	if [ ! -e "$_pfad" ] && [ ! -L "$_pfad" ]; then
+	# Das Manifest nennt Zielpfade; `rootpath` macht daraus den Pfad in der
+	# Wurzel, die gerade bearbeitet wird (auf dem Geraet derselbe).
+	case "$_pfad" in
+		"$CHIMERA_ROOT"*) _ziel="$_pfad" ;;
+		*)                _ziel="$(rootpath "$_pfad")" ;;
+	esac
+	if [ ! -e "$_ziel" ] && [ ! -L "$_ziel" ]; then
 		info "schon weg: $_pfad"; continue
 	fi
-	if [ -n "$_soll" ] && [ "$(network_checksum "$_pfad")" != "$_soll" ]; then
+	if [ -n "$_soll" ] && [ "$(network_checksum "$_ziel")" != "$_soll" ]; then
 		warn "nicht mehr unsere Datei (Pruefsumme weicht ab), bleibt liegen: $_pfad"
 		BEFUND=1; continue
 	fi
 	if is_dry_run; then info "[wuerde entfernen] $_pfad"; continue; fi
-	rm -f "$_pfad"
+	rm -f "$_ziel"
 	# Am Ergebnis pruefen, nicht am Exitcode.
-	if [ -e "$_pfad" ]; then warn "blieb stehen: $_pfad"; BEFUND=1
+	if [ -e "$_ziel" ]; then warn "blieb stehen: $_pfad"; BEFUND=1
 	else info "entfernt: $_pfad"; fi
 done <"$_F"
 

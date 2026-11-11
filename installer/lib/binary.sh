@@ -86,6 +86,10 @@ binary_aus_baum() {
 
 	_ba_bin_dir="$(rootpath "$CHIMERA_OPT/bin")"
 	_ba_bin="$_ba_bin_dir/$_ba_prog"
+	# Das Manifest nennt Zielpfade (ohne Wurzelverzeichnis). In einem
+	# erfundenen Wurzelverzeichnis (Tests) sind die beiden verschieden --
+	# verglichen und eingetragen wird immer der Zielpfad.
+	_ba_pfad="$CHIMERA_OPT/bin/$_ba_prog"
 	_ba_stand=""
 	[ -n "$_ba_standname" ] && _ba_stand="$(rootpath "$CHIMERA_STATE")/$_ba_standname"
 
@@ -178,11 +182,25 @@ binary_aus_baum() {
 
 	# --- Eigen ist, was im Manifest steht UND dessen Pruefsumme noch stimmt ---
 	_ba_eigen=""
+	_ba_fremd_modul=""
 	if [ -e "$_ba_bin" ] || [ -L "$_ba_bin" ]; then
-		_ba_eigen="$(manifest_list_von datei "$_ba_modul" | awk -F'\t' -v p="$_ba_bin" '$1 == p { print $2 }')"
+		_ba_eigen="$(manifest_list_von datei "$_ba_modul" | awk -F'\t' -v p="$_ba_pfad" '$1 == p { print $2 }')"
+		if [ -z "$_ba_eigen" ]; then
+			# Dasselbe Programm kann von einem anderen Schritt abgelegt worden
+			# sein: Schritt 55 legt beide Binaries ab, Schritt 99-sohelper
+			# prueft danach denselben Pfad. Ein Eintrag eines anderen Moduls
+			# ist kein Fremdkoerper -- aber nachsehen muss man es.
+			_ba_eigen="$(manifest_list datei | awk -F'\t' -v p="$_ba_pfad" '$1 == p { print $2 }')"
+			_ba_fremd_modul="$(manifest_list datei | awk -F'\t' -v p="$_ba_pfad" '$1 == p { print "ja" }')"
+		fi
 		if [ -z "$_ba_eigen" ]; then
 			err "$_ba_bin existiert und steht nicht im Manifest -- wird nicht ueberschrieben."
 			return 2
+		fi
+		if [ -n "$_ba_fremd_modul" ] && [ "$_ba_eigen" != "$_ba_summe" ]; then
+			warn "$_ba_bin steht unter einem anderen Schritt im Manifest, aber mit anderer Prüfsumme."
+			warn "  Sie wird ersetzt; der alte Eintrag bleibt stehen (Rückbau sieht ihn)."
+			_ba_fremd_modul=""
 		fi
 	fi
 
@@ -246,13 +264,13 @@ binary_aus_baum() {
 	[ "$_ba_bin_neu" = 1 ] && { manifest_has verzeich "$_ba_bin_dir" || manifest_record verzeich "$_ba_bin_dir" ""; }
 	# Eine alte Angabe (andere Summe) ersetzen: sonst bliebe sie stehen und der
 	# Rueckbau hielte die Datei fuer fremd.
-	if [ -n "$_ba_eigen" ] && [ -f "$CHIMERA_MANIFEST" ]; then
+	if [ -n "$_ba_eigen" ] && [ -z "$_ba_fremd_modul" ] && [ -f "$CHIMERA_MANIFEST" ]; then
 		_ba_mf_neu="$CHIMERA_MANIFEST.neu"
-		awk -F'\t' -v p="$_ba_bin" -v m="$_ba_modul" '!($1 !~ /^#/ && $2 == m && $3 == "datei" && $4 == p)' \
+		awk -F'\t' -v p="$_ba_pfad" -v m="$_ba_modul" '!($1 !~ /^#/ && $2 == m && $3 == "datei" && $4 == p)' \
 			"$CHIMERA_MANIFEST" >"$_ba_mf_neu" && [ -s "$_ba_mf_neu" ] && mv "$_ba_mf_neu" "$CHIMERA_MANIFEST" || {
 			rm -f "$_ba_mf_neu"; err "Manifest nicht aktualisierbar."; return 2; }
 	fi
-	manifest_record datei "$_ba_bin" "$_ba_summe"
+	manifest_record datei "$_ba_pfad" "$_ba_summe"
 
 	if [ -n "$_ba_stand" ]; then
 		rust_stand_schreiben "$_ba_standdatei" || \

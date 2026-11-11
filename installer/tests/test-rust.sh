@@ -210,7 +210,7 @@ fahr run
 check "neue Fassung: rc 0" "$RC" "0"
 check "neue Fassung: Binary ersetzt" "$(summe "$BIN")" "$(summe "$T/gateway/chimera-tor-aarch64")"
 check "neue Fassung: eine Manifestzeile fuer die Datei" \
-	"$(grep -c "	datei	$BIN	" "$MANIFEST")" "1"
+	"$(grep -c "	datei	/opt/chimera/bin/chimera-tor	" "$MANIFEST")" "1"
 hat "neue Fassung: neue Summe im Manifest" "$(cat "$MANIFEST")" "$(summe "$BIN")"
 
 # --- 8. Fremde Datei am Zielort -------------------------------------------
@@ -339,6 +339,24 @@ set -e
 check "Gegenprobe: falsches Programm -> rc 1" "$RC" "1"
 check "Gegenprobe: Datei unveraendert" "$(summe "$WT/sohelper/chimera-sohelper-aarch64")" "$SUMME_VOR"
 check "Gegenprobe: Stand unveraendert" "$(cat "$WT/sohelper/chimera-sohelper-aarch64.stand")" "$STAND_VOR"
+
+# Zweiter Aufruf unter einem ANDEREN Modul (so macht es 99-sohelper): das
+# Binary ist da und steht im Manifest unter 55-rust. Es darf nicht als
+# Fremdkoerper gelten -- sonst bricht der Lauf auf dem Geraet ab, obwohl
+# Schritt 55 eben genau diese Datei abgelegt hat.
+FR="$W/fremd"
+mkdir -p "$FR/root/opt/chimera/state" "$FR/root/opt/chimera/bin"
+cp "$WT/sohelper/chimera-sohelper-aarch64" "$FR/root/opt/chimera/bin/chimera-sohelper"
+printf 'z\t55-rust\tdatei\t/opt/chimera/bin/chimera-sohelper\t%s\n' \
+	"$(summe "$FR/root/opt/chimera/bin/chimera-sohelper")" >"$FR/root/opt/chimera/state/manifest.tsv"
+_KOPIE_VOR="$(summe "$FR/root/opt/chimera/bin/chimera-sohelper")"
+_LOGV="$(env CHIMERA_ROOT="$FR/root" CHIMERA_MANIFEST="$FR/root/opt/chimera/state/manifest.tsv" \
+	CHIMERA_LOG_DIR="$FR/logs" sh -c '. "$0/installer/lib/common.sh"; . "$0/installer/lib/network.sh"; . "$0/installer/lib/manifest.sh"; . "$0/installer/lib/source.sh"; . "$0/installer/lib/binary.sh"; BINARY_REPO="$1"; binary_aus_baum sohelper 99-sohelper' "$WT" "$WT" 2>&1)"
+_RC2=$?
+check "fremdes Modul: rc 0 (kein Fremdkoerper)" "$_RC2" "0"
+hat "fremdes Modul: sagt 'schon vorhanden'" "$_LOGV" "Schon vorhanden und geprueft"
+check "fremdes Modul: Datei unveraendert" "$(summe "$FR/root/opt/chimera/bin/chimera-sohelper")" "$_KOPIE_VOR"
+check "fremdes Modul: kein zweiter Eintrag" "$(wc -l <"$FR/root/opt/chimera/state/manifest.tsv")" "1"
 
 # ... und Schritt 55 nimmt genau das, ohne dass etwas nachgeholt werden muss.
 mkroot werkzeug; T="$WT"
