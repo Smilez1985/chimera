@@ -51,9 +51,6 @@ Aus dem Code-Review vom 11.11. Erledigt und dort beschrieben (2.1 Oracle-Cache,
       Binary älter ist, antwortet es `op_unbekannt` — der Dienst fällt dann
       auf den Vorgabewert zurück und sagt es (`fenster_angenommen`). Kein
       Fehler, aber die Messung fehlt bis zum neuen Stand.
-- [ ] **2.5 Sidecar-Name ist nicht eindeutig** (`rust/crates/tor/src/daten.rs`):
-      `.{name}.neu` ist fest; zwei Fäden überschreiben sich. Fix: Kennung in
-      den Namen.
 - [ ] **2.9 Kein `fsync`, keine Rechte beim Schreiben**
       (`agent/tools.py:162`): `write_bytes` → `replace` ohne Flush und ohne
       `copymode`. Fix: flushen, Rechte erhalten.

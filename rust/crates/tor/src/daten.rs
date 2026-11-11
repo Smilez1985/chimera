@@ -54,6 +54,19 @@ pub fn id_gueltig(id: &str) -> bool {
         && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
+/// Fortlaufende Nummer fuer Sidecar-Namen, je Prozess.
+static SIDECAR_NR: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Der Name der Nebendatei. **Je Schreiber verschieden** (DESIGN, Regel 5t):
+/// Ein fester Name wie `.datei.neu` laesst zwei Faeden dieselbe Nebendatei
+/// ueberschreiben -- dann gelingt das Umbenennen, und der Inhalt ist fremd.
+/// Prozesskennung und Zaehler stehen im Namen, damit auch zwei Prozesse
+/// (Gateway und Installer) sich nicht in die Quere kommen.
+fn sidecar_pfad(dir: &Path, name: &str) -> PathBuf {
+    let nr = SIDECAR_NR.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    dir.join(format!(".{name}.{}.{nr}.neu", std::process::id()))
+}
+
 /// Atomar schreiben: Sidecar neben dem Ziel, fsync, dann umbenennen.
 /// Prueft, dass die Datei danach die erwartete Laenge hat (stiller Erfolg
 /// ist die gefaehrlichste Fehlerart).
@@ -61,8 +74,7 @@ pub fn atomar_schreiben(ziel: &Path, inhalt: &[u8], modus: u32) -> Result<(), St
     let dir = ziel.parent().ok_or("Ziel ohne Verzeichnis")?;
     fs::create_dir_all(dir).map_err(|e| format!("{} nicht anlegbar: {e}", dir.display()))?;
     let name = ziel.file_name().and_then(|n| n.to_str()).ok_or("Ziel ohne Namen")?;
-    let tmp = dir.join(format!(".{name}.neu"));
-    let _ = fs::remove_file(&tmp);
+    let tmp = sidecar_pfad(dir, name);
     {
         let mut f = fs::OpenOptions::new()
             .write(true)
@@ -465,6 +477,19 @@ mod tests {
         }
         for gut in ["ollama", "ollama-2", "a1"] {
             assert!(id_gueltig(gut), "{gut:?}");
+        }
+    }
+
+    // Zwei Schreiber duerfen sich die Nebendatei nicht teilen.
+    #[test]
+    fn jede_nebendatei_hat_ihren_eigenen_namen() {
+        let d = Path::new("/tmp");
+        let namen: Vec<PathBuf> = (0..5).map(|_| super::sidecar_pfad(d, "x.json")).collect();
+        for (i, a) in namen.iter().enumerate() {
+            assert!(a.to_string_lossy().ends_with(".neu"), "{a:?}");
+            for b in namen.iter().skip(i + 1) {
+                assert_ne!(a, b, "zwei Schreiber bekaemen denselben Sidecar");
+            }
         }
     }
 

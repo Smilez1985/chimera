@@ -735,6 +735,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Zwei Schreiber teilten sich dieselbe Nebendatei** (`daten.rs`,
+  `.datei.neu` fest): Beim gleichzeitigen Zugriff über Gateway-Socket und
+  `netzsuche`-Faden konnte das Umbenennen gelingen, während der Inhalt schon
+  von der anderen Seite überschrieben war. Der Name enthält jetzt
+  Prozesskennung und einen fortlaufenden Zähler (`sidecar_pfad`), das
+  Vorab-Löschen entfällt damit. Test mit Gegenprobe (fester Name → rot).
 - **`context_window` war geraten** (`provider/gateway.py` trug fest `32 000`):
   Das Gateway misst das Fenster längst (`/api/show` → `kontext` im Katalog),
   der Dienst konnte es aber nicht fragen — der Katalog war nur über die
