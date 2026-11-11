@@ -681,8 +681,9 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
 ### Behoben
 - **Der Geheimnis-Prüfer hielt eine Anschrift aus dem Gateway-Binary für
   eine private Mailadresse.** Ein statisch gelinktes Programm bringt
-  Zeichenketten fremder Bibliotheken mit (`appro@openssl.org` aus dem
-  OpenSSL-Anteil); die Textsuche darauf blockierte den Push. Eine
+  Zeichenketten fremder Bibliotheken mit (eine Anschrift eines
+  OpenSSL-Mitwirkenden aus dem Krypto-Anteil); die Textsuche darauf
+  blockierte den Push. Eine
   Binärdatei wird jetzt auch **am Inhalt** erkannt (NUL-Byte in den ersten
   2 KB), nicht nur an der Endung, und die übersprungenen Dateien werden
   benannt („1 Binaerdatei(en) uebersprungen") statt verschwiegen. Dieselbe
