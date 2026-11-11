@@ -44,13 +44,9 @@ zram wird nicht angefasst, wenn es läuft.
 ## Phase Review 11.11. — offene Code-Befunde
 
 Aus dem Code-Review vom 11.11. Erledigt und dort beschrieben (2.1 Oracle-Cache,
-2.2 Reparatursperre, 2.3a Kontextfenster) stehen im CHANGELOG. Offen:
-
-- [ ] **Gateway-Binary neu bauen** (nach 2.3a): Der Socket kennt
-      `katalog_lesen` erst in der neuen Fassung. Solange das ausgelieferte
-      Binary älter ist, antwortet es `op_unbekannt` — der Dienst fällt dann
-      auf den Vorgabewert zurück und sagt es (`fenster_angenommen`). Kein
-      Fehler, aber die Messung fehlt bis zum neuen Stand.
+2.2 Reparatursperre, 2.3a Kontextfenster, 2.5 Sidecar-Namen, 2.9 sicheres
+Schreiben) stehen im CHANGELOG. Mit dem neu gebauten Gateway-Binary
+(`cba71db`) ist dieser Durchgang abgearbeitet — offen bleibt hier nichts.
 
 ## Phase ACP — Chimera als Agent für Editoren und IDEs (DESIGN: Regel „ACP“)
 

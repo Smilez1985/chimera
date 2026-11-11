@@ -438,6 +438,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Gateway-Binary neu gebaut und abgelegt** (nach 2.3a): `gateway/chimera-tor-aarch64`
+  stammt jetzt aus dem CI-Lauf zu `cba71db` (Prüfsumme `e57433ad…`,
+  `rust/`-Baum `068fecc3…`, Version `0.1.0-pre`), gelegt von
+  `tools/gateway-binary.sh`. Belegt über den Socket statt über den Quelltext:
+  die neue Fassung antwortet auf `{"op":"katalog_lesen","id":"ollama"}` mit
+  `{"ok":true,…}`, die alte (`fa7edfb`, Gegenprobe) mit `op_unbekannt`. Damit
+  bekommt der Dienst das gemessene Kontextfenster statt des Vorgabewerts.
 - **Drei Regeln nachgeschärft** (Review 11.11., nur Blaupause): Der
   Cache eines Laufs beantwortet nur die Frage, die gestellt wurde
   (`--bereich netz` hört nicht auf ein globales „ok"), eine Reparatur läuft
