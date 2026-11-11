@@ -153,10 +153,15 @@ def _target_for(conn, *, prefer: str = "any") -> str:
     """Anbieter plus ein passendes Modell.
 
     ``prefer="big"`` für das Gespräch, ``"small"`` für Hintergrundarbeit.
-    Ohne Modellliste bleibt es bei der Voreinstellung des Anbieters --
-    dann entscheidet der Anbieter selbst.
+    Nennt der Anbieter selbst eine Wahl (Gateway nach gemessenem ``tools``,
+    DESIGN 5n „Das Modell kommt vom Server"), gilt **die** — die Zahl im
+    Namen entscheidet nicht mehr. Ohne Wahl bleibt es bei der Voreinstellung
+    des Anbieters; dann entscheidet der Anbieter selbst.
     """
     found = _usable_models(conn)
+    gewaehlt = getattr(conn, "gewaehlt", None)
+    if gewaehlt:
+        return f"{conn.name}/{gewaehlt}"
     if found and prefer != "any":
         found.sort(key=_size_of, reverse=(prefer == "big"))
         return f"{conn.name}/{found[0]}"

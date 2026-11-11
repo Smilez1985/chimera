@@ -101,7 +101,8 @@ def chat(a):
     if a["op"] == "ping":
         return {"ok": True, "programm": "chimera-tor"}
     if a["op"] == "modelle":
-        return {"ok": True, "host": "ollama.example:11434", "modelle": ["qwen3:27b", "gemma:7b"]}
+        return {"ok": True, "host": "ollama.example:11434", "modelle": ["qwen3:27b", "gemma:7b"],
+                "wahl": "qwen3:27b"}
     if a["op"] == "chat":
         return {"ok": True, "text": f"antwort auf {a['prompt']}", "host": "ollama.example:11434",
                 "modell": a["modell"], "anbieter": "ollama"}
@@ -169,14 +170,19 @@ check("ohne Gateway: das Protokoll sagt es",
 print("== Kontextfenster ==")
 # DESIGN 5a: Das Fenster kommt aus der Abfrage, nicht aus einer Konstante.
 # Der Katalog des Gateways traegt, was /api/show gemeldet hat.
+# Die Form des Katalogs ist die des Gateways (daten::katalog_lesen):
+# {"stand": <sekunden>, "modelle": {<name>: {...}}}. Frueher stand hier eine
+# flache Form -- damit war der Test gruen und der Code las trotzdem nichts.
 _kat = Attrappe("kat", lambda a: {
     "ok": True, "modelle": ["klein:3b", "gross:27b"], "host": "ollama.example:11434",
+    "wahl": "gross:27b",
 } if a["op"] == "modelle" else {
     "ok": True, "id": "ollama",
-    "katalog": {"gross:27b": {"kontext": 262144, "tools": True},
-                "klein:3b": {"kontext": 8192, "tools": True}},
+    "katalog": {"stand": 1, "modelle": {
+        "gross:27b": {"kontext": 262144, "tools": True},
+        "klein:3b": {"kontext": 8192, "tools": True}}},
 })
-_c = gateway.GatewayOllama(default_model="gross:27b", pfad=_kat.pfad)
+_c = gateway.GatewayOllama(pfad=_kat.pfad)
 check("Katalog wird befragt", _c.is_available(), True)
 check("Fenster gemessen, nicht geraten", _c.context_window, 262144)
 check("Fenster gilt als gemessen", _c.fenster_angenommen, False)
@@ -188,6 +194,36 @@ _c2 = gateway.GatewayOllama(default_model="x", pfad=_leer.pfad)
 _c2.is_available()
 check("ohne Katalog bleibt der Vorgabewert", _c2.context_window, 32_000)
 check("und gilt als angenommen", _c2.fenster_angenommen, True)
+
+print("== Das Modell kommt vom Server (DESIGN 5n, smilez 11.11.) ==")
+# 1. Keine Einstellung als Quelle: OLLAMA_MODEL wird nicht mehr gelesen.
+os.environ["OLLAMA_MODEL"] = "alt:1b"
+_gi = Attrappe("ignoriert", chat)
+_ci = gateway.GatewayOllama(pfad=_gi.pfad)
+check("OLLAMA_MODEL ist keine Quelle mehr", _ci.default_model, None)
+_ci.is_available()
+_ci.call("Hi", [])
+check("ohne eigene Wahl wird kein Name geschickt",
+      [a for a in _gi.gesehen if a["op"] == "chat"][0]["modell"], "")
+
+# 2. Gewaehlt wird im Gateway; der Dienst uebernimmt nur das Ergebnis.
+_ci2 = gateway.GatewayOllama(pfad=_gi.pfad)
+_ci2.is_available()
+check("Wahl des Gateways wird uebernommen", _ci2.gewaehlt, "qwen3:27b")
+check("Vorschlag nimmt die Wahl, nicht den groessten Namen",
+      setup._target_for(_ci2, prefer="big"), "ollama/qwen3:27b")
+
+# Gegenprobe: Ohne Wahl entscheidet weiter der Name (Verhalten fuer Anbieter,
+# die keine Wahl melden). Sonst wuerde der Test oben auch mit kaputtem
+# `_target_for` gruen.
+class OhneWahl:
+    name = "ollama"
+    default_model = None
+    gewaehlt = None
+    def models(self):
+        return ["klein:70b", "gross:3b"]
+check("ohne Wahl gilt weiter der Name", setup._target_for(OhneWahl(), prefer="big"), "ollama/klein:70b")
+del os.environ["OLLAMA_MODEL"]
 
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")

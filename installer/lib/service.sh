@@ -296,7 +296,11 @@ service_nutzer() {
 #
 # Was der Dienst sieht, waehlt der Installer; was er nicht sieht (Schluessel,
 # Telegram-Token), bleibt in der .env und damit beim Gateway.
-SERVICE_ENV_NAMEN="OLLAMA_MODEL"
+# Leer seit 11.11.2026: Das Modell kommt aus der Serverliste, gewaehlt vom
+# Gateway nach dem gemessenen `tools` (DESIGN 5n, "Das Modell kommt vom
+# Server"). `OLLAMA_MODEL` liest niemand mehr -- eine Einstellung, die aussieht
+# wie ein Schalter und keiner ist, gehoert nicht in die Umgebung des Dienstes.
+SERVICE_ENV_NAMEN=""
 
 service_dienst_env() {
 	_sde_c="$(rootpath "$CHIMERA_CONFIG")"

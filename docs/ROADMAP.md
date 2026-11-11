@@ -399,22 +399,6 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       gewählten Modells; Anzeige „geladen / kalt“ und letzte Antwortzeit je
       Modell im Ollama-Modul. Der Dienst fragt dafür das Gateway, nicht den
       Server.
-- [ ] **Das Modell kommt aus der Serverliste** (smilez, 11.11.; DESIGN
-      5n, „Das Modell kommt vom Server“): `OLLAMA_MODEL` entfällt; gewählt
-      wird aus der Liste, die das Gateway vom Server holt, nach dem
-      gemessenen `tools` — nicht nach der Zahl im Namen
-      (`provider/setup.py`, `_size_of`). Ohne taugliches Modell ein
-      benannter Fehler (`kein_modell`), keine stille Auswahl. Danach die
-      Reihenfolge (5h): `wahl.json` entscheidet, bis dahin die Reihenfolge
-      des Servers.
-- [ ] **Ausführer `chimera-sohelper`: Arbeitsordner `/opt/chimera/sohelper`**
-      (smilez, 11.11.), Eigentümer `chimera-sohelper`, 700; das
-      Elternverzeichnis gehört root. Gedächtnis, Sitzungen und Moods
-      bleiben bei `chimera`. Vorbild ist der eigene Fork von openclawgotchi (smilez,
-      10.11.): gespeicherte Wahl, eine Stelle für die Auflösung, nur
-      Modelle mit `tools`, Frage nach der Adresse im Installer. Abgleich
-      mit dem Stand in Chimera: DESIGN 5n, „Modellwahl nach dem Vorbild
-      des Forks“.
 - [ ] **Der Dienst verliert sein Netz** (5n): Er ruft heute Ollama und
       Anthropic noch selbst über `urllib` auf (`IPAddressDeny` ist leer);
       der Weg über das Gateway ist nur ein zusätzlicher Pfad, `discover()`

@@ -227,12 +227,14 @@ long runs detached.
 Vorlage `.env.example`, `root:chimera-tor` 0640) liest **nur das Gateway**;
 systemd reicht die Werte als root hinein, der Dienst sieht sie nicht. Der
 Dienst liest `config/dienst.env` — dort stehen ausschließlich Namen, die
-**kein Geheimnis** sind (heute nur `OLLAMA_MODEL`).
+**kein Geheimnis** sind. Die Liste ist seit 11.11. **leer**: das Modell kommt
+aus der Liste des Servers (DESIGN 5n), `OLLAMA_MODEL` liest niemand mehr.
 
 Schlüssel nie in Ausgaben oder ins Repo. / **Two files, two readers.** The
 `.env` is read by the **gateway only** (`root:chimera-tor`, 0640); the
-service reads `config/dienst.env`, which holds non-secrets only (currently
-`OLLAMA_MODEL`). Never print keys or commit them.
+service reads `config/dienst.env`, which holds non-secrets only (the list is
+empty since 11.11.: the model comes from the server's list, `OLLAMA_MODEL` is
+gone). Never print keys or commit them.
 
 ### Beim Installieren / During install
 
@@ -248,7 +250,7 @@ service reads `config/dienst.env`, which holds non-secrets only (currently
 | Variable | Wirkung / Effect |
 |---|---|
 | `OLLAMA_API_BASE` | Adresse des Ollama-Servers — **nur das Gateway**. / Ollama server address, **gateway only**. |
-| `OLLAMA_MODEL` | Steht in `config/dienst.env`, nicht hier: der Dienst liest sie. / Lives in `config/dienst.env`, read by the service. |
+| ~~`OLLAMA_MODEL`~~ | **Entfallen** (11.11.): Das Modell wird aus der Serverliste gewählt. Bleibt ein alter Eintrag stehen, hat er keine Wirkung. / Gone — the model is chosen from the server's list; a leftover entry has no effect. |
 | `ANTHROPIC_API_KEY` | Anthropic-Schlüssel. / Anthropic key. |
 | `ANTHROPIC_OAUTH_TOKEN` | Anthropic-Abo-Anmeldung. / Anthropic subscription login. |
 | `CHIMERA_TELEGRAM_TOKEN` | Bot-Token vom BotFather; leer = Telegram aus. / Bot token; empty = off. |

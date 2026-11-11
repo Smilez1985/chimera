@@ -101,7 +101,16 @@ class GatewayOllama(Connector):
     PROBE_TTL = 30.0
 
     def __init__(self, default_model: str | None = None, *, pfad: str | None = None):
-        self.default_model = default_model or os.environ.get("OLLAMA_MODEL") or None
+        # Keine Einstellung als Quelle (DESIGN 5n, "Das Modell kommt vom
+        # Server", smilez 11.11.2026): `OLLAMA_MODEL` wird hier nicht mehr
+        # gelesen. Ohne genanntes Modell waehlt das Gateway aus der Liste,
+        # die der Server meldet -- nach dem gemessenen `tools`. Ein
+        # `default_model` gilt nur, wenn der Aufrufer es ausdruecklich setzt.
+        self.default_model = default_model or None
+        #: Was das Gateway ohne weitere Frage nehmen wuerde (`op: modelle` ->
+        #: `wahl`). Dieselbe Regel wie im Chat, dort entschieden -- hier wird
+        #: sie nicht nachgebaut.
+        self.gewaehlt: str | None = None
         self.pfad = pfad
         self.base_url = ""            # Der Dienst kennt die Adresse nicht.
         self.host = ""                # nur der Rechnername, fuer die Anzeige
@@ -132,6 +141,7 @@ class GatewayOllama(Connector):
             if a.get("ok"):
                 self._models = list(a.get("modelle", []))
                 self.host = a.get("host", "")
+                self.gewaehlt = a.get("wahl") or None
                 self._grund = None
                 ok = True
                 self._fenster_holen()
@@ -151,7 +161,7 @@ class GatewayOllama(Connector):
         Bleibt der Katalog leer, gilt der Vorgabewert weiter, und
         `fenster_angenommen` sagt das.
         """
-        modell = self.default_model or (self._models[0] if self._models else "")
+        modell = self.gewaehlt or self.default_model or (self._models[0] if self._models else "")
         if not modell:
             return
         try:
@@ -160,7 +170,11 @@ class GatewayOllama(Connector):
             return
         if not k.get("ok"):
             return
-        eintrag = (k.get("katalog") or {}).get(modell) or {}
+        # Der gespeicherte Katalog hat die Form {"stand": <s>, "modelle": {...}}
+        # (daten::katalog_lesen). Flach zu lesen war ein Fehler: das Fenster
+        # kam nie aus einer Messung, und die Attrappe im Test hatte die
+        # falsche Form nachgebaut.
+        eintrag = ((k.get("katalog") or {}).get("modelle") or {}).get(modell) or {}
         try:
             fenster = int(eintrag.get("kontext") or 0)
         except (TypeError, ValueError):

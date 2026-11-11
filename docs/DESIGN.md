@@ -1019,7 +1019,7 @@ Gateway. Bis dahin scheitert ein direkter Aufruf an der Sperre und wird als
 
 | Name | Stand |
 |---|---|
-| `OLLAMA_MODEL` | **entfällt** (smilez, 11.11.): Das Modell wird aus der Liste gewählt, die der Server meldet — nicht aus einer Einstellung. Siehe „Das Modell kommt vom Server“ |
+| `OLLAMA_MODEL` | **entfällt** (smilez, 11.11.): Das Modell wird aus der Liste gewählt, die der Server meldet — nicht aus einer Einstellung. Siehe „Das Modell kommt vom Server“. **Gebaut am 11.11.:** niemand liest den Namen mehr, `SERVICE_ENV_NAMEN` ist leer |
 | `OLLAMA_API_BASE`, `OLLAMA_HOST` | nur der direkte Weg — entfällt |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_OAUTH_TOKEN` | Schlüssel — gehören dem Gateway |
 | `CHIMERA_TELEGRAM_TOKEN`, `CHIMERA_TELEGRAM_ALLOWED` | Schlüssel — gehören dem Gateway; `__main__.py` fragt heute das Token ab, um die eigene Tür zu öffnen. Wie das künftig läuft, hängt an der offenen Telegram-Frage |
@@ -1034,6 +1034,7 @@ auf den beiden anderen aufbaut). Was der Fork tut:
   (`data/active_model.json`: Modell und Adresse), kein Wert der
   Konfiguration. Beim Start gilt sie vor der Voreinstellung;
   `OLLAMA_MODEL` bestimmt nur das Modell der Voreinstellung `ollama`.
+  (**Überholt** durch „Das Modell kommt vom Server", smilez 11.11.)
 - Die Adresse wird an **einer** Stelle aufgelöst: gespeicherte Wahl, dann
   laufende Verbindung, dann Umgebung. Anlass war ein Fehler: Eine zweite
   Stelle griff auf den Platzhalter zurück und überschrieb die gespeicherte
@@ -1070,11 +1071,32 @@ Offen dabei: die **Reihenfolge** mehrerer tauglicher Modelle. Bis
 `wahl.json` gebaut ist (Regel 5t), gilt die Liste des Servers in ihrer
 Reihenfolge; danach entscheidet der Nutzer.
 
+**Gebaut am 11.11.2026** (`ollama::modell_waehlen` — ein Ort für die Regel):
+
+1. Ein **genanntes** Modell gilt. Wer eines nennt, bekommt es — auch ohne
+   `tools` im Katalog. Die Auswahl ist nur der Fall „kein Modell im Auftrag".
+2. Sonst das **erste Modell in der Reihenfolge des Servers**, das der Katalog
+   mit `tools: true` gemessen hat.
+3. Sonst **kein Modell**: `kein_modell` mit Klartext-Grund — „der Server hat
+   kein Modell", „keines kann Werkzeuge" oder „nicht gemessen (Katalog leer)".
+   Es wird nichts geschickt.
+4. **Lesart notes, zu bestätigen:** `tools: null` ist keine Messung und zählt
+   nicht als „kann keine Werkzeuge" (5t). Ist für **kein** Modell etwas
+   gemessen, misst das Gateway einmal selbst (`KATALOG_BUDGET_SOFORT`, 12 s)
+   und entscheidet dann neu — sonst bliebe ein Anbieter, den die Netzsuche
+   nicht auffrischt (`auto: false`), dauerhaft ohne Antwort.
+
+`op: modelle` nennt dieselbe Wahl als `wahl` (und `wahl_grund`); der Dienst
+baut die Regel nicht nach, sondern übernimmt den Namen für das Kontextfenster
+(5a). `provider/setup.py` nimmt die Wahl statt der Zahl im Modellnamen.
+
 **Folge für die Sperre** (Lesart notes, zu bestätigen): Die Wahl gehört
 dorthin, wo die Adresse liegt — ans Gateway. Der Dienst braucht
-`OLLAMA_MODEL` dann nicht aus der `.env`: Nennt er kein Modell, entscheidet
-das Gateway an einer Stelle (gespeicherte Wahl, dann `OLLAMA_MODEL` aus
-seiner eigenen Umgebung, dann das erste Modell mit `tools`). Eine
+`OLLAMA_MODEL` nicht aus der `.env`: Nennt er kein Modell, entscheidet
+das Gateway an einer Stelle. **Gebaut 11.11. so:** gespeicherter Katalog →
+erstes Modell mit gemessenem `tools` → sonst `kein_modell`; die
+„gespeicherte Wahl" (`wahl.json`, 5t) und `OLLAMA_MODEL` aus seiner eigenen
+Umgebung sind **nicht** gebaut und werden nicht nachgeholt. Eine
 Abweichung vom Fork ist schon entschieden (Regel 5l): Die Adresse wird
 nicht im Chat gesetzt.
 

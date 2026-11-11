@@ -79,15 +79,12 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
             "telegram": if crate::telegram::laeuft() { "an" } else { "aus" },
         }),
         "chat" => match anfrage.get("anbieter").and_then(Value::as_str) {
-            Some(a) => match ollama_adresse(a, stand) {
-                Ok(adr) => ollama::op_chat(adr.as_deref(), anfrage),
-                Err(f) => f,
-            },
+            Some(a) => chat(a, anfrage, stand),
             None => zeile::fehlerantwort("anbieter_fehlt", "Der Chat braucht ein Feld \"anbieter\"."),
         },
         "modelle" => match anfrage.get("anbieter").and_then(Value::as_str) {
             Some(a) => match ollama_adresse(a, stand) {
-                Ok(adr) => ollama::op_modelle(adr.as_deref()),
+                Ok(adr) => ollama::op_modelle(adr.as_deref(), &crate::daten::katalog_lesen(&stand.daten, a)),
                 Err(f) => f,
             },
             None => zeile::fehlerantwort("anbieter_fehlt", "Die Abfrage braucht ein Feld \"anbieter\"."),
@@ -103,7 +100,7 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
             }),
             _ => zeile::fehlerantwort("id_ungueltig", "Die Anfrage braucht eine gueltige \"id\"."),
         },
-        "katalog_aktualisieren" => katalog_aktualisieren(anfrage, stand),
+        "katalog_aktualisieren" => katalog_aktualisieren(anfrage, stand, ollama::KATALOG_BUDGET),
         "netzsuche" => crate::netzsuche::durchgang(stand),
         "" => zeile::fehlerantwort("op_fehlt", "Die Anfrage braucht ein Feld \"op\"."),
         andere => crate::daten::op(andere, anfrage, &stand.daten).unwrap_or_else(|| {
@@ -139,10 +136,42 @@ fn ollama_adresse(id: &str, stand: &Stand) -> Result<Option<String>, Value> {
     Err(zeile::fehlerantwort("anbieter_unbekannt", &format!("Unbekannter Anbieter: {id}")))
 }
 
+/// `op: chat`: nimmt den gespeicherten Katalog mit, damit ohne genanntes
+/// Modell nach dem gemessenen `tools` gewaehlt wird (DESIGN 5n, „Das Modell
+/// kommt vom Server"). Ist nichts gemessen (frischer Anbieter, Katalog leer),
+/// wird **einmal** gemessen und erneut gefragt -- sonst bliebe ein Anbieter,
+/// den die Netzsuche nicht auffrischt (`auto: false`), dauerhaft ohne Antwort.
+fn chat(id: &str, anfrage: &Value, stand: &Stand) -> Value {
+    let adr = match ollama_adresse(id, stand) {
+        Ok(Some(a)) => a,
+        Ok(None) => return ollama::op_chat(None, anfrage, &json!({})),
+        Err(f) => return f,
+    };
+    let mut katalog = crate::daten::katalog_lesen(&stand.daten, id);
+    let a = ollama::op_chat(Some(&adr), anfrage, &katalog);
+    let genannt = anfrage.get("modell").and_then(Value::as_str).is_some_and(|m| !m.is_empty());
+    if a["fehler"]["code"] == "kein_modell" && !genannt && !katalog_gemessen(&katalog) {
+        let r = katalog_aktualisieren(&json!({"id": id}), stand, ollama::KATALOG_BUDGET_SOFORT);
+        if r["ok"] == true {
+            katalog = crate::daten::katalog_lesen(&stand.daten, id);
+            return ollama::op_chat(Some(&adr), anfrage, &katalog);
+        }
+    }
+    a
+}
+
+/// Hat der Katalog mindestens eine echte Messung? `tools: null` ist keine.
+fn katalog_gemessen(katalog: &Value) -> bool {
+    katalog["modelle"]
+        .as_object()
+        .map(|m| m.values().any(|e| !e["tools"].is_null()))
+        .unwrap_or(false)
+}
+
 /// `op: katalog_aktualisieren` mit `id`: Server fragen, Katalog abgleichen
 /// (Frist statt Loeschen) und schreiben. Ein nicht erreichbarer Server
 /// laesst den alten Katalog unberuehrt.
-fn katalog_aktualisieren(anfrage: &Value, stand: &Stand) -> Value {
+fn katalog_aktualisieren(anfrage: &Value, stand: &Stand, budget: Duration) -> Value {
     let id = match anfrage.get("id").and_then(Value::as_str) {
         Some(i) if crate::daten::id_gueltig(i) => i,
         _ => return zeile::fehlerantwort("id_ungueltig", "Die Anfrage braucht eine gueltige \"id\"."),
@@ -152,7 +181,7 @@ fn katalog_aktualisieren(anfrage: &Value, stand: &Stand) -> Value {
         Ok(None) => return zeile::fehlerantwort("nicht_eingerichtet", "Der Anbieter hat keine Adresse."),
         Err(f) => return f,
     };
-    let neu = match ollama::katalog_von(&adr, ollama::KATALOG_BUDGET) {
+    let neu = match ollama::katalog_von(&adr, budget) {
         Ok(k) => k,
         Err(f) => return f,
     };
@@ -443,5 +472,55 @@ mod tests_anbieter {
         let (s, p) = stand_mit_daten("typ", None);
         crate::daten::anbieter_speichern(&p, "cloud", &json!({"typ": "anthropic", "bezeichnung": "C"})).unwrap();
         assert_eq!(antworten(&json!({"op": "chat", "anbieter": "cloud"}), &s)["fehler"]["code"], "anbieter_unbekannt");
+    }
+
+    #[test]
+    fn chat_ohne_modell_nimmt_das_gemessene_aus_dem_gespeicherten_katalog() {
+        // Nur Modellliste und Chat: der gespeicherte Katalog reicht, es wird
+        // nichts nachgemessen (sonst kaeme ein dritter Aufruf, den der Server
+        // nicht beantwortet und der Test haengt).
+        let (b, h) = ollama::tests::server(vec![
+            (200, r#"{"models":[{"name":"blind:7b"},{"name":"klug"}]}"#.into()),
+            (200, r#"{"message":{"content":"ok"}}"#.into()),
+        ]);
+        let (s, p) = stand_mit_daten("wahl", None);
+        crate::daten::anbieter_speichern(&p, "lan", &json!({"typ": "ollama", "bezeichnung": "L", "adresse": b})).unwrap();
+        let katalog = json!({"stand": 7, "modelle": {
+            "blind:7b": {"tools": false}, "klug": {"tools": true},
+        }});
+        crate::daten::katalog_speichern(&p, "lan", &katalog).unwrap();
+        let a = antworten(&json!({"op": "chat", "anbieter": "lan", "prompt": "x"}), &s);
+        assert_eq!(a["ok"], true, "{a}");
+        assert_eq!(a["modell"], "klug", "die Zahl im Namen darf nicht entscheiden: {a}");
+        h.join().unwrap();
+    }
+
+    #[test]
+    fn chat_ohne_gemessenen_katalog_misst_einmal_und_fragt_dann_erneut() {
+        let (b, h) = ollama::tests::server(vec![
+            (200, r#"{"models":[{"name":"a"},{"name":"b"}]}"#.into()),   // chat: Modellliste
+            (200, r#"{"models":[{"name":"a"},{"name":"b"}]}"#.into()),   // katalog: tags
+            (200, r#"{"capabilities":["completion"]}"#.into()),          // show a
+            (200, r#"{"capabilities":["tools"]}"#.into()),               // show b
+            (200, r#"{"models":[{"name":"a"},{"name":"b"}]}"#.into()),   // chat: Modellliste erneut
+            (200, r#"{"message":{"content":"ok"}}"#.into()),             // chat
+        ]);
+        let (s, p) = stand_mit_daten("nachmessen", None);
+        crate::daten::anbieter_speichern(&p, "lan", &json!({"typ": "ollama", "bezeichnung": "L", "adresse": b})).unwrap();
+        let a = antworten(&json!({"op": "chat", "anbieter": "lan", "prompt": "x"}), &s);
+        assert_eq!(a["ok"], true, "{a}");
+        assert_eq!(a["modell"], "b", "{a}");
+        assert_eq!(crate::daten::katalog_lesen(&p, "lan")["modelle"]["b"]["tools"], true);
+        h.join().unwrap();
+    }
+
+    #[test]
+    fn ein_genanntes_modell_loest_keine_messung_aus() {
+        let (b, h) = ollama::tests::server(vec![(200, r#"{"message":{"content":"ok"}}"#.into())]);
+        let (s, p) = stand_mit_daten("genannt", None);
+        crate::daten::anbieter_speichern(&p, "lan", &json!({"typ": "ollama", "bezeichnung": "L", "adresse": b})).unwrap();
+        let a = antworten(&json!({"op": "chat", "anbieter": "lan", "modell": "a", "prompt": "x"}), &s);
+        assert_eq!(a["ok"], true, "{a}");
+        h.join().unwrap();
     }
 }

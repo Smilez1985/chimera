@@ -10,7 +10,7 @@
 //! Server aus dem Testprozess, nicht mit dem Netz.
 
 use gemein::zeile::fehlerantwort;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use std::time::Duration;
 
 /// Werte, die in Beispielkonfigurationen stehen und nichts bedeuten.
@@ -190,26 +190,79 @@ pub fn katalog_von(basis: &str, budget: Duration) -> Result<serde_json::Map<Stri
     Ok(m)
 }
 
-/// `op: ollama_modelle`
-pub fn op_modelle(basis: Option<&str>) -> Value {
+/// `op: ollama_modelle`. `katalog` ist der gespeicherte Katalog; er
+/// entscheidet, welches Modell ohne weitere Frage genommen wuerde (`wahl`) —
+/// dieselbe Regel wie im Chat, an einer Stelle (`modell_waehlen`).
+pub fn op_modelle(basis: Option<&str>, katalog: &Value) -> Value {
     let Some(b) = basis else { return nicht_eingerichtet() };
     match modelle(b) {
-        Ok(m) => json!({"ok": true, "host": host_von(b), "modelle": m}),
+        Ok(m) => {
+            let (wahl, grund) = match modell_waehlen(&m, katalog) {
+                Ok(name) => (Value::String(name), Value::Null),
+                Err(g) => (Value::Null, Value::String(g)),
+            };
+            json!({"ok": true, "host": host_von(b), "modelle": m, "wahl": wahl, "wahl_grund": grund})
+        }
         Err(f) => f,
     }
 }
 
-/// `op: chat` mit `anbieter: ollama`.
-pub fn op_chat(basis: Option<&str>, anfrage: &Value) -> Value {
+/// Zeit, die ein Chat hoechstens auf eine nachgeholte Katalogmessung wartet.
+/// Der Katalog wird sonst vom Hintergrund (Netzsuche) und von der Oberflaeche
+/// erneuert; steht dort nichts, soll ein Chat nicht 40 s haengen.
+pub const KATALOG_BUDGET_SOFORT: Duration = Duration::from_secs(12);
+
+/// Waehlt ein Modell aus der Serverliste (DESIGN 5n, „Das Modell kommt vom
+/// Server"): das erste, das der Katalog mit Werkzeugen gemessen hat, in der
+/// Reihenfolge des Servers. Rein -- der Katalog ist die gespeicherte Messung
+/// (`state/katalog/<id>.json`).
+///
+/// `unbekannt` (`tools: null`) zaehlt **nicht** als „ohne Werkzeuge": es ist
+/// keine Messung. `Err` traegt den Grund im Klartext, damit der Dienst ihn
+/// melden kann; es wird nie stillschweigend irgendein Name genommen.
+pub fn modell_waehlen(modelle: &[String], katalog: &Value) -> Result<String, String> {
+    if modelle.is_empty() {
+        return Err("Der Server hat kein Modell.".to_string());
+    }
+    let leer = Map::new();
+    let gemessen = katalog["modelle"].as_object().unwrap_or(&leer);
+    let tools_von = |name: &str| gemessen.get(name).map(|e| e["tools"].clone()).unwrap_or(Value::Null);
+    if let Some(name) = modelle.iter().find(|n| tools_von(n) == Value::Bool(true)) {
+        return Ok(name.clone());
+    }
+    let unbekannt = modelle.iter().filter(|n| tools_von(n).is_null()).count();
+    let ohne = modelle.len() - unbekannt;
+    Err(match (unbekannt, ohne) {
+        (u, _) if u == modelle.len() => format!(
+            "Keines der {} gemeldeten Modelle ist gemessen (Katalog leer). Messen: katalog_aktualisieren.",
+            modelle.len()
+        ),
+        (0, _) => format!(
+            "Der Server meldet {} Modelle, keines kann Werkzeuge.",
+            modelle.len()
+        ),
+        _ => format!(
+            "Keines der {} gemeldeten Modelle kann Werkzeuge ({unbekannt} nicht gemessen).",
+            modelle.len()
+        ),
+    })
+}
+
+/// `op: chat` mit `anbieter: ollama`. `katalog` ist der gespeicherte Katalog
+/// des Anbieters; ohne genanntes Modell entscheidet `modell_waehlen`.
+pub fn op_chat(basis: Option<&str>, anfrage: &Value, katalog: &Value) -> Value {
     let Some(b) = basis else { return nicht_eingerichtet() };
     let modell = match anfrage.get("modell").and_then(Value::as_str).filter(|m| !m.is_empty()) {
         Some(m) => m.to_string(),
         None => {
-            // Kein Modell genannt: das erste vorhandene -- aber die Antwort
-            // nennt es, es wird nicht stillschweigend gewaehlt.
+            // Kein Modell genannt: aus der Serverliste waehlen, nach dem
+            // gemessenen `tools` -- die Antwort nennt es, es wird nicht
+            // stillschweigend gewaehlt.
             match modelle(b) {
-                Ok(m) if !m.is_empty() => m[0].clone(),
-                Ok(_) => return fehlerantwort("kein_modell", "Der Server hat kein Modell."),
+                Ok(m) => match modell_waehlen(&m, katalog) {
+                    Ok(name) => name,
+                    Err(grund) => return fehlerantwort("kein_modell", &grund),
+                },
                 Err(f) => return f,
             }
         }
@@ -300,8 +353,8 @@ pub(crate) mod tests {
 
     #[test]
     fn ohne_adresse_ist_es_nicht_eingerichtet() {
-        assert_eq!(op_chat(None, &json!({}))["fehler"]["code"], "nicht_eingerichtet");
-        assert_eq!(op_modelle(None)["fehler"]["code"], "nicht_eingerichtet");
+        assert_eq!(op_chat(None, &json!({}), &json!({}))["fehler"]["code"], "nicht_eingerichtet");
+        assert_eq!(op_modelle(None, &json!({}))["fehler"]["code"], "nicht_eingerichtet");
     }
 
     /// Anschluss, an den ein gebundener Testserver lauscht. Eigene Funktion,
@@ -361,7 +414,7 @@ pub(crate) mod tests {
     #[test]
     fn chat_gegen_einen_server_liefert_text_und_schickt_den_verlauf() {
         let (b, h) = server(vec![(200, r#"{"message":{"content":"Hallo"},"prompt_eval_count":5,"eval_count":2}"#.into())]);
-        let a = op_chat(Some(&b), &json!({"modell":"qwen","system":"S","verlauf":[],"prompt":"Hi"}));
+        let a = op_chat(Some(&b), &json!({"modell":"qwen","system":"S","verlauf":[],"prompt":"Hi"}), &json!({}));
         assert_eq!(a["ok"], true, "{a}");
         assert_eq!(a["text"], "Hallo");
         let anfragen = h.join().unwrap();
@@ -377,20 +430,71 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn ohne_modell_wird_das_erste_genommen_und_genannt() {
+    fn ohne_modell_waehlt_das_erste_mit_gemessenen_werkzeugen_in_serverreihenfolge() {
+        // Reihenfolge des Servers gilt, aber nur unter den tauglichen -- das
+        // zweite Modell ist das erste mit `tools`, das dritte bleibt liegen.
+        let katalog = json!({"stand": 1, "modelle": {
+            "erstes:7b": {"tools": false},
+            "zweites": {"tools": true},
+            "drittes": {"tools": true},
+        }});
         let (b, h) = server(vec![
-            (200, r#"{"models":[{"name":"erstes:7b"},{"name":"zweites"}]}"#.into()),
+            (200, r#"{"models":[{"name":"erstes:7b"},{"name":"zweites"},{"name":"drittes"}]}"#.into()),
             (200, r#"{"message":{"content":"ok"}}"#.into()),
         ]);
-        let a = op_chat(Some(&b), &json!({"prompt":"x"}));
-        assert_eq!(a["modell"], "erstes:7b", "{a}");
+        let a = op_chat(Some(&b), &json!({"prompt":"x"}), &katalog);
+        assert_eq!(a["modell"], "zweites", "{a}");
+        let anfragen = h.join().unwrap();
+        let roh = &anfragen[1];
+        let koerper: Value = serde_json::from_str(&roh[roh.find("\r\n\r\n").unwrap() + 4..]).unwrap();
+        assert_eq!(koerper["model"], "zweites", "der Server muss das gewaehlte Modell bekommen");
+    }
+
+    #[test]
+    fn ohne_taugliches_modell_kein_modell_und_keine_anfrage() {
+        // Ein Server mit zwei Modellen, keines gemessen: es wird NICHTS
+        // geschickt -- der Testserver hat nur die Modellliste zu beantworten
+        // und wuerde einen Chat-Versuch als fehlenden Aufruf melden.
+        let katalog = json!({"stand": 1, "modelle": {"a": {"tools": null}, "b": {"tools": null}}});
+        let (b, h) = server(vec![(200, r#"{"models":[{"name":"a"},{"name":"b"}]}"#.into())]);
+        let a = op_chat(Some(&b), &json!({"prompt":"x"}), &katalog);
+        assert_eq!(a["fehler"]["code"], "kein_modell", "{a}");
+        let t = a["fehler"]["text"].as_str().unwrap();
+        assert!(t.contains("gemessen"), "{t}");
+        h.join().unwrap();
+    }
+
+    #[test]
+    fn gemessen_ohne_werkzeuge_ist_ein_anderer_grund_als_unbekannt() {
+        let katalog = json!({"stand": 1, "modelle": {"a": {"tools": false}, "b": {"tools": false}}});
+        assert_eq!(
+            modell_waehlen(&["a".into(), "b".into()], &katalog).unwrap_err(),
+            "Der Server meldet 2 Modelle, keines kann Werkzeuge."
+        );
+        assert_eq!(
+            modell_waehlen(&[], &katalog).unwrap_err(),
+            "Der Server hat kein Modell."
+        );
+        assert_eq!(
+            modell_waehlen(&["a".into()], &json!({})).unwrap_err(),
+            "Keines der 1 gemeldeten Modelle ist gemessen (Katalog leer). Messen: katalog_aktualisieren."
+        );
+    }
+
+    #[test]
+    fn ein_genanntes_modell_wird_nicht_umgewaehlt() {
+        // Wer ein Modell nennt, bekommt es -- auch ohne `tools` im Katalog.
+        let katalog = json!({"modelle": {"b": {"tools": true}}});
+        let (b, h) = server(vec![(200, r#"{"message":{"content":"ok"}}"#.into())]);
+        let a = op_chat(Some(&b), &json!({"modell":"a","prompt":"x"}), &katalog);
+        assert_eq!(a["modell"], "a", "{a}");
         h.join().unwrap();
     }
 
     #[test]
     fn server_fehler_bekommt_status_und_grund() {
         let (b, h) = server(vec![(404, r#"{"error":"model 'x' not found"}"#.into())]);
-        let a = op_chat(Some(&b), &json!({"modell":"x","prompt":"y"}));
+        let a = op_chat(Some(&b), &json!({"modell":"x","prompt":"y"}), &json!({}));
         assert_eq!(a["fehler"]["code"], "anbieter_fehler");
         assert!(a["fehler"]["text"].as_str().unwrap().contains("not found"), "{a}");
         h.join().unwrap();
@@ -399,7 +503,7 @@ pub(crate) mod tests {
     #[test]
     fn zu_viele_anfragen_heissen_ausgelastet() {
         let (b, h) = server(vec![(429, r#"{"error":"busy"}"#.into())]);
-        let a = op_chat(Some(&b), &json!({"modell":"x","prompt":"y"}));
+        let a = op_chat(Some(&b), &json!({"modell":"x","prompt":"y"}), &json!({}));
         assert_eq!(a["fehler"]["code"], "ausgelastet");
         h.join().unwrap();
     }
@@ -407,15 +511,27 @@ pub(crate) mod tests {
     #[test]
     fn niemand_zu_hause_heisst_nicht_erreichbar() {
         // Port 1 auf localhost: Verbindung wird abgelehnt.
-        let a = op_chat(Some("http://127.0.0.1:1"), &json!({"modell":"x","prompt":"y"}));
+        let a = op_chat(Some("http://127.0.0.1:1"), &json!({"modell":"x","prompt":"y"}), &json!({}));
         assert_eq!(a["fehler"]["code"], "nicht_erreichbar", "{a}");
     }
 
     #[test]
     fn modellliste_ueber_den_server() {
         let (b, h) = server(vec![(200, r#"{"models":[{"name":"a"},{"name":"b:1"}]}"#.into())]);
-        let a = op_modelle(Some(&b));
+        let a = op_modelle(Some(&b), &json!({}));
         assert_eq!(a["modelle"], json!(["a", "b:1"]));
+        assert_eq!(a["wahl"], Value::Null, "ohne Messung keine Wahl: {a}");
+        assert!(a["wahl_grund"].as_str().unwrap().contains("gemessen"), "{a}");
+        h.join().unwrap();
+    }
+
+    #[test]
+    fn modellliste_nennt_die_wahl_die_ein_chat_treffen_wuerde() {
+        let (b, h) = server(vec![(200, r#"{"models":[{"name":"a"},{"name":"b"}]}"#.into())]);
+        let katalog = json!({"modelle": {"a": {"tools": false}, "b": {"tools": true}}});
+        let a = op_modelle(Some(&b), &katalog);
+        assert_eq!(a["wahl"], "b", "{a}");
+        assert_eq!(a["wahl_grund"], Value::Null);
         h.join().unwrap();
     }
 

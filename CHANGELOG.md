@@ -20,6 +20,20 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Das Modell kommt aus der Serverliste** (`rust/crates/tor/src/ollama.rs`,
+  `dienst.rs`): `ollama::modell_waehlen` ist der eine Ort für die Regel —
+  ein genanntes Modell gilt; sonst das **erste in der Reihenfolge des
+  Servers**, das der Katalog mit `tools: true` gemessen hat; sonst
+  `kein_modell` mit Klartext-Grund („kein Modell", „keines kann
+  Werkzeuge", „nicht gemessen"), und es wird nichts geschickt. `op: modelle`
+  nennt dieselbe Wahl als `wahl` (und `wahl_grund`), damit der Dienst sie
+  nicht nachbaut — er nimmt sie fürs Kontextfenster (5a). Ist für **kein**
+  Modell etwas gemessen, misst das Gateway einmal selbst (12 s) und
+  entscheidet neu; sonst bliebe ein Anbieter, den die Netzsuche nicht
+  auffrischt (`auto: false`), dauerhaft ohne Antwort. Tests: 4 in
+  `ollama`, 3 in `dienst` (u. a. „ohne taugliches Modell wird nichts
+  geschickt" — der Testserver bekommt nur die Modellliste) und 5 in
+  `tests/test_gateway_provider.py`.
 - **Gleichheit gegen die Python-Seite belegt** (`tests/test_sohelper_gleichheit.py`):
   dieselben Befehle und Pfade gehen durch `safety.py` **und** durch einen
   laufenden `chimera-sohelper`; verglichen wird das Urteil und der Text der
@@ -478,6 +492,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **`OLLAMA_MODEL` entfällt** (smilez, 11.11.): `provider/gateway.py` liest
+  die Umgebung nicht mehr, sondern schickt ohne eigene Wahl ein leeres
+  Modell — das Gateway entscheidet. `provider/setup.py` nimmt die Wahl des
+  Gateways statt der Zahl im Modellnamen (`_size_of` bleibt nur für
+  Anbieter, die keine Wahl melden). `SERVICE_ENV_NAMEN` im Installer ist
+  leer: eine Einstellung, die aussieht wie ein Schalter und keiner ist,
+  gehört nicht in die Umgebung des Dienstes.
 - **Der Agent führt nichts mehr selbst aus** (`src/chimera/agent/sohelper.py`,
   `tools.py`): `run_command`, `read_file`, `write_file` und `list_dir` gehen
   als eine JSON-Zeile an den Socket des Ausführers; geprüft und ausgeführt
@@ -811,6 +832,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Das Kontextfenster kam nie aus einer Messung** (`provider/gateway.py`):
+  Der Dienst las den Katalog flach (`.get(modell)`), das Gateway legt ihn
+  aber als `{"stand": …, "modelle": {…}}` ab (`daten::katalog_lesen`) —
+  der Treffer war immer leer, und es blieb beim angenommenen Wert. Der Test
+  hatte die falsche Form **nachgebaut** und war deshalb grün. Jetzt wird
+  unter `modelle` gelesen, und der Test benutzt die echte Form.
 - **`write_file` schrieb nicht sicher** (`agent/tools.py`): Die Nebendatei
   hatte einen festen Namen (zwei Schreiber teilten sie), es fehlte `fsync` vor
   dem Umbenennen (nach Stromausfall eine leere Datei), und bestehende Rechte
