@@ -81,6 +81,18 @@ jobs:
       - name: Tests
         run: cargo test --locked --target "$ZIEL"
 
+      - name: Gleichheit Python <-> Ausfuehrer
+        # Zwei Umsetzungen derselben Regeln (agent/safety.py und
+        # rust/crates/sohelper) muessen dasselbe Urteil und denselben Text
+        # liefern. Der Test startet den Ausfuehrer und schickt dieselben
+        # Faelle durch beide Seiten. Er laeuft HIER, weil der Runner arm64
+        # ist und das gebaute Binary ausfuehren kann -- auf x86 waere es
+        # "Exec format error" (derselbe Test ueberspringt dort und sagt es).
+        run: |
+          set -eu
+          CHIMERA_SOHELPER_BIN="$PWD/target/$ZIEL/release/chimera-sohelper" \
+            python3 ../tests/test_sohelper_gleichheit.py
+
       - name: Lizenzen und Schwachstellen (cargo deny)
         run: |
           set -eu
