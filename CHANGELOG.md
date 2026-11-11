@@ -735,6 +735,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Der Oracle-Cache beantwortete eine größere Frage als gestellt**
+  (`chimera-tor --mojo --miracle --bereich netz`): Lag ein Ergebnis mit
+  `exitcode 0` von vorhin da, endete der Lauf sofort mit 0 — ohne das Netz zu
+  prüfen. Ist ein Bereich genannt, wird der Cache jetzt nicht befragt
+  (`darf_cache_antworten`, DESIGN Regel „Mojo"); der Lauf prüft selbst, auf
+  den gefilterten Bereich. Test mit Gegenprobe (Cache immer befragen → rot).
 - **Die V1-Warnung hing am HAT-EEPROM, das unser Board nicht hat**: Die
   Meldung „Auf V1 führt die Button-Leitung 5 V — ein Tastendruck kann das
   Board stromlos schalten" erschien nur bei `present`, also auf unserem

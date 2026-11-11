@@ -47,7 +47,7 @@ Aus dem Code-Review vom 11.11. Jeder Punkt ist ein eigener Commit mit Test
 **und Gegenprobe** (die Regel steht in DESIGN: „Ein Cache antwortet nur auf
 seine Frage", „Atomar schreiben", 5a).
 
-- [ ] **2.1 Oracle-Cache beantwortet eine größere Frage als gestellt**
+- [x] **2.1 Oracle-Cache beantwortet eine größere Frage als gestellt** (`8913730`-Phase, Fix mit Test)
       (`rust/crates/tor/src/main.rs`, `mojo_befehl`): Bei `--bereich netz`
       filtert der Befehl die Prüfungen, befragt aber den globalen Cache; ein
       „ok von vorhin" beendet den Lauf mit 0, ohne das Netz zu prüfen. Fix:

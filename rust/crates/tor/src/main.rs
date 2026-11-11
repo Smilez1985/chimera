@@ -74,6 +74,15 @@ fn modul_neu(a: &[String]) -> Result<PathBuf, String> {
 
 /// `--mojo`: pruefen (und mit `--miracle` sanft reparieren), Bericht ausgeben,
 /// den Bericht auch als Datei ablegen (Vorgabe `state/mojo-letzter.json`).
+/// Darf das Miracle sein Urteil aus dem abgelegten Oracle-Ergebnis holen?
+///
+/// Nur, wenn die gestellte Frage dieselbe ist wie damals. Ein genannter
+/// Bereich fragt etwas Engeres -- dort antwortet der Cache nicht, sondern
+/// es wird geprueft (DESIGN, Regel Mojo).
+fn darf_cache_antworten(bereich: Option<&str>) -> bool {
+    bereich.is_none()
+}
+
 fn mojo_befehl(a: &[String]) -> ExitCode {
     let (mut fix, mut json, mut datei) = (false, false, None::<PathBuf>);
     let mut bereich: Option<String> = None;
@@ -139,7 +148,13 @@ fn mojo_befehl(a: &[String]) -> ExitCode {
     // Miracle greift auf das letzte Oracle-Ergebnis zurueck, wenn es nicht
     // aelter als 6 Stunden ist. Fehlt es (oder ist es alt), laeuft Oracle
     // zuerst -- Miracle prueft dann selbst, statt blind zu reparieren.
-    if miracle && !fortsetzen {
+    //
+    // Ausnahme: Ist ein Bereich genannt, wird der Cache NICHT befragt. Sein
+    // "exitcode 0" gilt fuer die Pruefungen, die damals liefen -- ueber
+    // "--bereich netz" sagt es nichts (DESIGN, Regel Mojo: "ein Cache
+    // antwortet nur auf die Frage, die er beantwortet hat"). Der Lauf
+    // prueft dann selbst, auf den gefilterten Bereich.
+    if miracle && !fortsetzen && !darf_cache_antworten(bereich.as_deref()) {
         let pfad = datei.clone().unwrap_or_else(mojo::oracle_pfad);
         match mojo::oracle_lesen(&pfad) {
             Some(alt) => {
@@ -516,6 +531,16 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
+    // Regel Mojo: Ein Cache antwortet nur auf die Frage, die er beantwortet
+    // hat. Ein "alles in Ordnung" von vorhin beendet keinen Lauf, der nur
+    // das Netz pruefen soll.
+    #[test]
+    fn cache_antwortet_nicht_auf_einen_bereich() {
+        assert!(super::darf_cache_antworten(None));
+        assert!(!super::darf_cache_antworten(Some("netz")));
+        assert!(!super::darf_cache_antworten(Some("dienste")));
+    }
+
     #[test]
     fn pruefen_nennt_version_und_zustand() {
         let p = super::pruefen();
