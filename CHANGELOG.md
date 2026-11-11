@@ -835,6 +835,16 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Die Gegenprobe zu Modul 55 maß nichts mehr** (`counter-check-rust.sh`):
+  Seit das Ablegen und Prüfen des Binaries in `installer/lib/binary.sh` liegt
+  (`186a116`, `a8098b4`), zeigten 11 von 13 Mutationen auf Muster, die in
+  `steps/55-rust.sh` nicht mehr stehen — sie meldeten „Mutation griff nicht"
+  statt zu prüfen. Gemerkt hat es niemand, weil die CI die
+  `counter-check-*.sh` nicht fährt. Jetzt: Schritt 55 lädt die Bibliothek über
+  `CHIMERA_BINARY_LIB` (Vorgabe unverändert der eigene Pfad), die Gegenprobe
+  hat ein Ziel `lib` und verfälscht die Bibliothek selbst. Alle 13 Mutationen
+  werden rot, jede am erwarteten Prüfpunkt. Der Rückbau-Prüfpunkt hieß
+  außerdem noch `$_pfad` statt `$_ziel`.
 - **Die Wahl sah einen leeren Katalog, weil der Anbieter anders heißt**
   (`dienst.rs`, am Gerät gemessen 11.11.): Die Netzsuche legt den Server als
   `ollama-192-168-178-100` an, der Dienst fragt `ollama` über die Adresse aus

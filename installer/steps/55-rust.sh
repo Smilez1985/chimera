@@ -41,7 +41,10 @@ _HERE="$(cd "$(dirname "$0")/.." && pwd)"
 . "$_HERE/lib/network.sh"
 . "$_HERE/lib/manifest.sh"
 . "$_HERE/lib/source.sh"
-. "$_HERE/lib/binary.sh"
+# Der Pfad ist ueberschreibbar, damit die Gegenprobe (Regel 9) eine
+# verfaelschte Fassung unterschieben kann -- sonst waere das Ablegen und
+# Pruefen des Binaries ungemessen.
+. "${CHIMERA_BINARY_LIB:-$_HERE/lib/binary.sh}"
 
 CHIMERA_STEP="55-rust"; export CHIMERA_STEP
 

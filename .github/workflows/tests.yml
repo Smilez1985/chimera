@@ -113,6 +113,26 @@ jobs:
           done
           [ "$fehl" -eq 0 ] || { printf '\n%d Testdatei(en) rot.\n' "$fehl"; exit 1; }
 
+      - name: Gegenproben der Binary-Ablage (nur busybox)
+        # Regel 9: eine Zusage ohne Gegenprobe ist eine Behauptung. Diese
+        # Skripte liefen bisher NUR lokal -- deshalb blieb unbemerkt, dass
+        # counter-check-rust nach dem Umbau auf lib/binary.sh elf Mutationen
+        # gar nicht mehr anwendete (11.11.2026). Nur in einem Zweig, damit
+        # die Laufzeit nicht zweimal anfaellt.
+        if: matrix.shell == 'busybox'
+        run: |
+          set -eu
+          cd installer
+          fehl=0
+          for t in tests/counter-check-rust.sh tests/counter-check-sohelper.sh; do
+            printf '=== %s ===\n' "$t"
+            if sudo -E busybox sh "$t"; then :; else
+              fehl=$((fehl + 1))
+              printf 'ROT: %s\n' "$t"
+            fi
+          done
+          [ "$fehl" -eq 0 ] || { printf '\n%d Gegenprobe(n) rot.\n' "$fehl"; exit 1; }
+
       - name: Syntax aller Skripte
         # Ein Syntaxfehler in einem Modul, das kein Test aufruft, faellt
         # sonst erst auf dem Geraet auf.

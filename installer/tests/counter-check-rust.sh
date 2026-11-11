@@ -3,12 +3,21 @@
 #
 # Je eine Zusage von Modul 55 oder seinem Rueckbau wird in einer KOPIE
 # verfaelscht; der Test laeuft gegen die Kopie (CHIMERA_STEP_55 /
-# CHIMERA_STEP_RM55) und muss rot werden -- am erwarteten Pruefpunkt. Eine
-# Mutation, die die Datei nicht veraendert, ist selbst ein Fehler.
+# CHIMERA_STEP_RM55 / CHIMERA_BINARY_LIB) und muss rot werden -- am
+# erwarteten Pruefpunkt. Eine Mutation, die die Datei nicht veraendert, ist
+# selbst ein Fehler.
+#
+# **Warum `lib` als Ziel (11.11.2026):** Ablegen und Pruefen des Binaries
+# stehen seit `186a116`/`a8098b4` in `installer/lib/binary.sh`, nicht mehr in
+# `steps/55-rust.sh`. Die Mutationen zeigten deshalb ins Leere ("Muster
+# fehlt") -- elf von dreizehn -- und niemand merkte es, weil die CI die
+# `counter-check-*.sh` nicht faehrt. Schritt 55 laedt die Bibliothek ueber
+# `CHIMERA_BINARY_LIB`, damit die Gegenprobe wieder etwas misst.
 set -eu
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 STEP="$HERE/steps/55-rust.sh"
+LIB="$HERE/lib/binary.sh"
 RMSTEP="$REPO/uninstaller/steps/55-remove-rust.sh"
 TEST="$HERE/tests/test-rust.sh"
 PASS=0; FAIL=0
@@ -32,12 +41,14 @@ else
 	tail -5 "$G/basis.txt"
 fi
 
-# $1 Name, $2 step|rm, $3 alt, $4 neu, $5 erwarteter FAIL-Text
+# $1 Name, $2 step|lib|rm, $3 alt, $4 neu, $5 erwarteter FAIL-Text
 mutation() {
 	_m="$G/$1"; mkdir -p "$_m"
 	case "$2" in
 		step) cp "$STEP" "$_m/55.sh"; _neu="$_m/55.sh"; _env="CHIMERA_STEP_55=$_neu" ;;
+		lib)  cp "$LIB" "$_m/binary.sh"; _neu="$_m/binary.sh"; _env="CHIMERA_BINARY_LIB=$_neu" ;;
 		rm)   cp "$RMSTEP" "$_m/55-remove.sh"; _neu="$_m/55-remove.sh"; _env="CHIMERA_STEP_RM55=$_neu" ;;
+		*)    bad "$1: unbekanntes Ziel $2"; return ;;
 	esac
 	if ! python3 - "$_neu" "$3" "$4" <<'PY'
 import sys
@@ -62,67 +73,65 @@ PY
 }
 
 # M1: Pruefsumme wird nicht verglichen -- eine manipulierte Datei kaeme durch.
-mutation summe-egal step \
-	'if [ "$_ist_summe" != "$_SUMME" ]; then' 'if false; then' \
+mutation summe-egal lib \
+	'if [ "$_ba_ist" != "$_ba_summe" ]; then' 'if false; then' \
 	"falsche Summe: benannt"
 
 # M2: Version wird nicht geprueft.
-mutation version-egal step \
-	'if [ "$_ist" != "chimera-tor $SOLL_V" ]; then' 'if false; then' \
+mutation version-egal lib \
+	'if [ "$_ba_ist" != "$_ba_prog $_ba_soll_v" ]; then' 'if false; then' \
 	"falsche Version: rc 2"
 
 # M3: Laufprobe entfaellt -- ein Binary, das nie startet, wird abgelegt.
-mutation ohne-laufprobe step \
-	'if [ "$_ist" != "chimera-tor $SOLL_V" ]; then' 'if false; then' \
+mutation ohne-laufprobe lib \
+	'_ba_ist="$("$_ba_tmp/$_ba_asset" --version 2>/dev/null || true)"' '_ba_ist="$_ba_prog $_ba_soll_v"' \
 	"Binary laeuft nicht: rc 2"
 
 # M4: Architektur wird nicht geprueft.
-mutation arch-egal step \
-	'case "$_arch" in
-	aarch64|arm64) : ;;' 'case "aarch64" in
-	aarch64|arm64) : ;;' \
+mutation arch-egal lib \
+	'	case "$_ba_arch" in
+		aarch64|arm64) : ;;' '	case "aarch64" in
+		aarch64|arm64) : ;;' \
 	"armv7l: benannt"
 
 # M5: Eine fremde Datei am Zielort wird ueberschrieben.
-mutation fremde-datei step \
-	'	if [ -z "$_eigen_summe" ]; then
-		err "$BIN existiert und steht nicht im Manifest' '	if false; then
-		err "$BIN existiert und steht nicht im Manifest' \
-	"fremde Datei: rc 2"
+mutation fremde-datei lib \
+	'		err "$_ba_bin existiert und steht nicht im Manifest -- wird nicht ueberschrieben."' \
+	'		: # fremde Datei wird ueberschrieben' \
+	"fremde Datei: benannt"
 
 # M6: Idempotenz fehlt -- jeder Lauf schreibt neu.
-mutation immer-schreiben step \
-	'if [ -n "$_eigen_summe" ] && [ "$_eigen_summe" = "$_SUMME" ] && \' 'if false && \' \
+mutation immer-schreiben lib \
+	'if [ -n "$_ba_eigen" ] && [ "$_ba_eigen" = "$_ba_summe" ] && \' 'if false && \' \
 	"zweiter Lauf: nicht neu geschrieben"
 
 # M7: Alte Manifestzeile bleibt stehen (zwei Zeilen fuer dieselbe Datei).
-mutation manifest-doppelt step \
-	'if [ -n "$_eigen_summe" ] && [ -f "$CHIMERA_MANIFEST" ]; then' 'if false; then' \
+mutation manifest-doppelt lib \
+	'if [ -n "$_ba_eigen" ] && [ -z "$_ba_fremd_modul" ] && [ -f "$CHIMERA_MANIFEST" ]; then' 'if false; then' \
 	"neue Fassung: eine Manifestzeile fuer die Datei"
 
 # M8: Trockenlauf legt doch ab.
-mutation trockenlauf-schreibt step \
-	'info "[wuerde ablegen] $BIN (root, 755)"
-	log_close 0; exit 0
-fi' 'info "[wuerde ablegen] $BIN (root, 755)"
-fi' \
+mutation trockenlauf-schreibt lib \
+	'		info "[wuerde ablegen] $_ba_bin (root, 755)"
+		return 0
+	fi' '		info "[wuerde ablegen] $_ba_bin (root, 755)"
+	fi' \
 	"Trockenlauf: nichts abgelegt"
 
 # M9: Der Hinweis auf einen neueren rust/-Baum faellt weg.
-mutation ohne-hinweis step \
-	'	if [ -n "$_jetzt_h" ] && [ -n "$_alt_h" ] && [ "$_jetzt_h" != "$_alt_h" ]; then' '	if false; then' \
+mutation ohne-hinweis lib \
+	'	if [ -n "$_ba_jetzt_h" ] && [ -n "$_ba_alt_h" ] && [ "$_ba_jetzt_h" != "$_ba_alt_h" ]; then' '	if false; then' \
 	"rust/ neuer: gemeldet"
 
 # M10: Ein fehlendes Binary ist kein Befund (rc 0 statt 1).
-mutation ohne-binary-kein-befund step \
-	'		warn "Kein Binary im Startbaum: $QUELLE fehlt."' '		info "Kein Binary im Startbaum."
-		log_close 0; exit 0
-		warn "Kein Binary im Startbaum: $QUELLE fehlt."' \
+mutation ohne-binary-kein-befund lib \
+	'		if [ ! -f "$_ba_quelle" ]; then' '		if [ ! -f "$_ba_quelle" ]; then
+			log_close 0; exit 0' \
 	"kein Binary: rc 1"
 
 # M11: Rueckbau loescht auch eine ausgetauschte Datei.
 mutation rueckbau-ohne-summe rm \
-	'if [ -n "$_soll" ] && [ "$(network_checksum "$_pfad")" != "$_soll" ]; then' 'if false; then' \
+	'if [ -n "$_soll" ] && [ "$(network_checksum "$_ziel")" != "$_soll" ]; then' 'if false; then' \
 	"Rueckbau fremd: rc 1"
 
 # M12: Rueckbau entfernt bin/ auch mit Fremdem darin (rm -rf statt rmdir).
