@@ -87,6 +87,7 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
                 Ok(adr) => ollama::op_modelle(
                     adr.as_deref(),
                     &katalog_fuer(a, adr.as_deref(), stand),
+                    &bevorzugt(a, stand),
                 ),
                 Err(f) => f,
             },
@@ -147,20 +148,30 @@ fn ollama_adresse(id: &str, stand: &Stand) -> Result<Option<String>, Value> {
 fn chat(id: &str, anfrage: &Value, stand: &Stand) -> Value {
     let adr = match ollama_adresse(id, stand) {
         Ok(Some(a)) => a,
-        Ok(None) => return ollama::op_chat(None, anfrage, &json!({})),
+        Ok(None) => return ollama::op_chat(None, anfrage, &json!({}), &[]),
         Err(f) => return f,
     };
     let mut katalog = katalog_fuer(id, Some(&adr), stand);
-    let a = ollama::op_chat(Some(&adr), anfrage, &katalog);
+    let a = ollama::op_chat(Some(&adr), anfrage, &katalog, &bevorzugt(id, stand));
     let genannt = anfrage.get("modell").and_then(Value::as_str).is_some_and(|m| !m.is_empty());
     if a["fehler"]["code"] == "kein_modell" && !genannt && !katalog_gemessen(&katalog) {
         let r = katalog_aktualisieren(&json!({"id": id}), stand, ollama::KATALOG_BUDGET_SOFORT);
         if r["ok"] == true {
             katalog = crate::daten::katalog_lesen(&stand.daten, id);
-            return ollama::op_chat(Some(&adr), anfrage, &katalog);
+            return ollama::op_chat(Some(&adr), anfrage, &katalog, &bevorzugt(id, stand));
         }
     }
     a
+}
+
+/// Die Reihenfolge, die der Nutzer in `wahl.json` fuer diesen Anbieter
+/// vorgegeben hat (5h). Fehlt die Datei oder ist sie unlesbar, ist die Liste
+/// leer -- dann gilt die Reihenfolge des Servers (kein stiller Ausfall).
+fn bevorzugt(id: &str, stand: &Stand) -> Vec<String> {
+    match crate::daten::wahl_laden(&stand.daten) {
+        Ok(w) => crate::daten::bevorzugt(&w, id),
+        Err(_) => Vec::new(),
+    }
 }
 
 /// Der gespeicherte Katalog zu einem Anbieter.

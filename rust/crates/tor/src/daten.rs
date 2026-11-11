@@ -309,6 +309,28 @@ pub fn verweis_teilen(v: &str) -> Option<(&str, &str)> {
     (id_gueltig(a) && !m.is_empty()).then_some((a, m))
 }
 
+/// Die Modelle eines Anbieters in der vom Nutzer gewaehlten Reihenfolge
+/// (`wahl.json` -> `reihenfolge`, Verweise `<anbieter>/<modell>`).
+///
+/// Rein und ohne Pruefung gegen den Katalog: hier steht nur, was der Nutzer
+/// vorgegeben hat. Ob das Modell noch existiert und Werkzeuge kann, entscheidet
+/// die Wahl im Gateway (`ollama::modell_waehlen`) -- die Datei ist eine
+/// Absicht, keine Messung.
+pub fn bevorzugt(wahl: &Value, id: &str) -> Vec<String> {
+    wahl.get("reihenfolge")
+        .and_then(Value::as_array)
+        .map(|liste| {
+            liste
+                .iter()
+                .filter_map(Value::as_str)
+                .filter_map(verweis_teilen)
+                .filter(|(aid, _)| *aid == id)
+                .map(|(_, modell)| modell.to_string())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 pub fn wahl_laden(p: &Pfade) -> Result<Value, Meldung> {
     let f = p.wahl_datei();
     let Ok(t) = fs::read_to_string(&f) else { return Ok(json!({"reihenfolge": []})) };
@@ -638,6 +660,14 @@ mod tests {
         let mut m = Map::new();
         m.insert(id.into(), katalog_abgleichen(&json!({}), &gemeldet(namen), 1));
         m
+    }
+
+    #[test]
+    fn bevorzugt_liest_die_reihenfolge_dieses_anbieters() {
+        let w = json!({"reihenfolge": ["ollama/b", "anthropic/x", "ollama/a", "murks", 7]});
+        assert_eq!(bevorzugt(&w, "ollama"), vec!["b".to_string(), "a".to_string()]);
+        assert!(bevorzugt(&w, "weg").is_empty());
+        assert!(bevorzugt(&json!({}), "ollama").is_empty(), "keine Datei: keine Vorgabe");
     }
 
     #[test]
