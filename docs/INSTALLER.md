@@ -493,9 +493,10 @@ braucht **kein Netz**: Das Binary liegt mit im Repo.
 - **`CHIMERA_RUST_LOKAL`:** ein selbst gebautes Binary statt des
   ausgelieferten (Entwicklung). Prüfsumme, Laufprobe und Version gelten
   unverändert; einen Stand hat es nicht.
-- **Ablegen einer neuen Fassung:** `tools/gateway-binary.sh <binary>
-  [--commit <kurz>]` — prüft Lauf und Version, schreibt Binary, Prüfsumme
-  und Stand nach `gateway/`.
+- **Ablegen einer neuen Fassung:** `tools/binary-ablegen.sh <binary> --art
+  tor` (Kurzform: `tools/gateway-binary.sh <binary>`) — prüft Lauf und
+  Version, schreibt Binary, Prüfsumme und Stand nach `gateway/`. Für den
+  Ausführer dasselbe mit `--art sohelper` nach `sohelper/`.
 - **Rückbau:** `uninstaller/steps/55-remove-rust.sh` entfernt, was im
   Manifest steht (Modul `55-rust`).
 

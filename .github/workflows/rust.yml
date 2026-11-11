@@ -98,20 +98,25 @@ jobs:
       - name: Binary pruefen und Pruefsumme
         # Statisch heisst: kein Interpreter-Eintrag. Und das Binary muss
         # laufen und die Version aus VERSION nennen, nicht irgendeine.
+        # Beide Programme des Workspace, die im Repo liegen (Regel 14,
+        # "Binary im Repo"): Gateway und Ausfuehrer.
         run: |
           set -eu
-          b="target/$ZIEL/release/chimera-tor"
-          file "$b"
-          file "$b" | grep -q 'statically linked' || { echo "nicht statisch gelinkt"; exit 1; }
           soll="$(tr -d ' \t\r\n' < ../VERSION)"
-          ist="$("$b" --version)"
-          [ "$ist" = "chimera-tor $soll" ] || { echo "Version: '$ist' statt '$soll'"; exit 1; }
-          "$b" --pruefen
           mkdir -p ../ausgabe
-          cp "$b" ../ausgabe/chimera-tor-aarch64
-          cd ../ausgabe && sha256sum chimera-tor-aarch64 > chimera-tor-aarch64.sha256
-          cat chimera-tor-aarch64.sha256
-          ls -l
+          for pa in chimera-tor:chimera-tor-aarch64 chimera-sohelper:chimera-sohelper-aarch64; do
+            prog="${pa%%:*}"; asset="${pa##*:}"
+            b="target/$ZIEL/release/$prog"
+            file "$b"
+            file "$b" | grep -q 'statically linked' || { echo "$prog: nicht statisch gelinkt"; exit 1; }
+            ist="$("$b" --version)"
+            [ "$ist" = "$prog $soll" ] || { echo "$prog: Version '$ist' statt '$prog $soll'"; exit 1; }
+            cp "$b" "../ausgabe/$asset"
+            ( cd ../ausgabe && sha256sum "$asset" > "$asset.sha256" )
+            cat "../ausgabe/$asset.sha256"
+          done
+          "target/$ZIEL/release/chimera-tor" --pruefen
+          ls -l ../ausgabe
 
       - uses: actions/upload-artifact@v4
         with:

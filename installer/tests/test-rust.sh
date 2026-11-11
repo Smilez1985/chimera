@@ -279,6 +279,36 @@ check "Werkzeug: Binary liegt da" "$([ -x "$WT/gateway/chimera-tor-aarch64" ] &&
 hat "Werkzeug: Pruefsumme geschrieben" "$(cat "$WT/gateway/chimera-tor-aarch64.sha256")" "$(summe "$WT/gateway/chimera-tor-aarch64")"
 hat "Werkzeug: Stand nennt den Commit" "$(cat "$WT/gateway/chimera-tor-aarch64.stand")" "deadbee"
 
+# Dasselbe Werkzeug, andere Art: der Ausfuehrer landet in sohelper/.
+# Die Attrappe nennt den Programmnamen aus dem Namen, nicht fest "chimera-tor"
+# (ein Binary, das sich falsch vorstellt, muss abgelehnt werden).
+soh_bauen() { # $1 Datei, $2 Version
+	printf '#!/bin/sh\n[ "${1:-}" = --version ] && { echo "chimera-sohelper %s"; exit 0; }\nexit 2\n' "$2" >"$1"
+	chmod 755 "$1"
+}
+soh_bauen "$W/werkzeug-soh" "$VERSION_SOLL"
+set +e
+OUT="$(env CHIMERA_ROOT="" sh "$WT/tools/binary-ablegen.sh" "$W/werkzeug-soh" --art sohelper --commit deadbee 2>&1)"
+RC=$?
+set -e
+check "Werkzeug --art sohelper: rc 0" "$RC" "0"
+check "Werkzeug --art sohelper: Binary liegt da" \
+	"$([ -x "$WT/sohelper/chimera-sohelper-aarch64" ] && echo ja || echo nein)" "ja"
+hat "Werkzeug --art sohelper: Stand nennt den Commit" \
+	"$(cat "$WT/sohelper/chimera-sohelper-aarch64.stand")" "deadbee"
+
+# Gegenprobe: ein Gateway-Binary unter --art sohelper wird abgelehnt, und die
+# abgelegte Datei bleibt unangetastet (sonst waere "abgelehnt" nur ein Wort).
+SUMME_VOR="$(summe "$WT/sohelper/chimera-sohelper-aarch64")"
+STAND_VOR="$(cat "$WT/sohelper/chimera-sohelper-aarch64.stand")"
+set +e
+OUT="$(env CHIMERA_ROOT="" sh "$WT/tools/binary-ablegen.sh" "$W/werkzeug-bin" --art sohelper --commit cafebee 2>&1)"
+RC=$?
+set -e
+check "Gegenprobe: falsches Programm -> rc 1" "$RC" "1"
+check "Gegenprobe: Datei unveraendert" "$(summe "$WT/sohelper/chimera-sohelper-aarch64")" "$SUMME_VOR"
+check "Gegenprobe: Stand unveraendert" "$(cat "$WT/sohelper/chimera-sohelper-aarch64.stand")" "$STAND_VOR"
+
 # ... und Schritt 55 nimmt genau das, ohne dass etwas nachgeholt werden muss.
 mkroot werkzeug; T="$WT"
 fahr run

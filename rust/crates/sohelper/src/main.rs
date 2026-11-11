@@ -28,6 +28,7 @@ fn usage() -> ! {
          \n\
          Aufruf:\n\
          \x20 chimera-sohelper --socket <pfad> --arbeit <verzeichnis>\n\
+         \x20 chimera-sohelper --version   Version ausgeben\n\
          \n\
          Der Socket gehoert dem Ausfuehrer, die Gruppe dem Agenten (0660) --\n\
          nur er darf fragen. --arbeit ist die Wurzel aller Pfade; ausserhalb\n\
@@ -50,6 +51,13 @@ fn main() {
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
+            // Dieselbe Form wie beim Gateway ("chimera-tor <VERSION>"): Der
+            // Installer prueft damit, ob das abgelegte Binary zur VERSION im
+            // Repo passt (Aufnahme in DESIGN, Regel 14 -- Binary im Repo).
+            "--version" | "-V" => {
+                println!("chimera-sohelper {}", gemein::version());
+                std::process::exit(0);
+            }
             "--socket" => socket = args.next().map(PathBuf::from),
             "--arbeit" => arbeit = args.next().map(PathBuf::from),
             "-h" | "--help" => usage(),

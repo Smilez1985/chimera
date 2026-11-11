@@ -3533,6 +3533,16 @@ sauber, Rauchtest über den Socket:
   (`tests/test_agent.py` über den Socket); danach die Umstellung von
   `agent/tools.py` und das Entfernen des alten Wegs.
 
+**Das Binary des Ausführers liegt im Repo unter `sohelper/`** (smilez,
+11.11.2026) — derselbe Weg wie beim Gateway (Regel 14, „Binary im Repo"):
+`sohelper/chimera-sohelper-aarch64` mit `.sha256` und `.stand` daneben, ein
+eigener Ordner statt `gateway/`, weil dort das Gateway liegt und der Name
+sonst lügt. Gebaut wird in der CI (beide Programme des Workspace, ein
+Lauf); abgelegt von `tools/binary-ablegen.sh <binary> --art sohelper`
+(`--art tor` für das Gateway, `tools/gateway-binary.sh` bleibt als
+Kurzform). Beide Programme nennen ihre Version als `<programm> <VERSION>` —
+daran prüft das Werkzeug, ob Binary und Repo zusammenpassen.
+
 **Was die Regel nicht leistet.** Die eigentliche Schranke bleiben die
 Rechte des Nutzers (Regel 10r). Der eigene Prozess verhindert, dass der
 Agent die Prüfung auslässt oder ändert; er verhindert keinen Fehler in den

@@ -20,7 +20,7 @@ The test ignores them.
 | [3. Gateway](#3-gateway--gateway) | `chimera-tor` |
 | [4. Anzeige & Hardware](#4-anzeige--hardware--display--hardware) | `python3 -m chimera.displays` |
 | [5. Betrieb](#5-betrieb--operations) | `log-abgleich.sh` |
-| [6. Entwicklung](#6-entwicklung--development) | `tools/*.py`, `tools/gateway-binary.sh`, `installer/run-tests.sh` |
+| [6. Entwicklung](#6-entwicklung--development) | `tools/*.py`, `tools/binary-ablegen.sh`, `installer/run-tests.sh` |
 | [7. Umgebungsvariablen](#7-umgebungsvariablen--environment-variables) | `CHIMERA_*` |
 
 Exitcodes: `0` in Ordnung / ok, `1` Befund / finding, `2` Aufruf oder
@@ -213,7 +213,8 @@ Braucht `CHIMERA_LOG_RAM` und `CHIMERA_LOG_KARTE`. / Needs both variables.
 | `python3 tools/check-globals.py` | Namen finden, die gelesen, aber nie definiert werden. / Find names read as globals but never defined. |
 | `python3 tools/contact-sheet.py [ZIEL.png]` | Moods nebeneinander zeichnen. / Draw moods side by side. |
 | `python3 tools/import-noisy-moods.py PFAD [ZIEL.json]` | Noisys 41 Moods als Startbestand übernehmen. / Import Noisy's 41 moods. |
-| `tools/gateway-binary.sh BINARY [--commit KURZ] [--ohne-probe]` | Ein gebautes `chimera-tor` nach `gateway/` legen, mit Prüfsumme und Stand. Prüft Lauf und Version. / Place a built `chimera-tor` in `gateway/` with checksum and stand. |
+| `tools/binary-ablegen.sh BINARY --art tor|sohelper [--commit KURZ] [--ohne-probe]` | Ein gebautes Binary nach `gateway/` bzw. `sohelper/` legen, mit Prüfsumme und Stand. Prüft Lauf und Version. / Place a built binary in `gateway/` or `sohelper/` with checksum and stand. |
+| `tools/gateway-binary.sh BINARY [--commit KURZ] [--ohne-probe]` | Kurzform davon für das Gateway (`--art tor`). / Short form for the gateway (`--art tor`). |
 
 Langläufer immer abgekoppelt starten (nicht im Turn warten). / Always start
 long runs detached.

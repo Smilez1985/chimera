@@ -20,6 +20,16 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Das Binary des Ausführers liegt im Repo** (`sohelper/chimera-sohelper-aarch64`,
+  entschieden 11.11.): derselbe Weg wie beim Gateway — Prüfsumme und Stand
+  daneben, aus dem Startbaum eingespielt, nie auf dem Gerät gebaut. Der
+  Ausführer nennt seine Version jetzt als `chimera-sohelper <VERSION>`
+  (`--version`, wie `chimera-tor`); daran prüft die Ablage, ob Binary und
+  Repo zusammenpassen. Die CI baut beide Programme in einem Lauf und legt
+  beide als Artefakt ab. Abgelegt wird mit **einem** Werkzeug,
+  `tools/binary-ablegen.sh <binary> --art tor|sohelper`;
+  `tools/gateway-binary.sh` bleibt als Kurzform für das Gateway, damit
+  Skripte, Doku und Tests weiter stimmen.
 - **Ausführer `chimera-sohelper` (`rust/crates/sohelper`)** — der eigene
   Prozess aus der Regel „Wer prüft, führt aus": Er nimmt Werkzeugwünsche
   über einen Unix-Socket an (eine JSON-Zeile hin, eine zurück), prüft sie
