@@ -33,7 +33,10 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   auffrischt (`auto: false`), dauerhaft ohne Antwort. Tests: 4 in
   `ollama`, 3 in `dienst` (u. a. „ohne taugliches Modell wird nichts
   geschickt" — der Testserver bekommt nur die Modellliste) und 5 in
-  `tests/test_gateway_provider.py`.
+  `tests/test_gateway_provider.py`. **Am chimera-pi belegt (11.11.):**
+  `op: modelle` meldet `wahl: qwen3.6:27b` (erster Eintrag der Serverliste mit
+  `tools`), und ein `op: chat` **ohne** Modellangabe antwortet mit genau
+  diesem Modell — kalt 120,7 s, Text „bereit".
 - **Gleichheit gegen die Python-Seite belegt** (`tests/test_sohelper_gleichheit.py`):
   dieselben Befehle und Pfade gehen durch `safety.py` **und** durch einen
   laufenden `chimera-sohelper`; verglichen wird das Urteil und der Text der
