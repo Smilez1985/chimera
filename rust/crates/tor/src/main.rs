@@ -149,13 +149,22 @@ fn mojo_befehl(a: &[String]) -> ExitCode {
     // zu starten, endet hier -- nicht in einer Warteschlange: Ein Lauf, der
     // auf einen anderen wartet, repariert spaeter einen Zustand, den er nicht
     // mehr kennt. Exitcode 75 heisst "spaeter noch einmal" (EX_TEMPFAIL).
+    let mut gewartet = false;
     let _sperre: Option<mojo::ReparaturSperre> = if fix {
         match mojo::ReparaturSperre::nehmen(&zustand_dir()) {
-            Some(s) => Some(s),
-            None => {
+            mojo::Sperre::Sofort(s) => Some(s),
+            mojo::Sperre::NachWarten(s) => {
+                gewartet = true;
+                melden(
+                    Stufe::Info,
+                    "Eine andere Reparatur lief -- Sperre uebernommen, Befunde werden neu gemessen.",
+                );
+                Some(s)
+            }
+            mojo::Sperre::Belegt => {
                 melden(
                     Stufe::Warnung,
-                    "Eine andere Reparatur laeuft bereits (state/mojo.lock) -- dieser Lauf tut nichts.",
+                    "Eine andere Reparatur laeuft seit ueber der Frist (state/mojo.lock) -- dieser Lauf tut nichts. Exitcode 75: spaeter noch einmal.",
                 );
                 return ExitCode::from(75);
             }
@@ -173,7 +182,7 @@ fn mojo_befehl(a: &[String]) -> ExitCode {
     // "--bereich netz" sagt es nichts (DESIGN, Regel Mojo: "ein Cache
     // antwortet nur auf die Frage, die er beantwortet hat"). Der Lauf
     // prueft dann selbst, auf den gefilterten Bereich.
-    if miracle && !fortsetzen && !darf_cache_antworten(bereich.as_deref()) {
+    if miracle && !fortsetzen && !gewartet && !darf_cache_antworten(bereich.as_deref()) {
         let pfad = datei.clone().unwrap_or_else(mojo::oracle_pfad);
         match mojo::oracle_lesen(&pfad) {
             Some(alt) => {

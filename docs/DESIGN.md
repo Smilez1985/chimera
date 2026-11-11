@@ -3711,12 +3711,22 @@ Installerlauf inaktiv geblieben war.
 beide dasselbe verhindern: dass zwei Stellen dieselbe Wahrheit verschieden
 sehen.
 
-- **Eine Reparatur zur Zeit.** Timer, `OnFailure=` und Installer können
-  gleichzeitig `--miracle` starten. Ohne Sperre überschreiben sie sich beim
-  Hochzählen in `state/mojo-versuche.json` (Lost Update). Deshalb nimmt ein
-  reparierender Lauf eine **nicht blockierende** Sperre auf
-  `state/mojo.lock`; wer sie nicht bekommt, sagt das und endet mit eigenem
-  Exitcode — statt zu warten oder parallel zu laufen.
+- **Eine Reparatur zur Zeit — der zweite wartet, statt auszufallen.**
+  Timer, `OnFailure=` und Installer können gleichzeitig `--miracle` starten.
+  Ohne Sperre überschreiben sie sich beim Hochzählen in
+  `state/mojo-versuche.json` (Lost Update). Deshalb nimmt ein reparierender
+  Lauf eine Sperre auf `state/mojo.lock`. Ist sie belegt, **wartet er bis zu
+  fünf Minuten** (`CHIMERA_MOJO_FRIST` überstimmt) und kommt danach dran
+  (smilez, 11.11.2026).
+  **Aber er repariert dann nicht seine alten Befunde:** Nach dem Warten wird
+  frisch gemessen, und der Oracle-Cache wird nicht befragt — was der andere
+  erledigt hat, ist erledigt, und ein Befund von vorher wäre eine Behauptung
+  über einen Zustand, den es nicht mehr gibt.
+  Ist die Sperre nach der Frist noch belegt, meldet er das und endet mit 75
+  (`EX_TEMPFAIL`).
+- **Innerhalb eines Laufs ist es ohnehin nacheinander:** `mojo::lauf` geht
+  die offenen Befunde in einer Schleife durch, wartet, sammelt **neu** und
+  beginnt die nächste Runde — nie zwei Reparaturen gleichzeitig.
 - **Ein Cache antwortet nur auf die Frage, die er beantwortet hat.** Das
   Oracle-Ergebnis gilt für die Prüfungen, die gelaufen sind. `--bereich netz`
   fragt etwas Engeres; ein „alles in Ordnung" von vorhin beantwortet das

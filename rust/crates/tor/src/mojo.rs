@@ -1378,10 +1378,58 @@ pub struct ReparaturSperre {
     _datei: std::fs::File,
 }
 
+/// Wie lange auf eine belegte Sperre gewartet wird (Vorgabe; `CHIMERA_MOJO_FRIST`
+/// ueberstimmt, in Sekunden -- nur fuer Tests gedacht).
+pub const SPERRE_FRIST_S: u64 = 300;
+
+/// Wie das Nehmen ausgegangen ist.
+pub enum Sperre {
+    /// Sofort bekommen.
+    Sofort(ReparaturSperre),
+    /// Erst nach Warten bekommen -- die Befunde von vorhin sind damit
+    /// ueberholt, es wird neu gemessen.
+    NachWarten(ReparaturSperre),
+    /// Auch nach der Frist belegt.
+    Belegt,
+}
+
 impl ReparaturSperre {
-    /// Sperre nehmen, ohne zu warten. `None` heisst: ein anderer Lauf
-    /// repariert gerade -- dann wird nicht gewartet und nicht mitgemacht.
-    pub fn nehmen(dir: &std::path::Path) -> Option<ReparaturSperre> {
+    /// Sperre nehmen. Ist sie belegt, wird gewartet (smilez, 11.11.2026:
+    /// "nacheinander, aber im gleichen Durchlauf"): Der zweite Lauf soll
+    /// nicht ausfallen, sondern danach drankommen.
+    ///
+    /// **Aber:** Er wartet nicht *und repariert dann seine alten Befunde*.
+    /// Nach dem Warten wird frisch gemessen -- was der andere repariert hat,
+    /// ist dann erledigt, und ein Befund von vorher waere eine Behauptung
+    /// ueber einen Zustand, den es nicht mehr gibt.
+    pub fn nehmen(dir: &std::path::Path) -> Sperre {
+        let frist = std::env::var("CHIMERA_MOJO_FRIST")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(SPERRE_FRIST_S);
+        Self::nehmen_mit(dir, frist)
+    }
+
+    /// Wie `nehmen`, aber mit ausdruecklicher Frist -- damit der Test nicht
+    /// an einer Umgebungsvariablen haengt (und nicht 300 s wartet).
+    pub fn nehmen_mit(dir: &std::path::Path, frist_s: u64) -> Sperre {
+        let ende = std::time::Instant::now() + std::time::Duration::from_secs(frist_s);
+        let mut gewartet = false;
+        loop {
+            match Self::versuchen(dir) {
+                Some(s) if gewartet => return Sperre::NachWarten(s),
+                Some(s) => return Sperre::Sofort(s),
+                None if std::time::Instant::now() >= ende => return Sperre::Belegt,
+                None => {
+                    gewartet = true;
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                }
+            }
+        }
+    }
+
+    /// Einmal versuchen, ohne zu warten.
+    fn versuchen(dir: &std::path::Path) -> Option<ReparaturSperre> {
         let _ = std::fs::create_dir_all(dir);
         let datei = std::fs::OpenOptions::new()
             .create(true)
@@ -1450,16 +1498,57 @@ mod tests {
     fn nur_eine_reparatur_gleichzeitig() {
         let d = std::env::temp_dir().join(format!("mojo-lock-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
-        let erste = super::ReparaturSperre::nehmen(&d).expect("erste Sperre");
+        let erste = match super::ReparaturSperre::nehmen_mit(&d, 0) {
+            super::Sperre::Sofort(s) => s,
+            _ => panic!("erste Sperre muss sofort kommen"),
+        };
         assert!(
-            super::ReparaturSperre::nehmen(&d).is_none(),
-            "zweite Sperre muss scheitern, solange die erste lebt"
+            matches!(super::ReparaturSperre::nehmen_mit(&d, 0), super::Sperre::Belegt),
+            "zweite Sperre muss ohne Warten als belegt erkannt werden"
         );
         drop(erste);
         assert!(
-            super::ReparaturSperre::nehmen(&d).is_some(),
+            matches!(super::ReparaturSperre::nehmen_mit(&d, 0), super::Sperre::Sofort(_)),
             "nach dem Freigeben muss sie wieder zu haben sein"
         );
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    // smilez (11.11.): nicht abbrechen, sondern warten und dann drankommen --
+    // aber frisch messen, nicht die alten Befunde reparieren.
+    #[test]
+    fn zweiter_lauf_wartet_und_bekommt_die_sperre() {
+        let d = std::env::temp_dir().join(format!("mojo-warten-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let d2 = d.clone();
+        let halter = std::thread::spawn(move || {
+            let s = match super::ReparaturSperre::nehmen_mit(&d2, 0) {
+                super::Sperre::Sofort(s) => s,
+                _ => panic!("Halter bekommt die Sperre nicht"),
+            };
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            drop(s);
+        });
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert!(
+            matches!(super::ReparaturSperre::nehmen_mit(&d, 5), super::Sperre::NachWarten(_)),
+            "der zweite Lauf muss warten und dann die Sperre bekommen"
+        );
+        halter.join().unwrap();
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn nach_abgelaufener_frist_gibt_er_auf() {
+        let d = std::env::temp_dir().join(format!("mojo-frist-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let _halter = match super::ReparaturSperre::nehmen_mit(&d, 0) {
+            super::Sperre::Sofort(s) => s,
+            _ => panic!("Sperre nicht bekommen"),
+        };
+        let start = std::time::Instant::now();
+        assert!(matches!(super::ReparaturSperre::nehmen_mit(&d, 1), super::Sperre::Belegt));
+        assert!(start.elapsed() >= std::time::Duration::from_secs(1));
         let _ = std::fs::remove_dir_all(&d);
     }
 

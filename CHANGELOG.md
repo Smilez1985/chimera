@@ -719,6 +719,14 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   „Was welches Modul aus dem Changelog einspielt""). Im Repo steht kein `§`
   mehr; `tests/test_regelnamen.py` hält neue Nummern fern.
 
+- **Der zweite Reparaturlauf wartet, statt auszufallen** (smilez, 11.11.):
+  Ist `state/mojo.lock` belegt, wartet `--miracle` bis zu fünf Minuten
+  (`CHIMERA_MOJO_FRIST`) und kommt danach dran. Nach dem Warten wird **frisch
+  gemessen** — der Oracle-Cache wird nicht befragt, weil die Befunde von
+  vorhin überholt sind. Erst wenn die Sperre nach der Frist noch belegt ist,
+  endet der Lauf mit 75. Tests: warten bis frei, aufgeben nach Frist,
+  Gegenprobe (nicht warten → rot). 266 Tests grün.
+
 ### Entfernt
 - **Vorab-Laden im Hintergrund wieder entfernt** (`installer/lib/vorab.sh`,
   `installer/chimera-prefetch`, `installer/tests/test-vorab.sh`, Schalter
