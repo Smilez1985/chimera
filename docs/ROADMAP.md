@@ -41,26 +41,16 @@ zram wird nicht angefasst, wenn es läuft.
       **einmal zurückgefragt** (Web-Oberfläche oder Gespräch), ohne Antwort
       abgelehnt. Kein Verbindungsaufbau ohne Einordnung.
 
-## Phase Review 11.11. — fünf Code-Befunde, in dieser Reihenfolge
+## Phase Review 11.11. — offene Code-Befunde
 
-Aus dem Code-Review vom 11.11. Jeder Punkt ist ein eigener Commit mit Test
-**und Gegenprobe** (die Regel steht in DESIGN: „Ein Cache antwortet nur auf
-seine Frage", „Atomar schreiben", 5a).
+Aus dem Code-Review vom 11.11. Erledigt und dort beschrieben (2.1 Oracle-Cache,
+2.2 Reparatursperre, 2.3a Kontextfenster) stehen im CHANGELOG. Offen:
 
-- [x] **2.1 Oracle-Cache beantwortet eine größere Frage als gestellt** (`8913730`-Phase, Fix mit Test)
-      (`rust/crates/tor/src/main.rs`, `mojo_befehl`): Bei `--bereich netz`
-      filtert der Befehl die Prüfungen, befragt aber den globalen Cache; ein
-      „ok von vorhin" beendet den Lauf mit 0, ohne das Netz zu prüfen. Fix:
-      bei gesetztem Bereich nicht auf den Cache hören (oder Bereich im
-      Oracle mitführen und vergleichen).
-- [x] **2.2 Keine Sperre gegen parallele Reparaturen** (`ReparaturSperre`, nicht blockierend): Timer, `OnFailure=`
-      und Installer können gleichzeitig `--miracle` starten und
-      `state/mojo-versuche.json` gegenseitig überschreiben. Fix:
-      nicht blockierende `flock` auf `state/mojo.lock` im reparierenden Lauf,
-      eigener Exitcode wenn belegt.
-- [ ] **2.3a `context_window` ist geraten** (`provider/gateway.py`): fest
-      `32_000` statt des Werts aus der Serverabfrage. Fix: Fenster über
-      `op: modelle`/`status` holen; ohne Angabe gilt „unbekannt", nicht 32 000.
+- [ ] **Gateway-Binary neu bauen** (nach 2.3a): Der Socket kennt
+      `katalog_lesen` erst in der neuen Fassung. Solange das ausgelieferte
+      Binary älter ist, antwortet es `op_unbekannt` — der Dienst fällt dann
+      auf den Vorgabewert zurück und sagt es (`fenster_angenommen`). Kein
+      Fehler, aber die Messung fehlt bis zum neuen Stand.
 - [ ] **2.5 Sidecar-Name ist nicht eindeutig** (`rust/crates/tor/src/daten.rs`):
       `.{name}.neu` ist fest; zwei Fäden überschreiben sich. Fix: Kennung in
       den Namen.

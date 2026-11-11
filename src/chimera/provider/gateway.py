@@ -90,7 +90,13 @@ class GatewayOllama(Connector):
     cost = CostClass.FREE
     supports_tools = True
     supports_streaming = False
+
+    #: **Angenommen, nicht gemessen.** Der echte Wert kommt aus dem Katalog des
+    #: Gateways (`op: katalog_lesen`, dort steht, was `/api/show` gemeldet hat).
+    #: Bis das gemessen ist, gilt dieser Wert -- und `fenster_angenommen`
+    #: bleibt True, damit es niemand fuer eine Messung haelt (DESIGN 5a).
     context_window = 32_000
+    fenster_angenommen = True
 
     PROBE_TTL = 30.0
 
@@ -128,12 +134,40 @@ class GatewayOllama(Connector):
                 self.host = a.get("host", "")
                 self._grund = None
                 ok = True
+                self._fenster_holen()
             else:
                 self._grund = (a.get("fehler") or {}).get("text")
         except LLMError as exc:
             self._grund = str(exc)
         self._probe = (jetzt, ok)
         return ok
+
+    def _fenster_holen(self) -> None:
+        """Das Kontextfenster des bedienenden Modells aus dem Katalog holen.
+
+        Warum nicht fest: Ein 27B-Modell hat ein anderes Fenster als ein 3B.
+        Ein fester Wert prueft die Schwellen gegen das falsche Modell -- und
+        faellt nicht auf, weil er wie eine Messung aussieht (DESIGN 5a).
+        Bleibt der Katalog leer, gilt der Vorgabewert weiter, und
+        `fenster_angenommen` sagt das.
+        """
+        modell = self.default_model or (self._models[0] if self._models else "")
+        if not modell:
+            return
+        try:
+            k = anfragen({"op": "katalog_lesen", "id": self.name}, pfad=self.pfad)
+        except LLMError:
+            return
+        if not k.get("ok"):
+            return
+        eintrag = (k.get("katalog") or {}).get(modell) or {}
+        try:
+            fenster = int(eintrag.get("kontext") or 0)
+        except (TypeError, ValueError):
+            return
+        if fenster > 0:
+            self.context_window = fenster
+            self.fenster_angenommen = False
 
     def models(self) -> list[str]:
         if not self._models:

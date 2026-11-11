@@ -166,6 +166,29 @@ check("ohne Gateway: es wird nichts direkt geholt", type(_o2).__name__, "Gateway
 check("ohne Gateway: das Protokoll sagt es",
       any("nicht erreichbar" in n for n in notes2), True)
 
+print("== Kontextfenster ==")
+# DESIGN 5a: Das Fenster kommt aus der Abfrage, nicht aus einer Konstante.
+# Der Katalog des Gateways traegt, was /api/show gemeldet hat.
+_kat = Attrappe("kat", lambda a: {
+    "ok": True, "modelle": ["klein:3b", "gross:27b"], "host": "ollama.example:11434",
+} if a["op"] == "modelle" else {
+    "ok": True, "id": "ollama",
+    "katalog": {"gross:27b": {"kontext": 262144, "tools": True},
+                "klein:3b": {"kontext": 8192, "tools": True}},
+})
+_c = gateway.GatewayOllama(default_model="gross:27b", pfad=_kat.pfad)
+check("Katalog wird befragt", _c.is_available(), True)
+check("Fenster gemessen, nicht geraten", _c.context_window, 262144)
+check("Fenster gilt als gemessen", _c.fenster_angenommen, False)
+
+# Ohne Katalogeintrag bleibt der Vorgabewert -- aber er sagt, dass er einer ist.
+_leer = Attrappe("leer", lambda a: {"ok": True, "modelle": ["x"], "host": "h", "katalog": {}}
+                 if a["op"] == "modelle" else {"ok": True, "id": "ollama", "katalog": {}})
+_c2 = gateway.GatewayOllama(default_model="x", pfad=_leer.pfad)
+_c2.is_available()
+check("ohne Katalog bleibt der Vorgabewert", _c2.context_window, 32_000)
+check("und gilt als angenommen", _c2.fenster_angenommen, True)
+
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(1 if FAIL else 0)

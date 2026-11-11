@@ -735,6 +735,16 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **`context_window` war geraten** (`provider/gateway.py` trug fest `32 000`):
+  Das Gateway misst das Fenster längst (`/api/show` → `kontext` im Katalog),
+  der Dienst konnte es aber nicht fragen — der Katalog war nur über die
+  Weboberfläche erreichbar. Neu: `op: katalog_lesen` am Socket, und
+  `GatewayOllama` holt das Fenster des bedienenden Modells daraus
+  (`fenster_angenommen` bleibt `True`, solange es nur der Vorgabewert ist).
+  Test mit Gegenprobe (Katalog nicht befragen → rot). **Das ausgelieferte
+  Gateway-Binary kennt die Operation noch nicht** — bis zum Neubau antwortet
+  es `op_unbekannt`, der Dienst bleibt beim Vorgabewert. Sicher, aber
+  ungemessen.
 - **Zwei Reparaturen konnten gleichzeitig laufen** (`--mojo --miracle`): Timer,
   `OnFailure=` und Installer hätten denselben Fehlversuch doppelt gezählt oder
   sich gegenseitig überschrieben (`mojo-versuche.json`). Ein reparierender Lauf

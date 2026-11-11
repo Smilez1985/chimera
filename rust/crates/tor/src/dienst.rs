@@ -93,6 +93,17 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
             },
             None => zeile::fehlerantwort("anbieter_fehlt", "Die Abfrage braucht ein Feld \"anbieter\"."),
         },
+        // Was das Gateway ueber die Modelle gemessen hat (Werkzeuge, Fenster).
+        // Der Dienst hat kein Netz und kann es nicht selbst fragen; ohne diese
+        // Operation muesste er das Fenster raten (DESIGN 5a, 11.11.2026).
+        "katalog_lesen" => match anfrage.get("id").and_then(Value::as_str) {
+            Some(id) if crate::daten::id_gueltig(id) => json!({
+                "ok": true,
+                "id": id,
+                "katalog": crate::daten::katalog_lesen(&stand.daten, id),
+            }),
+            _ => zeile::fehlerantwort("id_ungueltig", "Die Anfrage braucht eine gueltige \"id\"."),
+        },
         "katalog_aktualisieren" => katalog_aktualisieren(anfrage, stand),
         "netzsuche" => crate::netzsuche::durchgang(stand),
         "" => zeile::fehlerantwort("op_fehlt", "Die Anfrage braucht ein Feld \"op\"."),
@@ -274,6 +285,19 @@ pub fn anfragen(pfad: &Path, anfrage: &Value) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
+    // Der Dienst hat kein Netz: Ohne diese Operation muesste er das Fenster
+    // raten (DESIGN 5a).
+    #[test]
+    fn katalog_lesen_ueber_den_socket() {
+        let s = Stand::mit_ollama(None);
+        let a = antworten(&json!({"op": "katalog_lesen", "id": "ollama"}), &s);
+        assert_eq!(a["ok"], true);
+        assert_eq!(a["id"], "ollama");
+        assert!(a.get("katalog").is_some(), "katalog fehlt: {a}");
+        let falsch = antworten(&json!({"op": "katalog_lesen", "id": "../etc"}), &s);
+        assert_eq!(falsch["fehler"]["code"], "id_ungueltig");
+    }
+
     use super::*;
     use std::io::{Read, Write};
 
