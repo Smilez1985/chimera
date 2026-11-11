@@ -670,14 +670,9 @@ Offen bleibt:
       sieht er nicht (entschieden 11.11.). **Nutzer, Ordner und Unit sind
       gebaut** (11.11.: `lib/sohelper.sh`, Schritt `99-sohelper`, Rückbau);
       am Gerät noch nicht eingespielt.
-- [ ] **Werkzeuge am Gerät durchschalten:** nach dem Einspielen von
-      55/99-sohelper die vier Werkzeuge einmal über den Socket benutzen
-      (der Code ist umgestellt, auf dem Pi aber noch nicht gelaufen).
-- [ ] **Am Gerät einspielen und messen:** denselben Stand auf den
-      chimera-pi bringen (Module 55 und 99-sohelper), `--ping` über den
-      Socket, `IPAddressDeny` und `InaccessiblePaths` nachsehen und den
-      Speicher im Ruhezustand messen (Vergleichswert: `chimera-tor --dienst`
-      mit 1,6 MB RSS, 3.11.).
+- [ ] **Verhalten am Gerät im Betrieb beobachten:** die Werkzeuge sind
+      am 11.11. über den Socket durchgeschaltet (CHANGELOG); offen ist,
+      wie sich lange Befehle und Zeitüberschreitungen im Alltag zeigen.
 - [ ] Auslagern bei `Action.OFFLOAD`: erkannt wird es, getan noch nicht
 - [ ] Schleifenzustand auf die RGB-LED (braucht Hardware)
 - [ ] **Regel 10q, Messen:** `VmRSS`/`VmHWM`/`VmSwap` je Arbeitsschritt ins

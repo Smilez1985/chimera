@@ -1040,6 +1040,20 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   nicht gemessen.
 
 ### Geprüft
+- **Am chimera-pi eingespielt (11.11.2026, Stand `a8098b4`):** Module 55 und
+  99-sohelper grün, `tools/abgleich.sh` meldet „der eingespielte Stand
+  entspricht der Quelle". Nachweise am laufenden System: Nutzer
+  `chimera-sohelper` in **keiner** Gruppe, `/opt/chimera/sohelper` 700 und
+  sein Eigentum, `/run/chimera/sohelper.sock` 0660 `chimera-sohelper:chimera`,
+  Unit mit `IPAddressDeny=::/0 0.0.0.0/0`, `InaccessiblePaths=/opt/chimera/config`,
+  `ProtectSystem=strict`, `ReadWritePaths=/opt/chimera/sohelper`,
+  `NoNewPrivileges=yes`, keine `SupplementaryGroups`. `--ping` antwortet.
+  Die vier Werkzeuge als Nutzer `chimera` über den Socket: schreiben, lesen,
+  auflisten, `ls -l` laufen; `../../etc/passwd`, `sudo id` und `curl` werden
+  mit denselben Texten abgelehnt wie vorher. **Ruhezustand: 492 kB RSS**
+  (Gateway zum Vergleich 1592 kB, `MemoryCurrent` ist wie erwartet nicht
+  gesetzt — Controller auf dem Pi aus).
+
 - **Netzsperre ohne localhost-Freigabe am chimera-pi (10.11.):** Ein Prozess
   unter dem Nutzer `chimera` mit `IPAddressDeny=any` erreicht das Gateway
   über den Unix-Socket (`status`, Modell-Liste des Ollama-Servers im LAN);
