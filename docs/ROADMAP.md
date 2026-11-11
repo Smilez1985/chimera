@@ -399,6 +399,15 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       gewählten Modells; Anzeige „geladen / kalt“ und letzte Antwortzeit je
       Modell im Ollama-Modul. Der Dienst fragt dafür das Gateway, nicht den
       Server.
+- [ ] **`installer/tests/counter-check-rust.sh` misst nichts mehr** (gefunden
+      11.11.): Seit das Ablegen und Prüfen des Binaries in `lib/binary.sh`
+      liegt (`186a116`, `a8098b4`), greifen 11 von 13 Mutationen nicht mehr
+      — sie verändern `steps/55-rust.sh`, dort stehen die Muster nicht mehr
+      („Mutation griff nicht (Muster fehlt)"). Die CI fährt die
+      `counter-check-*.sh` nicht, deshalb fiel es nicht auf. Reparatur nach
+      dem Vorbild von `counter-check-sohelper.sh`: Schritt 55 bekommt einen
+      Pfadschalter für die Bibliothek (`CHIMERA_BINARY_LIB`), die Mutationen
+      zielen darauf.
 - [ ] **Der Dienst verliert sein Netz** (5n): Er ruft heute Ollama und
       Anthropic noch selbst über `urllib` auf (`IPAddressDeny` ist leer);
       der Weg über das Gateway ist nur ein zusätzlicher Pfad, `discover()`
