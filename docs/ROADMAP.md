@@ -33,6 +33,14 @@ zram wird nicht angefasst, wenn es läuft.
       ist damit keine Entscheidung mehr, sondern nur der Anlass: Tritt ein
       Bruch auf, wird die Grenze gesetzt und der Fall hier vermerkt.
 
+- [ ] **Das Gateway ordnet ausgehende Ziele ein** (DESIGN 5n, entschieden
+      11.11.): `ip_im_lan` (`web.rs`, heute nur für eingehende Web-Anfragen)
+      auch für ausgehende Verbindungen benutzen; geprüft wird die **aufgelöste**
+      Adresse und **jeder Sprung** (auch nach 3xx). Lokal/LAN ohne Rückfrage,
+      Internet nur für eingetragene Anbieter (5t); eine neue Adresse wird
+      **einmal zurückgefragt** (Web-Oberfläche oder Gespräch), ohne Antwort
+      abgelehnt. Kein Verbindungsaufbau ohne Einordnung.
+
 ## Phase ACP — Chimera als Agent für Editoren und IDEs (DESIGN: Regel „ACP“)
 
 Pflicht-Schnittstelle (smilez, 2.11.). **Entschieden: Der ACP-Server wird gebaut,
@@ -60,9 +68,14 @@ Gateway-Workspace (Regel „Rust, wo dauernd läuft“), eigene Tür.
 - [ ] **In einer echten IDE belegen** (Zed, JetBrains oder Android Studio) und
       klären, wie ein eigener Agent dort ohne Registry eingetragen wird (in den
       gelesenen Quellen nicht beschrieben).
-- [ ] Später: Registry-Eintrag, Sitzungsliste und Modi, ein ACP-Client für
-      Chimera (Chimera spricht mit anderen Agenten), Gesichter und Moods über ACP
-      bauen (siehe Phase MQTT).
+- [ ] **Display verleihbar** (entschieden 11.11., DESIGN „ACP" Punkt 10):
+      Ein gekoppeltes Gerät spricht **das Display** desselben Servers an —
+      vorhandene Moods zeigen, Status lesen. Eigene Kennung je Gerät, keine
+      Werkzeuge, kein neues Gesicht. Dieselbe Fläche über MQTT
+      (`displays/<name>/mood`).
+- [ ] Später: Registry-Eintrag, Sitzungsliste und Modi; ein ACP-Client für
+      Chimera (Chimera spricht mit anderen Agenten) — **nicht entschieden**,
+      DESIGN sagt bisher „Chimera ist der Agent, nicht der Client“.
 
 ## Phase MQTT — Broker in Rust, verknüpft mit der Anzeige (DESIGN: Regel „MQTT“)
 
@@ -430,10 +443,17 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       CMA 64 auf 16 MB gemessen: +21 MB verfügbar (Modul `26-boot`, Phase Mojo);
       `cgroup_enable=memory` bleibt aus (kostet etwa 9 MB, bringt keinen RAM).
       Journal im RAM begrenzen.
-- [ ] **Gedächtnis-Verdichtung in Blöcken** (8c): lange Verläufe an
+- [ ] **Gedächtnis ohne Modellaufruf** (8c, entschieden 11.11.): Monats- und
+      Jahresordner statt Verdichtung; Wegweiser-Datei je Monat und Jahr mit
+      Sprungmarken (`## JJJJ-Www (TT.MM.–TT.MM.)`, je Tag Datum und
+      Überschriften), erzeugt **im Harness** (Überschriften, Zeitstempel,
+      offene Punkte, `Entscheidung:`) — keine Tokens, nichts erfunden. Im
+      Kontext steht die aktuelle Woche; ältere Einträge holt `erinnern`.
+- [ ] **Gedächtnis-Verdichtung in Blöcken** (8d, Verlauf): lange Verläufe an
       Nachrichtengrenzen teilen, je Block zusammenfassen, zusammenführen; feste
       Briefstruktur (Ziel, Kontext, Stand, nächste Schritte, offene Fragen);
-      auch für die Übergabe beim Wechsel der Hauptsitzung (5s).
+      auch für die Übergabe beim Wechsel der Hauptsitzung (5s). **Nur hier**
+      ist ein Modell beteiligt.
 - [ ] **DeepSeek** als Anbietermodul über die API (OpenAI-kompatibel). Eine
       Browser-Brücke zur Weboberfläche ist nicht beschlossen: Sie bräuchte
       einen Browser auf einem anderen Rechner im LAN (der Pi hat 462 MB RAM)
@@ -638,7 +658,9 @@ Offen bleibt:
       `/opt/chimera/sohelper` (700), Unit mit Socket und
       `IPAddressDeny=any`, Installer-Modul samt Rückbau; **Gleichheitstest
       gegen die Python-Seite** (die Fälle aus `tests/test_agent.py` über den
-      Socket).
+      Socket). Der Ausführer darf das venv benutzen (Interpreter, Pakete),
+      die Unit sperrt aber `InaccessiblePaths=/opt/chimera/config` — die
+      Schlüssel sieht er nicht (entschieden 11.11.).
 - [ ] **Dienst umstellen:** `agent/tools.py` reicht die vier Werkzeuge an den
       Socket weiter und startet nichts mehr selbst; läuft der Ausführer
       nicht, wird nichts ausgeführt und der Grund genannt.

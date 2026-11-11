@@ -438,6 +438,19 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Das Gateway ordnet ausgehende Ziele ein** (DESIGN 5n): `ip_im_lan` gilt
+  künftig auch für ausgehende Verbindungen, geprüft wird die aufgelöste
+  Adresse und jeder Sprung. Lokal und LAN ohne Rückfrage, Internet nur für
+  eingetragene Anbieter; eine neue Adresse wird einmal zurückgefragt. Damit
+  gehen Display und Sprachmodell über dasselbe Tor wie alles andere.
+- **Gedächtnis: keine Verdichtung per Modell mehr** (DESIGN 8c): Monats- und
+  Jahresordner statt Zusammenfassung, Wegweiser-Datei mit Sprungmarken
+  (`## JJJJ-Www`), erzeugt im Harness aus Überschriften, Zeitstempeln,
+  offenen Punkten und Entscheidungen — ohne Tokens, ohne erfundene Prosa. Im
+  Kontext steht die aktuelle Woche, ältere Einträge holt `erinnern`.
+- **ACP: das Display ist verleihbar** (DESIGN „ACP“ Punkt 10) — Ergänzung,
+  keine Umwidmung: Ein gekoppeltes Gerät spricht dasselbe Display an
+  (vorhandene Moods, Status), mit eigener Kennung und ohne Werkzeuge.
 - **Der Agent-Dienst hat kein Netz mehr und liest die `.env` nicht**
   (DESIGN 5n, Verschärfung; smilez 10.11./11.11.). Die Unit trägt
   `IPAddressDeny=any` und lädt statt der `.env` eine eigene

@@ -1150,6 +1150,32 @@ außerhalb des Betriebs. 5n regelt den **laufenden** Betrieb.
 **Bewusst nicht im Gateway:** Audio und Anzeige. Die sind lokal und
 brauchen kein Netz.
 
+**LAN und Internet werden unterschieden** (smilez, 11.11.2026). Alles, was
+Chimera tut und Netz braucht, geht über das Gateway — auch das Display und
+das Sprachmodell („von lokal, aus dem lokalen Netz über Ollama oder online
+über die API"). Damit das nicht alles gleichberechtigt ist, ordnet das
+Gateway **jedes ausgehende Ziel** ein:
+
+1. **Geprüft wird die aufgelöste Adresse, nicht der Name.** Sonst zeigt ein
+   öffentlicher Name auf `192.168.x` und die Einordnung ist wertlos.
+2. **Bei jedem Sprung neu**, auch nach einer Umleitung (3xx): einmal geprüft
+   und dann blind weiter ist genau der Fehler, den die Einordnung verhindern
+   soll.
+3. **Lokal und LAN ohne Rückfrage:** loopback, RFC 1918, link-local, IPv6-ULA
+   — dafür gibt es `ip_im_lan` (`web.rs`), heute nur für eingehende
+   Web-Anfragen benutzt (`nur_lan`), künftig auch ausgehend. Kein zweites
+   Verfahren, eine Funktion für beide Richtungen.
+4. **Internet nur für eingetragene Anbieter** (die Positivliste aus 5t) —
+   und eine Adresse, die zum ersten Mal erscheint, wird **einmal
+   zurückgefragt** (smilez, 11.11.). Antwortet niemand, gilt sie als nicht
+   erlaubt; die Rückfrage läuft über die Web-Oberfläche oder das Gespräch,
+   nicht über ein Gerät, das gerade niemand ansieht.
+5. **Ohne Einordnung kein Verbindungsaufbau.** Was sich nicht zuordnen lässt
+   (kein DNS, keine Adresse), fällt nicht durch, sondern wird abgelehnt.
+
+Damit bleibt die Regel „Netz ausschließlich über das Gateway" unverändert
+wahr — das Gateway entscheidet nur zusätzlich, **wohin**.
+
 ### Architekturregel 5k — Ollama wird im Netz gesucht, nie auf dem Gerät betrieben
 
 Chimera installiert und startet **nie** ein eigenes Ollama.
@@ -2354,13 +2380,24 @@ data/gedaechtnis/
   Beim ersten Turn nach Mitternacht, oder spätestens beim Wechsel, wird
   daraus eine **Tageszusammenfassung** am Kopf derselben Datei. Die
   Einträge bleiben darunter stehen.
-- **Monat:** Am Monatsende werden die Tageszusammenfassungen zu
-  `monate/JJJJ-MM.md` verdichtet. Danach wird `memory.md` neu geschrieben,
-  aus der Zusammenfassung des Vorjahres plus den Monaten des laufenden
-  Jahres.
-- **Jahr:** Am Jahresende wird `memory.md` zu `jahre/JJJJ.md`. Die neue
-  `memory.md` beginnt mit dieser Jahreszusammenfassung. So fließt das
-  Jahr in das neue ein, wie vorgegeben.
+- **Monat und Jahr: es wird nicht zusammengefasst, es wird einsortiert**
+  (smilez, 11.11.2026 — ersetzt die automatische Verdichtung). Am
+  Monatsende wandern die Tagesdateien unverändert nach `monate/JJJJ-MM/`,
+  daneben liegt ein **Wegweiser** `monate/JJJJ-MM.md`. Am Jahresende
+  wandert das Monatsverzeichnis nach `jahre/JJJJ/`, mit derselben
+  Wegweiser-Datei. Gelesen wird das nur bei Bedarf (`erinnern`).
+- **Die Zusammenfassung kostet keine Tokens** (smilez, 11.11.2026). Sie
+  entsteht **im Harness, ohne Modell**: Überschriften, Zeitstempel, offene
+  Punkte (`- [ ]`), Entscheidungen (`Entscheidung:`) und die Fundstelle
+  werden mechanisch eingesammelt. Ein Modell kann Prosa nicht verdichten,
+  ohne zu erfinden — deshalb wird **nicht verdichtet, sondern ausgewählt**:
+  `memory.md` ist ein Wegweiser (Datum, Überschrift, offene Punkte), keine
+  Nacherzählung. Nachprüfbar, null Tokens, kein stilles Verdünnen.
+- **Sprungmarken** haben eine feste Form, damit das Suchen nicht rät:
+  `## JJJJ-Www (TT.MM.–TT.MM.)`, darunter je Tag eine Zeile mit Datum und
+  Überschriften. Fundstellen sind Pfade (`tage/JJJJ-MM-TT.md`).
+- **Im laufenden Kontext steht die aktuelle Woche.** Ältere Einträge liegen
+  im Archiv und werden nur bei Bedarf geholt — nicht bei jedem Turn.
 - **Eingespeist wird:** `GRUNDLAGEN.md`, `memory.md` und die Zusammen-
   fassungen der letzten Tage, mit dem Hinweistext aus 8 (Hintergrund,
   keine Aufgabenliste).
@@ -2375,9 +2412,9 @@ data/gedaechtnis/
   Markern geführt wird (`- [ ]`, `Entscheidung:`), Zahl gegen Zahl
   (GLOBAL: Summe gegen Gesamtzahl). Fehlt etwas, wird die Verdichtung
   verworfen und erneut versucht, und das wird gemeldet.
-- Modell: Aufgabe `zusammenfassen` aus 5h. Ist kein Modell erreichbar,
-  wird die Verdichtung **verschoben, nicht ersetzt**. Ein gekürzter
-  Ersatz entfällt.
+- **Kein Modell beteiligt** (siehe oben): Die Aufgabe `zusammenfassen` aus
+  5h wird für das Gedächtnis nicht mehr gebraucht. Sie bleibt für den
+  Verlauf (8d), wo Prosa wirklich zusammengefasst werden muss.
 - Platz auf der Platte: Ein Tag ergibt einige KB. Zehn Jahre liegen im
   einstelligen MB-Bereich (Schätzung, ungemessen).
 
@@ -3498,6 +3535,21 @@ kein Netz, keine Schlüssel, kein `sudo`, keine Anmeldung. Ihm gehört der
 Arbeitsordner — damit setzt der Kernel die Trennung durch, und das
 Protokoll ist für den Agenten nicht änderbar.
 
+**Das venv darf er benutzen, den Schlüssel nicht** (smilez, 11.11.2026):
+Der Ausführer braucht den Interpreter und die Pakete des venv, damit ein
+Befehl wie `venv/bin/python ...` läuft — er darf aber nicht an die
+Zugangsdaten kommen. Deshalb:
+
+- Das venv ist lesbar und ausführbar.
+- Die Schlüssel bleiben in `config/.env` (`root:chimera-tor` 0640) — wie
+  entschieden (5l).
+- Die Unit des Ausführers bekommt `InaccessiblePaths=/opt/chimera/config`.
+  Er sieht das venv, den Schlüssel sieht er nicht.
+- Grund: Ein Prozess, der Befehle auf Zuruf des Modells ausführt, ist die
+  falsche Stelle für Zugangsdaten. Läge der Schlüssel im venv, könnte das
+  Modell ihn lesen lassen und über den Agenten nach draußen schicken —
+  die Netzsperre des Ausführers macht das nur langsamer, nicht unmöglich.
+
 **Der Arbeitsordner liegt im Installationsziel: `/opt/chimera/sohelper`**
 (smilez, 11.11.2026) — „im Installationsziel von chimera in einem
 Unterordner sohelper“. Er gehört dem Ausführer (700), nicht dem Agenten:
@@ -4297,6 +4349,21 @@ Transportschicht, damit eine IDE das Gateway ansprechen kann.**
    beenden, ein Nutzer darf nie die Sitzung eines anderen sehen, und jeder
    Transport muss denselben Kern-Test bestehen (gleiche Nachrichten, gleiche
    Antworten).
+10. **Das Display ist verleihbar** (smilez, 11.11.2026 — **Ergänzung, keine
+    Umwidmung**). Alles, was oben steht, bleibt: Chimera ist der Agent für
+    Editoren. Es kommt eine Fläche dazu — ein **gekoppeltes Gerät** darf
+    zusätzlich **das Display** desselben Servers ansprechen: eine
+    vorhandene Mood zeigen, den Status lesen. Grenzen:
+    - **Nur vorhandene Moods.** Was ausgelöst wird, muss in der
+      Mood-Bibliothek stehen; ein neues Gesicht anzulegen ist keine
+      Fernbedienung, sondern eine Änderung am Gerät.
+    - **Eigene Kennung je Gerät**, nie die des Agenten; eine Sitzung
+      gehört einem Gerät. Wer kein Paar ist, kommt nicht durch
+      (Regel „Eine Tür von draußen“).
+    - **Keine Werkzeuge.** Über diese Fläche gibt es keinen Zugriff auf
+      `chimera-sohelper`, Dateien oder Befehle — nur Anzeige.
+    - Dieselbe Fläche gibt es über MQTT (Regel „MQTT“): dort ist der
+      Kanal `displays/<name>/mood` der Weg, hier die ACP-Methode.
 
 ### Regel „MQTT“ — Ein Broker in Rust löst gespeicherte Moods auf dem Display aus
 
