@@ -20,6 +20,18 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Websuche, erste Stufe** (DESIGN Regel 5r): `op: web_suche` im Gateway
+  (`suche.rs`) und das Werkzeug `web_suche` im Agenten. Quellen in
+  `wahl.json` unter `suche.quellen`, in Reihenfolge: `searxng:<adresse>`
+  (eigene Instanz, `format=json`; ein 403 nennt `search.formats` als Grund)
+  und `ollama` (`https://ollama.com/api/web_search`, `OLLAMA_API_KEY` aus
+  der Umgebung des Gateways). Fällt eine Quelle aus, wird die nächste
+  versucht; ohne Quelle kommt `keine_quelle` mit Beispiel, nie ein stiller
+  Ausfall. Treffer: 5 (bis 10), 400 Zeichen Auszug, 8.000 gesamt, nichts
+  auf Platte. Der Agent hat weiter kein Netz — er fragt über den Socket.
+  Tests: 8 in `suche` (Quellen lesen, Kürzen, 403-Text, Ausfall der ersten
+  Quelle, fehlender Schlüssel) und 6 in `test_agent` (Gateway wird gefragt,
+  Antwort wird lesbar, „keine Quelle" wird genannt).
 - **`stream` ist umschaltbar** (DESIGN, Regel „Aufrufe, nicht Text“): Das
   Gateway liest `stream` aus `wahl.json` (Vorgabe **aus**) und setzt den Wert
   ausdrücklich — Ollama hat sonst `true`. Ist er an, werden die NDJSON-

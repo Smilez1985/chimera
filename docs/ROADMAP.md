@@ -413,6 +413,10 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       3. **Web-Werkzeuge** `web_suche`/`web_abruf` am Gateway (5r): erst
          kostenlose Quellen (eigene SearXNG-Instanz, Ollama-Cloud-Konto),
          dann die mit Schlüssel (Tavily, Exa, Brave nur ohne Cache).
+         **`web_suche` gebaut 12.11.** (SearXNG + Ollama-Cloud). Offen:
+         `web_abruf` (braucht eine Positivliste erlaubter Ziele) und die
+         Schlüssel-Quellen; außerdem gibt es auf dem Pi **keine** Suchquelle
+         — ohne Eintrag in `wahl.json` antwortet das Werkzeug `keine_quelle`.
       4. **Schalter `stream`** in GUI, CLI und Telegram (`/stream`), Wert in
          `wahl.json`; Vorgabe aus. **Gebaut 12.11.:** Gateway und Telegram,
          Teilstücke werden zusammengesetzt. Offen: Schalter in GUI und CLI.

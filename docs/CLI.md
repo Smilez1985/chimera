@@ -253,6 +253,7 @@ gone). Never print keys or commit them.
 | ~~`OLLAMA_MODEL`~~ | **Entfallen** (11.11.): Das Modell wird aus der Serverliste gewählt. Bleibt ein alter Eintrag stehen, hat er keine Wirkung. / Gone — the model is chosen from the server's list; a leftover entry has no effect. |
 | `ANTHROPIC_API_KEY` | Anthropic-Schlüssel. / Anthropic key. |
 | `ANTHROPIC_OAUTH_TOKEN` | Anthropic-Abo-Anmeldung. / Anthropic subscription login. |
+| `OLLAMA_API_KEY` | Suchquelle `ollama` für `web_suche` (Free-Konto) — **nur das Gateway**. Fehlt der Schlüssel, wird die Quelle übersprungen und das gemeldet. / Search source `ollama` for `web_suche`; **gateway only**. Without a key the source is skipped and that is reported. |
 | `CHIMERA_TELEGRAM_TOKEN` | Bot-Token vom BotFather; leer = Telegram aus. / Bot token; empty = off. |
 | `CHIMERA_TELEGRAM_ALLOWED` | Erlaubte Nutzer-IDs, kommagetrennt (Pflicht mit Token). / Allowed user IDs (required with a token). |
 | `CHIMERA_WEB_PASSWORT_HASH` | Passwort-Hash der Web-Oberfläche; leer = Oberfläche aus. / Web UI password hash; empty = UI off. |

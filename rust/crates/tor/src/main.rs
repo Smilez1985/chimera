@@ -12,6 +12,7 @@ mod neustart;
 mod ollama;
 mod sitzung;
 mod status;
+mod suche;
 mod telegram;
 mod web;
 

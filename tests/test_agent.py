@@ -170,6 +170,51 @@ with tempfile.TemporaryDirectory() as td:
     ok("unbekanntes Werkzeug gemeldet") if "gibt es nicht" in tb.call("quatsch", {}) \
         else bad("stillschweigend")
 
+print("== Websuche (DESIGN Regel 5r) ==")
+# Der Dienst hat kein Netz: die Suche geht ueber das Gateway. Geprueft wird
+# hier, dass er wirklich fragt, und was er aus den Antworten macht.
+from chimera.provider import gateway as _gw  # noqa: E402
+
+_echt = _gw.anfragen
+try:
+    gesehen = []
+
+    def _fake(anfrage, **kw):
+        gesehen.append(dict(anfrage))
+        return {"ok": True, "quelle": "searxng", "treffer": [
+            {"titel": "Ollama", "url": "https://ollama.com", "auszug": "lokal"},
+            {"titel": "Zwei", "url": "https://z", "auszug": "x"},
+        ]}
+
+    _gw.anfragen = _fake
+    with tempfile.TemporaryDirectory() as td:
+        tb2 = Toolbox(td)
+        text = tb2.call("web_suche", {"frage": "was ist ollama", "anzahl": 2})
+        check("Suche geht ueber das Gateway", gesehen[0]["op"], "web_suche")
+        check("Frage wird mitgeschickt", gesehen[0]["frage"], "was ist ollama")
+        check("Anzahl wird mitgeschickt", gesehen[0]["anzahl"], 2)
+        check("Treffer mit URL in der Antwort", "https://ollama.com" in text, True)
+        check("Quelle wird genannt", "searxng" in text, True)
+
+    def _leer(anfrage, **kw):
+        return {"ok": False, "fehler": {"code": "keine_quelle",
+                                        "text": "Es ist keine Suchquelle eingetragen."}}
+
+    _gw.anfragen = _leer
+    with tempfile.TemporaryDirectory() as td:
+        text = Toolbox(td).call("web_suche", {"frage": "x"})
+        check("ohne Quelle wird der Grund genannt", "keine Suchquelle" in text, True)
+
+    def _keine(anfrage, **kw):
+        return {"ok": True, "quelle": "searxng", "treffer": []}
+
+    _gw.anfragen = _keine
+    with tempfile.TemporaryDirectory() as td:
+        check("keine Treffer ist eine Auskunft",
+              "Keine Treffer" in Toolbox(td).call("web_suche", {"frage": "x"}), True)
+finally:
+    _gw.anfragen = _echt
+
 print("== Native Werkzeugaufrufe (DESIGN, Regel „Aufrufe, nicht Text“) ==")
 # Der Anbieter liefert strukturierte Aufrufe -- kein Text-Protokoll.
 from chimera.provider.base import Access, CostClass, Reply  # noqa: E402

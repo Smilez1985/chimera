@@ -105,6 +105,18 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
             _ => zeile::fehlerantwort("id_ungueltig", "Die Anfrage braucht eine gueltige \"id\"."),
         },
         "katalog_aktualisieren" => katalog_aktualisieren(anfrage, stand, ollama::KATALOG_BUDGET),
+        // Websuche ist ein Werkzeug des Gateways (DESIGN Regel 5r): der Agent
+        // hat kein Netz, hier wird gesucht. Quellen stehen in wahl.json.
+        "web_suche" => {
+            // Der Schluessel der Suchquelle gehoert dem Gateway und steht in
+            // seiner Umgebung (`.env`, nur das Gateway liest sie, 5l).
+            let schluessel = std::env::var("OLLAMA_API_KEY").ok();
+            crate::suche::op_web_suche(
+                anfrage,
+                &crate::daten::wahl_laden(&stand.daten).unwrap_or_else(|_| json!({})),
+                schluessel.as_deref().filter(|s| !s.trim().is_empty()),
+            )
+        }
         "netzsuche" => crate::netzsuche::durchgang(stand),
         "" => zeile::fehlerantwort("op_fehlt", "Die Anfrage braucht ein Feld \"op\"."),
         andere => crate::daten::op(andere, anfrage, &stand.daten).unwrap_or_else(|| {

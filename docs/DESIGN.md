@@ -1768,6 +1768,27 @@ nie in einem eigenen Such-Cache (gilt für alle Quellen, wegen Brave).
 Quellen sind Einträge der Registry; die Preise und Limits werden vor jedem
 Release neu geprüft.
 
+**Gebaut am 12.11.2026 (erste Stufe):** `op: web_suche` im Gateway
+(`rust/crates/tor/src/suche.rs`), Werkzeug `web_suche` im Agenten. Quellen
+stehen in `wahl.json` unter `suche.quellen` als Liste, in dieser Reihenfolge:
+
+```json
+{"suche": {"quellen": ["searxng:http://127.0.0.1:8888", "ollama"]}}
+```
+
+- `searxng:<adresse>` — eigene Instanz, `GET {adresse}/search?q=…&format=json`.
+  Antwortet sie mit **403**, sagt der Fehlertext, dass `search.formats` das
+  JSON nicht führt (sonst sucht jemand an der falschen Stelle).
+- `ollama` — `https://ollama.com/api/web_search` mit **`OLLAMA_API_KEY`** aus
+  der Umgebung des Gateways (`.env`, nur das Gateway liest sie).
+- Fällt eine Quelle aus, wird die nächste versucht; scheitern alle, kommt
+  `suche_gescheitert` mit jedem Grund. Ist **keine** Quelle eingetragen,
+  kommt `keine_quelle` mit einem Beispiel — kein stiller Ausfall.
+- Treffer: höchstens 5 (bis 10 auf Auftrag), 400 Zeichen Auszug, 8.000
+  Zeichen gesamt, **nichts auf Platte**.
+- `web_abruf` (URL holen) ist **nicht** gebaut: dafür braucht es die
+  Positivliste „welche Ziele darf der Abruf", sonst ist 5n verletzt.
+
 **Grenzen:**
 - **5n bleibt hart:** Das Gateway verbindet sich **nie mit einer beliebigen
   URL**. `web_abruf` läuft entweder beim Anbieter (Anthropic web_fetch) oder
