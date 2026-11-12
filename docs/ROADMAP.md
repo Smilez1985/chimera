@@ -693,9 +693,13 @@ Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
       leere Antwort“, auch bei `list_dir` (also unabhängig vom Werkzeug) —
       der Agenten-Weg für Werkzeuge ist damit **nicht** belegt. Erst hier
       nachsehen, bevor `web_abruf` über den Chat geprüft wird.
-- [ ] **Stufe 3 — Prüfpunkt im Ausführer:** `chimera-sohelper` kennt die
-      Freigaben für `run_command`/`ssh`; die harten Regeln aus `safety.py`
-      bleiben unabhängig davon in Kraft.
+- [ ] **Stufe 3 — Prüfpunkt im Ausführer: für `run_command` gebaut 12.11.**
+      (entschieden: „Gateway fragen", CHANGELOG). Offen daran: am Gerät
+      belegen (Freigabe öffnen → Befehl läuft, Freigabe zu → gesperrt) und
+      **`ssh`** — der Freigabe-Eintrag hat keinen Aufrufer, weil der
+      Ausführer Netzprogramme grundsätzlich ablehnt. Entweder bekommt `ssh`
+      einen eigenen Weg (dann ist zu entscheiden, wie er ohne Netz
+      auskommt) oder der Eintrag verschwindet aus der Oberfläche.
 - [ ] **Entscheidung offen:** ob eine Freigabe beim Ablauf **automatisch
       gemeldet** wird (Telegram/Anzeige) oder still auf `positivliste`
       zurückfällt. Beides ist gebaut gleich teuer; die Meldung ist ehrlicher.

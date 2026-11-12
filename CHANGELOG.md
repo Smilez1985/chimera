@@ -662,6 +662,29 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Der Ausführer fragt vor jeder Ausführung die Freigabe** (DESIGN, Regel
+  „Freigabe je Werkzeug auf Zeit", **Stufe 3**; entschieden 12.11.: „Gateway
+  fragen"): `chimera-sohelper` schickt vor dem Start
+  `{"op":"freigabe_pruefen","werkzeug":"run_command","ziel":"<programm>"}` an
+  `/run/chimera/tor.sock`; erst ein „erlaubt" führt aus. Ziel ist der
+  **Programmname** (Basename von `argv[0]`, klein), nicht die ganze Zeile.
+  **Keine Antwort heißt nicht erlaubt:** ist das Gateway nicht erreichbar,
+  läuft nichts, und der Text sagt beides („'ls' ist nicht freigegeben: das
+  Gateway ist nicht erreichbar …"). Die harten Regeln (`sudo`, Interpreter,
+  Shell-Zeichen, Netzprogramme) bleiben unabhängig — `offen` erlaubt mehr
+  Ziele, nicht mehr Programme. Damit `run_command`/`ssh` weiterhin nutzbar
+  sind, öffnet der Nutzer sie befristet über `/frei` bzw. das Modul
+  `freigaben`; **ohne Freigabe ist der Befehlsstart zu** (das ist die
+  Folge der Entscheidung, nicht ein Nebeneffekt). Die Unit bekommt dafür
+  `SupplementaryGroups=chimera` (der Socket gehört `chimera-tor:chimera`,
+  0660); `InaccessiblePaths=/opt/chimera/config` bleibt, er liest den
+  Zustand nie selbst. Tests: 6 in `chimera-sohelper` (Zielname, angefragte
+  Form, kein Gateway → nichts läuft, Ablehnung → nichts läuft, Freigabe →
+  läuft, harte Regeln bei Freigabe), `test_tools_socket` 26 (u. a. „ohne
+  Gateway wird nichts ausgeführt"), `test_sohelper_gleichheit` 45 mit
+  Gateway-Attrappe; `counter-check-sohelper.sh` prüft die verlorene Gruppe.
+  **Offen:** `ssh` hat keinen Aufrufer (Netzprogramme lehnt der Ausführer
+  ab) — der Freigabe-Eintrag ist dort bis auf Weiteres wirkungslos.
 - **`OLLAMA_MODEL` entfällt** (smilez, 11.11.): `provider/gateway.py` liest
   die Umgebung nicht mehr, sondern schickt ohne eigene Wahl ein leeres
   Modell — das Gateway entscheidet. `provider/setup.py` nimmt die Wahl des

@@ -3702,8 +3702,32 @@ statt durchgelassen.
 
 **Erste Stufe (gebaut 12.11.):** Zustand, Türen und Ablauf — siehe CHANGELOG.
 **Stufe 2 (gebaut 12.11.):** `web_abruf` fragt vor dem Verbinden — die
-Positivliste der Ziele ist `positiv`, kein zweiter Ort. Stufe 3
-(`run_command`/`ssh` im Ausführer) steht aus.
+Positivliste der Ziele ist `positiv`, kein zweiter Ort.
+
+**Stufe 3 (entschieden 12.11., smilez: „Gateway fragen"):** Der Ausführer
+fragt das Gateway, bevor er ein Programm startet. Keine zweite Kopie des
+Zustands, keine eigene Auslegung — **eine** Wahrheit, und die steht dort, wo
+die Türen sie schreiben.
+
+- **Ablauf:** `run` prüft erst die harten Regeln (`safety.py`-Port), dann
+  fragt er `{"op":"freigabe_pruefen","werkzeug":"run_command","ziel":"<programm>"}`
+  über `/run/chimera/tor.sock`. Erst ein „erlaubt" führt zur Ausführung.
+- **Ziel ist der Programmname** (Basename von `argv[0]`, klein geschrieben),
+  nicht die ganze Zeile: eine Liste von Kommandozeilen träfe nie, und
+  „Werkzeug, Ziel als Zusatz" meint ein Ziel, das man hinschreiben kann.
+- **Nicht erreichbar heißt nicht erlaubt.** Antwortet das Gateway nicht,
+  läuft **nichts**, und der Text nennt den Grund (kein Rückfall, wie bei 5n).
+- **Die harten Regeln bleiben unabhängig:** `offen` erlaubt mehr Ziele, nicht
+  mehr Programme. `sudo`, Interpreter, Shell-Zeichen und Netzprogramme werden
+  weiterhin abgelehnt, auch bei „für immer".
+- **Rechte:** Der Ausführer bekommt die Gruppe `chimera`
+  (`SupplementaryGroups=`), sonst kommt er nicht an den Gateway-Socket
+  (0660 `chimera-tor:chimera`). Er liest den Zustand trotzdem nie selbst —
+  `InaccessiblePaths=/opt/chimera/config` bleibt.
+- **`ssh` hat noch keinen Aufrufer:** Netzprogramme lehnt der Ausführer
+  grundsätzlich ab (`IPAddressDeny=any`, kein Netz). Der Freigabe-Eintrag
+  `ssh` ist damit heute wirkungslos — das ist offen und steht in der
+  ROADMAP, statt still anders zu wirken, als die Oberfläche anzeigt.
 
 ### Regel „Wer prüft, führt aus“ — Werkzeuge laufen in einem eigenen Prozess, den der Agent nicht ändern kann
 

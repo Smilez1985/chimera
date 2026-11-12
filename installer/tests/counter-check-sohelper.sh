@@ -78,8 +78,8 @@ mutation ohne-nachweis \
 
 # M-S7: Der Ausfuehrer bekommt zusaetzliche Rechte (Gruppen des Agenten).
 mutation mit-gruppen \
-	'/^Group=\$CHIMERA_SOHELPER_NUTZER$/ a SupplementaryGroups=chimera' \
-	"Dienst: keine SupplementaryGroups (weniger Rechte als der Agent)"
+	'/^SupplementaryGroups=\$CHIMERA_DIENSTNUTZER$/d' \
+	"Dienst: erreicht den Gateway-Socket ueber die Gruppe"
 
 printf '\nErgebnis: %d ok, %d fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

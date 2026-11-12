@@ -41,6 +41,8 @@ fn usage() -> ! {
 
 struct Einstellung {
     arbeit: PathBuf,
+    /// Der Gateway-Socket, bei dem die Freigabe erfragt wird (Stufe 3).
+    tor: PathBuf,
     grenzen: Grenzen,
     start: Instant,
     anfragen: u64,
@@ -49,6 +51,7 @@ struct Einstellung {
 fn main() {
     let mut socket: Option<PathBuf> = None;
     let mut arbeit: Option<PathBuf> = None;
+    let mut tor: Option<PathBuf> = None;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -69,6 +72,9 @@ fn main() {
                 std::process::exit(pingen(Path::new(&pfad)));
             }
             "--arbeit" => arbeit = args.next().map(PathBuf::from),
+            // Wo das Gateway zu erreichen ist (Vorgabe: der Dienstpfad, oder
+            // CHIMERA_TOR_SOCKET aus der Umgebung). Fuer Tests und Sandbox.
+            "--tor" => tor = args.next().map(PathBuf::from),
             "-h" | "--help" => usage(),
             _ => {
                 eprintln!("Unbekannte Option: {a}");
@@ -95,8 +101,13 @@ fn main() {
         }
     };
 
+    let tor = tor
+        .or_else(|| std::env::var("CHIMERA_TOR_SOCKET").ok().map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from(TOR_SOCKET));
+
     let mut st = Einstellung {
         arbeit,
+        tor,
         grenzen: Grenzen::default(),
         start: Instant::now(),
         anfragen: 0,
@@ -108,6 +119,7 @@ fn main() {
         match strom {
             Ok(s) => {
                 let arbeit = st.arbeit.clone();
+                let tor = st.tor.clone();
                 let grenzen = st.grenzen.clone();
                 let start = st.start;
                 let nr = st.anfragen;
@@ -115,7 +127,7 @@ fn main() {
                 // Ein Faden je Verbindung: Ein langer Befehl darf die
                 // Antwort auf "bist du da?" nicht blockieren.
                 std::thread::spawn(move || {
-                    let _ = bedienen(s, &arbeit, &grenzen, start, nr);
+                    let _ = bedienen(s, &arbeit, &tor, &grenzen, start, nr);
                 });
             }
             Err(e) => eprintln!("<4>Verbindung nicht angenommen: {e}"),
@@ -161,6 +173,7 @@ fn pingen(pfad: &Path) -> i32 {
 
 fn bedienen(    strom: UnixStream,
     arbeit: &Path,
+    tor: &Path,
     grenzen: &Grenzen,
     start: Instant,
     nummer: u64,
@@ -177,12 +190,41 @@ fn bedienen(    strom: UnixStream,
                 return Ok(());
             }
         };
-        let a = bearbeite(&wert, arbeit, grenzen, start, nummer);
+        let a = bearbeite(&wert, arbeit, tor, grenzen, start, nummer);
         if let Err(e) = gemein::zeile::schreiben(&mut schreiber, &a) {
             eprintln!("<4>Antwort nicht geschrieben: {e}");
             return Ok(());
         }
     }
+}
+
+/// Wo das Gateway zu erreichen ist. Der Ausfuehrer liest den
+/// Freigabe-Zustand **nicht** selbst (kein Zugriff auf config/), er fragt
+/// (DESIGN, Regel "Freigabe je Werkzeug auf Zeit", Stufe 3).
+const TOR_SOCKET: &str = "/run/chimera/tor.sock";
+
+/// Der Zielname, den die Freigabe-Liste fuehrt: der Programmname, klein.
+/// Nicht die ganze Zeile -- eine Liste von Kommandozeilen traefe nie.
+fn ziel_name(argv: &[String]) -> String {
+    Path::new(&argv[0])
+        .file_name()
+        .map(|s| s.to_string_lossy().to_lowercase())
+        .unwrap_or_default()
+}
+
+/// Das Gateway fragen. `Err` heisst **nicht** "erlaubt": ohne Antwort laeuft
+/// nichts (kein Rueckfall, wie bei 5n).
+fn freigabe_fragen(pfad: &Path, werkzeug: &str, ziel: &str) -> Result<Value, String> {
+    let strom = UnixStream::connect(pfad)
+        .map_err(|e| format!("das Gateway ist nicht erreichbar ({}: {e})", pfad.display()))?;
+    let _ = strom.set_read_timeout(Some(Duration::from_secs(10)));
+    let mut schreiber = strom.try_clone().map_err(|e| e.to_string())?;
+    let anfrage = json!({"op": "freigabe_pruefen", "werkzeug": werkzeug, "ziel": ziel});
+    gemein::zeile::schreiben(&mut schreiber, &anfrage)
+        .map_err(|e| format!("die Freigabe-Anfrage wurde nicht geschrieben ({e})"))?;
+    let mut leser = BufReader::new(strom);
+    gemein::zeile::lesen(&mut leser, gemein::zeile::MAX_BYTES)
+        .map_err(|e| format!("keine Antwort vom Gateway ({e})"))
 }
 
 fn antwort_ok(teile: Value) -> Value {
@@ -199,7 +241,14 @@ fn antwort_fehler(code: &str, text: &str) -> Value {
     json!({ "ok": false, "fehler": { "code": code, "text": text } })
 }
 
-fn bearbeite(wert: &Value, arbeit: &Path, grenzen: &Grenzen, start: Instant, nr: u64) -> Value {
+fn bearbeite(
+    wert: &Value,
+    arbeit: &Path,
+    tor: &Path,
+    grenzen: &Grenzen,
+    start: Instant,
+    nr: u64,
+) -> Value {
     match wert.get("op").and_then(Value::as_str).unwrap_or("") {
         "ping" => antwort_ok(json!({
             "programm": "chimera-sohelper",
@@ -213,7 +262,33 @@ fn bearbeite(wert: &Value, arbeit: &Path, grenzen: &Grenzen, start: Instant, nr:
                 return antwort_fehler("befehl_fehlt", "run braucht ein Feld \"command\".");
             };
             match befehl_pruefen(befehl, grenzen) {
-                Ok(b) => antwort_ok(json!({ "text": ausfuehren(&b.argv, arbeit, grenzen) })),
+                Ok(b) => {
+                    // Die harten Regeln sind durch -- jetzt entscheidet der
+                    // Freigabe-Zustand, und zwar im Gateway (Stufe 3).
+                    let ziel = ziel_name(&b.argv);
+                    match freigabe_fragen(tor, "run_command", &ziel) {
+                        Ok(a) if a.get("erlaubt").and_then(Value::as_bool) == Some(true) => {
+                            antwort_ok(json!({ "text": ausfuehren(&b.argv, arbeit, grenzen) }))
+                        }
+                        Ok(a) => {
+                            let grund = a
+                                .get("grund")
+                                .and_then(Value::as_str)
+                                .unwrap_or("ohne Grund");
+                            antwort_fehler(
+                                "nicht_freigegeben",
+                                &format!("'{ziel}' ist nicht freigegeben: {grund}"),
+                            )
+                        }
+                        // Ohne Antwort des Gateways ist die Frage offen --
+                        // und offen heisst hier: nein. Der Text sagt beides:
+                        // die Sperre und ihren Grund.
+                        Err(e) => antwort_fehler(
+                            "nicht_freigegeben",
+                            &format!("'{ziel}' ist nicht freigegeben: {e}"),
+                        ),
+                    }
+                }
                 Err(e) => antwort_fehler("abgelehnt", &e.0),
             }
         }
@@ -358,4 +433,145 @@ fn auflisten(ziel: &Path, angegeben: &str) -> String {
 #[allow(dead_code)]
 fn _schreib_bar(mut s: UnixStream) {
     let _ = s.flush();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::BufRead;
+
+    /// Ein winziges Gateway: nimmt **eine** Anfrage an, merkt sie sich und
+    /// antwortet. Rueckgabe: (Socketpfad, Faden mit der gesehenen Anfrage).
+    fn gateway(antwort: Value) -> (PathBuf, std::thread::JoinHandle<Value>) {
+        let ordner = std::env::temp_dir().join(format!(
+            "chimera-tor-attrappe-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&ordner).expect("ordner");
+        let pfad = ordner.join("tor.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&pfad).expect("binden");
+        let faden = std::thread::spawn(move || {
+            let (strom, _) = listener.accept().expect("verbindung");
+            let mut leser = std::io::BufReader::new(strom.try_clone().expect("klon"));
+            let mut zeile = String::new();
+            leser.read_line(&mut zeile).expect("lesen");
+            let gesehen: Value = serde_json::from_str(zeile.trim()).expect("json");
+            let mut schreiber = strom;
+            gemein::zeile::schreiben(&mut schreiber, &antwort).expect("antwort");
+            gesehen
+        });
+        (pfad, faden)
+    }
+
+    fn einstellungen(arbeit: &Path) -> Grenzen {
+        let _ = arbeit;
+        Grenzen::default()
+    }
+
+    fn arbeit(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("chimera-sohelper-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).expect("arbeitsordner");
+        d
+    }
+
+    #[test]
+    fn ziel_ist_der_programmname_klein() {
+        assert_eq!(ziel_name(&["/usr/bin/ls".to_string(), "-la".to_string()]), "ls");
+        assert_eq!(ziel_name(&["LS".to_string()]), "ls");
+        assert_eq!(ziel_name(&["python3".to_string(), "x.py".to_string()]), "python3");
+    }
+
+    #[test]
+    fn die_anfrage_nennt_werkzeug_und_ziel() {
+        let (pfad, faden) = gateway(json!({"ok": true, "erlaubt": true, "grund": "Zeitfreigabe laeuft"}));
+        let a = freigabe_fragen(&pfad, "run_command", "ls").expect("antwort");
+        let gesehen = faden.join().expect("faden");
+        assert_eq!(gesehen["op"], "freigabe_pruefen");
+        assert_eq!(gesehen["werkzeug"], "run_command");
+        assert_eq!(gesehen["ziel"], "ls");
+        assert_eq!(a["erlaubt"], true);
+    }
+
+    #[test]
+    fn ohne_gateway_wird_nichts_ausgefuehrt() {
+        // Der Fall, der zaehlt: kein Gateway, kein Befehl -- und der Grund
+        // steht im Text, statt still durchzulaufen (kein Rueckfall).
+        let ordner = arbeit("ohne-gateway");
+        let fehlt = ordner.join("gibt-es-nicht.sock");
+        let a = bearbeite(
+            &json!({"op": "run", "command": "echo sollte-nicht-laufen"}),
+            &ordner,
+            &fehlt,
+            &einstellungen(&ordner),
+            Instant::now(),
+            1,
+        );
+        assert_eq!(a["ok"], false, "{a}");
+        assert_eq!(a["fehler"]["code"], "nicht_freigegeben");
+        let text = a["fehler"]["text"].as_str().unwrap();
+        assert!(text.contains("nicht erreichbar") && text.contains("nicht freigegeben"), "{text}");
+        assert!(!text.contains("sollte-nicht-laufen") || text.contains("nicht freigegeben"), "{text}");
+    }
+
+    #[test]
+    fn eine_ablehnung_verhindert_die_ausfuehrung() {
+        let ordner = arbeit("abgelehnt");
+        let (pfad, faden) = gateway(json!({"ok": true, "erlaubt": false, "grund": "keine Freigabe eingetragen"}));
+        let a = bearbeite(
+            &json!({"op": "run", "command": "echo hallo"}),
+            &ordner,
+            &pfad,
+            &einstellungen(&ordner),
+            Instant::now(),
+            2,
+        );
+        let gesehen = faden.join().expect("faden");
+        assert_eq!(gesehen["ziel"], "echo");
+        assert_eq!(a["ok"], false, "{a}");
+        assert_eq!(a["fehler"]["code"], "nicht_freigegeben");
+        let text = a["fehler"]["text"].as_str().unwrap();
+        assert!(text.contains("keine Freigabe eingetragen") && text.contains("echo"), "{text}");
+        assert_ne!(text, "hallo", "der Befehl darf nicht gelaufen sein");
+    }
+
+    #[test]
+    fn eine_freigabe_laesst_ihn_laufen() {
+        let ordner = arbeit("erlaubt");
+        let (pfad, faden) = gateway(json!({"ok": true, "erlaubt": true, "grund": "Zeitfreigabe laeuft"}));
+        let a = bearbeite(
+            &json!({"op": "run", "command": "echo hallo"}),
+            &ordner,
+            &pfad,
+            &einstellungen(&ordner),
+            Instant::now(),
+            3,
+        );
+        let _ = faden.join().expect("faden");
+        assert_eq!(a["ok"], true, "{a}");
+        assert_eq!(a["text"].as_str().unwrap().trim(), "hallo");
+    }
+
+    #[test]
+    fn harte_regeln_gelten_auch_mit_freigabe() {
+        // "offen" erlaubt mehr Ziele, nicht mehr Programme.
+        let ordner = arbeit("harte-regeln");
+        let (pfad, _faden) = gateway(json!({"ok": true, "erlaubt": true}));
+        for befehl in ["sudo id", "sh -c ls", "curl http://example.com", "rm -rf /"] {
+            let a = bearbeite(
+                &json!({"op": "run", "command": befehl}),
+                &ordner,
+                &pfad,
+                &einstellungen(&ordner),
+                Instant::now(),
+                4,
+            );
+            assert_eq!(a["ok"], false, "{befehl}: {a}");
+            assert_eq!(a["fehler"]["code"], "abgelehnt", "{befehl}: {a}");
+        }
+    }
 }

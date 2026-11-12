@@ -217,6 +217,44 @@ def binary() -> Path | None:
     return None
 
 
+def _gateway_attrappe(pfad, gesehen, erlaubt=True, grund="Zeitfreigabe laeuft"):
+    """Ein winziges Gateway: nimmt Anfragen an und antwortet wie das echte.
+
+    Der Ausführer fragt seit Stufe 3 der Freigaben vor jeder Ausführung
+    ("Gateway fragen", 12.11.). Ohne diese Attrappe liefe im Test nichts.
+    """
+    import socket
+    import threading
+
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(str(pfad))
+    srv.listen(8)
+
+    def bedienen():
+        while True:
+            try:
+                c, _ = srv.accept()
+            except OSError:
+                return
+            with c:
+                roh = c.makefile("rwb")
+                zeile = roh.readline()
+                if not zeile:
+                    continue
+                try:
+                    import json as _j
+                    gesehen.append(_j.loads(zeile.decode()))
+                except Exception:
+                    pass
+                antwort = {"ok": True, "erlaubt": erlaubt, "grund": grund}
+                roh.write((__import__("json").dumps(antwort) + "\n").encode())
+                roh.flush()
+
+    faden = threading.Thread(target=bedienen, daemon=True)
+    faden.start()
+    return srv
+
+
 def echt():
     print("== Mit dem echten Ausführer ==")
     prog = binary()
@@ -227,7 +265,11 @@ def echt():
     arbeit = d / "arbeit"
     arbeit.mkdir()
     sock = d / "s.sock"
-    p = subprocess.Popen([str(prog), "--socket", str(sock), "--arbeit", str(arbeit)],
+    tor = d / "tor.sock"
+    gesehen: list = []
+    g = _gateway_attrappe(tor, gesehen)
+    p = subprocess.Popen([str(prog), "--socket", str(sock), "--arbeit", str(arbeit),
+                          "--tor", str(tor)],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         for _ in range(100):
@@ -241,6 +283,11 @@ def echt():
         ok("auflisten") if "a.txt" in tb.call("list_dir", {}) else bad("list_dir kaputt")
         ok("Befehl läuft") if "a.txt" in tb.call("run_command", {"command": "ls"}) \
             else bad("run_command kaputt")
+        check("vorher gefragt: Werkzeug", (gesehen[-1] if gesehen else {}).get("werkzeug"), "run_command")
+        check("vorher gefragt: Ziel ist der Programmname",
+              (gesehen[-1] if gesehen else {}).get("ziel"), "ls")
+        check("vorher gefragt: die richtige Operation",
+              (gesehen[-1] if gesehen else {}).get("op"), "freigabe_pruefen")
         ok("Ausbruch abgelehnt") if "Abgelehnt" in tb.call("read_file", {"path": "../../etc/passwd"}) \
             else bad("Ausbruch durchgelassen")
     finally:
@@ -249,7 +296,36 @@ def echt():
             p.wait(timeout=5)
         except subprocess.TimeoutExpired:
             p.kill()
+        g.close()
+
+    # Ohne Gateway läuft nichts -- und der Grund steht im Text (kein Rückfall).
+    d2 = Path(tempfile.mkdtemp(prefix="sohelper-ohne-tor-"))
+    (d2 / "arbeit").mkdir()
+    p2 = subprocess.Popen([str(prog), "--socket", str(d2 / "s.sock"),
+                           "--arbeit", str(d2 / "arbeit"), "--tor", str(d2 / "nichts.sock")],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        for _ in range(100):
+            if (d2 / "s.sock").exists():
+                break
+            time.sleep(0.02)
+        tb2 = Toolbox(d2 / "arbeit", ausfuehrer=Ausfuehrer(d2 / "s.sock"))
+        text = tb2.call("run_command", {"command": "ls"})
+        ok("ohne Gateway wird nichts ausgeführt") if "nicht freigegeben" in text \
+            and text.startswith("Abgelehnt") else bad(f"ohne Gateway lief etwas: {text}")
+        ok("und der Grund wird genannt") if "nicht erreichbar" in text \
+            else bad(f"Grund fehlt: {text}")
+        # Lesen und Schreiben hängen nicht an der Freigabe (kein Kommandostart).
+        ok("lesen geht weiter") if "Keine Datei" in tb2.call("read_file", {"path": "x"}) \
+            else bad("read_file kaputt")
+    finally:
+        p2.terminate()
+        try:
+            p2.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            p2.kill()
         shutil.rmtree(d, ignore_errors=True)
+        shutil.rmtree(d2, ignore_errors=True)
 
 
 def main() -> int:

@@ -73,6 +73,10 @@ StartLimitBurst=5
 Type=simple
 User=$CHIMERA_SOHELPER_NUTZER
 Group=$CHIMERA_SOHELPER_NUTZER
+# Die Gruppe des Gateways, sonst kommt er nicht an dessen Socket (0660
+# chimera-tor:chimera). Er fragt dort vor jeder Ausfuehrung die Freigabe --
+# lesen darf er den Zustand trotzdem nicht (InaccessiblePaths unten).
+SupplementaryGroups=$CHIMERA_DIENSTNUTZER
 # Kein Netz -- die eigentliche Sperre (Regel 5n). Die Regeln im Programm
 # lehnen Netzprogramme zusaetzlich ab; beides ist gewollt.
 IPAddressDeny=any

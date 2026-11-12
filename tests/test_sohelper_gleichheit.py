@@ -68,6 +68,32 @@ class NichtAusfuehrbar(RuntimeError):
     """Das Binary laeuft auf dieser Maschine nicht (fremde Architektur)."""
 
 
+def _gateway_attrappe(pfad: Path):
+    """Ein Gateway, das alles erlaubt -- nur für den Regeln-Vergleich."""
+    import socket
+    import threading
+
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(str(pfad))
+    srv.listen(8)
+
+    def bedienen():
+        while True:
+            try:
+                c, _ = srv.accept()
+            except OSError:
+                return
+            with c:
+                roh = c.makefile("rwb")
+                if not roh.readline():
+                    continue
+                roh.write(b'{"ok": true, "erlaubt": true, "grund": "Test"}\n')
+                roh.flush()
+
+    threading.Thread(target=bedienen, daemon=True).start()
+    return srv
+
+
 class Ausfuehrer:
     """Ein laufender Ausführer in einem erfundenen Arbeitsordner."""
 
@@ -86,8 +112,15 @@ class Ausfuehrer:
         self.arbeit = self.dir / "arbeit"
         self.arbeit.mkdir()
         self.socket = self.dir / "s.sock"
+        # Seit Stufe 3 der Freigaben fragt der Ausführer vor jeder Ausführung
+        # das Gateway (12.11.). Für den Regeln-Vergleich antwortet hier eine
+        # Attrappe mit "erlaubt": Gemessen werden die harten Regeln, nicht
+        # die Freigabe -- die hat ihre eigenen Tests.
+        self.tor = self.dir / "tor.sock"
+        self._tor = _gateway_attrappe(self.tor)
         self.proc = subprocess.Popen(
-            [str(prog), "--socket", str(self.socket), "--arbeit", str(self.arbeit)],
+            [str(prog), "--socket", str(self.socket), "--arbeit", str(self.arbeit),
+             "--tor", str(self.tor)],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         for _ in range(100):
