@@ -70,6 +70,11 @@ const EINGEBAUT: &[Eingebaut] = &[
         manifest: include_str!("../web/module/wahl/manifest.json"),
         dateien: &[("wahl.js", "text/javascript; charset=utf-8", include_str!("../web/module/wahl/wahl.js"))],
     },
+    Eingebaut {
+        name: "ssh",
+        manifest: include_str!("../web/module/ssh/manifest.json"),
+        dateien: &[("ssh.js", "text/javascript; charset=utf-8", include_str!("../web/module/ssh/ssh.js"))],
+    },
 ];
 
 
@@ -148,7 +153,7 @@ pub struct Modul {
 /// eintragen**, wenn das Gateway ein neues Recht kennt. Ein Recht, das nicht in
 /// dieser Liste steht, verwirft das Modul -- sonst wuerde ein Tippfehler im
 /// Manifest still ein wirkungsloses Recht verlangen.
-pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben", "wahl-lesen", "wahl-schreiben", "freigaben-lesen", "freigaben-schreiben"];
+pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben", "wahl-lesen", "wahl-schreiben", "freigaben-lesen", "freigaben-schreiben", "ssh-lesen", "ssh-schreiben"];
 
 fn name_ok(s: &str) -> bool {
     !s.is_empty() && s.len() <= 32 && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
@@ -473,6 +478,7 @@ pub fn behandle(z: &Zustand, a: &Anfrage) -> Antwort {
         (_, p) if p.starts_with("/api/anbieter/") => anbieter_api(z, a, &p["/api/anbieter/".len()..]),
         (_, p) if p.starts_with("/api/wahl/") => wahl_api(z, a, &p["/api/wahl/".len()..]),
         (_, p) if p.starts_with("/api/freigaben/") => freigaben_api(z, a, &p["/api/freigaben/".len()..]),
+        (_, p) if p.starts_with("/api/ssh/") => ssh_api(z, a, &p["/api/ssh/".len()..]),
         _ => fehler(404, "nicht gefunden"),
     }
 }
@@ -656,6 +662,51 @@ fn wahl_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort {
             match crate::wahl::reihenfolge_setzen(&z.stand, &texte) {
                 Ok(()) => json_antwort(200, json!({"ok": true, "reihenfolge": texte})),
                 Err(g) => fehler(400, &g),
+            }
+        }
+        _ => fehler(404, "nicht gefunden"),
+    }
+}
+
+/// Die Host-Tabelle der Fernausfuehrung (DESIGN, Regel "Jedes Werkzeug
+/// bekommt nur seine Rechte"): ansehen, anlegen/aendern, loeschen. Der Agent
+/// kommt hier nicht durch -- er hat genau eine Op (`ssh_vorschlag`), die nur
+/// anlegen darf; bestaetigen tut der Nutzer, hier.
+fn ssh_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
+    let (m, _) = module_erkennen(z.modul_dir.as_deref());
+    let (recht, nur_post) = match was {
+        "lesen" => ("ssh-lesen", false),
+        "setzen" => ("ssh-schreiben", true),
+        "loeschen" => ("ssh-schreiben", true),
+        _ => return fehler(404, "nicht gefunden"),
+    };
+    if !schreibrecht_vergeben(&m, recht) {
+        return fehler(403, &format!("kein Modul hat das Recht '{recht}'"));
+    }
+    if nur_post != (a.methode == "POST") {
+        return fehler(405, "Methode nicht erlaubt");
+    }
+    match was {
+        "lesen" => json_antwort(
+            200,
+            json!({"ok": true, "rechte": crate::ssh::RECHTE, "hosts": crate::ssh::laden(&z.stand.daten)["hosts"]}),
+        ),
+        "setzen" | "loeschen" => {
+            let v: Value = match serde_json::from_slice(a.body) {
+                Ok(v @ Value::Object(_)) => v,
+                _ => return fehler(400, "kein JSON-Objekt"),
+            };
+            let Some(name) = v["host"].as_str() else {
+                return fehler(400, "Feld \"host\" fehlt");
+            };
+            let op = if was == "setzen" { "ssh_host_setzen" } else { "ssh_host_loeschen" };
+            // Dieselbe eine Stelle wie ueberall: der Dienst entscheidet.
+            let a2 = json!({"op": op, "host": name, "wert": v.get("wert").cloned().unwrap_or(Value::Null)});
+            let r = crate::dienst::antworten(&a2, &z.stand);
+            if r["ok"] == true {
+                json_antwort(200, r)
+            } else {
+                fehler(400, &format!("{}", r["fehler"]["text"].as_str().unwrap_or("abgelehnt")))
             }
         }
         _ => fehler(404, "nicht gefunden"),

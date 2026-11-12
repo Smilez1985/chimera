@@ -213,6 +213,7 @@ Braucht `CHIMERA_LOG_RAM` und `CHIMERA_LOG_KARTE`. / Needs both variables.
 | `sh rust/gegenprobe-freigaben.sh` | Gegenprobe der Freigaben je Werkzeug (Negativliste, Ablauf, unbekanntes Werkzeug, Teilauftrag, Dauer, „aus“). / Per-tool grant counter-check. |
 | `sh rust/gegenprobe-wahl.sh` | Gegenprobe der Wahl (Feld prüfen, Wert prüfen, Rest erhalten, Tür ohne Recht). / Choice counter-check (field, value, preserved rest, door without right). |
 | `sh rust/gegenprobe-abruf.sh` | Gegenprobe des Webabrufs (Freigabe übergangen, eigene Adresse frei, Umleitung ungeprüft, Nicht-Text, keine Kürzung, falsches Schema, Anmeldung in der Adresse). / Web-fetch counter-check. |
+| `sh rust/gegenprobe-ssh.sh` | Gegenprobe der Host-Tabelle (Vorschlag wirkt, Vorschlag überschreibt, Hostschlüssel fehlt, geändertes Ziel, Fingerabdruck geglaubt, Pfad als Schlüsselname, unbekannte Rechte, unbestätigter Host, freie Namen, known_hosts ohne Port). / Host-table counter-check. |
 | `sh rust/gegenprobe-mojo.sh` | Gegenprobe von Mojo (Ursachen, Reparaturen, Nachprüfung, Meldung). / Mojo counter-check. |
 | `cd rust && cargo test --locked` | Rust-Tests. / Rust tests. |
 | `python3 tools/check-globals.py` | Namen finden, die gelesen, aber nie definiert werden. / Find names read as globals but never defined. |

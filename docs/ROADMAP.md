@@ -710,11 +710,6 @@ Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
 Entschieden (smilez, 12.11.): Alles, was Chimera ins Netz will, geht durch
 das Gateway — auch `ssh`. Der Ausführer bleibt ohne Netz.
 
-- [ ] **Host-Tabelle** `config/ssh/hosts.json` (Adresse, Nutzer, Port,
-      Schlüsselverweis, Hostschlüssel, `rechte`, `herkunft`). Pflege
-      (entschieden 12.11.): **Web-Modul `ssh`** + der Agent darf
-      **vorschlagen** (`ssh_vorschlag`, wirkt erst nach Bestätigung im
-      Modul).
 - [ ] **`op: ssh`** im Gateway: `{"op":"ssh","host":"…","befehl":"…"}`; Ziel
       für die Freigabe ist `user@host`, geprüft **vor** dem Verbinden. Danach
       **öffnet das Gateway die TCP-Verbindung** (Adresse/Port aus der Tabelle).
@@ -735,7 +730,11 @@ das Gateway — auch `ssh`. Der Ausführer bleibt ohne Netz.
 - [ ] **Hostschlüssel beim Anlegen lesen**: das Gateway liest den Schlüssel
       einmal, das Modul zeigt den Fingerabdruck, der Nutzer bestätigt; erst
       dann steht der Eintrag. Ein Agenten-Vorschlag kann diesen Schritt nicht
-      auslösen.
+      auslösen. **Stand 12.11.:** Die Bestätigung ist gebaut (Blob aus
+      `ssh-keyscan`, Fingerabdruck rechnet das Gateway) — das **Lesen im
+      Gateway** fehlt, weil es einen SSH-Schlüsselaustausch braucht. Gehört
+      zu `op: ssh`: dort ist der Netzweg, und `ssh_schluessel_lesen` kann
+      denselben Code benutzen.
 - [ ] **Agenten-Werkzeug `ssh`** (`{host, befehl}`) — kein `argv`, keine
       Optionen.
 - [ ] **Gegenprobe:** ssh erreicht 1.1.1.1:443 nicht (Unit-Riegel, obwohl

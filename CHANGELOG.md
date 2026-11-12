@@ -20,6 +20,30 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Host-Tabelle der Fernausführung** (12.11., erste Stufe von „fernausführen
+  über `ssh`"): `rust/crates/tor/src/ssh.rs` hält die eine Wahrheit darüber,
+  welche Hosts es gibt — Adresse, Nutzer, Port, Schlüssel**name**, Rechte je
+  Host (`force`/`rbash`/`voll`, Vorgabe `force`, unbekannter Wert wird
+  abgelehnt, nicht ausgelegt), Herkunft. Ein Eintrag **wirkt** nur mit
+  `herkunft: nutzer` **und** bestätigtem Hostschlüssel; der Fingerabdruck
+  (`SHA256:…`) wird aus dem Blob **gerechnet**, nicht vom Aufrufer
+  übernommen, und die `known_hosts`-Zeile entsteht aus der Tabelle (bei
+  Port ≠ 22 als `[adresse]:port`). Ein Vorschlag des Agenten (`ssh_vorschlag`)
+  legt nur an, ändert nie und ist nie brauchbar — auch nicht, wenn jemand von
+  Hand einen Schlüssel nachträgt. Adresse oder Port ändern heißt: neuer
+  Hostschlüssel. Pflege über das Web-Modul „Fernzugriff" (Rechte
+  `ssh-lesen`/`ssh-schreiben`), Ops `ssh_hosts`/`ssh_host_setzen`/
+  `ssh_host_loeschen`; Ablage `config/ssh/` steht jetzt in `ReadWritePaths`
+  und in `gateway_ablagen` (Regel 5t, sechs Ablagen). Tests: 15 in `ssh`,
+  Web-Modultests, `tests/test_ablagen_wirksam.py` grün; Gegenprobe
+  `rust/gegenprobe-ssh.sh` 10/10 rot. Dazu das Agenten-Werkzeug
+  `ssh_vorschlag` (`{host, adresse, nutzer, port?, notiz?}`) — mehr darf der
+  Agent nicht: kein Ändern, kein Bestätigen, kein Löschen, keine Optionen,
+  kein `argv`; `test_agent.py` 8 Proben (Port als Zahl oder klarer Satz,
+  Ablehnung mit Grund).
+  **Bewusste Abweichung, benannt:** den Hostschlüssel liest heute der Nutzer
+  ein (`ssh-keyscan`), nicht das Gateway — das Lesen braucht einen
+  SSH-Schlüsselaustausch und gehört zu `op: ssh` (ROADMAP).
 - **Regel „Jedes Werkzeug bekommt nur seine Rechte"** (Vorgabe smilez
   12.11.: Child-Prozesse mit genau den benötigten Rechten): Ein
   Werkzeugaufruf erhält die Rechte **seiner Fähigkeitsklasse**, und die

@@ -255,6 +255,49 @@ try:
 finally:
     _gw.anfragen = _echt
 
+print("== ssh_vorschlag: der Agent schlaegt nur vor, er oeffnet nichts ==")
+_echt = _gw.anfragen
+try:
+    gesehen = []
+
+    def _fake_vorschlag(anfrage, **kw):
+        gesehen.append(dict(anfrage))
+        return {"ok": True, "host": anfrage["host"], "brauchbar": False}
+
+    _gw.anfragen = _fake_vorschlag
+    with tempfile.TemporaryDirectory() as td:
+        text = Toolbox(td).call("ssh_vorschlag",
+                                {"host": "radxa", "adresse": "box.example", "nutzer": "dietpi"})
+        check("Vorschlag geht als eigene Operation zum Gateway", gesehen[0]["op"], "ssh_vorschlag")
+        check("Adresse und Nutzer gehen mit",
+              (gesehen[0]["adresse"], gesehen[0]["nutzer"]), ("box.example", "dietpi"))
+        check("ohne Port wird keiner erfunden", "port" in gesehen[0], False)
+        check("der Agent sagt, dass der Vorschlag nicht wirkt",
+              "wirkt noch" in text and "Fernzugriff" in text, True)
+
+        text = Toolbox(td).call("ssh_vorschlag",
+                                {"host": "radxa", "adresse": "box.example", "nutzer": "dietpi",
+                                 "port": "2222"})
+        check("ein genannter Port geht als Zahl mit", gesehen[1]["port"], 2222)
+        text = Toolbox(td).call("ssh_vorschlag",
+                                {"host": "radxa", "adresse": "box.example", "nutzer": "dietpi",
+                                 "port": "zweiundzwanzig"})
+        check("kein Port ist ein klarer Satz, kein Aufruf", "keine Zahl" in text, True)
+        check("und es wurde nichts geschickt", len(gesehen), 2)
+
+    def _abgelehnt(anfrage, **kw):
+        return {"ok": False, "fehler": {"code": "host_bekannt",
+                "text": "\"radxa\" steht schon in der Tabelle -- ein Vorschlag aendert nichts."}}
+
+    _gw.anfragen = _abgelehnt
+    with tempfile.TemporaryDirectory() as td:
+        text = Toolbox(td).call("ssh_vorschlag",
+                                {"host": "radxa", "adresse": "box.example", "nutzer": "dietpi"})
+        check("Ablehnung kommt mit Grund, nicht als Fehler des Programms",
+              "steht schon in der Tabelle" in text and "Fehler in 'ssh_vorschlag'" not in text, True)
+finally:
+    _gw.anfragen = _echt
+
 print("== Native Werkzeugaufrufe (DESIGN, Regel „Aufrufe, nicht Text“) ==")
 # Der Anbieter liefert strukturierte Aufrufe -- kein Text-Protokoll.
 from chimera.provider.base import Access, CostClass, Reply  # noqa: E402

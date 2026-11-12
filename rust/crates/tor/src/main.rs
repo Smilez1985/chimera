@@ -13,6 +13,7 @@ mod netzsuche;
 mod neustart;
 mod ollama;
 mod sitzung;
+mod ssh;
 mod status;
 mod suche;
 mod telegram;

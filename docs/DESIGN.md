@@ -1397,7 +1397,7 @@ Voreinstellung, HTTPS Opt-in, sichtbarer Hinweis bei HTTP; Änderungen wirken
 ohne Neustart; Schlüssel werden nur geschrieben, nie wieder angezeigt
 (zurück kommt „gesetzt“).
 
-### Architekturregel 5t — Anbieter, Schlüssel, Katalog, Wahl und Freigaben sind fünf Ablagen mit je einem Schreiber
+### Architekturregel 5t — Anbieter, Schlüssel, Katalog, Wahl, Freigaben und Hosts sind sechs Ablagen mit je einem Schreiber
 
 Vorgabe smilez (31.10.): Jeder Anbieter ist ein eigenes Modul, die Modelle
 des Anbieters liegen darin. Mehrere Anbieter können dasselbe Modell mit
@@ -1413,6 +1413,7 @@ Beispiele, keine Vorgabe.
 | **Katalog** | Was der Anbieter zuletzt gemeldet hat: Modelle, Kontext, `tools`, Zeitpunkt, `fehlt_seit` | `state/katalog/<id>.json` | Gateway | **ja** |
 | **Wahl** | Reihenfolge und Ketten als Verweise `<anbieter-id>/<modell>` | `config/wahl/wahl.json` | Gateway | nein |
 | **Freigaben** | Je Werkzeug: Positivliste oder offene Zeitspanne (`bis`), Negativliste (DESIGN, Regel „Freigabe je Werkzeug auf Zeit“) | `config/freigaben/freigaben.json` | Gateway | nein |
+| **Hosts** | Fernausführung: Adresse, Nutzer, Port, Schlüssel**name**, Hostschlüssel (Typ, Blob, gerechneter Fingerabdruck), Rechte je Host, Herkunft (`nutzer`/`vorschlag`) | `config/ssh/hosts.json` | Gateway | nein |
 
 - **Eintragsschlüssel ist `<anbieter-id>/<modell>`**, nie der Modellname
   allein. „Sonnet über Abo“ und „Sonnet über OpenRouter“ sind zwei
@@ -3955,9 +3956,11 @@ Start.
 
 **Stand 12.11.** Gebaut: Ausführer (eigener Nutzer, kein Netz, nur
 Arbeitsordner; fragt vor jeder Ausführung die Freigabe), Gateway als einziger
-Netznutzer mit fünf Ablagen, `web_abruf` mit Freigabe-Prüfung. **Nicht
-gebaut:** die Fernausführung über `ssh` (unten) — und damit ist der
-Freigabe-Eintrag `ssh` heute wirkungslos.
+Netznutzer mit sechs Ablagen, `web_abruf` mit Freigabe-Prüfung, die
+**Host-Tabelle** der Fernausführung (`config/ssh/hosts.json`, Web-Modul
+„Fernzugriff“, Vorschlags-Op `ssh_vorschlag`). **Nicht gebaut:** die
+Verbindung selbst (`op: ssh`, Deskriptor-Übergabe, `chimera-fdpass`) —
+und damit ist der Freigabe-Eintrag `ssh` heute wirkungslos.
 
 #### Fernausführung: `ssh` geht durch das Gateway, und nur so
 
@@ -4049,6 +4052,27 @@ wechselt der Schlüssel später, bricht der Lauf ab und **meldet** es, statt
 still weiterzumachen. Ein Vorschlag des Agenten kann diesen Schritt nicht
 auslösen: er nennt Adresse und Nutzer, den Fingerabdruck bestätigt der
 Nutzer.
+
+**Was davon steht (12.11., `rust/crates/tor/src/ssh.rs`).** Tabelle,
+Web-Modul „Fernzugriff“ und die Vorschlags-Op `ssh_vorschlag` sind gebaut.
+Was ein Eintrag können muss, damit er **wirkt**: `herkunft: "nutzer"` **und**
+ein Hostschlüssel mit gerechnetem Fingerabdruck (`SHA256:…`). Ein Vorschlag
+ist nie brauchbar, auch wenn jemand von Hand einen Schlüssel nachträgt — die
+Herkunft entscheidet, nicht der Inhalt.
+
+Eine Abweichung vom Entwurf, bewusst und benannt: **der Blob des
+Hostschlüssels kommt heute vom Nutzer** (Zeile aus `ssh-keyscan -t ed25519
+<adresse>`), nicht vom Gateway. Den **Fingerabdruck** rechnet trotzdem das
+Gateway aus dem Blob (`SHA256:`, base64 ohne Füllzeichen) — der Nutzer
+bestätigt also die Zeile, die in `known_hosts` landet, und keine getippte
+Prüfsumme. Grund: den Schlüssel selbst zu lesen, hieße im Gateway einen
+SSH-Schlüsselaustausch zu sprechen (Banner, KEXINIT, curve25519, Entpacken
+der Hostschlüssel-Nachricht) — genau die Protokollfläche, die dieser
+Abschnitt aus dem Gateway heraushalten will. Der Schlüsselaustausch gehört
+deshalb zu `op: ssh` (ROADMAP): dort steht der Netzweg ohnehin, und danach
+kann `ssh_schluessel_lesen` denselben Code benutzen.
+`known_hosts`-Zeilen entstehen aus der Tabelle (`adresse typ blob`, bei
+Port ≠ 22 als `[adresse]:port`) — eine Form, kein zweiter Ort.
 
 **Welche Rechte auf dem Ziel (entschieden 12.11.).** Alles wird angeboten,
 der Nutzer entscheidet **je Host**; das Feld steht in der Tabelle:

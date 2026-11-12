@@ -1,0 +1,9 @@
+{
+  "name": "ssh",
+  "titel": {"de": "Fernzugriff", "en": "Remote access"},
+  "symbol": "🔑",
+  "reihenfolge": 70,
+  "einstieg": "ssh.js",
+  "element": "chimera-ssh",
+  "rechte": ["ssh-lesen", "ssh-schreiben"]
+}

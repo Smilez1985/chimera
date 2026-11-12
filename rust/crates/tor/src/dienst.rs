@@ -143,6 +143,46 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
             let a = crate::freigaben::pruefen(&stand.daten, name, ziel, jetzt_s());
             json!({"ok": true, "werkzeug": name, "ziel": anfrage.get("ziel").cloned(), "erlaubt": a["erlaubt"], "grund": a["grund"], "bis": a["bis"]})
         }
+        // Die Host-Tabelle der Fernausfuehrung (DESIGN, Regel "Jedes
+        // Werkzeug bekommt nur seine Rechte"). Der Agent darf **nur**
+        // vorschlagen: `ssh_vorschlag` legt an und aendert nie. Lesen, Setzen
+        // und Loeschen gehoeren dem Nutzer (Web-Modul).
+        "ssh_hosts" => json!({"ok": true, "hosts": crate::ssh::laden(&stand.daten)["hosts"]}),
+        "ssh_host_setzen" => {
+            let name = anfrage.get("host").and_then(Value::as_str).unwrap_or("");
+            let wert = anfrage.get("wert").cloned().unwrap_or(Value::Null);
+            match crate::ssh::setzen(&stand.daten, name, &wert) {
+                Ok(v) => json!({"ok": true, "host": name, "eintrag": v}),
+                Err((code, text)) => zeile::fehlerantwort(code, &text),
+            }
+        }
+        "ssh_host_loeschen" => {
+            let name = anfrage.get("host").and_then(Value::as_str).unwrap_or("");
+            match crate::ssh::loeschen(&stand.daten, name) {
+                Ok(weg) => json!({"ok": true, "geloescht": weg}),
+                Err((code, text)) => zeile::fehlerantwort(code, &text),
+            }
+        }
+        "ssh_vorschlag" => {
+            let feld = |k: &str| anfrage.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+            match crate::ssh::vorschlag(
+                &stand.daten,
+                &feld("host"),
+                &feld("adresse"),
+                &feld("nutzer"),
+                anfrage.get("port").and_then(Value::as_u64),
+                &feld("notiz"),
+            ) {
+                Ok(v) => {
+                    let mut v = v;
+                    if let Some(o) = v.as_object_mut() {
+                        o.insert("ok".into(), json!(true));
+                    }
+                    v
+                }
+                Err((code, text)) => zeile::fehlerantwort(code, &text),
+            }
+        }
         "" => zeile::fehlerantwort("op_fehlt", "Die Anfrage braucht ein Feld \"op\"."),
         andere => crate::daten::op(andere, anfrage, &stand.daten).unwrap_or_else(|| {
             zeile::fehlerantwort("op_unbekannt", &format!("Unbekannte Operation: {andere}"))
