@@ -39,6 +39,11 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Treffer, ist das ein benannter Fehler statt eines leeren Erfolgs.
   2 Tests mit einem echten Seitenausschnitt (Ziele, Entitäten, Kürzung,
   Bot-Seite ohne Treffer) und einer für `%XX`/`+`.
+  **Am chimera-pi belegt (`dc9b8c2`):** `suche.quellen: ["ddg"]` in
+  `wahl.json`, dann `op: web_suche` → drei deutsche Treffer (Wikipedia,
+  Hostinger, Centron), und ein Auftrag an den Agenten („Suche im Netz …")
+  kam mit zwei Treffern samt URL zurück — der Weg Agent → Gateway → Netz
+  ist damit durchgängig belegt, ohne dass der Dienst selbst ins Netz geht.
 - **`stream` ist umschaltbar** (DESIGN, Regel „Aufrufe, nicht Text“): Das
   Gateway liest `stream` aus `wahl.json` (Vorgabe **aus**) und setzt den Wert
   ausdrücklich — Ollama hat sonst `true`. Ist er an, werden die NDJSON-
