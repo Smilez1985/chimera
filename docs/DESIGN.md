@@ -3725,10 +3725,12 @@ die Türen sie schreiben.
   (`SupplementaryGroups=`), sonst kommt er nicht an den Gateway-Socket
   (0660 `chimera-tor:chimera`). Er liest den Zustand trotzdem nie selbst —
   `InaccessiblePaths=/opt/chimera/config` bleibt.
-- **`ssh` hat noch keinen Aufrufer:** Netzprogramme lehnt der Ausführer
-  grundsätzlich ab (`IPAddressDeny=any`, kein Netz). Der Freigabe-Eintrag
-  `ssh` ist damit heute wirkungslos — das ist offen und steht in der
-  ROADMAP, statt still anders zu wirken, als die Oberfläche anzeigt.
+- **`ssh` im normalen Weg bleibt gesperrt:** Netzprogramme lehnt der
+  Ausführer grundsätzlich ab (`IPAddressDeny=any`, kein Netz) — auch mit
+  Freigabe. Der **einzige** ssh-Weg ist `op: ssh` (Abschnitt
+  „Fernausführung" weiter unten): das Gateway prüft, verbindet und reicht den
+  Deskriptor weiter. Seit 12.11. (`bbb8e1d`) hat der Freigabe-Eintrag damit
+  seinen Aufrufer.
 
 ### Regel „Wer prüft, führt aus“ — Werkzeuge laufen in einem eigenen Prozess, den der Agent nicht ändern kann
 

@@ -90,9 +90,10 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Entschieden (12.11.): Host-Tabelle pflegt ein **Web-Modul**, der Agent
   darf **vorschlagen** (`herkunft: vorschlag`, wirkt erst nach Bestätigung);
   die **Rechte je Host** stehen in der Tabelle — `force` (Vorgabe,
-  `ForceCommand`), `rbash`, `voll`. Gebaut ist davon noch **nichts**
-  (ROADMAP, Phase Fernausführung); der Freigabe-Eintrag `ssh` bleibt bis
-  dahin wirkungslos.
+  `ForceCommand`), `rbash`, `voll`. **Nachtrag:** Gebaut ist es inzwischen —
+  Host-Tabelle (`173d58b`) und Verbindung über den Deskriptor (`bbb8e1d`),
+  siehe die beiden Einträge weiter oben; der Freigabe-Eintrag `ssh` hat damit
+  seinen Aufrufer.
 - **`web_abruf` — eine Adresse holen, aber nur mit Freigabe** (DESIGN 5r,
   **Stufe 2** der Regel „Freigabe je Werkzeug auf Zeit“, 12.11.):
   `op: web_abruf` und das Agenten-Werkzeug `web_abruf`
@@ -763,8 +764,9 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Zeilen. Dabei aufgefallen und behoben: der CI-Gleichheitstest nahm das
   **eingecheckte** Binary statt des frisch gebauten — er baut es jetzt selbst
   (`02fb472`).
-  **Offen:** `ssh` hat keinen Aufrufer (Netzprogramme lehnt der Ausführer
-  ab) — der Freigabe-Eintrag ist dort bis auf Weiteres wirkungslos.
+  **Damals offen:** `ssh` hatte keinen Aufrufer (Netzprogramme lehnt der
+  Ausführer ab) — erledigt am 12.11. mit `op: ssh` und der
+  Deskriptor-Übergabe (`bbb8e1d`); der Freigabe-Eintrag wirkt jetzt.
 - **`OLLAMA_MODEL` entfällt** (smilez, 11.11.): `provider/gateway.py` liest
   die Umgebung nicht mehr, sondern schickt ohne eigene Wahl ein leeres
   Modell — das Gateway entscheidet. `provider/setup.py` nimmt die Wahl des

@@ -695,10 +695,11 @@ Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
       nachsehen, bevor `web_abruf` über den Chat geprüft wird.
 - [ ] **Stufe 3 — Prüfpunkt im Ausführer: für `run_command` gebaut und am
       Gerät belegt** (12.11., `02fb472`; entschieden: „Gateway fragen",
-      CHANGELOG). Offen daran: **`ssh`** — der Freigabe-Eintrag hat keinen Aufrufer, weil der
-      Ausführer Netzprogramme grundsätzlich ablehnt. Entweder bekommt `ssh`
-      einen eigenen Weg (dann ist zu entscheiden, wie er ohne Netz
-      auskommt) oder der Eintrag verschwindet aus der Oberfläche.
+      CHANGELOG). **`ssh` hat diesen Weg jetzt bekommen** (12.11., `bbb8e1d`):
+      das Gateway fragt die Freigabe, öffnet die Verbindung und reicht den
+      Deskriptor weiter — der Ausführer bleibt ohne Netz (Phase
+      Fernausführung). Im normalen Weg (`run_command`) bleibt `ssh`
+      gesperrt.
 - [ ] **Entscheidung offen:** ob eine Freigabe beim Ablauf **automatisch
       gemeldet** wird (Telegram/Anzeige) oder still auf `positivliste`
       zurückfällt. Beides ist gebaut gleich teuer; die Meldung ist ehrlicher.
