@@ -684,9 +684,11 @@ Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
       erlaubt `gut.example` und lehnt `bose.example` über die Negativliste ab,
       „aus“ führt zurück auf die Positivliste. Offen daran nur noch: die
       Anzeige der Restzeit im Autotest (das JS ist nur im Browser geprüft).
-- [ ] **Stufe 2 — Prüfpunkt im Gateway:** `web_abruf` (und später jeder
-      ausgehende Weg) fragt `freigaben`, bevor es verbindet; Ablehnung nennt
-      Werkzeug und Grund.
+- [ ] **Stufe 2 — Prüfpunkt im Gateway: für `web_abruf` gebaut 12.11.**
+      (CHANGELOG): `abruf::durchgang` fragt `freigaben::pruefen`, bevor es
+      verbindet; Ablehnung nennt Werkzeug, Ziel und Grund. Offen: **jeder
+      weitere** ausgehende Weg braucht denselben Prüfpunkt — heute hat ihn
+      nur `web_abruf`.
 - [ ] **Stufe 3 — Prüfpunkt im Ausführer:** `chimera-sohelper` kennt die
       Freigaben für `run_command`/`ssh`; die harten Regeln aus `safety.py`
       bleiben unabhängig davon in Kraft.

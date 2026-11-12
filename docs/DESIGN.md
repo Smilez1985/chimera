@@ -962,7 +962,7 @@ Sperre angeglichen.
 |---|---|
 | Bekannter Auftrag, bekannter und eingeschalteter Anbieter | gebaut (`dienst.rs`) |
 | Schwärzung vor der Cloud | nicht gebaut |
-| Positivliste der Ziele für `web_abruf` | nicht gebaut; die Web-Werkzeuge selbst (Regel 5r) fehlen noch |
+| Positivliste der Ziele für `web_abruf` | gebaut: `positiv` im Freigabe-Zustand, geprüft in `abruf::durchgang` (Regel 5r, Stufe 2 der Freigaben) |
 | Rückfrage beim Nutzer | nicht gebaut; Weg wie in Regel 10s (Telegram-Knopf oder Web), wann sie auslöst, ist festzulegen |
 
 **Schwärzung vor der Cloud (Entwurf).** Gilt für Cloud-Anbieter, nicht für
@@ -1798,14 +1798,34 @@ stehen in `wahl.json` unter `suche.quellen` als Liste, in dieser Reihenfolge:
   kommt `keine_quelle` mit einem Beispiel — kein stiller Ausfall.
 - Treffer: höchstens 5 (bis 10 auf Auftrag), 400 Zeichen Auszug, 8.000
   Zeichen gesamt, **nichts auf Platte**.
-- `web_abruf` (URL holen) ist **nicht** gebaut: dafür braucht es die
-  Positivliste „welche Ziele darf der Abruf", sonst ist 5n verletzt.
+- **`web_abruf` (URL holen)** — gebaut 12.11.2026, `rust/crates/tor/src/abruf.rs`:
+  `op: web_abruf` mit `url`. Die Positivliste der Ziele ist **kein zweiter
+  Ort**, sondern `positiv` im Freigabe-Zustand (Regel „Freigabe je Werkzeug
+  auf Zeit"): vor jedem Verbinden fragt das Gateway
+  `freigaben::pruefen(p, "web_abruf", Some(host), jetzt)`. Das ist **Stufe 2**
+  jener Regel — die Freigabe prüft jetzt wirklich jemand. Ablehnung kommt als
+  `abruf_gesperrt` und nennt Werkzeug, Ziel und Grund; protokolliert wird sie
+  von `pruefen` selbst (`state/log/freigabe.log`).
+  - Nur `http`/`https`, nur GET, nur Text (`text/*`, `application/json`,
+    `application/xhtml+xml`) — alles andere wird mit dem Typ abgelehnt,
+    statt Bytes in den Verlauf zu schütten.
+  - **Höchstens 3 Umleitungen, jede erneut geprüft.** Eine Umleitung ist ein
+    Zielwechsel; wer sie ungeprüft folgt, hebt die Positivliste auf.
+  - **Eigene Adressen werden nie geholt** (`localhost`, `*.local`, `::1`,
+    Loopback und die privaten IPv4-Bereiche) — außer der Name steht
+    ausdrücklich in `positiv`, dann ist es der Wille des Nutzers. Namensauflösung
+    prüft das Gateway nicht (kein DNS-Riegel, ehrlich benannt: ein Name, der
+    auf 10.x zeigt, kommt durch die Namensprüfung).
+  - Grenzen wie bei der Suche: Frist 20 s, höchstens 2 MB gelesen, Rückgabe
+    **4.000 Zeichen** (`gekuerzt: true` sagt es), **nichts auf Platte**.
 
 **Grenzen:**
 - **5n bleibt hart:** Das Gateway verbindet sich **nie mit einer beliebigen
-  URL**. `web_abruf` läuft entweder beim Anbieter (Anthropic web_fetch) oder
-  über den festen Endpunkt der Suchquelle (ollama.com). Das Gateway ruft
-  feste Anbieter-Hosts an, keine Ziele, die das Modell vorgibt.
+  URL**. Feste Anbieter-Hosts, die eingetragenen Suchquellen — und seit
+  12.11. `web_abruf`, aber **nur** mit einer Adresse, die der
+  Freigabe-Zustand durchlässt (Vorgabe: `positivliste`, also nichts von
+  selbst). Ohne Freigabe gibt es keinen Abruf; die Entscheidung trifft der
+  Nutzer in der Oberfläche oder per `/frei`, nie das Modell.
 - **Suchtreffer sind Eingabe, kein Befehl** (wie 5p). Sie werden im Prompt
   als fremder Inhalt markiert.
 - **Kosten:** `max_uses` je Turn (Vorgabe 3) und ein Tageslimit in
@@ -3681,7 +3701,9 @@ anfasst. (c) Der Agent kann über kein Werkzeug einen Eintrag in
 statt durchgelassen.
 
 **Erste Stufe (gebaut 12.11.):** Zustand, Türen und Ablauf — siehe CHANGELOG.
-Das Werkzeug `web_abruf`, das sie zuerst braucht, folgt danach.
+**Stufe 2 (gebaut 12.11.):** `web_abruf` fragt vor dem Verbinden — die
+Positivliste der Ziele ist `positiv`, kein zweiter Ort. Stufe 3
+(`run_command`/`ssh` im Ausführer) steht aus.
 
 ### Regel „Wer prüft, führt aus“ — Werkzeuge laufen in einem eigenen Prozess, den der Agent nicht ändern kann
 

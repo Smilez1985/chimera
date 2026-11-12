@@ -20,6 +20,29 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **`web_abruf` — eine Adresse holen, aber nur mit Freigabe** (DESIGN 5r,
+  **Stufe 2** der Regel „Freigabe je Werkzeug auf Zeit“, 12.11.):
+  `op: web_abruf` und das Agenten-Werkzeug `web_abruf`
+  (`rust/crates/tor/src/abruf.rs`, `agent/tools.py`). Die Positivliste der
+  Ziele ist **kein zweiter Ort**, sondern `positiv` im Freigabe-Zustand: vor
+  dem Verbinden fragt das Gateway `freigaben::pruefen`, Ablehnung kommt als
+  `abruf_gesperrt` mit Werkzeug, Ziel und Grund und steht im Protokoll. Nur
+  `http`/`https`, nur GET, nur Text (`text/*`, `application/json`,
+  `application/xhtml+xml` — sonst wird der Typ genannt und nichts
+  ausgeliefert); höchstens 3 Umleitungen und **jede erneut geprüft**;
+  **eigene Adressen** (Loopback, private Bereiche, `localhost`, `*.local`)
+  gehen nur durch, wenn der Name ausdrücklich in `positiv` steht — sonst
+  wäre die Web-Oberfläche des Gateways selbst erreichbar. Frist 20 s,
+  höchstens 2 MB gelesen, 4.000 Zeichen zurück (`gekuerzt: true` sagt es),
+  nichts auf Platte. Der Agent filtert nichts vor und lädt nichts nach: er
+  fragt und bekommt Ja oder Nein mit Grund. Tests: 10 in `abruf` (Zerlegen
+  und Ablehnungen, eigene Adressen, Textarten, ohne Freigabe wird **nicht**
+  geholt, offen sperrt eigene Adressen, Holen und Kürzen gegen einen echten
+  kleinen Server, Nicht-Text, Umleitung ohne Ziel, Umleitung auf fremden
+  Host, abgelaufene Zeitfreigabe), 6 in `test_agent`; Gegenprobe
+  `rust/gegenprobe-abruf.sh`: 7 Verfälschungen, alle rot. Lokal am eigenen
+  Gateway belegt: ohne Freigabe `abruf_gesperrt`, nach Zeitfreigabe die Seite
+  geholt, eigene Adresse abgelehnt, vier Zeilen im Freigabe-Protokoll.
 - **Freigabe je Werkzeug auf Zeit** (DESIGN, Regel „Freigabe je Werkzeug auf
   Zeit“; entschieden 12.11.): `config/freigaben.json` hält je Werkzeug
   (`web_suche`, `web_abruf`, `ssh`, `run_command`) einen Modus

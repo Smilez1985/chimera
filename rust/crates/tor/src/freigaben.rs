@@ -278,6 +278,13 @@ fn schreiben(p: &Pfade, wert: &Value) -> Result<(), String> {
 /// Eine Zeile je Entscheidung. Auch das Ja wird protokolliert -- "stiller
 /// Erfolg" ist hier die gefaehrlichste Fehlerart. Ein Protokollfehler darf
 /// die Entscheidung nicht umdrehen (die Warnung geht ins Dienstprotokoll).
+/// Fuer Aufrufer, die eine Entscheidung **vor** `pruefen` treffen (harte
+/// Grenzen, z.B. eigene Adressen beim Abruf): dieselbe eine Protokollzeile,
+/// damit auch diese Ablehnung nachweisbar ist.
+pub fn protokolliere(p: &Pfade, zeit: u64, werkzeug: &str, ziel: Option<&str>, was: &str, grund: &str) {
+    protokoll(p, zeit, werkzeug, ziel, was, grund)
+}
+
 fn protokoll(p: &Pfade, zeit: u64, werkzeug: &str, ziel: Option<&str>, was: &str, grund: &str) {
     let datei = protokoll_datei(p);
     if let Some(dir) = datei.parent() {

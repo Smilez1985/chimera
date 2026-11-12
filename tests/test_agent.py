@@ -215,6 +215,46 @@ try:
 finally:
     _gw.anfragen = _echt
 
+print("== Webabruf: die Entscheidung faellt im Gateway, nicht hier ==")
+_echt = _gw.anfragen
+try:
+    gesehen = []
+
+    def _fake_abruf(anfrage, **kw):
+        gesehen.append(dict(anfrage))
+        return {"ok": True, "url": "https://beispiel.example/a",
+                "endgueltige_url": "https://beispiel.example/b", "typ": "text/html",
+                "status": 200, "umleitungen": 1, "gekuerzt": True,
+                "text": "Inhalt der Seite"}
+
+    _gw.anfragen = _fake_abruf
+    with tempfile.TemporaryDirectory() as td:
+        text = Toolbox(td).call("web_abruf", {"url": "https://beispiel.example/a"})
+        check("Abruf geht ueber das Gateway", gesehen[0]["op"], "web_abruf")
+        check("Adresse wird mitgeschickt", gesehen[0]["url"], "https://beispiel.example/a")
+        check("Endadresse und Typ stehen in der Antwort",
+              "beispiel.example/b" in text and "text/html" in text, True)
+        check("Umleitung und Kuerzung werden benannt",
+              "Umleitung" in text and "gekuerzt" in text, True)
+        check("fremder Inhalt wird als solcher benannt",
+              "Fremder Inhalt" in text and "Inhalt der Seite" in text, True)
+
+    def _gesperrt(anfrage, **kw):
+        return {"ok": False, "fehler": {"code": "abruf_gesperrt", "werkzeug": "web_abruf",
+                                        "ziel": "intern.example",
+                                        "text": "Der Abruf von intern.example ist nicht "
+                                                "freigegeben: keine Freigabe eingetragen"}}
+
+    _gw.anfragen = _gesperrt
+    with tempfile.TemporaryDirectory() as td:
+        text = Toolbox(td).call("web_abruf", {"url": "https://intern.example/x"})
+        check("Ablehnung nennt Ziel und Grund",
+              "intern.example" in text and "keine Freigabe" in text, True)
+        check("Ablehnung wird nicht als Fehler des Programms ausgegeben",
+              "Fehler in 'web_abruf'" not in text, True)
+finally:
+    _gw.anfragen = _echt
+
 print("== Native Werkzeugaufrufe (DESIGN, Regel „Aufrufe, nicht Text“) ==")
 # Der Anbieter liefert strukturierte Aufrufe -- kein Text-Protokoll.
 from chimera.provider.base import Access, CostClass, Reply  # noqa: E402

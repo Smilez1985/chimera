@@ -118,6 +118,13 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
             )
         }
         "netzsuche" => crate::netzsuche::durchgang(stand),
+        // Eine Adresse holen -- nur mit Freigabe (DESIGN 5r, Stufe 2 der
+        // Regel "Freigabe je Werkzeug auf Zeit"). Die Pruefung sitzt hier,
+        // vor dem Verbinden: der Agent fragt nie selbst "darf ich?".
+        "web_abruf" => {
+            let url = anfrage.get("url").and_then(Value::as_str).unwrap_or("");
+            crate::abruf::durchgang(&stand.daten, url, jetzt_s())
+        }
         // Freigabe je Werkzeug auf Zeit (DESIGN, Regel "Freigabe je Werkzeug
         // auf Zeit"). Lesen und Setzen gehoeren dem Nutzer; `freigabe_pruefen`
         // ist die Frage des Ausfuehrers vor dem Handeln.
