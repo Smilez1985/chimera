@@ -134,6 +134,43 @@ mut2 freie-option \
 
 zurueck2
 
+# --- die Geheim-Ablage (Aufnahme) ----------------------------------------
+F3=crates/tor/src/geheim.rs
+cp "$F3" /tmp/gp-ssh3.orig
+zurueck3() { cp /tmp/gp-ssh3.orig "$F3"; }
+mut3() { # name, suchen, ersetzen
+	zurueck3
+	python3 - "$F3" "$2" "$3" <<'EOF3'
+import sys
+f, a, b = sys.argv[1], sys.argv[2], sys.argv[3]
+s = open(f).read()
+assert s.count(a) >= 1, "Muster fehlt: " + a
+open(f, "w").write(s.replace(a, b, 1))
+EOF3
+	[ $? -eq 0 ] || { echo "MUSTER FEHLT: $1"; gruen=$((gruen + 1)); return; }
+	if CARGO_TARGET_DIR=/root/chimera-target cargo test --offline -p chimera-tor 'geheim::' >/tmp/gp-ssh3-intern.log 2>&1; then
+		echo "GRUEN (schlecht): $1"
+		gruen=$((gruen + 1))
+	else
+		echo "rot (gut): $1"
+	fi
+}
+
+# 21. Die Ablage ist nicht mehr nur fuer das Gateway lesbar.
+mut3 rechte-zu-offen \
+	'atomar_schreiben(&ziel, passwort.as_bytes(), 0o600)' \
+	'atomar_schreiben(&ziel, passwort.as_bytes(), 0o644)'
+# 22. Der Name darf ein Pfad sein.
+mut3 name-als-pfad \
+	'        && n.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '"'"'-'"'"' || c == '"'"'_'"'"' || c == '"'"'.'"'"')' \
+	'        && true'
+# 23. Steuerzeichen werden durchgelassen (zweizeiliges Geheimnis).
+mut3 steuerzeichen-durch \
+	'    if passwort.chars().any(|c| c.is_control()) {' \
+	'    if false {'
+
+zurueck3
+
 zurueck
 echo "---"
 echo "$gruen gruen (0 ist gut)"

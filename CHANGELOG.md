@@ -20,6 +20,30 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Geheim-Ablage für die Aufnahme** (12.11., erster Schritt der Host-Aufnahme):
+  `config/geheim/ssh/<host>` (0600, `chimera-tor`), geschrieben über
+  `chimera-tor --geheim-ssh <host>` (Passwort von stdin, **ohne Echo** am
+  Terminal, nie als Argument) und löschbar mit `--geheim-ssh-weg <host>`.
+  Damit gibt es einen Weg, ein Passwort abzulegen, der **nicht** durch den
+  Chat geht: der Agent kann `config/` nicht lesen, und die Ausgabe nennt nur,
+  *dass* etwas steht, nie den Wert. `geheim::vorhanden` ist die einzige
+  Auskunft, die eine Oberfläche zeigen darf.
+  **Neue Regel im DESIGN: „Aufnahme eines Hosts: das Passwort einmal, der
+  Schlüssel danach"** — samt der Begründung, warum Maskieren im Prompt
+  **nicht** reicht (wer maskiert, muss das Geheimnis vorher kennen; Zusammen-
+  fassungen sind verlustbehaftet; der Rückweg hält den Klartext im Speicher;
+  als Agent-Werkzeugargument wäre es im Modellkontext). Maskieren bleibt als
+  zweites Netz für Unfälle, nicht als Mechanismus.
+- **Rechte je Host an `sshd(8)` nachgeprüft** (12.11.): **Vorgabe `zaun` =
+  `restrict`** — ein Wort in derselben `authorized_keys`-Zeile, kostet auf dem
+  Ziel nichts und schaltet PTY, Weiterleitungen und `~/.ssh/rc` ab;
+  `force` = `restrict,command="<zaun>"` ist die freiwillig engste Stufe und
+  die einzige, die eine Datei auf dem Ziel verlangt; `voll` = keine Optionen
+  (das Verhalten von `ssh-copy-id`).
+  **`rbash` heißt jetzt `zaun` und wird abgelehnt**: eine eingeschränkte
+  Shell lässt sich über Editoren, `less` oder `BASH_ENV` aushebeln — sie sieht
+  nach Zaun aus und ist keiner. `restrict` schaltet laut Doku alle
+  Beschränkungen ein (auch künftige), statt sie einzeln aufzuzählen.
 - **Fernausführung über `ssh` — gebaut und am Ziel belegt** (12.11.):
   `{"op":"ssh","host":"…","befehl":"…"}` im Gateway. Reihenfolge ist die
   Zusage: Host-Tabelle (was nicht drinsteht oder nur ein Vorschlag ist, gibt

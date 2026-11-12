@@ -28,7 +28,7 @@ use serde_json::{json, Value};
 /// Rechte auf dem Ziel. Die Vorgabe ist `force` -- wer mehr will, sagt es
 /// ausdruecklich; ein unbekannter Wert wird abgelehnt, nicht grosszuegig
 /// ausgelegt.
-pub const RECHTE: &[&str] = &["force", "rbash", "voll"];
+pub const RECHTE: &[&str] = &["zaun", "force", "voll"];
 
 /// Namen sind Bezeichner, keine Kommandozeile: klein, ohne Leerraum, max. 32.
 const NAME_MAX: usize = 32;
@@ -65,7 +65,7 @@ pub fn laden(p: &Pfade) -> Value {
             let mut e = e.clone();
             if let Some(o) = e.as_object_mut() {
                 o.entry("port").or_insert(json!(22));
-                o.entry("rechte").or_insert(json!("force"));
+                o.entry("rechte").or_insert(json!("zaun"));
                 o.entry("herkunft").or_insert(json!("vorschlag"));
                 o.entry("notiz").or_insert(json!(""));
             }
@@ -235,7 +235,10 @@ pub fn setzen(p: &Pfade, name: &str, wert: &Value) -> Result<Value, (&'static st
             format!("Schluesselname \"{schluessel}\": nur ein Name aus dem Schluesselordner, kein Pfad."),
         ));
     }
-    let rechte = wert.get("rechte").and_then(Value::as_str).unwrap_or("force").trim();
+    // Vorgabe ist `zaun` (restrict): kostet auf dem Ziel nichts, schaltet aber
+    // PTY und Weiterleitungen ab. `force` verlangt eine Datei auf dem Ziel und
+    // ist darum eine bewusste Wahl (DESIGN, "Welche Rechte auf dem Ziel").
+    let rechte = wert.get("rechte").and_then(Value::as_str).unwrap_or("zaun").trim();
     if !RECHTE.contains(&rechte) {
         return Err(("wert_ungueltig", format!("Rechte \"{rechte}\" gibt es nicht ({}).", RECHTE.join(", "))));
     }
@@ -314,7 +317,7 @@ pub fn vorschlag(p: &Pfade, name: &str, adresse: &str, nutzer: &str, port: Optio
     }
     let e = json!({
         "adresse": adresse.trim(), "nutzer": nutzer.trim(), "port": port,
-        "schluessel": "", "hostschluessel": Value::Null, "rechte": "force",
+        "schluessel": "", "hostschluessel": Value::Null, "rechte": "zaun",
         "herkunft": "vorschlag", "notiz": notiz.trim(),
     });
     hosts.insert(name.to_string(), e.clone());
@@ -493,7 +496,7 @@ mod tests {
 
     fn eintrag(adresse: &str) -> Value {
         json!({"adresse": adresse, "nutzer": "dietpi", "port": 22, "schluessel": "radxa_ed25519",
-               "hostschluessel": {"typ": "ssh-ed25519", "schluessel": blob()}, "rechte": "force"})
+               "hostschluessel": {"typ": "ssh-ed25519", "schluessel": blob()}, "rechte": "zaun"})
     }
 
     #[test]
@@ -511,7 +514,7 @@ mod tests {
         let t = laden(&p);
         let h = &t["hosts"]["radxa"];
         assert_eq!(h["nutzer"], "dietpi");
-        assert_eq!(h["rechte"], "force");
+        assert_eq!(h["rechte"], "zaun");
         assert!(h["hostschluessel"]["fingerabdruck"].as_str().unwrap().starts_with("SHA256:"));
         assert_eq!(h["brauchbar"], true);
     }
@@ -609,6 +612,20 @@ mod tests {
         e["schluessel"] = json!("ok_key");
         e["adresse"] = json!("-oProxyCommand=boese");
         assert_eq!(setzen(&p, "radxa", &e).unwrap_err().0, "wert_ungueltig");
+    }
+
+    #[test]
+    fn ohne_angabe_gilt_zaun_als_vorgabe() {
+        // `zaun` (restrict) kostet auf dem Ziel nichts; `force` verlangt eine
+        // Datei und ist darum eine bewusste Wahl.
+        let p = p("vorgabe");
+        let mut e = eintrag("h.example");
+        e.as_object_mut().unwrap().remove("rechte");
+        setzen(&p, "h", &e).unwrap();
+        assert_eq!(laden(&p)["hosts"]["h"]["rechte"], "zaun");
+        // `rbash` gibt es nicht mehr: eine eingeschraenkte Shell ist kein Zaun.
+        e["rechte"] = json!("rbash");
+        assert_eq!(setzen(&p, "h", &e).unwrap_err().0, "wert_ungueltig");
     }
 
     #[test]

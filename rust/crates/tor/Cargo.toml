@@ -16,3 +16,4 @@ serde_json.workspace = true
 ureq.workspace = true
 tiny_http.workspace = true
 ring.workspace = true
+libc.workspace = true

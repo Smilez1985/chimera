@@ -58,6 +58,7 @@ name = "chimera-tor"
 version = "0.0.0"
 dependencies = [
  "gemein",
+ "libc",
  "ring",
  "serde_json",
  "tiny_http",

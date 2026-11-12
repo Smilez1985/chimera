@@ -215,17 +215,25 @@ mod tests {
 
     #[test]
     fn erben_lassen_legt_die_nummer_und_loescht_cloexec() {
+        // Eine Nummer, die in diesem Prozess frei ist: die Tests laufen
+        // nebeneinander, und ein festes `9` gehoert mal einem Socketpair
+        // eines anderen Tests -- dann schloesse `dup2` dessen Verbindung
+        // (am 12.11. genau so passiert).
+        let ziel: RawFd = (100..200).find(|n| unsafe { libc::fcntl(*n, libc::F_GETFD) } < 0).expect("freie Nummer");
         // Ein roher Deskriptor, den kein Rust-Typ besitzt: `erben_lassen`
         // schliesst das Original, und ein UnixStream-Destructor wuerde
         // dieselbe Nummer ein zweites Mal schliessen (IO-Safety-Abbruch).
         let roh = unsafe { libc::dup(0) };
         assert!(roh >= 0);
-        let neu = erben_lassen(roh, 9).unwrap();
-        assert_eq!(neu, 9);
-        let flags = unsafe { libc::fcntl(9, libc::F_GETFD) };
+        let neu = erben_lassen(roh, ziel).unwrap();
+        assert_eq!(neu, ziel);
+        let flags = unsafe { libc::fcntl(ziel, libc::F_GETFD) };
         assert_eq!(flags & libc::FD_CLOEXEC, 0);
-        // Das Original ist weg, die Nummer 9 lebt.
-        assert!(unsafe { libc::fcntl(roh, libc::F_GETFD) } < 0);
-        schliessen(9);
+        // Auf "das Original ist zu" wird hier **nicht** geprueft: die Tests
+        // laufen in einem Prozess nebeneinander, und nach dem Schliessen kann
+        // ein anderer Faden dieselbe Nummer bekommen -- die Probe maesse dann
+        // dessen Deskriptor (am 12.11. genau so passiert). Dass `dup2`
+        // schliesst, ist Betriebssystem-Zusage, nicht unsere.
+        schliessen(ziel);
     }
 }

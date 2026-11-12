@@ -46,9 +46,9 @@ class ChimeraSsh extends HTMLElement {
           <div><label class="klein">Schlüsselname (im Schlüsselordner des Ausführers)</label><input id="schluessel" placeholder="radxa_ed25519"></div>
           <div><label class="klein">Rechte auf dem Ziel</label>
             <select id="rechte">
-              <option value="force">force — nur die vorgesehenen Befehle (Vorgabe)</option>
-              <option value="rbash">rbash — eingeschränkte Shell</option>
-              <option value="voll">voll — der Schlüssel darf, was der Zielnutzer darf</option>
+              <option value="zaun">zaun — freie Befehle, aber keine Weiterleitung/kein PTY (restrict, Vorgabe)</option>
+              <option value="force">force — nur die vorgesehenen Befehle; verlangt ein Skript auf dem Ziel</option>
+              <option value="voll">voll — der Schlüssel darf, was der Zielnutzer darf (wie ssh-copy-id)</option>
             </select>
           </div>
         </div>
@@ -129,7 +129,7 @@ class ChimeraSsh extends HTMLElement {
       this.$("nutzer").value = e.nutzer || "";
       this.$("port").value = e.port || 22;
       this.$("schluessel").value = e.schluessel || "";
-      this.$("rechte").value = e.rechte || "force";
+      this.$("rechte").value = e.rechte || "zaun";
       this.$("notiz").value = e.notiz || "";
       this.$("hostschluessel").value = "";
       this.melden(e.brauchbar ? "Zum Ändern: Felder prüfen, dann speichern. Der Hostschlüssel bleibt, solange Adresse und Port gleich bleiben." : "Zum Bestätigen: Hostschlüssel einfügen (ssh-keyscan) und speichern.", false);

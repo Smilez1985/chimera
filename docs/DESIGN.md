@@ -4095,18 +4095,159 @@ kann `ssh_schluessel_lesen` denselben Code benutzen.
 `known_hosts`-Zeilen entstehen aus der Tabelle (`adresse typ blob`, bei
 Port ≠ 22 als `[adresse]:port`) — eine Form, kein zweiter Ort.
 
-**Welche Rechte auf dem Ziel (entschieden 12.11.).** Alles wird angeboten,
-der Nutzer entscheidet **je Host**; das Feld steht in der Tabelle:
+**Welche Rechte auf dem Ziel (entschieden 12.11., nachgeprüft 12.11.
+abends).** Alles wird angeboten, der Nutzer entscheidet **je Host**; das Feld
+steht in der Tabelle. Grundlage ist `sshd(8)`, Abschnitt AUTHORIZED_KEYS FILE
+FORMAT — nicht eine eigene Erfindung:
 
-| `rechte` | Auf dem Ziel | Was es bedeutet |
+| `rechte` | `authorized_keys`-Zeile | Was es bedeutet |
 |---|---|---|
-| `force` (Vorgabe) | `ForceCommand` in `authorized_keys` bzw. ein festes Skript | nur die vorgesehenen Befehle; der Schlüssel ist kein Zugang zu allem |
-| `rbash` | eingeschränkte Shell (`rbash`, kein `cd` aus dem Startordner, keine Umleitung) | Kompromiss: freie Befehle, enger Rahmen |
-| `voll` | volle Shell | bequem und ehrlich benannt: der Schlüssel darf, was der Zielnutzer darf |
+| `zaun` (Vorgabe) | `restrict` | Freie Befehle, aber keine Port-/Agent-/X11-Weiterleitung, kein PTY, kein `~/.ssh/rc` — vom sshd erzwungen. Kostet auf dem Ziel **nichts**: ein Wort in derselben Zeile. |
+| `force` (freiwillig) | `restrict,command="<zaun>"` | Das Ziel führt nur aus, was der Zaun durchlässt. Der vom Client gewünschte Befehl steht in `SSH_ORIGINAL_COMMAND` und wird **dort** gegen eine Liste geprüft — ohne Prüfung ist `command=` eine Weiterleitung, keine Grenze. **Einzige Stufe, die eine Datei auf dem Ziel verlangt** — darum nicht die Vorgabe. |
+| `voll` | keine Optionen | Ausdrücklich gewählt und ehrlich benannt: der Schlüssel darf, was der Zielnutzer darf. Das ist das Verhalten von `ssh-copy-id`. |
 
-Die Vorgabe ist `force` — wer mehr will, sagt es ausdrücklich. Ein Host ohne
-`rechte` gilt als `force`; ein unbekannter Wert wird abgelehnt, nicht
-„großzügig" ausgelegt.
+**Die Aufnahme schreibt genau eine Zeile — nichts sonst.** Kein Skript, kein
+Dienst, keine Konfiguration auf dem Ziel: `mkdir -p ~/.ssh` (700), Zeile
+anhängen (`grep -qxF … || echo … >>`), `chmod 600`. Das ist `ssh-copy-id` mit
+einer Option davor. Die Vorgabe `zaun` kostet dafür nichts (Vorgabe smilez
+12.11.: „chimera soll nix auf das Ziel schreiben"); `force` verlangt eine
+Datei und ist darum eine bewusste Wahl, keine Vorgabe.
+
+`restrict` ist bewusst die Grundlage der beiden engeren Stufen: Laut Doku
+schaltet es „alle Beschränkungen" ein und **nimmt künftige dazu** — eine
+Aufzählung einzelner `no-*`-Optionen würde bei jedem neuen sshd-Feature
+still veralten. Wo eine Weiterleitung doch gebraucht wird, kommt sie
+einzeln zurück (`permitopen`, `permitlisten`, `agent-forwarding`).
+
+**`rbash` ist keine Grenze** (und heißt deshalb nicht mehr so): Eine
+eingeschränkte Shell lässt sich über jeden interaktiven Editor, `vi`,
+`less`, Funktionsdefinitionen oder `BASH_ENV` aushebeln. Sie sieht nach Zaun
+aus und ist keiner. Der Wert `rbash` wird abgelehnt, nicht still auf etwas
+anderes abgebildet — Pre-Alpha, es gibt keinen Bestand, den das bräche.
+
+**Den Zaun legt der Nutzer auf dem Ziel an.** In der Tabelle steht nur der
+**Pfad** (`zaun: "/usr/local/bin/chimera-zaun"`), kein Code; Chimera schreibt
+**nichts** auf ein Zielsystem — das wäre heimliche Codeverteilung, und der
+Zaun ist genau die Stelle, an der der Nutzer die Kontrolle behalten muss.
+Das Modul zeigt einen **Vorschlag zum Kopieren**, aus der Befehlsliste des
+Hosts erzeugt; abgelegt und geprüft wird er vom Nutzer.
+
+Form des Zauns (Beispiel, das so auf das Ziel gehört):
+
+```sh
+#!/bin/sh
+# Zaun fuer den Chimera-Schluessel: nur diese Befehle, exakt.
+set -eu
+CMD="${SSH_ORIGINAL_COMMAND:-}"
+case "$CMD" in
+  uptime)       exec /usr/bin/uptime ;;
+  "df -h")      exec /usr/bin/df -h ;;
+  "")           echo "kein Befehl angegeben" >&2; exit 2 ;;
+  *)            echo "nicht erlaubt: $CMD" >&2; exit 3 ;;
+esac
+```
+
+Drei Bedingungen, sonst ist es kein Zaun: **exakter Vergleich** (kein `eval`,
+keine Muster — sonst käme `uptime; rm -rf ~` durch die Musterprüfung),
+**absolute Pfade** im `exec` (kein `PATH`, der etwas unterschiebt) und
+**Eigentümer root, Modus 755** (sonst schreibt sich der Zielnutzer seinen
+eigenen Zaun um). Unser Client schickt den Befehl als **ein** Argument
+(`-- <befehl>`), darum ist der exakte Vergleich hier tragfähig und nicht nur
+bequem.
+
+Fehlt der Pfad, ist `force` nicht möglich: die Aufnahme sagt das und schlägt
+`zaun` vor, statt still `voll` zu nehmen. (Ein Host ohne `rechte` gilt als
+`zaun`.)
+
+---
+
+### Aufnahme eines Hosts: das Passwort einmal, der Schlüssel danach
+
+Vorgabe smilez (12.11. abends): „Den ssh-Key soll Chimera am Zielgerät selbst
+eintragen und sich auch in Chimera ablegen, aber so, dass der LLM-Agent den
+Schlüssel nie zu lesen bekommt. Für die erste Verbindung sollen IP, Username
+und Passwort reichen — aber auch das Passwort darf der Agent nie sehen, obwohl
+der User es in den Prompt tippt."
+
+**Warum das Passwort nicht in den Chat darf — und Maskieren nicht reicht.**
+Der naheliegende Weg wäre, das Passwort im Prompt zu erkennen und vor dem
+Modell durch einen Platzhalter zu ersetzen, die Antwort hinterher
+zurückzusetzen. Das ist **kein** tragfähiger Schutz, sondern ein Netz für
+Unfälle:
+
+- **Wer maskiert, muss das Geheimnis vorher kennen.** Beim ersten Mal kennt es
+  niemand — es steht in dem Moment schon im Chatverlauf, in der Sitzungsablage
+  der App und in jeder Zusammenfassung.
+- **Zusammenfassungen sind verlustbehaftet.** „Geh3im!" kommt als „das
+  Passwort lautet Geh3im" zurück, klein geschrieben oder umformuliert; ein
+  exakter Treffer-Tausch scheitert daran **still**.
+- **Der Rückweg hält das Geheimnis am Leben:** die Stelle, die die Antwort
+  zurückstopft, muss den Klartext über die ganze Runde im Speicher halten.
+- **Der Agent-Weg ist der Modell-Weg.** Sobald das Modell den Aufruf
+  orchestriert, wäre das Passwort ein Werkzeugargument — also im Kontext.
+
+Deshalb gilt: **Das Geheimnis kommt nie in den Chat, sondern in einen Kanal,
+der nicht zum Modell führt.** Das Maskieren bleibt als **zweites Netz**
+bestehen (die Prompt-Schicht kann die bekannten Geheimnisse aus
+`config/geheim/` laden und Treffer ersetzen, bevor etwas hinausgeht) — aber es
+ist die Ausnahme, nicht der Mechanismus.
+
+**Der eine Kanal, viele Türen.** Die Ablage ist `config/geheim/ssh/<host>`
+(0600, `chimera-tor`); der Agent kann sie nicht lesen (`InaccessiblePaths`
+auf `config/`, und er läuft als `chimera`, nicht als `chimera-tor`). Eingeben
+darf der Nutzer sie über **jede** seiner Türen — dieselbe Datei, dieselbe
+Prüfung:
+1. **Web-Modul „Fernzugriff"** (Passwortfeld, Aufnahme-Knopf) — in-process,
+   ohne Socket.
+2. **Kommandozeile** auf dem Gerät oder über SSH dorthin:
+   `chimera-tor --geheim-ssh <host>` liest das Passwort **ohne Echo** vom
+   Terminal (kein `argv`, keine Shell-Historie) und schreibt die Datei.
+3. **Telegram**: ein Befehl, den das Gateway verarbeitet (`/passwort <host>`),
+   nicht der Agent. Die Nachricht wird nach dem Schreiben **gelöscht** und ihr
+   Text nie protokolliert.
+4. **Sprache (später, mit Whisper)**: derselbe Kanal wie Telegram — das
+   Transkript wird verworfen, nur das Geheimnis landet in der Ablage.
+
+**Ein Schlüssel, den der Agent nie sieht.** Er entsteht im **Ausführer**
+(`ssh-keygen`, ed25519), direkt in `/opt/chimera/sohelper/ssh/keys/<host>`
+(0600, `chimera-sohelper`). Der Ordner ist 0700 und gehört dem Ausführer; der
+Agent kann ihn nicht betreten. Zusätzlich bekommt die Agent-Unit
+`InaccessiblePaths=/opt/chimera/sohelper` — zwei Riegel statt einem. Der
+**öffentliche** Teil wird im Modul angezeigt (kopierbar), damit der Nutzer ihn
+auch von Hand eintragen kann.
+
+**Der Ablauf einer Aufnahme** (`op: ssh_aufnahme`, nur für Hosts mit
+`herkunft: nutzer` — ein Vorschlag des Agenten ist nicht aufnehmbar):
+1. Passwort aus der Ablage lesen; fehlt es → `passwort_fehlt` mit dem Hinweis,
+   **wo** es eingegeben wird (nie: „tippe es hier").
+2. Freigabe prüfen wie bei `op: ssh` (Ziel `user@host`), Gateway öffnet die
+   TCP-Verbindung, Deskriptor an den Ausführer. Der Netznutzer bleibt einer.
+3. Das Gateway legt das Passwort als Datei in den Arbeitsordner des
+   Ausführers (`<arbeit>/ssh/.passwort`, 0600) — kurzlebig, nur für diesen
+   Lauf, danach gelöscht. Über den Socket geht nur der Pfad, nie das Passwort.
+4. Der Ausführer startet `ssh` mit **Passwort-Anmeldung ohne TTY**:
+   `SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force` + `setsid`; der Askpass-Helfer
+   liest die Passwortdatei. **Gemessen 12.11.2026 (OpenSSH 9.9):** das
+   funktioniert ohne Terminal; `sshpass -p …` scheidet aus, weil es das
+   Passwort sichtbar in `ps` hinterlässt (gemessen: drei Treffer).
+   `StrictHostKeyChecking=no` gilt **nur für diesen einen Lauf**, mit eigener
+   `known_hosts`; danach ist es aus.
+5. Hostschlüssel aus dieser `known_hosts` nehmen, Fingerabdruck rechnen,
+   Schlüsselpaar erzeugen, öffentlichen Teil in derselben Sitzung eintragen:
+   `mkdir -p ~/.ssh`, `chmod 700`, Zeile mit den Rechten-Optionen anhängen,
+   `chmod 600`.
+6. Antwort: Fingerabdruck, öffentlicher Schlüssel, Zeile, Ergebnis. Passwort-
+   datei und temporäre `known_hosts` werden gelöscht; **das Passwort wird
+   sofort aus der Ablage entfernt** (Vorgabe smilez 12.11.: „sofort löschen").
+7. **Erst der Nutzer macht den Eintrag daraus:** das Modul zeigt
+   Fingerabdruck und öffentlichen Schlüssel, er bestätigt → `ssh_host_setzen`
+   schreibt `hostschluessel` und Herkunft (wie heute). Eine Aufnahme schreibt
+   selbst **nichts** in die Tabelle; sie liefert nur, was zu bestätigen ist.
+
+**Was der Agent dabei kann.** Er kann einen Host vorschlagen und — wenn der
+Nutzer ihn schon bestätigt hat — die Aufnahme anstoßen; er sieht weder
+Passwort noch Schlüssel, und die Antwort der Aufnahme ist für ihn eine
+Erfolgsmeldung ohne Geheimnis. Ein **neues** Passwort kann er nicht eingeben.
 
 ---
 

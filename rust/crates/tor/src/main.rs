@@ -6,6 +6,7 @@
 mod abruf;
 mod daten;
 mod freigaben;
+mod geheim;
 mod dienst;
 mod modul_vorlage;
 mod mojo;
@@ -430,6 +431,34 @@ fn fortsetzung_abschluss(
     }
 }
 
+/// Ein Passwort von der Standardeingabe lesen. Ist stdin ein Terminal, wird
+/// das Echo abgeschaltet (sonst steht das Passwort auf dem Bildschirm und im
+/// Scrollback). Kein `argv`: die Prozessliste ist fuer jeden lesbar.
+fn passwort_ohne_echo() -> Result<String, String> {
+    use std::io::BufRead;
+    let tty = unsafe { libc::isatty(0) } == 1;
+    let mut alt: libc::termios = unsafe { std::mem::zeroed() };
+    let mut gesetzt = false;
+    if tty {
+        if unsafe { libc::tcgetattr(0, &mut alt) } == 0 {
+            let mut neu = alt;
+            neu.c_lflag &= !(libc::ECHO);
+            if unsafe { libc::tcsetattr(0, libc::TCSANOW, &neu) } == 0 {
+                gesetzt = true;
+                eprint!("Passwort für die Aufnahme (wird nicht angezeigt): ");
+            }
+        }
+    }
+    let mut zeile = String::new();
+    let r = std::io::stdin().lock().read_line(&mut zeile);
+    if gesetzt {
+        unsafe { libc::tcsetattr(0, libc::TCSANOW, &alt) };
+        eprintln!();
+    }
+    r.map_err(|e| format!("Eingabe nicht lesbar: {e}"))?;
+    Ok(zeile.trim_end_matches(['\n', '\r']).to_string())
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
@@ -503,6 +532,56 @@ fn main() -> ExitCode {
                 }
             }
         }
+        // Ein Geheimnis ablegen, ohne dass es durch den Chat geht (DESIGN,
+        // "Aufnahme eines Hosts"). Der Wert kommt von der Standardeingabe --
+        // nie als Argument (Prozessliste, Shell-Verlauf) und wird nie
+        // ausgegeben. Ist stdin ein Terminal, wird ohne Echo gelesen.
+        Some("--geheim-ssh") => match args.get(1) {
+            None => {
+                melden(Stufe::Fehler, "Aufruf: chimera-tor --geheim-ssh <host>   (Passwort von stdin)");
+                ExitCode::from(2)
+            }
+            Some(host) => {
+                let pw = match passwort_ohne_echo() {
+                    Ok(p) => p,
+                    Err(e) => {
+                        melden(Stufe::Fehler, &e);
+                        return ExitCode::from(2);
+                    }
+                };
+                match geheim::setzen(&daten::Pfade::aus_umgebung(), host, &pw) {
+                    // Gemeldet wird **dass** es steht, nie der Wert.
+                    Ok(()) => {
+                        println!("Geheimnis für {host} abgelegt (0600, nur das Gateway).");
+                        ExitCode::SUCCESS
+                    }
+                    Err((_, text)) => {
+                        melden(Stufe::Fehler, &text);
+                        ExitCode::from(2)
+                    }
+                }
+            }
+        },
+        Some("--geheim-ssh-weg") => match args.get(1) {
+            None => {
+                melden(Stufe::Fehler, "Aufruf: chimera-tor --geheim-ssh-weg <host>");
+                ExitCode::from(2)
+            }
+            Some(host) => match geheim::loeschen(&daten::Pfade::aus_umgebung(), host) {
+                Ok(true) => {
+                    println!("Geheimnis für {host} gelöscht.");
+                    ExitCode::SUCCESS
+                }
+                Ok(false) => {
+                    println!("Für {host} lag kein Geheimnis.");
+                    ExitCode::SUCCESS
+                }
+                Err((_, text)) => {
+                    melden(Stufe::Fehler, &text);
+                    ExitCode::from(2)
+                }
+            },
+        },
         Some("--passwort-hash") => {
             // Passwort von der Standardeingabe lesen (nie als Argument: sonst
             // steht es in der Prozessliste und im Verlauf der Shell).
