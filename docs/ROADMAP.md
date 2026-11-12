@@ -672,14 +672,11 @@ Entschieden (smilez, 12.11.): geschaltet wird in **Web-Oberfläche und
 Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
 (Positiv- und Negativliste); „für immer“ ist erlaubt.
 
-- [ ] **Stufe 1 — Zustand, Türen, Ablauf:** `config/freigaben.json` mit
-      `vorgabe` und `werkzeuge` (Modus `positivliste`/`offen`, `bis`,
-      `positiv`, `negativ`); geschlossene Werkzeugliste; Op
-      `freigabe_lesen`/`freigabe_setzen`; Ablauf **beim Prüfen** auswerten,
-      nicht per Timer; Protokoll in `logs/freigabe/`; Web-Modul `freigaben`
-      (Modus, Dauer in Minuten/Stunden/Tagen/immer, Listen) und Telegram
-      `/frei`. Ohne diese Stufe ist keine Freigabe gültig — die Vorgabe
-      bleibt `positivliste`.
+- [ ] **Stufe 1 — Zustand, Türen, Ablauf: gebaut 12.11.** (CHANGELOG;
+      `config/freigaben.json`, Ops `freigabe_lesen`/`setzen`/`pruefen`,
+      Web-Modul `freigaben`, Telegram `/frei`, Protokoll). Offen daran: am
+      Gerät belegen und die Anzeige der Restzeit im Autotest (das JS ist nur
+      im Browser geprüft).
 - [ ] **Stufe 2 — Prüfpunkt im Gateway:** `web_abruf` (und später jeder
       ausgehende Weg) fragt `freigaben`, bevor es verbindet; Ablehnung nennt
       Werkzeug und Grund.

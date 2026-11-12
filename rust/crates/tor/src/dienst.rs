@@ -118,6 +118,24 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
             )
         }
         "netzsuche" => crate::netzsuche::durchgang(stand),
+        // Freigabe je Werkzeug auf Zeit (DESIGN, Regel "Freigabe je Werkzeug
+        // auf Zeit"). Lesen und Setzen gehoeren dem Nutzer; `freigabe_pruefen`
+        // ist die Frage des Ausfuehrers vor dem Handeln.
+        "freigabe_lesen" => json!({"ok": true, "freigaben": crate::freigaben::laden(&stand.daten)}),
+        "freigabe_setzen" => {
+            let name = anfrage.get("werkzeug").and_then(Value::as_str).unwrap_or("");
+            let wert = anfrage.get("wert").cloned().unwrap_or(Value::Null);
+            match crate::freigaben::setzen(&stand.daten, name, &wert, jetzt_s()) {
+                Ok(v) => json!({"ok": true, "werkzeug": name, "freigabe": v}),
+                Err((code, text)) => zeile::fehlerantwort(code, &text),
+            }
+        }
+        "freigabe_pruefen" => {
+            let name = anfrage.get("werkzeug").and_then(Value::as_str).unwrap_or("");
+            let ziel = anfrage.get("ziel").and_then(Value::as_str);
+            let a = crate::freigaben::pruefen(&stand.daten, name, ziel, jetzt_s());
+            json!({"ok": true, "werkzeug": name, "ziel": anfrage.get("ziel").cloned(), "erlaubt": a["erlaubt"], "grund": a["grund"], "bis": a["bis"]})
+        }
         "" => zeile::fehlerantwort("op_fehlt", "Die Anfrage braucht ein Feld \"op\"."),
         andere => crate::daten::op(andere, anfrage, &stand.daten).unwrap_or_else(|| {
             zeile::fehlerantwort("op_unbekannt", &format!("Unbekannte Operation: {andere}"))
@@ -339,6 +357,12 @@ pub fn lauschen(listener: UnixListener) -> ! {
         }
     }
     unreachable!("incoming() endet nicht")
+}
+
+/// Sekunden seit der Epoche. Der Dienst rechnet mit derselben Uhr wie die
+/// Freigaben -- eine Quelle, damit "abgelaufen" ueberall dasselbe heisst.
+fn jetzt_s() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 /// Eine Anfrage an ein laufendes Gateway (fuer `--ping` und den Installer).

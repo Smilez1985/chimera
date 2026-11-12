@@ -61,6 +61,11 @@ const EINGEBAUT: &[Eingebaut] = &[
         dateien: &[("ollama.js", "text/javascript; charset=utf-8", include_str!("../web/module/ollama/ollama.js"))],
     },
     Eingebaut {
+        name: "freigaben",
+        manifest: include_str!("../web/module/freigaben/manifest.json"),
+        dateien: &[("freigaben.js", "text/javascript; charset=utf-8", include_str!("../web/module/freigaben/freigaben.js"))],
+    },
+    Eingebaut {
         name: "wahl",
         manifest: include_str!("../web/module/wahl/manifest.json"),
         dateien: &[("wahl.js", "text/javascript; charset=utf-8", include_str!("../web/module/wahl/wahl.js"))],
@@ -143,7 +148,7 @@ pub struct Modul {
 /// eintragen**, wenn das Gateway ein neues Recht kennt. Ein Recht, das nicht in
 /// dieser Liste steht, verwirft das Modul -- sonst wuerde ein Tippfehler im
 /// Manifest still ein wirkungsloses Recht verlangen.
-pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben", "wahl-lesen", "wahl-schreiben"];
+pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben", "wahl-lesen", "wahl-schreiben", "freigaben-lesen", "freigaben-schreiben"];
 
 fn name_ok(s: &str) -> bool {
     !s.is_empty() && s.len() <= 32 && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
@@ -395,6 +400,11 @@ fn query_wert(q: &str, name: &str) -> Option<String> {
 
 const COOKIE: &str = "chimera_sitzung";
 
+/// Sekunden seit der Epoche -- fuer die Restzeit einer Freigabe.
+fn jetzt_s() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
 /// Die ganze Entscheidung: Anfrage rein, Antwort raus.
 pub fn behandle(z: &Zustand, a: &Anfrage) -> Antwort {
     let ist_post = a.methode == "POST";
@@ -462,6 +472,7 @@ pub fn behandle(z: &Zustand, a: &Anfrage) -> Antwort {
         (_, p) if p.starts_with("/api/status/") => status_api(z, a, &p["/api/status/".len()..]),
         (_, p) if p.starts_with("/api/anbieter/") => anbieter_api(z, a, &p["/api/anbieter/".len()..]),
         (_, p) if p.starts_with("/api/wahl/") => wahl_api(z, a, &p["/api/wahl/".len()..]),
+        (_, p) if p.starts_with("/api/freigaben/") => freigaben_api(z, a, &p["/api/freigaben/".len()..]),
         _ => fehler(404, "nicht gefunden"),
     }
 }
@@ -645,6 +656,58 @@ fn wahl_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort {
             match crate::wahl::reihenfolge_setzen(&z.stand, &texte) {
                 Ok(()) => json_antwort(200, json!({"ok": true, "reihenfolge": texte})),
                 Err(g) => fehler(400, &g),
+            }
+        }
+        _ => fehler(404, "nicht gefunden"),
+    }
+}
+
+/// Die Freigaben je Werkzeug (DESIGN, Regel "Freigabe je Werkzeug auf Zeit"):
+/// ansehen und setzen. Gesetzt wird ueber `freigaben::setzen` -- dieselbe
+/// Stelle, die die Kommandozeile und Telegram benutzen.
+fn freigaben_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
+    let (m, _) = module_erkennen(z.modul_dir.as_deref());
+    freigaben_antwort(z, a, was, &m)
+}
+
+fn freigaben_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort {
+    let (recht, nur_post) = match was {
+        "lesen" => ("freigaben-lesen", false),
+        "setzen" => ("freigaben-schreiben", true),
+        _ => return fehler(404, "nicht gefunden"),
+    };
+    if !schreibrecht_vergeben(m, recht) {
+        return fehler(403, &format!("kein Modul hat das Recht '{recht}'"));
+    }
+    if nur_post != (a.methode == "POST") {
+        return fehler(405, "Methode nicht erlaubt");
+    }
+    match was {
+        "lesen" => json_antwort(
+            200,
+            json!({
+                "ok": true,
+                "werkzeuge": crate::freigaben::WERKZEUGE,
+                "jetzt": jetzt_s(),
+                "freigaben": crate::freigaben::laden(&z.stand.daten),
+            }),
+        ),
+        "setzen" => {
+            let v: Value = match serde_json::from_slice(a.body) {
+                Ok(v @ Value::Object(_)) => v,
+                _ => return fehler(400, "kein JSON-Objekt"),
+            };
+            let Some(name) = v["werkzeug"].as_str() else {
+                return fehler(400, "Feld \"werkzeug\" fehlt");
+            };
+            let wert = v.get("wert").cloned().unwrap_or(Value::Null);
+            // Dieselbe Regel wie ueberall: der Dienst entscheidet, was gilt.
+            let a2 = json!({"op": "freigabe_setzen", "werkzeug": name, "wert": wert});
+            let r = crate::dienst::antworten(&a2, &z.stand);
+            if r["ok"] == true {
+                json_antwort(200, r)
+            } else {
+                fehler(400, &format!("{}", r["fehler"]["text"].as_str().unwrap_or("abgelehnt")))
             }
         }
         _ => fehler(404, "nicht gefunden"),

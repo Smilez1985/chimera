@@ -125,7 +125,8 @@ for datei in ("tools/check-globals.py", "tools/contact-sheet.py", "tools/import-
               "installer/run-tests.sh", "rust/gegenprobe-web.sh", "rust/gegenprobe-telegram.sh",
               "rust/gegenprobe-status.sh", "rust/gegenprobe-vorlage.sh", "rust/gegenprobe-daten.sh",
               "rust/gegenprobe-anbieter.sh", "rust/gegenprobe-netzsuche.sh",
-              "rust/gegenprobe-wahl.sh"):
+              "rust/gegenprobe-wahl.sh",
+              "rust/gegenprobe-freigaben.sh"):
     (ok if (ROOT / datei).exists() and datei in doku else bad)(f"{datei}: existiert und ist genannt")
 
 print(f"\nErgebnis: {PASS} ok, {FAIL} fehlgeschlagen")

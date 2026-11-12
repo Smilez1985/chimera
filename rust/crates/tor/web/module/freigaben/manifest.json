@@ -1,0 +1,9 @@
+{
+  "name": "freigaben",
+  "titel": {"de": "Freigaben", "en": "Grants"},
+  "symbol": "🔓",
+  "reihenfolge": 60,
+  "einstieg": "freigaben.js",
+  "element": "chimera-freigaben",
+  "rechte": ["freigaben-lesen", "freigaben-schreiben"]
+}

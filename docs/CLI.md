@@ -210,6 +210,7 @@ Braucht `CHIMERA_LOG_RAM` und `CHIMERA_LOG_KARTE`. / Needs both variables.
 | `sh rust/gegenprobe-daten.sh` | Gegenprobe der Datenschicht (Anbieter, Schlüssel, Katalog, Wahl). / Data layer counter-check. |
 | `sh rust/gegenprobe-anbieter.sh` | Gegenprobe der Anbieter-Schnittstelle und des Katalogs. / Provider API and catalogue counter-check. |
 | `sh rust/gegenprobe-netzsuche.sh` | Gegenprobe der Netzsuche. / Network discovery counter-check. |
+| `sh rust/gegenprobe-freigaben.sh` | Gegenprobe der Freigaben je Werkzeug (Negativliste, Ablauf, unbekanntes Werkzeug, Teilauftrag, Dauer, „aus“). / Per-tool grant counter-check. |
 | `sh rust/gegenprobe-wahl.sh` | Gegenprobe der Wahl (Feld prüfen, Wert prüfen, Rest erhalten, Tür ohne Recht). / Choice counter-check (field, value, preserved rest, door without right). |
 | `sh rust/gegenprobe-mojo.sh` | Gegenprobe von Mojo (Ursachen, Reparaturen, Nachprüfung, Meldung). / Mojo counter-check. |
 | `cd rust && cargo test --locked` | Rust-Tests. / Rust tests. |

@@ -158,7 +158,7 @@ fn ok_manifest(n: &str) -> String {
 fn das_eingebaute_chatmodul_ist_gueltig_und_erkannt() {
     let (m, f) = module_erkennen(None);
     assert!(f.is_empty(), "{f:?}");
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "ollama", "wahl", "status"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "ollama", "wahl", "freigaben", "status"]);
     assert!(m.iter().all(|x| x.eingebaut));
 }
 
@@ -169,12 +169,12 @@ fn ein_neues_verzeichnis_erscheint_im_menue_ohne_codeaenderung() {
     std::fs::write(d.join("zusatz/manifest.json"), ok_manifest("zusatz")).unwrap();
     let (m, f) = module_erkennen(Some(&d));
     assert!(f.is_empty(), "{f:?}");
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "ollama", "wahl", "status", "zusatz"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "ollama", "wahl", "freigaben", "status", "zusatz"]);
     let z = zustand(Some(d), "/x".into());
     let c = anmelden(&z);
     let r = behandle(&z, &a("GET", "/api/module", &c, b""));
     let v: Value = serde_json::from_slice(&r.body).unwrap();
-    assert_eq!(v["module"].as_array().unwrap().len(), 5);
+    assert_eq!(v["module"].as_array().unwrap().len(), 6);
 }
 
 #[test]
@@ -188,7 +188,7 @@ fn ein_kaputtes_manifest_verwirft_nur_dieses_modul_und_wird_gemeldet() {
     std::fs::create_dir_all(d.join("leer")).unwrap(); // Verzeichnis ohne Manifest
     let (m, f) = module_erkennen(Some(&d));
     let namen: Vec<_> = m.iter().map(|x| x.name.as_str()).collect();
-    assert_eq!(namen, vec!["chat", "ollama", "wahl", "status", "gut"]);
+    assert_eq!(namen, vec!["chat", "ollama", "wahl", "freigaben", "status", "gut"]);
     assert_eq!(f.len(), 4, "{f:?}");
 }
 
@@ -198,7 +198,7 @@ fn ein_nachgelegtes_modul_ersetzt_kein_eingebautes() {
     std::fs::create_dir_all(d.join("chat")).unwrap();
     std::fs::write(d.join("chat/manifest.json"), ok_manifest("chat")).unwrap();
     let (m, f) = module_erkennen(Some(&d));
-    assert_eq!(m.len(), 4);
+    assert_eq!(m.len(), 5);
     assert!(m.iter().all(|x| x.eingebaut));
     assert_eq!(f.len(), 1);
 }
@@ -212,7 +212,7 @@ fn die_reihenfolge_kommt_aus_dem_manifest() {
             format!(r#"{{"name":"{n}","titel":"T","element":"x-{n}","einstieg":"a.js","rechte":[],"reihenfolge":{r}}}"#)).unwrap();
     }
     let (m, _) = module_erkennen(Some(&d));
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["b-zuerst", "chat", "ollama", "wahl", "status", "a-zuletzt"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["b-zuerst", "chat", "ollama", "wahl", "freigaben", "status", "a-zuletzt"]);
 }
 
 #[test]
@@ -805,4 +805,60 @@ fn die_kette_nimmt_keinen_schrott_und_schreibt_dann_nichts() {
         assert_eq!(r["ok"], false, "{body}");
     }
     assert_eq!(crate::daten::wahl_laden(&p).unwrap()["reihenfolge"], json!(["ollama/a"]));
+}
+
+// --- Freigaben je Werkzeug auf Zeit ---
+
+fn jetzt_s() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+#[test]
+fn freigaben_lesen_zeigt_alle_werkzeuge_und_die_vorgabe() {
+    let (z, p) = anbieter_zustand("frei-lesen");
+    let c = anmelden(&z);
+    let r = api(&z, &c, "GET", "/api/freigaben/lesen", "");
+    assert_eq!(r["_status"], 200);
+    assert_eq!(r["freigaben"]["werkzeuge"]["web_abruf"]["modus"], "positivliste");
+    assert!(r["werkzeuge"].as_array().unwrap().iter().any(|w| w == "web_abruf"));
+    assert!(!crate::freigaben::datei(&p).exists());
+}
+
+#[test]
+fn freigabe_setzen_wirkt_und_prueft_das_werkzeug() {
+    let (z, p) = anbieter_zustand("frei-setzen");
+    let c = anmelden(&z);
+    let jetzt = jetzt_s();
+    let r = api(&z, &c, "POST", "/api/freigaben/setzen",
+        &format!(r#"{{"werkzeug":"web_abruf","wert":{{"modus":"offen","bis":{},"negativ":["bose.example"]}}}}"#, jetzt + 600));
+    assert_eq!(r["_status"], 200, "{r}");
+    // Die Datei steht, und die Pruefung folgt ihr.
+    let a = crate::freigaben::pruefen(&p, "web_abruf", Some("gut.example"), jetzt + 10);
+    assert_eq!(a["erlaubt"], true);
+    let b = crate::freigaben::pruefen(&p, "web_abruf", Some("bose.example"), jetzt + 10);
+    assert_eq!(b["erlaubt"], false);
+    // Nach Ablauf gilt wieder die Positivliste.
+    let s = crate::freigaben::pruefen(&p, "web_abruf", Some("gut.example"), jetzt + 601);
+    assert_eq!(s["erlaubt"], false);
+    // Unbekanntes Werkzeug: 400 mit Grund, nichts geschrieben.
+    let r = api(&z, &c, "POST", "/api/freigaben/setzen", r#"{"werkzeug":"gibtesnicht","wert":{"modus":"offen"}}"#);
+    assert_eq!(r["_status"], 400);
+    assert!(r["fehler"].as_str().unwrap_or("").contains("nicht freigeben"), "{r}");
+}
+
+#[test]
+fn ohne_modul_mit_dem_recht_ist_jeder_freigabeweg_403() {
+    let (z, p) = anbieter_zustand("frei-403");
+    let leer: Vec<Modul> = vec![];
+    for (m, pfad, body) in [
+        ("GET", "lesen", ""),
+        ("POST", "setzen", r#"{"werkzeug":"web_abruf","wert":{"modus":"offen"}}"#),
+    ] {
+        let r = freigaben_antwort(&z, &a(m, &format!("/api/freigaben/{pfad}"), "", body.as_bytes()), pfad, &leer);
+        assert_eq!(r.status, 403, "{pfad} ohne Modul");
+    }
+    let nur_lesen = vec![modul("x", &["freigaben-lesen"], true)];
+    let r = freigaben_antwort(&z, &a("POST", "/api/freigaben/setzen", "", br#"{"werkzeug":"web_abruf","wert":{"modus":"offen"}}"#), "setzen", &nur_lesen);
+    assert_eq!(r.status, 403);
+    assert!(!crate::freigaben::datei(&p).exists(), "nichts geschrieben");
 }

@@ -4,6 +4,7 @@
 //! Anbieter, Telegram und Web folgen (docs/ROADMAP.md, Phase 4d).
 
 mod daten;
+mod freigaben;
 mod dienst;
 mod modul_vorlage;
 mod mojo;

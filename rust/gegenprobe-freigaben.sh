@@ -1,0 +1,49 @@
+#!/bin/sh
+# Gegenprobe der Freigaben je Werkzeug (DESIGN, Regel "Freigabe je Werkzeug
+# auf Zeit"): jede Zusage verfaelschen, `cargo test` muss rot werden.
+# Aufruf: sh gegenprobe-freigaben.sh   (Ergebnis: "0 gruen" ist gut)
+. "$HOME/.cargo/env"
+cd "$(dirname "$0")" || exit 2
+F=crates/tor/src/freigaben.rs
+T=crates/tor/src/telegram.rs
+cp "$F" /tmp/gp-freigaben.orig
+cp "$T" /tmp/gp-telegram.orig
+gruen=0
+zurueck() { cp /tmp/gp-freigaben.orig "$F"; cp /tmp/gp-telegram.orig "$T"; }
+mut() { # name, datei, suchen, ersetzen, testfilter
+	zurueck
+	python3 - "$2" "$3" "$4" <<'EOF'
+import sys
+f, a, b = sys.argv[1], sys.argv[2], sys.argv[3]
+s = open(f).read()
+assert s.count(a) >= 1, "Muster fehlt: " + a
+open(f, "w").write(s.replace(a, b, 1))
+EOF
+	[ $? -eq 0 ] || { echo "MUSTER FEHLT: $1"; gruen=$((gruen + 1)); return; }
+	if CARGO_TARGET_DIR=/root/chimera-target cargo test --offline -p chimera-tor "$5" >/tmp/gp-frei.log 2>&1; then
+		echo "GRUEN (schlecht): $1"
+		gruen=$((gruen + 1))
+	else
+		echo "rot (gut): $1"
+	fi
+}
+
+# 1. Negativliste wird im offenen Modus uebersehen.
+mut negativ-uebersehen "$F" '    if !z.is_empty() && e.negativ.iter().any(|n| n.to_lowercase() == z) {' '    if false {' 'freigaben::'
+# 2. Ablauf zaehlt nicht: eine Freigabe gilt fuer immer.
+mut ablauf-ignoriert "$F" '        self.modus_offen && self.bis.map(|b| b > jetzt).unwrap_or(true)' '        self.modus_offen' 'freigaben::'
+# 3. Unbekanntes Werkzeug wird durchgelassen.
+mut werkzeug-offen "$F" '    if !WERKZEUGE.contains(&werkzeug) {
+        return antwort(false,' '    if false {
+        return antwort(false,' 'freigaben::'
+# 4. Ein Teil-Auftrag leert die Listen (Zeitknopf loescht Ziele).
+mut teilauftrag-leert "$F" '    let positiv = if wert.get("positiv").is_some() { liste("positiv")? } else { alt.positiv.clone() };' '    let positiv = liste("positiv")?;' 'freigaben::'
+# 5. Eine Dauer in der Vergangenheit wird angenommen.
+mut vergangenheit-erlaubt "$F" '            Some(b) if b > jetzt => Some(b),' '            Some(b) => Some(b),' 'freigaben::'
+# 6. "aus" setzt nicht zurueck, sondern laesst alles offen.
+mut aus-schaltet-nicht "$T" '"aus" | "zu" | "positivliste" => return Ok(Auftrag::Aus),' '"aus" | "zu" | "positivliste" => return Ok(Auftrag::Immer),' 'telegram::'
+# 7. Die Dauer wird nicht begrenzt (999d faellt durch).
+mut dauer-unbegrenzt "$T" '    if n == 0 || n > 365 {' '    if n == 0 {' 'telegram::'
+
+zurueck
+echo "== $gruen gruen =="

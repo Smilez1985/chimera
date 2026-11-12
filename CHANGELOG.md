@@ -20,6 +20,27 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Freigabe je Werkzeug auf Zeit** (DESIGN, Regel „Freigabe je Werkzeug auf
+  Zeit“; entschieden 12.11.): `config/freigaben.json` hält je Werkzeug
+  (`web_suche`, `web_abruf`, `ssh`, `run_command`) einen Modus
+  `positivliste` (Vorgabe) oder `offen` mit Zeitpunkt `bis` (`null` = für
+  immer), dazu `positiv` und `negativ`. **`negativ` gilt immer**, auch im
+  offenen Modus und auch bei „für immer“; ein eingetragenes positives Ziel
+  gilt auch nach Ablauf. Der **Ablauf wird beim Prüfen** ausgewertet
+  (`freigaben::pruefen`), nicht von einem Timer — ein Neustart verlängert
+  nichts. Die Werkzeugliste ist **geschlossen** (unbekannter Name →
+  `werkzeug_unbekannt`); eine Dauer in der Vergangenheit wird abgelehnt statt
+  still zu gelten; ein Teil-Auftrag (nur `modus`/`bis`) **behält** die
+  gepflegten Listen, `[]` leert sie ausdrücklich. Jede Entscheidung wird
+  protokolliert (`state/log/freigabe.log`, auch das Ja; Rotation bei 512 kB).
+  Türen: Op `freigabe_lesen`/`freigabe_setzen`/`freigabe_pruefen`, Web-Modul
+  `freigaben` (Dauer 15 min … 7 Tage/immer, „sofort beenden“, Listen) und
+  Telegram `/frei [werkzeug 30m|2h|3d|immer|aus]`; der Agent kann **keine**
+  Freigabe anlegen. Tests: 10 in `freigaben` (Vorgabe, Ablauf, für immer,
+  Negativliste, Positivliste nach Ablauf, Vergangenheit, falscher Modus,
+  Teilauftrag, Protokoll), 3 in `web::tests` (Rechte, Setzen+Prüfen,
+  Modulliste), 3 in `telegram` (Erkennung, Dauer, Text); Gegenprobe
+  `rust/gegenprobe-freigaben.sh`: 7 Verfälschungen, alle rot.
 - **`/suche` in Telegram** (DESIGN 5k): der Befehl schickt zuerst „ich suche
   im eigenen Netz nach Ollama-Servern", führt dann `netzsuche::durchgang` aus
   und antwortet mit den Funden, den **neu eingetragenen** Anbietern und der
