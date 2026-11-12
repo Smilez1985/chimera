@@ -4197,8 +4197,11 @@ ist die Ausnahme, nicht der Mechanismus.
 auf `config/`, und er läuft als `chimera`, nicht als `chimera-tor`). Eingeben
 darf der Nutzer sie über **jede** seiner Türen — dieselbe Datei, dieselbe
 Prüfung:
-1. **Web-Modul „Fernzugriff"** (Passwortfeld, Aufnahme-Knopf) — in-process,
-   ohne Socket.
+1. **Web-Modul „Fernzugriff"** (Passwortfeld je Host, Aufnahme-Knopf) —
+   in-process, ohne Socket. Die API gibt den Wert **nie** zurück; sie meldet
+   nur „abgelegt" bzw. `geheim: true` in der Liste, und das Feld leert sich
+   nach dem Absenden (gebaut 12.11.: `POST /api/ssh/geheim`,
+   `/api/ssh/geheim-loeschen`).
 2. **Kommandozeile** auf dem Gerät oder über SSH dorthin:
    `chimera-tor --geheim-ssh <host>` liest das Passwort **ohne Echo** vom
    Terminal (kein `argv`, keine Shell-Historie) und schreibt die Datei.

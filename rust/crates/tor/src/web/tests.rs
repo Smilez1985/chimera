@@ -847,6 +847,37 @@ fn freigabe_setzen_wirkt_und_prueft_das_werkzeug() {
 }
 
 #[test]
+fn das_passwort_wird_abgelegt_aber_nie_zurueckgegeben() {
+    let (z, p) = anbieter_zustand("geheim");
+    let c = anmelden(&z);
+    // Ein Host, fuer den das Passwort gedacht ist (Herkunft: der Nutzer).
+    let h = api(&z, &c, "POST", "/api/ssh/setzen",
+        r#"{"host":"radxa","wert":{"adresse":"box.example","nutzer":"dietpi","schluessel":"k","hostschluessel":{"typ":"ssh-ed25519","schluessel":"AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}}}"#);
+    assert_eq!(h["_status"], 200, "{h}");
+    let r = api(&z, &c, "POST", "/api/ssh/geheim", r#"{"host":"radxa","passwort":"Geheim123"}"#);
+    assert_eq!(r["_status"], 200, "{r}");
+    // Es steht in der Ablage ...
+    assert_eq!(crate::geheim::lesen(&p, "radxa").as_deref(), Some("Geheim123"));
+    // ... und die Antwort enthaelt es nirgends.
+    assert!(!format!("{r}").contains("Geheim123"), "{r}");
+    // Lesen zeigt nur, DASS eines da ist.
+    let l = api(&z, &c, "GET", "/api/ssh/lesen", "");
+    assert!(!format!("{l}").contains("Geheim123"), "{l}");
+    assert_eq!(l["hosts"]["radxa"]["geheim"], true);
+    // Ein leerer Wert wird abgelehnt.
+    let e = api(&z, &c, "POST", "/api/ssh/geheim", r#"{"host":"radxa","passwort":""}"#);
+    assert_eq!(e["_status"], 400, "{e}");
+    // Loeschen nimmt es weg.
+    let d = api(&z, &c, "POST", "/api/ssh/geheim-loeschen", r#"{"host":"radxa"}"#);
+    assert_eq!(d["_status"], 200, "{d}");
+    assert_eq!(d["geloescht"], true);
+    assert!(!crate::geheim::vorhanden(&p, "radxa"));
+    // Ein Pfad als Hostname wird abgelehnt.
+    let b = api(&z, &c, "POST", "/api/ssh/geheim", r#"{"host":"../x","passwort":"y"}"#);
+    assert_eq!(b["_status"], 400, "{b}");
+}
+
+#[test]
 fn ohne_modul_mit_dem_recht_ist_jeder_freigabeweg_403() {
     let (z, p) = anbieter_zustand("frei-403");
     let leer: Vec<Modul> = vec![];

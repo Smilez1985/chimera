@@ -122,6 +122,45 @@ class ChimeraSsh extends HTMLElement {
       k.append(this.el("p", `Hostschlüssel ${e.hostschluessel.typ} ${e.hostschluessel.fingerabdruck}`, "klein"));
     }
     if (e.notiz) k.append(this.el("p", e.notiz, "klein"));
+
+    // Passwort für die Aufnahme: es geht **nur hier** hinein — nie in den
+    // Chat. Angezeigt wird nur, ob eines hinterlegt ist; der Wert kommt
+    // nirgends zurück.
+    const pwZeile = this.el("div");
+    const pwMeldung = this.el("p", "", "klein");
+    const zeige = (da) => {
+      pwZeile.replaceChildren();
+      if (da) {
+        pwZeile.append(this.el("span", "Passwort hinterlegt (0600, nur das Gateway). ", "klein"));
+        const weg = this.el("button", "Passwort löschen", "stumm");
+        weg.onclick = async () => {
+          const r = await this.post("/api/ssh/geheim-loeschen", { host: name });
+          if (!r.ok) { pwMeldung.className = "fehler"; pwMeldung.textContent = (r.fehler && r.fehler.text) || "Fehler"; return; }
+          pwMeldung.className = "klein"; pwMeldung.textContent = "Passwort gelöscht.";
+          zeige(false);
+        };
+        pwZeile.append(weg);
+      } else {
+        const feld = this.el("input");
+        feld.type = "password";
+        feld.autocomplete = "new-password";
+        feld.placeholder = "Passwort für die erste Verbindung (wird nicht angezeigt)";
+        const knopf = this.el("button", "Passwort hinterlegen", "stumm");
+        knopf.onclick = async () => {
+          if (!feld.value) { pwMeldung.className = "fehler"; pwMeldung.textContent = "Das Feld ist leer."; return; }
+          const r = await this.post("/api/ssh/geheim", { host: name, passwort: feld.value });
+          feld.value = "";
+          if (!r.ok) { pwMeldung.className = "fehler"; pwMeldung.textContent = (r.fehler && r.fehler.text) || "Fehler"; return; }
+          pwMeldung.className = "klein"; pwMeldung.textContent = "Passwort hinterlegt.";
+          zeige(true);
+        };
+        pwZeile.append(feld, knopf);
+      }
+      pwZeile.append(pwMeldung);
+    };
+    zeige(!!e.geheim);
+    k.append(pwZeile);
+
     const aendern = this.el("button", "In das Formular", "stumm");
     aendern.onclick = () => {
       this.$("name").value = name;

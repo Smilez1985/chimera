@@ -27,7 +27,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Damit gibt es einen Weg, ein Passwort abzulegen, der **nicht** durch den
   Chat geht: der Agent kann `config/` nicht lesen, und die Ausgabe nennt nur,
   *dass* etwas steht, nie den Wert. `geheim::vorhanden` ist die einzige
-  Auskunft, die eine Oberfläche zeigen darf.
+  Auskunft, die eine Oberfläche zeigen darf. Im Modul **„Fernzugriff"** gibt
+  es dafür ein Passwortfeld je Host (`POST /api/ssh/geheim`, Recht
+  `ssh-schreiben`): der Wert geht **nur** dorthin, wird nie zurückgegeben und
+  nie angezeigt — die Anzeige nennt nur „hinterlegt" und bietet „Passwort
+  löschen". So kommt das Passwort in die Ablage, ohne durch den Chat zu gehen.
+  Am eigenen Gateway durchgespielt: Datei 0600, Antwort ohne Wert, Anzeige
+  mit `geheim: true`, Löschen räumt sie weg.
   **Neue Regel im DESIGN: „Aufnahme eines Hosts: das Passwort einmal, der
   Schlüssel danach"** — samt der Begründung, warum Maskieren im Prompt
   **nicht** reicht (wer maskiert, muss das Geheimnis vorher kennen; Zusammen-

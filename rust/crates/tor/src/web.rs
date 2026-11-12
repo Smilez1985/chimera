@@ -678,6 +678,10 @@ fn ssh_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
         "lesen" => ("ssh-lesen", false),
         "setzen" => ("ssh-schreiben", true),
         "loeschen" => ("ssh-schreiben", true),
+        // Das Passwort fuer die Aufnahme: schreiben und loeschen, **nie
+        // lesen** -- es gibt bewusst keinen Weg, es sich anzeigen zu lassen.
+        "geheim" => ("ssh-schreiben", true),
+        "geheim-loeschen" => ("ssh-schreiben", true),
         _ => return fehler(404, "nicht gefunden"),
     };
     if !schreibrecht_vergeben(&m, recht) {
@@ -687,10 +691,43 @@ fn ssh_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
         return fehler(405, "Methode nicht erlaubt");
     }
     match was {
-        "lesen" => json_antwort(
-            200,
-            json!({"ok": true, "rechte": crate::ssh::RECHTE, "hosts": crate::ssh::laden(&z.stand.daten)["hosts"]}),
-        ),
+        "lesen" => {
+            // Je Host nur, **ob** ein Geheimnis liegt -- nie der Wert.
+            let mut hosts = crate::ssh::laden(&z.stand.daten)["hosts"].clone();
+            if let Some(m) = hosts.as_object_mut() {
+                for (name, e) in m.iter_mut() {
+                    let da = crate::geheim::vorhanden(&z.stand.daten, name);
+                    if let Some(o) = e.as_object_mut() {
+                        o.insert("geheim".into(), json!(da));
+                    }
+                }
+            }
+            json_antwort(200, json!({"ok": true, "rechte": crate::ssh::RECHTE, "hosts": hosts}))
+        }
+        "geheim" | "geheim-loeschen" => {
+            let v: Value = match serde_json::from_slice(a.body) {
+                Ok(v @ Value::Object(_)) => v,
+                _ => return fehler(400, "kein JSON-Objekt"),
+            };
+            let Some(name) = v["host"].as_str() else {
+                return fehler(400, "Feld \"host\" fehlt");
+            };
+            if was == "geheim-loeschen" {
+                return match crate::geheim::loeschen(&z.stand.daten, name) {
+                    Ok(weg) => json_antwort(200, json!({"ok": true, "host": name, "geloescht": weg})),
+                    Err((code, text)) => fehler(400, &format!("{code}: {text}")),
+                };
+            }
+            let Some(pw) = v["passwort"].as_str() else {
+                return fehler(400, "Feld \"passwort\" fehlt");
+            };
+            match crate::geheim::setzen(&z.stand.daten, name, pw) {
+                // Die Antwort nennt nur, dass es steht. Der Wert geht nicht
+                // zurueck -- auch nicht an die Oberflaeche, die ihn schickte.
+                Ok(()) => json_antwort(200, json!({"ok": true, "host": name, "abgelegt": true})),
+                Err((_, text)) => fehler(400, &text),
+            }
+        }
         "setzen" | "loeschen" => {
             let v: Value = match serde_json::from_slice(a.body) {
                 Ok(v @ Value::Object(_)) => v,
