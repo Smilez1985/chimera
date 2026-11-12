@@ -468,6 +468,18 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       Web-Oberfläche und auf der Kommandozeile sind gebaut (12.11., Modul
       `wahl`); offen sind das **Sortieren** der Kette in der Oberfläche und
       `/suche` in Telegram.
+- [ ] **Ein Verweis, ein Abgleich** (5h, gefunden 12.11. am Gerät): Die
+      Netzsuche legt den Anbieter als `ollama-<host>` an, der Dienst fragt
+      ihn als `ollama`. `dienst::katalog_fuer` gleicht deshalb über die
+      Adresse ab — `daten::wahl_aufloesen` und `bevorzugt` tun das **nicht**.
+      Folge am Gerät: `--wahl` meldete „Anbieter \"ollama\" fehlt" und
+      „keine brauchbare Kette", obwohl der Chat über denselben Abgleich
+      funktionierte; die Nutzerwahl galt stillschweigend nicht (es galt das
+      erste Modell mit `tools`). Vorläufig von Hand gerichtet
+      (`ollama-192-168-178-100/qwen2.5:14b`), danach: Chat ohne
+      Modellangabe → `qwen2.5:14b`, 5,6 s. Zu entscheiden ist, ob die
+      Abgleichsregel in **eine** Funktion zieht oder ob die Id stabil wird
+      (die Id trägt die Adresse und ändert sich mit dem Netz).
 - [ ] **CLI** als Socket-Client, ohne eigene Anzeige.
 - [ ] HTTPS als Opt-in: Reverse-Proxy dokumentieren, selbstsigniertes
       Zertifikat für alle ohne Proxy.
