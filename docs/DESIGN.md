@@ -3963,7 +3963,8 @@ Freigabe-Eintrag `ssh` heute wirkungslos.
 
 Vorgabe smilez (12.11.2026): „Alles von Chimera, was ins Netz will, muss durch
 das Gateway" — also auch `ssh`. Der Ausführer bleibt bei `IPAddressDeny=any`;
-`ssh` bleibt dort in `NETZ` und damit gesperrt.
+für den normalen Weg (`run_command "ssh …"`) bleibt `ssh` in `NETZ` und damit
+gesperrt. Der **einzige** ssh-Weg ist der Auftrag `ssh` an das Gateway.
 
 **Warum kein SSH-Client im Gateway-Prozess.** Ein Protokoll samt
 Schlüsselaustausch in den Prozess zu ziehen, der die Anbieter-Schlüssel hält,
@@ -3984,23 +3985,50 @@ Internet für die Anbieter) und passt nicht unter `MemoryMax=10M`.
    trotzdem".
 2. Die Freigabe entscheidet über das Ziel: `freigaben::pruefen(p, "ssh",
    Some("user@host"), jetzt)`. Vorgabe bleibt `positivliste`.
-3. Das Gateway startet **`ssh` als Kindprozess in einer flüchtigen Unit** mit
-   fester `argv`: `-o BatchMode=yes`, `-o StrictHostKeyChecking=yes`,
-   `-o UserKnownHostsFile=<eigene Datei>`, `-T`, `-p <Port aus der Tabelle>`,
-   letztes Argument die Adresse, danach `--` und der Befehl als **ein**
-   Argument. Verboten und im Test festgenagelt: `-D`, `-L`, `-R`, `-A`,
-   `-o ProxyCommand`, `-o LocalCommand`, freies `-o`.
-4. Die flüchtige Unit bekommt `IPAddressDeny=any` +
-   `IPAddressAllow=<aufgelöste Adresse aus der Tabelle>`, `ProtectSystem=strict`,
-   `NoNewPrivileges`, `PrivateTmp`, eigenes `MemoryMax` (30–50 MB) und eine
-   Frist. **Der Kernel** hält damit fest, wohin die Verbindung darf — nicht
-   die Zeile, die geprüft wurde.
-5. Schlüssel: 0600, Eigentum `chimera-tor`, je Ziel ein eigener Schlüssel
-   statt eines Generalschlüssels; der Agent sieht nie einen Pfad, nur den
-   Host-Namen. Passt der Hostschlüssel nicht, bricht der Lauf ab (kein
-   `accept-new`).
+3. **Das Gateway öffnet die Verbindung** — erst nach Freigabe und Tabelle:
+   ein TCP-Verbindungsaufbau auf Adresse und Port aus der Tabelle. Damit ist
+   der Netzweg an genau einer Stelle, wie 5n es verlangt.
+4. **Die Verbindung wird als Deskriptor weitergereicht**, nicht als Adresse:
+   das Gateway schickt den offenen Socket per `SCM_RIGHTS` zusammen mit dem
+   Auftrag über `/run/chimera/sohelper.sock`. Der Ausführer prüft den Auftrag
+   gegen seine eigene enge Form (nur `ssh`, feste `argv`, Schlüssel**name**
+   aus seinem Verzeichnis — kein Pfad, kein freies Argument) und startet:
+
+   ```
+   ssh -T -o BatchMode=yes -o StrictHostKeyChecking=yes \
+       -o UserKnownHostsFile=/opt/chimera/sohelper/ssh/known_hosts \
+       -o ProxyUseFdpass=yes -o ProxyCommand="/opt/chimera/bin/chimera-fdpass 3" \
+       -i /opt/chimera/sohelper/ssh/keys/<name> -l <nutzer> -p <port> \
+       <adresse> -- <befehl>
+   ```
+
+   `chimera-fdpass` gibt den geerbten Deskriptor als Zeile `fd 3` aus,
+   `ProxyUseFdpass=yes` nimmt ihn. **ssh spricht dann über eine Verbindung,
+   die es nicht selbst geöffnet hat** — und kann keine zweite öffnen, weil
+   seine Unit `IPAddressDeny=any` behält. Verboten und im Test festgenagelt:
+   `-D`, `-L`, `-R`, `-A`, `-o LocalCommand`, freies `-o` aus dem Modell.
+5. **Wem was gehört.** Die Tabelle (Adresse, Nutzer, Port, **Schlüsselname**,
+   Rechte) führt das **Gateway** — eine Wahrheit (10g). Die
+   **Schlüsseldateien** liegen beim Ausführer (`/opt/chimera/sohelper/ssh/keys/`,
+   Verzeichnis 0700, Dateien 0600, `chimera-sohelper`), weil er ssh startet;
+   das Gateway sieht nur den Namen, nie den Schlüssel. Damit hat das Gateway
+   den Netzzugang und keinen Schlüssel, der Ausführer die Schlüssel und kein
+   Netz — keiner von beiden hat beides. Je Host ein eigener Schlüssel statt
+   eines Generalschlüssels; passt der Hostschlüssel nicht, bricht der Lauf ab
+   (kein `accept-new`).
 6. Rückgabe wie bei `web_abruf`: Ausgabe gekürzt, Exitcode, Dauer, Host —
-   nichts auf Platte außer der Protokollzeile der Freigabe.
+   nichts auf Platte außer der Protokollzeile der Freigabe. Beim Agenten ist
+   es **ein** Werkzeug `ssh` (`{host, befehl}`) — kein `argv`, keine
+   Optionen, kein Pfad.
+
+**Warum nicht einfach eine flüchtige Unit mit `IPAddressAllow=<ziel>`?**
+Das war der erste Entwurf und ist verworfen: sie lässt ssh **selbst**
+verbinden (dann hat ssh Netz, und 5n wäre nur noch „mit Ausnahme"), und ein
+`systemd-run` aus dem Gateway heraus braucht dbus/polkit-Rechte — ein neues
+Privileg genau an der empfindlichsten Stelle. Mit der Deskriptor-Übergabe
+bleibt der Netzprozess **einer**, ssh bleibt netzlos, und das Gateway
+braucht keine neuen Rechte (es hat den Netzzugang ohnehin). Der Kernel-Riegel
+bleibt als Gegenprobe: ssh versucht 1.1.1.1:443 → nichts.
 
 **Wer die Tabelle pflegt (entschieden 12.11.).** Ein **Web-Modul** `ssh`
 trägt Hosts ein, ändert und löscht sie; **zusätzlich** darf der **Agent
@@ -4011,6 +4039,16 @@ nützliche Ziele anbieten, ohne sich selbst einen Zugang zu öffnen (dieselbe
 Grundhaltung wie bei den Freigaben: schreiben tut der Nutzer). Der Agent
 bekommt dafür genau **eine** Op (`ssh_vorschlag`), die nur anlegen darf,
 nie ändern, nie bestätigen, nie löschen.
+
+**Ein Host wird mit seinem Hostschlüssel aufgenommen.** Adresse und Port
+eintippen reicht nicht: das Modul lässt das **Gateway** den Hostschlüssel
+einmal lesen, zeigt den Fingerabdruck, und erst wenn der Nutzer ihn
+bestätigt, steht der Eintrag (mit `SHA256:…` in der Tabelle und in
+`known_hosts` des Ausführers). Danach gilt `StrictHostKeyChecking=yes` —
+wechselt der Schlüssel später, bricht der Lauf ab und **meldet** es, statt
+still weiterzumachen. Ein Vorschlag des Agenten kann diesen Schritt nicht
+auslösen: er nennt Adresse und Nutzer, den Fingerabdruck bestätigt der
+Nutzer.
 
 **Welche Rechte auf dem Ziel (entschieden 12.11.).** Alles wird angeboten,
 der Nutzer entscheidet **je Host**; das Feld steht in der Tabelle:

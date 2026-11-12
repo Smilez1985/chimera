@@ -30,8 +30,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   erst im Aufruf feststeht (`ssh`). Dazu die Bauanlage für die
   **Fernausführung**: `ssh` geht durch das Gateway (kein SSH-Client im
   Gateway-Prozess), Host-Tabelle, feste `argv` ohne `-D`/`-L`/`-R`/`-A`/
-  `-o ProxyCommand`, Kindprozess in flüchtiger Unit mit
-  `IPAddressAllow=<Zieladresse>`, Schlüssel je Ziel, Hostschlüssel-Pin.
+  das Gateway öffnet die Verbindung und reicht den **Deskriptor** per
+  `SCM_RIGHTS` an den Ausführer (`ssh` mit `ProxyUseFdpass=yes`, bleibt ohne
+  Netz), Schlüsseldateien beim Ausführer, Tabelle im Gateway,
+  Hostschlüssel-Pin. Die flüchtige Unit mit `IPAddressAllow` war der erste
+  Entwurf und ist verworfen (sie gäbe ssh selbst Netz, und `systemd-run` aus
+  dem Gateway bräuchte dbus/polkit-Rechte).
   Entschieden (12.11.): Host-Tabelle pflegt ein **Web-Modul**, der Agent
   darf **vorschlagen** (`herkunft: vorschlag`, wirkt erst nach Bestätigung);
   die **Rechte je Host** stehen in der Tabelle — `force` (Vorgabe,

@@ -716,17 +716,32 @@ das Gateway — auch `ssh`. Der Ausführer bleibt ohne Netz.
       **vorschlagen** (`ssh_vorschlag`, wirkt erst nach Bestätigung im
       Modul).
 - [ ] **`op: ssh`** im Gateway: `{"op":"ssh","host":"…","befehl":"…"}`; Ziel
-      für die Freigabe ist `user@host`, geprüft **vor** dem Start.
-- [ ] **Kindprozess in flüchtiger Unit**: feste `argv` (BatchMode,
-      StrictHostKeyChecking, eigenes `known_hosts`, `-T`, `-p`), Befehl als
-      **ein** Argument hinter `--`; `-D`/`-L`/`-R`/`-A`/`-o ProxyCommand`
-      verboten und im Test festgenagelt.
-- [ ] **Kernel-Riegel**: `IPAddressDeny=any` + `IPAddressAllow=<Zieladresse>`
-      der flüchtigen Unit, `MemoryMax` 30–50 MB, Frist, kein PTY.
-- [ ] **Schlüssel je Ziel**, 0600 `chimera-tor`; Hostschlüssel-Pin, kein
-      `accept-new`; der Agent sieht nur den Host-Namen.
-- [ ] **Gegenprobe:** zweites Ziel aus derselben Unit nicht erreichbar;
-      unbekannter Host abgelehnt; Hostschlüssel-Wechsel bricht ab.
+      für die Freigabe ist `user@host`, geprüft **vor** dem Verbinden. Danach
+      **öffnet das Gateway die TCP-Verbindung** (Adresse/Port aus der Tabelle).
+- [ ] **Deskriptor-Übergabe** statt Adressweitergabe: Socket per `SCM_RIGHTS`
+      an den Ausführer, der `ssh` mit `ProxyUseFdpass=yes` und
+      `ProxyCommand=chimera-fdpass 3` startet — ssh selbst bleibt ohne Netz
+      (`IPAddressDeny=any` unverändert). Neues kleines Programm
+      `chimera-fdpass` (gibt `fd <n>` aus).
+- [ ] **Feste `argv`** im Ausführer: BatchMode, StrictHostKeyChecking,
+      eigenes `known_hosts`, `-T`, `-p`, `-l`, `-i <schlüsselname>`, Befehl als
+      **ein** Argument hinter `--`; `-D`/`-L`/`-R`/`-A`/`-o LocalCommand`/
+      freies `-o` verboten und im Test festgenagelt.
+- [ ] **Zwei Hälften, je eine Wahrheit:** Tabelle im Gateway (Adresse, Nutzer,
+      Port, Schlüssel**name**, Rechte), Schlüsseldateien beim Ausführer
+      (`/opt/chimera/sohelper/ssh/keys/`, 0700/0600) — das Gateway hat Netz
+      und keinen Schlüssel, der Ausführer Schlüssel und kein Netz.
+      Hostschlüssel-Pin, kein `accept-new`.
+- [ ] **Hostschlüssel beim Anlegen lesen**: das Gateway liest den Schlüssel
+      einmal, das Modul zeigt den Fingerabdruck, der Nutzer bestätigt; erst
+      dann steht der Eintrag. Ein Agenten-Vorschlag kann diesen Schritt nicht
+      auslösen.
+- [ ] **Agenten-Werkzeug `ssh`** (`{host, befehl}`) — kein `argv`, keine
+      Optionen.
+- [ ] **Gegenprobe:** ssh erreicht 1.1.1.1:443 nicht (Unit-Riegel, obwohl
+      das Programm es versucht); ein zweiter Host ist ohne neuen Auftrag nicht
+      erreichbar; unbekannter Host und `herkunft: vorschlag` abgelehnt;
+      Hostschlüssel-Wechsel bricht ab; `-D`/`-L`/`-R` werden abgelehnt.
 - [ ] **Rechte je Host** (entschieden 12.11.): `force` (Vorgabe,
       `ForceCommand`), `rbash` (eingeschränkte Shell), `voll` — der Nutzer
       wählt je Host; unbekannter Wert wird abgelehnt.
