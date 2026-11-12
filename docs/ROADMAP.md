@@ -666,6 +666,32 @@ Einzeln nachrüstbar, in dieser Reihenfolge.
 - [ ] Speicherverbrauch gegen Architekturregel 5 nachmessen
 - [ ] Falls nötig: Modellrotation (STT und TTS nie gleichzeitig geladen)
 
+## Phase Freigaben — Werkzeuge auf Zeit freigeben (DESIGN: Regel „Freigabe je Werkzeug auf Zeit“)
+
+Entschieden (smilez, 12.11.): geschaltet wird in **Web-Oberfläche und
+Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
+(Positiv- und Negativliste); „für immer“ ist erlaubt.
+
+- [ ] **Stufe 1 — Zustand, Türen, Ablauf:** `config/freigaben.json` mit
+      `vorgabe` und `werkzeuge` (Modus `positivliste`/`offen`, `bis`,
+      `positiv`, `negativ`); geschlossene Werkzeugliste; Op
+      `freigabe_lesen`/`freigabe_setzen`; Ablauf **beim Prüfen** auswerten,
+      nicht per Timer; Protokoll in `logs/freigabe/`; Web-Modul `freigaben`
+      (Modus, Dauer in Minuten/Stunden/Tagen/immer, Listen) und Telegram
+      `/frei`. Ohne diese Stufe ist keine Freigabe gültig — die Vorgabe
+      bleibt `positivliste`.
+- [ ] **Stufe 2 — Prüfpunkt im Gateway:** `web_abruf` (und später jeder
+      ausgehende Weg) fragt `freigaben`, bevor es verbindet; Ablehnung nennt
+      Werkzeug und Grund.
+- [ ] **Stufe 3 — Prüfpunkt im Ausführer:** `chimera-sohelper` kennt die
+      Freigaben für `run_command`/`ssh`; die harten Regeln aus `safety.py`
+      bleiben unabhängig davon in Kraft.
+- [ ] **Entscheidung offen:** ob eine Freigabe beim Ablauf **automatisch
+      gemeldet** wird (Telegram/Anzeige) oder still auf `positivliste`
+      zurückfällt. Beides ist gebaut gleich teuer; die Meldung ist ehrlicher.
+- [ ] **Betrieb:** Dauer einer Freigabe in der Oberfläche sichtbar („läuft ab
+      in 42 min“) und „sofort beenden“ wie bei 10s.
+
 ## Phase 6 — Agent-Härtung
 
 Die vier Muster aus `docs/DESIGN.md`, Abschnitt „Übernommene Muster aus OpenMinis (nachgebaut, nicht kopiert)" sind gebaut und verdrahtet.

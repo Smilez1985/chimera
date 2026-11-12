@@ -3597,6 +3597,80 @@ befüllt werden, `productive/` erst im Installerlauf.
   jeder einzelne Befehl bestätigt wird, wird als Option angeboten.
   Vorgabe ist die Zeitfreigabe.
 
+### Regel „Freigabe je Werkzeug auf Zeit“ — die Positivliste lässt sich befristet aussetzen, die Negativliste nie
+
+Vorgabe smilez (12.11.2026), entschieden im selben Gang: **Der Nutzer soll
+wählen**, ob ein Werkzeug weiter **einzeln** fragt (Positivliste) oder ob
+für eine **Zeitspanne** alles durchgeht, was nicht auf einer **Negativliste**
+steht. „Für immer“ ist ausdrücklich erlaubt. Geschaltet wird **pro Werkzeug**;
+Ziele sind die Ausnahmen dazu (smilez: „Werkzeug, Ziel als Zusatz“).
+
+**Warum überhaupt.** Eine Positivliste, die jede neue Adresse einzeln
+abnickt, ist sicher und im Alltag unbrauchbar; ein Freibrief ohne Grenze ist
+im Alltag bequem und im Ernstfall offen. Die Zeitfreigabe ist der Mittelweg,
+den 10s für Root schon geht: der Nutzer entscheidet **einmal mit einer
+Frist**, danach entscheidet die Uhr — nicht der Agent.
+
+**Zustand und Form.** `config/freigaben.json` (root:chimera-tor 660; das
+Gateway schreibt, der Agent liest sie **nie** — er bekommt „erlaubt“ oder
+„abgelehnt“ mit Grund):
+
+```json
+{
+  "vorgabe": {"modus": "positivliste"},
+  "werkzeuge": {
+    "web_abruf": {
+      "modus": "offen",
+      "bis": 1794490000,
+      "positiv": ["api.example.com"],
+      "negativ": ["intern.example.com"],
+      "notiz": "12.11., auf Zeit freigegeben"
+    }
+  }
+}
+```
+
+- **`modus`** — `positivliste` (Vorgabe, nur Ziele in `positiv`) oder
+  `offen` (jedes Ziel außer `negativ`).
+- **`bis`** — Zeitpunkt; `null` heißt **für immer**. Vergangen = es gilt
+  wieder `positivliste`.
+- **`positiv` / `negativ`** — Ziele in der Form des Werkzeugs (Host bei
+  `web_abruf`, `user@host` bei `ssh`, Quellenname bei `web_suche`).
+  **`negativ` gilt immer** — auch in `offen`, auch bei `bis: null`,
+  auch für ein Ziel, das in `positiv` steht.
+- **Die Werkzeugliste ist geschlossen.** Ein Name, der nicht in der Tabelle
+  steht, wird abgelehnt (`werkzeug_unbekannt`) — sonst öffnet ein Tippfehler
+  still gar nichts oder, schlimmer, alles.
+
+**Ablauf entscheidet die Uhr, geprüft wird beim Ausführen.** `bis` wird
+**beim Prüfen** ausgewertet, nicht von einem Timer: ein ausgefallener oder
+neu gestarteter Dienst darf eine Freigabe nicht verlängern. Die Prüfung
+sitzt dort, wo ausgeführt wird — Netzwege im Gateway, Befehle im Ausführer
+(Regel „Wer prüft, führt aus“); der Agent fragt nie selbst „darf ich?“ und
+bekommt auch keine Restzeit zu sehen.
+
+**Wer freigibt, ist immer der Nutzer.** Die Türen sind die Web-Oberfläche
+(Modul `freigaben`) und Telegram (`/frei`) — beide schreiben dieselbe Datei
+über `op: freigabe_setzen`; der Agent kann **keine** Freigabe anlegen, auch
+nicht über einen Umweg (kein Werkzeug dafür). Die harten Grenzen aus
+`safety.py` / dem Ausführer (`sudo`, `su`, Interpreter, Shell-Zeichen,
+Pfadschutz) bleiben **unabhängig** vom Modus in Kraft: `offen` erlaubt mehr
+Ziele, nicht mehr Programme.
+
+**Protokoll.** Jede Freigabe und jede Ablehnung kommt mit Zeitpunkt, Werkzeug
+und Grund in `logs/freigabe/` (eine Zeile je Entscheidung, rollierend) —
+„stiller Erfolg“ ist hier die gefährlichste Fehlerart, also wird auch das Ja
+protokolliert.
+
+**Gegenprobe (Regel 9):** (a) `negativ` greift in `offen`. (b) Ein
+abgelaufener Zeitpunkt wirkt wie `positivliste`, ohne dass jemand die Datei
+anfasst. (c) Der Agent kann über kein Werkzeug einen Eintrag in
+`freigaben.json` schreiben. (d) Ein unbekannter Werkzeugname wird abgelehnt
+statt durchgelassen.
+
+**Erste Stufe (gebaut 12.11.):** Zustand, Türen und Ablauf — siehe CHANGELOG.
+Das Werkzeug `web_abruf`, das sie zuerst braucht, folgt danach.
+
 ### Regel „Wer prüft, führt aus“ — Werkzeuge laufen in einem eigenen Prozess, den der Agent nicht ändern kann
 
 Vorgabe smilez (10.11.2026): eine **unabhängige Kontrollinstanz** vor der
@@ -4750,6 +4824,8 @@ einen Verweis liest, soll verstehen, **worum es geht**, ohne nachzuschlagen.
 - **ACP** — Chimera ist ein Agent für Editoren, erreichbar über eine Transportschicht am Gateway
 - **MQTT** — Ein Broker in Rust löst gespeicherte Moods auf dem Display aus
 - **Sprechende Namen** — Eine Regel, ein Befehl, ein Baustein heißt nach dem, was er tut
+- **Freigabe je Werkzeug auf Zeit** — die Positivliste lässt sich befristet
+  aussetzen, die Negativliste nie
 - **Wer prüft, führt aus** — Werkzeuge laufen in einem eigenen Prozess, den der Agent nicht ändern kann
 - **Mojo** — jeder Fehler wird bemerkt, mit Ursache benannt, versucht, nachgeprüft und laut gemeldet
 - **13a** — Vor jedem Push wird geprüft, und die Prüfung beweist ihre Sehfähigkeit
