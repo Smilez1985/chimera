@@ -32,8 +32,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Gateway-Prozess), Host-Tabelle, feste `argv` ohne `-D`/`-L`/`-R`/`-A`/
   `-o ProxyCommand`, Kindprozess in flüchtiger Unit mit
   `IPAddressAllow=<Zieladresse>`, Schlüssel je Ziel, Hostschlüssel-Pin.
-  Gebaut ist davon noch **nichts** (ROADMAP, Phase Fernausführung); der
-  Freigabe-Eintrag `ssh` bleibt bis dahin wirkungslos.
+  Entschieden (12.11.): Host-Tabelle pflegt ein **Web-Modul**, der Agent
+  darf **vorschlagen** (`herkunft: vorschlag`, wirkt erst nach Bestätigung);
+  die **Rechte je Host** stehen in der Tabelle — `force` (Vorgabe,
+  `ForceCommand`), `rbash`, `voll`. Gebaut ist davon noch **nichts**
+  (ROADMAP, Phase Fernausführung); der Freigabe-Eintrag `ssh` bleibt bis
+  dahin wirkungslos.
 - **`web_abruf` — eine Adresse holen, aber nur mit Freigabe** (DESIGN 5r,
   **Stufe 2** der Regel „Freigabe je Werkzeug auf Zeit“, 12.11.):
   `op: web_abruf` und das Agenten-Werkzeug `web_abruf`

@@ -711,8 +711,10 @@ Entschieden (smilez, 12.11.): Alles, was Chimera ins Netz will, geht durch
 das Gateway — auch `ssh`. Der Ausführer bleibt ohne Netz.
 
 - [ ] **Host-Tabelle** `config/ssh/hosts.json` (Adresse, Nutzer, Port,
-      Schlüsselverweis, Hostschlüssel). Pflege: **offen** — von Hand oder
-      über ein Web-Modul (Entscheidung des Nutzers).
+      Schlüsselverweis, Hostschlüssel, `rechte`, `herkunft`). Pflege
+      (entschieden 12.11.): **Web-Modul `ssh`** + der Agent darf
+      **vorschlagen** (`ssh_vorschlag`, wirkt erst nach Bestätigung im
+      Modul).
 - [ ] **`op: ssh`** im Gateway: `{"op":"ssh","host":"…","befehl":"…"}`; Ziel
       für die Freigabe ist `user@host`, geprüft **vor** dem Start.
 - [ ] **Kindprozess in flüchtiger Unit**: feste `argv` (BatchMode,
@@ -725,8 +727,9 @@ das Gateway — auch `ssh`. Der Ausführer bleibt ohne Netz.
       `accept-new`; der Agent sieht nur den Host-Namen.
 - [ ] **Gegenprobe:** zweites Ziel aus derselben Unit nicht erreichbar;
       unbekannter Host abgelehnt; Hostschlüssel-Wechsel bricht ab.
-- [ ] **Entscheidung offen:** Rechte auf den Zielen (`ForceCommand`/
-      eingeschränkte Shell gegen volle Shell).
+- [ ] **Rechte je Host** (entschieden 12.11.): `force` (Vorgabe,
+      `ForceCommand`), `rbash` (eingeschränkte Shell), `voll` — der Nutzer
+      wählt je Host; unbekannter Wert wird abgelehnt.
 - [ ] **Danach:** der Freigabe-Eintrag `ssh` hat einen Aufrufer — vorher
       nicht (heute wirkt er nicht).
 

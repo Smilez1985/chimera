@@ -3978,8 +3978,9 @@ Internet für die Anbieter) und passt nicht unter `MemoryMax=10M`.
 ```
 
 1. `host` ist ein Eintrag der **Host-Tabelle** `config/ssh/hosts.json`
-   (Adresse, Nutzer, Port, Schlüsselverweis, Hostschlüssel-Eintrag). Was nicht
-   in der Tabelle steht, gibt es nicht — kein „Host unbekannt, versuch es
+   (Adresse, Nutzer, Port, Schlüsselverweis, Hostschlüssel-Eintrag, **Rechte**
+   auf dem Ziel, `herkunft`). Was nicht in der Tabelle steht oder dort nur
+   als Vorschlag liegt, gibt es nicht — kein „Host unbekannt, versuch es
    trotzdem".
 2. Die Freigabe entscheidet über das Ziel: `freigaben::pruefen(p, "ssh",
    Some("user@host"), jetzt)`. Vorgabe bleibt `positivliste`.
@@ -4001,10 +4002,28 @@ Internet für die Anbieter) und passt nicht unter `MemoryMax=10M`.
 6. Rückgabe wie bei `web_abruf`: Ausgabe gekürzt, Exitcode, Dauer, Host —
    nichts auf Platte außer der Protokollzeile der Freigabe.
 
-**Offen (Entscheidung des Nutzers):** wer die Host-Tabelle pflegt (von Hand
-oder über ein Web-Modul) und welche Rechte auf den Zielen gelten
-(`ForceCommand`/eingeschränkte Shell gegen volle Shell). Beides gehört zum
-Bauplan, nicht in den Code als Vorgabe.
+**Wer die Tabelle pflegt (entschieden 12.11.).** Ein **Web-Modul** `ssh`
+trägt Hosts ein, ändert und löscht sie; **zusätzlich** darf der **Agent
+Hosts vorschlagen**. Ein Vorschlag ist ein Eintrag mit
+`"herkunft": "vorschlag"` und wirkt **nicht** — erst wenn der Nutzer ihn im
+Modul bestätigt, wird daraus `"herkunft": "nutzer"`. Damit kann das Modell
+nützliche Ziele anbieten, ohne sich selbst einen Zugang zu öffnen (dieselbe
+Grundhaltung wie bei den Freigaben: schreiben tut der Nutzer). Der Agent
+bekommt dafür genau **eine** Op (`ssh_vorschlag`), die nur anlegen darf,
+nie ändern, nie bestätigen, nie löschen.
+
+**Welche Rechte auf dem Ziel (entschieden 12.11.).** Alles wird angeboten,
+der Nutzer entscheidet **je Host**; das Feld steht in der Tabelle:
+
+| `rechte` | Auf dem Ziel | Was es bedeutet |
+|---|---|---|
+| `force` (Vorgabe) | `ForceCommand` in `authorized_keys` bzw. ein festes Skript | nur die vorgesehenen Befehle; der Schlüssel ist kein Zugang zu allem |
+| `rbash` | eingeschränkte Shell (`rbash`, kein `cd` aus dem Startordner, keine Umleitung) | Kompromiss: freie Befehle, enger Rahmen |
+| `voll` | volle Shell | bequem und ehrlich benannt: der Schlüssel darf, was der Zielnutzer darf |
+
+Die Vorgabe ist `force` — wer mehr will, sagt es ausdrücklich. Ein Host ohne
+`rechte` gilt als `force`; ein unbekannter Wert wird abgelehnt, nicht
+„großzügig" ausgelegt.
 
 ---
 
