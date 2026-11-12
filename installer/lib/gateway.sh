@@ -120,19 +120,23 @@ PrivateDevices=yes
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes
-# Regel 5t: schreiben darf das Gateway nur in die vier Ablagen, nie in
+# Regel 5t: schreiben darf das Gateway nur in die Ablagen, nie in
 # config/ oder state/ als Ganzes. Das "-" vor dem Pfad: fehlt ein Ordner,
 # startet die Unit trotzdem (der Installer legt sie vorher an).
-ReadWritePaths=-$CHIMERA_CONFIG/anbieter -$CHIMERA_CONFIG/geheim -$CHIMERA_CONFIG/wahl -$CHIMERA_STATE/katalog
+ReadWritePaths=-$CHIMERA_CONFIG/anbieter -$CHIMERA_CONFIG/geheim -$CHIMERA_CONFIG/wahl \
+	-$CHIMERA_CONFIG/freigaben -$CHIMERA_STATE/katalog -$CHIMERA_STATE/log
 EOF
 }
 
-# Die vier Ablagen aus Regel 5t. config/ und state/ selbst bekommen nur ein
+# Die Ablagen aus Regel 5t. config/ und state/ selbst bekommen nur ein
 # Durchgangsrecht (x), kein Lese- oder Schreibrecht: chimera-tor erreicht
 # seine Unterordner, listen darf er dort nichts (die .env bleibt 640).
+# Seit 12.11. dabei: config/freigaben (Freigabe je Werkzeug auf Zeit) und
+# state/log (deren Protokoll) -- ohne sie meldet der Dienst am Geraet
+# "Read-only file system" und die Freigabe bleibt eine Anzeige ohne Wirkung.
 # rc 0 ok, 2 nicht anlegbar.
 gateway_ablagen() {
-	for _ga_d in "$CHIMERA_CONFIG/anbieter" "$CHIMERA_CONFIG/geheim" "$CHIMERA_CONFIG/wahl" "$CHIMERA_STATE/katalog"; do
+	for _ga_d in "$CHIMERA_CONFIG/anbieter" "$CHIMERA_CONFIG/geheim" "$CHIMERA_CONFIG/wahl" "$CHIMERA_CONFIG/freigaben" "$CHIMERA_STATE/katalog" "$CHIMERA_STATE/log"; do
 		if is_dry_run; then info "[wuerde anlegen] $_ga_d"; continue; fi
 		_ga_p="$(rootpath "$_ga_d")"
 		mkdir -p "$_ga_p" || { err "nicht anlegbar: $_ga_d"; return 2; }

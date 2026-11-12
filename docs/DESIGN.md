@@ -1397,7 +1397,7 @@ Voreinstellung, HTTPS Opt-in, sichtbarer Hinweis bei HTTP; Änderungen wirken
 ohne Neustart; Schlüssel werden nur geschrieben, nie wieder angezeigt
 (zurück kommt „gesetzt“).
 
-### Architekturregel 5t — Anbieter, Schlüssel, Katalog und Wahl sind vier Ablagen mit je einem Schreiber
+### Architekturregel 5t — Anbieter, Schlüssel, Katalog, Wahl und Freigaben sind fünf Ablagen mit je einem Schreiber
 
 Vorgabe smilez (31.10.): Jeder Anbieter ist ein eigenes Modul, die Modelle
 des Anbieters liegen darin. Mehrere Anbieter können dasselbe Modell mit
@@ -1412,6 +1412,7 @@ Beispiele, keine Vorgabe.
 | **Schlüssel** | Geheimnis zur Anmeldung beim Anbieter | `config/geheim/<id>`, Modus 0600 | Gateway | nein |
 | **Katalog** | Was der Anbieter zuletzt gemeldet hat: Modelle, Kontext, `tools`, Zeitpunkt, `fehlt_seit` | `state/katalog/<id>.json` | Gateway | **ja** |
 | **Wahl** | Reihenfolge und Ketten als Verweise `<anbieter-id>/<modell>` | `config/wahl/wahl.json` | Gateway | nein |
+| **Freigaben** | Je Werkzeug: Positivliste oder offene Zeitspanne (`bis`), Negativliste (DESIGN, Regel „Freigabe je Werkzeug auf Zeit“) | `config/freigaben/freigaben.json` | Gateway | nein |
 
 - **Eintragsschlüssel ist `<anbieter-id>/<modell>`**, nie der Modellname
   allein. „Sonnet über Abo“ und „Sonnet über OpenRouter“ sind zwei
@@ -1442,12 +1443,13 @@ Beispiele, keine Vorgabe.
 - **Format JSON-Dateien**, kein SQLite: kleiner Bestand, von Hand lesbar.
   SQLite bleibt dem Gedächtnisindex (8h).
 - **Kleinste Schreibrechte:** `ReadWritePaths` nennt nur
-  `config/anbieter`, `config/geheim`, `config/wahl` und `state/katalog`,
+  `config/anbieter`, `config/geheim`, `config/wahl`, `config/freigaben`,
+  `state/katalog` und `state/log` (Protokoll der Freigaben),
   nie `config/` als Ganzes. Telegram-Token und Passwort-Hash ziehen aus der
   `.env` nach `config/geheim/`; die `.env` bleibt für Adressen und Schalter
   und wird vom Gateway nur gelesen. Der Installer übernimmt den Umzug in
   `migrate_from()`.
-- **Durchgang statt Lesen:** Die vier Ordner gehören `chimera-tor` (700).
+- **Durchgang statt Lesen:** Die Ablagen-Ordner gehören `chimera-tor` (700).
   `config/` bekommt das Durchgangsrecht (751; der Agent liest dort die
   `.env`). `state/` bleibt dem Agent verschlossen (10r) und wird 710
   `root:chimera-tor`: nur das Gateway darf hindurch, das Manifest bleibt
@@ -3611,9 +3613,18 @@ im Alltag bequem und im Ernstfall offen. Die Zeitfreigabe ist der Mittelweg,
 den 10s für Root schon geht: der Nutzer entscheidet **einmal mit einer
 Frist**, danach entscheidet die Uhr — nicht der Agent.
 
-**Zustand und Form.** `config/freigaben.json` (root:chimera-tor 660; das
+**Zustand und Form.** `config/freigaben/freigaben.json` (eigener Ordner
+`chimera-tor` 700, Datei 660 — wie `config/wahl/`; das
 Gateway schreibt, der Agent liest sie **nie** — er bekommt „erlaubt“ oder
 „abgelehnt“ mit Grund):
+
+> **Warum ein eigener Ordner (13.11.2026, am Gerät gefunden).** Eine Datei
+> direkt in `config/` lässt sich **nicht** speichern: Geschrieben wird atomar
+> über eine Nebendatei im selben Ordner, und `config/` ist für das Gateway nur
+> Durchgang (751, Regel 5t). Der erste Lauf am Pi endete mit
+> `Read-only file system (os error 30)`. Ablage, Protokollordner und
+> `ReadWritePaths` müssen zusammenpassen — sonst ist die Freigabe eine Anzeige
+> ohne Wirkung.
 
 ```json
 {
@@ -3658,9 +3669,10 @@ Pfadschutz) bleiben **unabhängig** vom Modus in Kraft: `offen` erlaubt mehr
 Ziele, nicht mehr Programme.
 
 **Protokoll.** Jede Freigabe und jede Ablehnung kommt mit Zeitpunkt, Werkzeug
-und Grund in `logs/freigabe/` (eine Zeile je Entscheidung, rollierend) —
-„stiller Erfolg“ ist hier die gefährlichste Fehlerart, also wird auch das Ja
-protokolliert.
+und Grund in `state/log/freigabe.log` (eine Zeile je Entscheidung, rollierend
+bei 512 kB) — „stiller Erfolg“ ist hier die gefährlichste Fehlerart, also wird
+auch das Ja protokolliert, und ein nicht schreibbares Protokoll wird im
+Dienstprotokoll gemeldet (die Entscheidung selbst dreht es nicht um).
 
 **Gegenprobe (Regel 9):** (a) `negativ` greift in `offen`. (b) Ein
 abgelaufener Zeitpunkt wirkt wie `positivliste`, ohne dass jemand die Datei
@@ -4770,7 +4782,7 @@ einen Verweis liest, soll verstehen, **worum es geht**, ohne nachzuschlagen.
 - **5l** — Wer Schlüssel hat, hat kein Werkzeug; wer Werkzeuge hat, hat keine Schlüssel
 - **5m** — Die Web-Oberfläche ist Teil des Gateways und braucht kein Framework
 - **5n** — Chimera spricht nur über sein Gateway mit der Welt
-- **5t** — Anbieter, Schlüssel, Katalog und Wahl sind vier Ablagen mit je einem Schreiber
+- **5t** — Anbieter, Schlüssel, Katalog, Wahl und Freigaben sind fünf Ablagen mit je einem Schreiber
 - **5u** — Passwort ändern braucht das alte; Werksreset braucht das Gerät
 - **5v** — Module melden sich einfach und sicher am Gateway an
 - **5o** — Der Briefkasten ist ein eigener Prozess hinter dem Gateway, mit eigenem Port

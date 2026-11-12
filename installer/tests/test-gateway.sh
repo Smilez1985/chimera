@@ -132,7 +132,7 @@ hat "Socket-Aktivierung eingeschaltet" "$F/spur" "systemctl enable --now chimera
 hat "Socket im Manifest" "$R/opt/chimera/state/manifest.tsv" "dienst	chimera-tor.socket	aktiviert"
 
 # --- 1b. Ablagen (Regel 5t) ------------------------------------------------
-for _d in config/anbieter config/geheim config/wahl state/katalog; do
+for _d in config/anbieter config/geheim config/wahl config/freigaben state/katalog state/log; do
 	[ -d "$R/opt/chimera/$_d" ] && ok "Ablage angelegt: $_d" || bad "Ablage fehlt: $_d"
 	check "Ablage $_d: Modus 700" "$(stat -c %a "$R/opt/chimera/$_d")" 700
 	hat "Ablage $_d im Manifest" "$R/opt/chimera/state/manifest.tsv" "verzeich	/opt/chimera/$_d"
@@ -141,7 +141,7 @@ check "config/ nur Durchgang fuer andere (751)" "$(stat -c %a "$R/opt/chimera/co
 check "state/ nur fuer das Gateway durchgaengig (710), Agent bleibt draussen (10r)" "$(stat -c %a "$R/opt/chimera/state")" 710
 _rw="$(grep '^ReadWritePaths=' "$R/$DIENST" || true)"
 check "Dienst: genau eine ReadWritePaths-Zeile" "$(grep -c '^ReadWritePaths=' "$R/$DIENST")" 1
-for _d in config/anbieter config/geheim config/wahl state/katalog; do
+for _d in config/anbieter config/geheim config/wahl config/freigaben state/katalog state/log; do
 	case "$_rw" in *"-/opt/chimera/$_d"*) ok "Dienst darf schreiben: $_d" ;; *) bad "Dienst: $_d fehlt in ReadWritePaths" ;; esac
 done
 # Kein Pfad ohne Unterordner: weder config noch state als Ganzes.

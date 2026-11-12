@@ -971,6 +971,25 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Die Freigabe ließ sich am Gerät nicht speichern** (gefunden 12.11. beim
+  Einspielen, Pi): `freigaben::datei` zeigte auf `config/freigaben.json`, die
+  Gateway-Unit erlaubt dem Prozess aber nur die Ablagen aus Regel 5t —
+  `config/` ist bloß Durchgang (751). Jedes Speichern endete mit
+  `nicht_gespeichert: /opt/chimera/config/.freigaben.json.…neu nicht
+  schreibbar: Read-only file system (os error 30)`, und Telegram `/frei` wie
+  das Web-Modul waren damit Anzeigen ohne Wirkung. Der atomare Schreibweg
+  braucht **den Ordner**, nicht die Datei, deshalb jetzt eine eigene Ablage
+  `config/freigaben/freigaben.json` (700 `chimera-tor`, wie `config/wahl/`);
+  `gateway_ablagen` und `ReadWritePaths` nennen sie zusätzlich zu
+  `state/log` (Protokoll der Freigaben, fehlte am Gerät ebenfalls). Regel 5t
+  führt seither **fünf** Ablagen. Kein Umzug nötig: der alte Pfad war nie
+  schreibbar, es liegt auf keinem Gerät eine Datei. Neuer Wächter
+  `tests/test_ablagen_wirksam.py` (jeder Ordner, den der Gateway-Code unter
+  `config/`/`state/` anspricht, muss in `ReadWritePaths` stehen;
+  Gegenprobe `tests/gegenprobe_ablagen_wirksam.py` 4/4 rot), neue Mutation
+  `M12b` in `counter-check-gateway.sh`. Dazu protokolliert ein
+  Schreibfehler im Freigabe-Protokoll nicht mehr still, sondern landet im
+  Dienstprotokoll (DESIGN sagt das zu, der Code tat es nicht).
 - **Das Fortschrittsgesicht des Installers war nie zu sehen** (am Gerät
   gefunden, 12.11.): `_einstellung()` in `display/panel.py` baute den Pfad als
   `Path(os.environ.get("CHIMERA_ROOT", "")) / "opt/chimera/state/anzeige"` —

@@ -163,15 +163,21 @@ mutation agent-haengt-am-gateway \
 	's|^	log "Gateway-Nutzer"$|	echo "Requires=chimera-tor.socket" >>"$_ge_dir/chimera.service"; log "Gateway-Nutzer"|' \
 	"Agent-Dienst-Unit bleibt unberuehrt"
 
-# M11: ReadWritePaths nennt config/ als Ganzes (Regel 5t: nur vier Ordner).
+# M11: ReadWritePaths nennt config/ als Ganzes (Regel 5t: nur die Ablagen).
 mutation config-ganz-schreibbar \
 	's|^ReadWritePaths=-\$CHIMERA_CONFIG/anbieter|ReadWritePaths=-$CHIMERA_CONFIG -$CHIMERA_CONFIG/anbieter|' \
 	"Dienst: config/ oder state/ als Ganzes schreibbar"
 
 # M12: Katalog fehlt in ReadWritePaths.
 mutation katalog-nicht-schreibbar \
-	's| -\$CHIMERA_STATE/katalog$||' \
+	's| -\$CHIMERA_STATE/katalog||' \
 	"Dienst: state/katalog fehlt in ReadWritePaths"
+
+# M12b: Die Ablage der Freigaben fehlt (am Geraet 12.11. als "Read-only file
+# system" aufgefallen, weil die Datei direkt in config/ lag).
+mutation freigaben-nicht-schreibbar \
+	's| -\$CHIMERA_CONFIG/freigaben||' \
+	"Dienst: config/freigaben fehlt in ReadWritePaths"
 
 # M13: Schluesselordner offen statt 700.
 mutation geheim-offen \

@@ -673,10 +673,15 @@ Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
 (Positiv- und Negativliste); „für immer“ ist erlaubt.
 
 - [ ] **Stufe 1 — Zustand, Türen, Ablauf: gebaut 12.11.** (CHANGELOG;
-      `config/freigaben.json`, Ops `freigabe_lesen`/`setzen`/`pruefen`,
-      Web-Modul `freigaben`, Telegram `/frei`, Protokoll). Offen daran: am
-      Gerät belegen und die Anzeige der Restzeit im Autotest (das JS ist nur
-      im Browser geprüft).
+      `config/freigaben/freigaben.json`, Ops `freigabe_lesen`/`setzen`/
+      `pruefen`, Web-Modul `freigaben`, Telegram `/frei`, Protokoll
+      `state/log/freigabe.log`). **Der erste Gerätelauf ging in die Hose**
+      und ist behoben: die Datei lag in `config/` und war damit nicht
+      schreibbar (Regel 5t) — jetzt eine eigene Ablage, die der Installer
+      anlegt und die Unit beschreiben darf; Wächter
+      `tests/test_ablagen_wirksam.py`. Offen daran: die Anzeige der Restzeit
+      im Autotest (das JS ist nur im Browser geprüft) und der Nachweis am
+      Gerät nach dem nächsten Installerlauf.
 - [ ] **Stufe 2 — Prüfpunkt im Gateway:** `web_abruf` (und später jeder
       ausgehende Weg) fragt `freigaben`, bevor es verbindet; Ablehnung nennt
       Werkzeug und Grund.

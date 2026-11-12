@@ -14,7 +14,7 @@
 //! * **Die Werkzeugliste ist geschlossen.** Ein unbekannter Name wird
 //!   abgelehnt, statt still durchzugehen -- ein Tippfehler soll nichts oeffnen.
 //!
-//! Die Datei gehoert dem Gateway (`config/freigaben.json`, 660). Der Agent
+//! Die Datei gehoert dem Gateway (`config/freigaben/freigaben.json`, 660). Der Agent
 //! liest sie nie; er fragt und bekommt Ja oder Nein mit Grund.
 
 use crate::daten::{atomar_schreiben, Pfade};
@@ -33,8 +33,13 @@ fn jetzt_s() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
+/// Eigene Ablage unter `config/freigaben/` -- nicht die Datei direkt in
+/// `config/`. Grund (am Geraet gefunden, 12.11.2026): Geschrieben wird atomar
+/// ueber eine Nebendatei **im selben Ordner**, und `config/` selbst ist fuer
+/// das Gateway nur Durchgang (751, Regel 5t). Eine Datei in `config/` waere
+/// damit grundsaetzlich nicht speicherbar ("Read-only file system").
 pub fn datei(p: &Pfade) -> std::path::PathBuf {
-    p.config.join("freigaben.json")
+    p.config.join("freigaben").join("freigaben.json")
 }
 
 fn protokoll_datei(p: &Pfade) -> std::path::PathBuf {
@@ -276,15 +281,27 @@ fn schreiben(p: &Pfade, wert: &Value) -> Result<(), String> {
 fn protokoll(p: &Pfade, zeit: u64, werkzeug: &str, ziel: Option<&str>, was: &str, grund: &str) {
     let datei = protokoll_datei(p);
     if let Some(dir) = datei.parent() {
-        let _ = std::fs::create_dir_all(dir);
+        if let Err(e) = std::fs::create_dir_all(dir) {
+            eprintln!("freigabe: Protokollordner {} nicht anlegbar: {e}", dir.display());
+        }
     }
     if std::fs::metadata(&datei).map(|m| m.len()).unwrap_or(0) > PROTOKOLL_MAX {
         let alt = datei.with_extension("log.1");
-        let _ = std::fs::rename(&datei, alt);
+        if let Err(e) = std::fs::rename(&datei, alt) {
+            eprintln!("freigabe: Rotation misslungen: {e}");
+        }
     }
     let mut zeile = format!("{zeit}\t{was}\t{werkzeug}\t{}\t{grund}\n", ziel.unwrap_or("-"));
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&datei) {
-        let _ = f.write_all(zeile.as_bytes());
+    match std::fs::OpenOptions::new().create(true).append(true).open(&datei) {
+        Ok(mut f) => {
+            if let Err(e) = f.write_all(zeile.as_bytes()) {
+                eprintln!("freigabe: Protokollzeile nicht geschrieben: {e}");
+            }
+        }
+        // Ein Protokollfehler dreht die Entscheidung nicht um, aber er bleibt
+        // nicht still: ohne diese Meldung waere "nichts protokolliert" von
+        // "nichts entschieden" nicht zu unterscheiden (Regel 9, stiller Erfolg).
+        Err(e) => eprintln!("freigabe: Protokoll {} nicht schreibbar: {e}", datei.display()),
     }
     zeile.clear();
 }
