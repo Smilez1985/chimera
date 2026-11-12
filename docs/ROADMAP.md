@@ -705,6 +705,31 @@ Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
 - [ ] **Betrieb:** Dauer einer Freigabe in der Oberfläche sichtbar („läuft ab
       in 42 min“) und „sofort beenden“ wie bei 10s.
 
+## Phase Fernausführung — `ssh` durch das Gateway (DESIGN: Regel „Jedes Werkzeug bekommt nur seine Rechte")
+
+Entschieden (smilez, 12.11.): Alles, was Chimera ins Netz will, geht durch
+das Gateway — auch `ssh`. Der Ausführer bleibt ohne Netz.
+
+- [ ] **Host-Tabelle** `config/ssh/hosts.json` (Adresse, Nutzer, Port,
+      Schlüsselverweis, Hostschlüssel). Pflege: **offen** — von Hand oder
+      über ein Web-Modul (Entscheidung des Nutzers).
+- [ ] **`op: ssh`** im Gateway: `{"op":"ssh","host":"…","befehl":"…"}`; Ziel
+      für die Freigabe ist `user@host`, geprüft **vor** dem Start.
+- [ ] **Kindprozess in flüchtiger Unit**: feste `argv` (BatchMode,
+      StrictHostKeyChecking, eigenes `known_hosts`, `-T`, `-p`), Befehl als
+      **ein** Argument hinter `--`; `-D`/`-L`/`-R`/`-A`/`-o ProxyCommand`
+      verboten und im Test festgenagelt.
+- [ ] **Kernel-Riegel**: `IPAddressDeny=any` + `IPAddressAllow=<Zieladresse>`
+      der flüchtigen Unit, `MemoryMax` 30–50 MB, Frist, kein PTY.
+- [ ] **Schlüssel je Ziel**, 0600 `chimera-tor`; Hostschlüssel-Pin, kein
+      `accept-new`; der Agent sieht nur den Host-Namen.
+- [ ] **Gegenprobe:** zweites Ziel aus derselben Unit nicht erreichbar;
+      unbekannter Host abgelehnt; Hostschlüssel-Wechsel bricht ab.
+- [ ] **Entscheidung offen:** Rechte auf den Zielen (`ForceCommand`/
+      eingeschränkte Shell gegen volle Shell).
+- [ ] **Danach:** der Freigabe-Eintrag `ssh` hat einen Aufrufer — vorher
+      nicht (heute wirkt er nicht).
+
 ## Phase 6 — Agent-Härtung
 
 Die vier Muster aus `docs/DESIGN.md`, Abschnitt „Übernommene Muster aus OpenMinis (nachgebaut, nicht kopiert)" sind gebaut und verdrahtet.

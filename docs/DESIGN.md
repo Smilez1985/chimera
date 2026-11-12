@@ -3891,6 +3891,123 @@ Ausführer für ihn.
 
 ---
 
+### Regel „Jedes Werkzeug bekommt nur seine Rechte“ — die Rechte werden mitgegeben, nicht geerbt
+
+Vorgabe smilez (12.11.2026): „Child-Prozesse, die nur die benötigten
+Berechtigungen erben bzw. erhalten — das ist nicht nur für SSH richtig,
+sondern für jeden Tool-Aufruf." Dem ist so; die Regel hält fest, **wie** das
+gilt, damit nicht an jeder Ecke eine eigene halbe Umsetzung entsteht.
+
+**Das Problem.** Der einfache Weg ist der gefährliche: Ein Prozess kann
+alles, was er je können muss, und die Prüfung im Programm entscheidet, was er
+davon *benutzt*. Damit ist die Grenze eine Zeile Code, die man vergessen
+kann. Sobald ein Aufruf etwas darf, was er nicht braucht (Netz, ein fremder
+Ordner, ein Schlüssel), ist das eine Einladung — ein Optionsschalter, ein
+Umweg über eine Bibliothek, ein Fehler im Argument-Parsing genügt.
+
+**Die Regel.** Ein Werkzeugaufruf erhält **genau die Rechte seiner
+Fähigkeitsklasse**, und die Grenze setzt das Betriebssystem, nicht das
+Programm. Drei Schichten, alle drei nötig:
+
+1. **Welcher Prozess.** Jede Klasse hat ihren eigenen Nutzer und ihre eigene
+   Unit: der Agent liest und denkt (`chimera`, kein Netz, kein root), der
+   Ausführer führt aus (`chimera-sohelper`, `IPAddressDeny=any`, nur sein
+   Arbeitsordner beschreibbar), das Gateway ist der einzige Netznutzer
+   (`chimera-tor`, 5t-Ablagen, `MemoryMax`). Ein Prozess, der zwei Klassen
+   kann, ist zwei Prozesse zu wenig.
+2. **Was er erreichen kann.** Netz, Ordner und Speicher stehen in der Unit
+   (`IPAddressDeny`/`IPAddressAllow`, `InaccessiblePaths`, `ReadWritePaths`,
+   `ProtectSystem`, `MemoryMax`). Was dort nicht steht, gibt es für das
+   Programm nicht — auch nicht über eine Bibliothek.
+3. **Welche Form der Aufruf hat.** Je Werkzeug eine feste Form (Schema, feste
+   `argv`, keine Shell, kein `env`-Vererbung). Die Form ist die halbe
+   Berechtigung: `ssh -D 1080` ist ein anderes Recht als `ssh host cmd`, auch
+   wenn beides dasselbe Programm startet.
+
+**Berechtigung ist eine Klasse, nicht ein Aufruf.** Gemessen wird an dem, was
+das Programm je braucht: dauerhafte Units je Klasse (Ausführer lokal,
+Netzabruf im Gateway, Fernausführung) sind billig und schnell. Eine
+flüchtige Unit **je Aufruf** lohnt nur, wo das Ziel erst im Aufruf feststeht
+und der Kernel es mitbegrenzen soll — heute genau ein Fall: `ssh`. Ein
+Unit-Start je `read_file` wäre Aufwand ohne Gewinn.
+
+**Was ein Kind nie erbt.** Keine Umgebung (`Environment=` leer, nur was der
+Aufruf braucht), keinen Agent-Socket, keine `.env`, keine Schlüssel, die
+nicht zu seiner Klasse gehören, kein Arbeitsverzeichnis des anderen. Ein
+Kind, das den Editor des Agenten oder dessen Anbieter-Schlüssel sieht, ist
+eine zweite Tür.
+
+**Einen Entscheider, nicht zwei.** Wer entscheidet, startet auch — sonst
+prüft eine Stelle und eine andere führt aus (Regel „Wer prüft, führt aus").
+Kinder entscheiden **nie** selbst über ihre Rechte; sie bekommen sie beim
+Start.
+
+**Gegenprobe (Regel 9):**
+- (a) Ein Kind kann das, was seine Klasse nicht darf, **auch wenn es will**:
+  der Ausführer erreicht 1.1.1.1:443 nicht, obwohl er es versucht
+  (Unit-Riegel, nicht Programmlogik).
+- (b) Kein Argument erweitert die Klasse: `ssh` mit `-D`, `-L`, `-R`, `-o
+  ProxyCommand` wird abgelehnt, und das ist als Test festgenagelt.
+- (c) Ein Kind bekommt kein Recht „auf Vorrat": der Ausführer sieht
+  `config/` nicht, obwohl er im selben Baum läuft.
+- (d) Der SSH-Läufer erreicht ein **zweites** Ziel nicht, obwohl die
+  Verbindung erlaubt ist (`IPAddressAllow` nennt genau ein Ziel).
+
+**Stand 12.11.** Gebaut: Ausführer (eigener Nutzer, kein Netz, nur
+Arbeitsordner; fragt vor jeder Ausführung die Freigabe), Gateway als einziger
+Netznutzer mit fünf Ablagen, `web_abruf` mit Freigabe-Prüfung. **Nicht
+gebaut:** die Fernausführung über `ssh` (unten) — und damit ist der
+Freigabe-Eintrag `ssh` heute wirkungslos.
+
+#### Fernausführung: `ssh` geht durch das Gateway, und nur so
+
+Vorgabe smilez (12.11.2026): „Alles von Chimera, was ins Netz will, muss durch
+das Gateway" — also auch `ssh`. Der Ausführer bleibt bei `IPAddressDeny=any`;
+`ssh` bleibt dort in `NETZ` und damit gesperrt.
+
+**Warum kein SSH-Client im Gateway-Prozess.** Ein Protokoll samt
+Schlüsselaustausch in den Prozess zu ziehen, der die Anbieter-Schlüssel hält,
+vergrößert die Fläche an der empfindlichsten Stelle, lässt sich nicht mit
+`IPAddressAllow` einengen (die gilt für den ganzen Prozess, und der braucht
+Internet für die Anbieter) und passt nicht unter `MemoryMax=10M`.
+
+**Der Weg.** `op: ssh` im Gateway, und der Aufruf nennt **kein `argv`**:
+
+```json
+{"op": "ssh", "host": "radxa", "befehl": "uptime"}
+```
+
+1. `host` ist ein Eintrag der **Host-Tabelle** `config/ssh/hosts.json`
+   (Adresse, Nutzer, Port, Schlüsselverweis, Hostschlüssel-Eintrag). Was nicht
+   in der Tabelle steht, gibt es nicht — kein „Host unbekannt, versuch es
+   trotzdem".
+2. Die Freigabe entscheidet über das Ziel: `freigaben::pruefen(p, "ssh",
+   Some("user@host"), jetzt)`. Vorgabe bleibt `positivliste`.
+3. Das Gateway startet **`ssh` als Kindprozess in einer flüchtigen Unit** mit
+   fester `argv`: `-o BatchMode=yes`, `-o StrictHostKeyChecking=yes`,
+   `-o UserKnownHostsFile=<eigene Datei>`, `-T`, `-p <Port aus der Tabelle>`,
+   letztes Argument die Adresse, danach `--` und der Befehl als **ein**
+   Argument. Verboten und im Test festgenagelt: `-D`, `-L`, `-R`, `-A`,
+   `-o ProxyCommand`, `-o LocalCommand`, freies `-o`.
+4. Die flüchtige Unit bekommt `IPAddressDeny=any` +
+   `IPAddressAllow=<aufgelöste Adresse aus der Tabelle>`, `ProtectSystem=strict`,
+   `NoNewPrivileges`, `PrivateTmp`, eigenes `MemoryMax` (30–50 MB) und eine
+   Frist. **Der Kernel** hält damit fest, wohin die Verbindung darf — nicht
+   die Zeile, die geprüft wurde.
+5. Schlüssel: 0600, Eigentum `chimera-tor`, je Ziel ein eigener Schlüssel
+   statt eines Generalschlüssels; der Agent sieht nie einen Pfad, nur den
+   Host-Namen. Passt der Hostschlüssel nicht, bricht der Lauf ab (kein
+   `accept-new`).
+6. Rückgabe wie bei `web_abruf`: Ausgabe gekürzt, Exitcode, Dauer, Host —
+   nichts auf Platte außer der Protokollzeile der Freigabe.
+
+**Offen (Entscheidung des Nutzers):** wer die Host-Tabelle pflegt (von Hand
+oder über ein Web-Modul) und welche Rechte auf den Zielen gelten
+(`ForceCommand`/eingeschränkte Shell gegen volle Shell). Beides gehört zum
+Bauplan, nicht in den Code als Vorgabe.
+
+---
+
 ### Regel „Mojo“ — jeder Fehler wird bemerkt, mit Ursache benannt, versucht, nachgeprüft und laut gemeldet
 
 Vorgabe smilez (1.11.): Die Dienste starten nach dem Boot zuverlässig, versuchen
@@ -4885,6 +5002,7 @@ einen Verweis liest, soll verstehen, **worum es geht**, ohne nachzuschlagen.
 - **Freigabe je Werkzeug auf Zeit** — die Positivliste lässt sich befristet
   aussetzen, die Negativliste nie
 - **Wer prüft, führt aus** — Werkzeuge laufen in einem eigenen Prozess, den der Agent nicht ändern kann
+- **Jedes Werkzeug bekommt nur seine Rechte** — die Rechte werden mitgegeben, nicht geerbt
 - **Mojo** — jeder Fehler wird bemerkt, mit Ursache benannt, versucht, nachgeprüft und laut gemeldet
 - **13a** — Vor jedem Push wird geprüft, und die Prüfung beweist ihre Sehfähigkeit
 - **14** — Was dauernd läuft und nicht auf das Modell wartet, ist Rust

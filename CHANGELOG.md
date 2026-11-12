@@ -20,6 +20,20 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Regel „Jedes Werkzeug bekommt nur seine Rechte"** (Vorgabe smilez
+  12.11.: Child-Prozesse mit genau den benötigten Rechten): Ein
+  Werkzeugaufruf erhält die Rechte **seiner Fähigkeitsklasse**, und die
+  Grenze setzt das Betriebssystem, nicht das Programm — drei Schichten
+  (eigener Prozess/Nutzer je Klasse, Netz/Ordner/Speicher in der Unit, feste
+  Form des Aufrufs ohne Shell). Berechtigung ist eine **Klasse**, nicht ein
+  Aufruf: dauerhafte Units je Klasse, flüchtige Unit nur dort, wo das Ziel
+  erst im Aufruf feststeht (`ssh`). Dazu die Bauanlage für die
+  **Fernausführung**: `ssh` geht durch das Gateway (kein SSH-Client im
+  Gateway-Prozess), Host-Tabelle, feste `argv` ohne `-D`/`-L`/`-R`/`-A`/
+  `-o ProxyCommand`, Kindprozess in flüchtiger Unit mit
+  `IPAddressAllow=<Zieladresse>`, Schlüssel je Ziel, Hostschlüssel-Pin.
+  Gebaut ist davon noch **nichts** (ROADMAP, Phase Fernausführung); der
+  Freigabe-Eintrag `ssh` bleibt bis dahin wirkungslos.
 - **`web_abruf` — eine Adresse holen, aber nur mit Freigabe** (DESIGN 5r,
   **Stufe 2** der Regel „Freigabe je Werkzeug auf Zeit“, 12.11.):
   `op: web_abruf` und das Agenten-Werkzeug `web_abruf`
