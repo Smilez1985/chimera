@@ -67,8 +67,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   ausdrücklich (Ollama hat sonst default **true**) und gibt Aufrufe als
   `werkzeuge: [{name, argumente, id?}]` zurück. `content: ""` ist dabei kein
   Fehler mehr — „leer“ ist nur, wenn **weder** Text **noch** Aufruf kommt.
-  Argumente werden als Objekt **oder** JSON-String angenommen und intern als
-  Objekt gehalten (Ollama schickt Objekte, die OpenAI-Form Strings).
+  Werkzeugbeschreibungen gelten intern **neutral** (`name`, `description`,
+  `parameters`); der Serialisierer macht daraus die Ollama-/OpenAI-Form
+  (`{"type":"function",…}`). Argumente werden als Objekt **oder** JSON-String
+  angenommen und intern als Objekt gehalten (Ollama schickt Objekte, die
+  OpenAI-Form Strings). Je Runde werden höchstens **3** Aufrufe ausgeführt
+  (`MAX_WERKZEUGE_JE_RUNDE`), in der Reihenfolge ihres `index`.
   Der Agent schickt seine Schemas mit; kommt ein Aufruf zurück, läuft er über
   `tools.call()` — also durch `chimera-sohelper`, kein zweiter Weg. Das
   Text-Protokoll `TOOL: …` bleibt Rückfall für Modelle, die keine Aufrufe
