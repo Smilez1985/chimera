@@ -5,6 +5,10 @@
 //!   (Regel 5n, Grenze Python <-> Gateway).
 //! - [`protokoll`]: Zeilen fuer journald, mit Stufe als Praefix.
 //! - [`socket`]: an den Unix-Socket kommen -- von systemd oder selbst gebunden.
+//! - [`fdpass`]: einen offenen Deskriptor weiterreichen (`SCM_RIGHTS`,
+//!   Fernausfuehrung: das Gateway oeffnet, der Ausfuehrer spricht).
+
+pub mod fdpass;
 
 /// Die Version kommt aus der VERSION-Datei im Repo-Root (einzige
 /// Wahrheitsquelle, GLOBAL). Die Cargo-Manifeste tragen bewusst 0.0.0.

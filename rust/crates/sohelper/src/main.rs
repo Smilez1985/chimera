@@ -13,7 +13,8 @@
 //! die eigentliche Sperre. Hier gibt es zusätzlich kein `allow_network` —
 //! Netzprogramme werden immer abgelehnt (Regel 5n).
 
-use std::io::{BufReader, Write};
+use std::io::{BufReader, Read, Write};
+use std::os::unix::io::RawFd;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -178,8 +179,18 @@ fn bedienen(    strom: UnixStream,
     start: Instant,
     nummer: u64,
 ) -> std::io::Result<()> {
-    let mut leser = BufReader::new(strom.try_clone()?);
-    let mut schreiber = strom;
+    // Die **erste** Nachricht einer Verbindung kann einen Deskriptor tragen
+    // (Fernausführung: das Gateway hat die Verbindung geöffnet). Nur so lässt
+    // sie sich empfangen -- mit einem BufReader wären die Rechte weg, bevor
+    // jemand sie sieht.
+    let (erste, fds, rest) = erste_nachricht(&strom)?;
+    let mut schreiber = strom.try_clone()?;
+    if let Err(e) = gemein::zeile::schreiben(&mut schreiber, &bearbeite(&erste, arbeit, tor, grenzen, start, nummer, &fds)) {
+        eprintln!("<4>Antwort nicht geschrieben: {e}");
+        return Ok(());
+    }
+    let quelle = std::io::Cursor::new(rest).chain(strom.try_clone()?);
+    let mut leser = BufReader::new(quelle);
     loop {
         let wert = match gemein::zeile::lesen(&mut leser, gemein::zeile::MAX_BYTES) {
             Ok(v) => v,
@@ -190,10 +201,43 @@ fn bedienen(    strom: UnixStream,
                 return Ok(());
             }
         };
-        let a = bearbeite(&wert, arbeit, tor, grenzen, start, nummer);
+        // Weitere Deskriptoren nimmt der Ausführer nicht an: Rechte gibt es
+        // einmal je Auftrag (eine Nachricht, ein Ziel).
+        let a = bearbeite(&wert, arbeit, tor, grenzen, start, nummer, &[]);
         if let Err(e) = gemein::zeile::schreiben(&mut schreiber, &a) {
             eprintln!("<4>Antwort nicht geschrieben: {e}");
             return Ok(());
+        }
+    }
+}
+
+/// Die erste Nachricht lesen -- mit möglichen Deskriptoren.
+///
+/// Gibt den geparsten Wert, die Deskriptoren und die Bytes **nach** der
+/// ersten Zeile zurück (sie gehören zum nächsten Lesen).
+fn erste_nachricht(strom: &UnixStream) -> std::io::Result<(Value, Vec<RawFd>, Vec<u8>)> {
+    let mut puffer: Vec<u8> = Vec::new();
+    let mut fds: Vec<RawFd> = Vec::new();
+    loop {
+        let platz = gemein::zeile::MAX_BYTES.saturating_sub(puffer.len());
+        if platz == 0 {
+            for fd in fds {
+                gemein::fdpass::schliessen(fd);
+            }
+            return Ok((json!({"op": "_zu_lang"}), Vec::new(), Vec::new()));
+        }
+        let (stueck, neue) = gemein::fdpass::empfangen(strom, platz)?;
+        if stueck.is_empty() {
+            // Verbindung zu, bevor eine Zeile begann: kein Fehler, nur Ende.
+            return Ok((json!({"op": "_ende"}), fds, Vec::new()));
+        }
+        puffer.extend_from_slice(&stueck);
+        fds.extend(neue);
+        if let Some(i) = puffer.iter().position(|b| *b == b'\n') {
+            let zeile = puffer[..i].to_vec();
+            let rest = puffer[i + 1..].to_vec();
+            let wert = serde_json::from_slice::<Value>(&zeile).unwrap_or(Value::Null);
+            return Ok((wert, fds, rest));
         }
     }
 }
@@ -248,8 +292,59 @@ fn bearbeite(
     grenzen: &Grenzen,
     start: Instant,
     nr: u64,
+    fds: &[RawFd],
 ) -> Value {
-    match wert.get("op").and_then(Value::as_str).unwrap_or("") {
+    let op = wert.get("op").and_then(Value::as_str).unwrap_or("");
+    // Ein Deskriptor ist ein Recht. Wer ihn schickt, ohne dass die Operation
+    // ihn braucht, bekommt ihn geschlossen zurück -- kein Recht auf Vorrat.
+    if !fds.is_empty() && op != "ssh" {
+        for fd in fds {
+            gemein::fdpass::schliessen(*fd);
+        }
+        return antwort_fehler("deskriptor_unerwartet",
+            &format!("Die Operation \"{op}\" nimmt keinen Deskriptor an."));
+    }
+    match op {
+        // Die Verbindung kommt als Deskriptor vom Gateway (DESIGN,
+        // "Fernausführung"). Hier wird **nicht** verbunden und **nicht**
+        // gefragt, ob es erlaubt ist: beides hat das Gateway schon getan,
+        // bevor es den Socket weiterreichte. Der Ausführer prüft die Form
+        // des Auftrags und baut daraus eine feste Kommandozeile.
+        "ssh" => {
+            let fd = match fds {
+                [eine] => *eine,
+                _ => {
+                    return antwort_fehler(
+                        "deskriptor_fehlt",
+                        "ssh braucht genau eine offene Verbindung (Deskriptor) vom Gateway.",
+                    )
+                }
+            };
+            let auftrag = match sohelper::ssh::auftrag_aus(wert) {
+                Ok(a) => a,
+                Err(e) => {
+                    gemein::fdpass::schliessen(fd);
+                    return antwort_fehler("abgelehnt", &e.0);
+                }
+            };
+            let (keydir, known_hosts) = sohelper::ssh::ordner(arbeit);
+            if !keydir.join(&auftrag.schluessel).is_file() {
+                gemein::fdpass::schliessen(fd);
+                return antwort_fehler(
+                    "schluessel_fehlt",
+                    &format!("Der Schlüssel \"{}\" liegt nicht im Schlüsselordner ({}).",
+                        auftrag.schluessel, keydir.display()),
+                );
+            }
+            if let Err(e) = sohelper::ssh::known_hosts_schreiben(&known_hosts, &auftrag.hostschluessel) {
+                gemein::fdpass::schliessen(fd);
+                return antwort_fehler("known_hosts", &format!("known_hosts nicht schreibbar: {e}"));
+            }
+            let fdpass = fdpass_pfad();
+            antwort_ok(ssh_ausfuehren(&auftrag, &keydir, &known_hosts, &fdpass, fd, grenzen))
+        }
+        "_ende" => antwort_ok(json!({"text": ""})),
+        "_zu_lang" => antwort_fehler("zu_lang", "Die Anfrage ist laenger als erlaubt."),
         "ping" => antwort_ok(json!({
             "programm": "chimera-sohelper",
             "version": gemein::version(),
@@ -323,6 +418,192 @@ fn bearbeite(
         "" => antwort_fehler("op_fehlt", "Die Anfrage braucht ein Feld \"op\"."),
         andere => antwort_fehler("op_unbekannt", &format!("Unbekannte Operation: {andere}")),
     }
+}
+
+/// Wo `chimera-fdpass` liegt: neben dem eigenen Binary (so findet es sich im
+/// Installer und in der Sandbox gleich), sonst die Ablage im Betrieb.
+fn fdpass_pfad() -> PathBuf {
+    if let Ok(p) = std::env::var("CHIMERA_FDPASS") {
+        return PathBuf::from(p);
+    }
+    if let Ok(eigen) = std::env::current_exe() {
+        let neben = eigen.parent().map(|d| d.join("chimera-fdpass"));
+        if let Some(p) = neben.filter(|p| p.is_file()) {
+            return p;
+        }
+    }
+    PathBuf::from("/opt/chimera/bin/chimera-fdpass")
+}
+
+/// Ein `ssh`-Aufruf. **Höchstens einer zur Zeit**: die Übergabe läuft über
+/// einen benannten Socket, und zwei gleichzeitige Läufe würden einander den
+/// Deskriptor unter den Füßen wegziehen. Die Sperre ist billig; die
+/// Alternative wäre ein falscher Socket.
+static SSH_SPERRE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Wie `ssh` die Verbindung bekommt (gemessen 12.11.2026, OpenSSH 9.9):
+/// `ssh` schließt im Proxy-Kind **alle** Deskriptoren ab 3 (`fd 3` ist dort
+/// nicht offen) und gibt dem Proxy nur stdin als Socketpair. Deshalb holt
+/// `chimera-fdpass` die Verbindung über diesen Unix-Socket beim Ausführer ab
+/// und reicht sie auf stdin an `ssh` weiter.
+fn ssh_ausfuehren(
+    auftrag: &sohelper::ssh::Auftrag,
+    keydir: &Path,
+    known_hosts: &Path,
+    fdpass: &Path,
+    fd: RawFd,
+    grenzen: &Grenzen,
+) -> Value {
+    let _wache = SSH_SPERRE.lock().unwrap_or_else(|g| g.into_inner());
+    let uebergabe = keydir.parent().unwrap_or(Path::new("/")).join("uebergabe.sock");
+    let _ = std::fs::remove_file(&uebergabe);
+    let horcher = match std::os::unix::net::UnixListener::bind(&uebergabe) {
+        Ok(h) => h,
+        Err(e) => {
+            gemein::fdpass::schliessen(fd);
+            return json!({ "fehler": { "code": "uebergabe",
+                "text": format!("Der Übergabe-Socket {} ist nicht anlegbar: {e}", uebergabe.display()) } });
+        }
+    };
+    let argv = sohelper::ssh::argv(auftrag, keydir, known_hosts, fdpass, Some(&uebergabe));
+    let start = Instant::now();
+    let mut kind = match Command::new(&argv[0])
+        .args(&argv[1..])
+        .current_dir(keydir.parent().unwrap_or(Path::new("/")))
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        // Keine Umgebung: ein Kind erbt keine Schlüssel, keine .env, kein
+        // Arbeitsverzeichnis des anderen (DESIGN, "Was ein Kind nie erbt").
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
+        .spawn()
+    {
+        Ok(k) => k,
+        Err(e) => {
+            gemein::fdpass::schliessen(fd);
+            let _ = std::fs::remove_file(&uebergabe);
+            let text = if e.kind() == std::io::ErrorKind::NotFound {
+                "Der ssh-Aufruf ist nicht gestartet: Programm nicht gefunden.".to_string()
+            } else {
+                format!("Der ssh-Aufruf ist nicht gestartet: {e}")
+            };
+            return json!({ "fehler": { "code": "ssh_nicht_gestartet", "text": text } });
+        }
+    };
+    // Auf den Proxy warten und ihm die Verbindung geben.
+    let _ = horcher.set_nonblocking(true);
+    let mut gegeben = false;
+    let frist_uebergabe = Instant::now() + Duration::from_secs(15);
+    while Instant::now() < frist_uebergabe {
+        match horcher.accept() {
+            Ok((strom, _)) => {
+                let r = uebergabe_schicken(&strom, fd);
+                gemein::fdpass::schliessen(fd);
+                gegeben = r.is_ok();
+                if let Err(e) = r {
+                    eprintln!("<4>ssh: Übergabe misslungen: {e}");
+                }
+                break;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            Err(e) => {
+                eprintln!("<4>ssh: accept: {e}");
+                break;
+            }
+        }
+    }
+    if !gegeben {
+        // Niemand hat die Verbindung abgeholt: ssh läuft ins Leere, also
+        // beenden statt warten. Der Deskriptor wird geschlossen.
+        let _ = kind.kill();
+    }
+    let _ = std::fs::remove_file(&uebergabe);
+
+    let (aus, fehler) = (kind.stdout.take(), kind.stderr.take());
+    let leser_out = aus.map(|mut r| std::thread::spawn(move || { let mut v = Vec::new(); let _ = std::io::Read::read_to_end(&mut r, &mut v); v }));
+    let leser_err = fehler.map(|mut r| std::thread::spawn(move || { let mut v = Vec::new(); let _ = std::io::Read::read_to_end(&mut r, &mut v); v }));
+
+    let frist = Duration::from_secs(grenzen.frist_s);
+    let status = loop {
+        match kind.try_wait() {
+            Ok(Some(s)) => break Some(s),
+            Ok(None) if start.elapsed() >= frist => {
+                let _ = kind.kill();
+                let _ = kind.wait();
+                break None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+            Err(e) => {
+                eprintln!("<4>ssh: try_wait: {e}");
+                let _ = kind.kill();
+                break kind.wait().ok();
+            }
+        }
+    };
+    let aus = leser_out.and_then(|h| h.join().ok()).unwrap_or_default();
+    let fehler = leser_err.and_then(|h| h.join().ok()).unwrap_or_default();
+    let mut text = String::new();
+    let o = String::from_utf8_lossy(&aus);
+    let f = String::from_utf8_lossy(&fehler);
+    if !o.trim().is_empty() {
+        text.push_str(o.trim());
+        text.push('\n');
+    }
+    if !f.trim().is_empty() {
+        text.push_str(&format!("[Fehlerausgabe] {}\n", f.trim()));
+    }
+    if status.is_none() {
+        text.push_str(&format!("[Frist {} s überschritten, abgebrochen]\n", grenzen.frist_s));
+    }
+    let code = status.and_then(|s| s.code());
+    if let Some(c) = code {
+        if c != 0 {
+            text.push_str(&format!("[Exitcode {c}]\n"));
+        }
+    }
+    if text.is_empty() {
+        text.push_str("(keine Ausgabe)");
+    }
+    json!({
+        "text": kuerzen(&text, grenzen),
+        "host": auftrag.host,
+        "adresse": auftrag.adresse,
+        "exitcode": code,
+        "dauer_s": start.elapsed().as_secs(),
+    })
+}
+
+/// Den Verbindungs-Deskriptor an den Proxy geben (ein Byte + `SCM_RIGHTS`).
+fn uebergabe_schicken(strom: &UnixStream, fd: RawFd) -> std::io::Result<()> {
+    let mut buf = [0u8; 1];
+    let iov = libc::iovec { iov_base: buf.as_mut_ptr() as *mut libc::c_void, iov_len: 1 };
+    let mut cmsg_puffer = [0u8; 64];
+    let mut kopf: libc::msghdr = unsafe { std::mem::zeroed() };
+    kopf.msg_iov = &iov as *const libc::iovec as *mut libc::iovec;
+    kopf.msg_iovlen = 1 as _;
+    kopf.msg_control = cmsg_puffer.as_mut_ptr() as *mut libc::c_void;
+    let bytes = std::mem::size_of::<RawFd>() as u32;
+    let platz = unsafe { libc::CMSG_SPACE(bytes) };
+    kopf.msg_controllen = platz as _;
+    if platz as usize > cmsg_puffer.len() {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Puffer zu klein"));
+    }
+    unsafe {
+        let cmsg = libc::CMSG_FIRSTHDR(&kopf);
+        (*cmsg).cmsg_level = libc::SOL_SOCKET;
+        (*cmsg).cmsg_type = libc::SCM_RIGHTS;
+        (*cmsg).cmsg_len = libc::CMSG_LEN(bytes) as _;
+        std::ptr::copy_nonoverlapping(&fd as *const RawFd as *const u8, libc::CMSG_DATA(cmsg), bytes as usize);
+    }
+    use std::os::unix::io::AsRawFd;
+    let n = unsafe { libc::sendmsg(strom.as_raw_fd(), &kopf, 0) };
+    if n < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
 }
 
 /// Wie `_run_command` in tools.py: dieselbe Meldung, damit das Modell
@@ -510,6 +791,7 @@ mod tests {
             &einstellungen(&ordner),
             Instant::now(),
             1,
+            &[],
         );
         assert_eq!(a["ok"], false, "{a}");
         assert_eq!(a["fehler"]["code"], "nicht_freigegeben");
@@ -529,6 +811,7 @@ mod tests {
             &einstellungen(&ordner),
             Instant::now(),
             2,
+            &[],
         );
         let gesehen = faden.join().expect("faden");
         assert_eq!(gesehen["ziel"], "echo");
@@ -550,6 +833,7 @@ mod tests {
             &einstellungen(&ordner),
             Instant::now(),
             3,
+            &[],
         );
         let _ = faden.join().expect("faden");
         assert_eq!(a["ok"], true, "{a}");
@@ -569,6 +853,7 @@ mod tests {
                 &einstellungen(&ordner),
                 Instant::now(),
                 4,
+                &[],
             );
             assert_eq!(a["ok"], false, "{befehl}: {a}");
             assert_eq!(a["fehler"]["code"], "abgelehnt", "{befehl}: {a}");

@@ -20,6 +20,33 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Fernausführung über `ssh` — gebaut und am Ziel belegt** (12.11.):
+  `{"op":"ssh","host":"…","befehl":"…"}` im Gateway. Reihenfolge ist die
+  Zusage: Host-Tabelle (was nicht drinsteht oder nur ein Vorschlag ist, gibt
+  es nicht) → Freigabe auf `user@host` **vor** dem Verbinden → **das Gateway
+  öffnet die TCP-Verbindung** → der offene Socket geht per `SCM_RIGHTS` an
+  den Ausführer (`gemein::fdpass`, neue Abhängigkeit `libc`). Der Ausführer
+  bekommt **kein `argv`**: er baut aus dem Auftrag genau eine Kommandozeile
+  (`-T`, `BatchMode`, `StrictHostKeyChecking=yes`, eigenes `known_hosts`,
+  `ProxyUseFdpass=yes`, `-i <schlüsselname>`, `-l`, `-p`, Ziel, `--`, Befehl
+  als **ein** Argument) — `-D`/`-L`/`-R`/`-A`/freies `-o` haben keinen Platz,
+  an dem sie stehen könnten, und sind als Test festgenagelt. Das Kind bekommt
+  keine Umgebung (`env_clear`), nur `PATH`. Neues Programm
+  **`chimera-fdpass`**, das die Verbindung abholt und an `ssh` weiterreicht;
+  `ssh` selbst bleibt ohne Netz (Unit unverändert).
+  **Am echten sshd belegt** (Sandbox, OpenSSH 9.9): Host über das Gateway
+  eingetragen, ohne Freigabe `ssh_gesperrt`, mit Freigabe läuft der Befehl auf
+  dem Ziel („hallo-vom-ziel", Exitcode 0), Protokoll und `known_hosts`
+  geschrieben, `id -un` auf dem Ziel `root`.
+  **Zwei Messungen haben den Entwurf korrigiert** (in DESIGN benannt):
+  `ssh` schließt im Proxy-Kind alle Deskriptoren ab 3 (ein geerbtes `fd 3`
+  ist dort zu), und die Rückgabe ist `SCM_RIGHTS` über stdin, kein Text
+  `fd <n>`. Deshalb der Übergabe-Socket; „ein ssh zur Zeit" schützt ihn.
+  Installer: neues Binary `chimera-fdpass` (dritte Art in `binary.sh`,
+  `binary-ablegen.sh`, `rust.yml`), Ordner `ssh/keys` (0700) beim Ausführer.
+  Agent: Werkzeug `ssh` (`{host, befehl}`). Tests: cargo 356 (17 in `ssh`),
+  `chimera-sohelper` 22 + 15 (5 in `ssh`), `test_agent` 103, Gegenprobe
+  `rust/gegenprobe-ssh.sh` 16/16 rot.
 - **Host-Tabelle der Fernausführung** (12.11., erste Stufe von „fernausführen
   über `ssh`"): `rust/crates/tor/src/ssh.rs` hält die eine Wahrheit darüber,
   welche Hosts es gibt — Adresse, Nutzer, Port, Schlüssel**name**, Rechte je

@@ -13,6 +13,8 @@
 //! **Was hier anders ist:** Es gibt kein `allow_network`. Der Ausführer hat
 //! nie Netz (DESIGN 5n): Programme aus `NETWORK` werden immer abgelehnt.
 
+pub mod ssh;
+
 use std::path::{Path, PathBuf};
 
 /// Grenzen der Ausführung. Einstellbar, weil sie hardwareabhängig sind —

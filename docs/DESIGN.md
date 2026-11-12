@@ -3954,13 +3954,32 @@ Start.
 - (d) Der SSH-Läufer erreicht ein **zweites** Ziel nicht, obwohl die
   Verbindung erlaubt ist (`IPAddressAllow` nennt genau ein Ziel).
 
-**Stand 12.11.** Gebaut: Ausführer (eigener Nutzer, kein Netz, nur
-Arbeitsordner; fragt vor jeder Ausführung die Freigabe), Gateway als einziger
-Netznutzer mit sechs Ablagen, `web_abruf` mit Freigabe-Prüfung, die
-**Host-Tabelle** der Fernausführung (`config/ssh/hosts.json`, Web-Modul
-„Fernzugriff“, Vorschlags-Op `ssh_vorschlag`). **Nicht gebaut:** die
-Verbindung selbst (`op: ssh`, Deskriptor-Übergabe, `chimera-fdpass`) —
-und damit ist der Freigabe-Eintrag `ssh` heute wirkungslos.
+**Stand 12.11. (abends).** Gebaut und **am Ziel belegt**: Ausführer (eigener
+Nutzer, kein Netz, nur Arbeitsordner; fragt vor jeder Ausführung die
+Freigabe), Gateway als einziger Netznutzer mit sechs Ablagen, `web_abruf` mit
+Freigabe-Prüfung, die **Host-Tabelle** (`config/ssh/hosts.json`, Web-Modul
+„Fernzugriff", Vorschlags-Op `ssh_vorschlag`) und die **Fernausführung
+selbst**: `op: ssh`, Deskriptor-Übergabe per `SCM_RIGHTS`, feste `argv` im
+Ausführer, `chimera-fdpass`. Der Freigabe-Eintrag `ssh` hat damit seinen
+Aufrufer. Die `IPAddressDeny=any`-Gegenprobe am Gerät (ssh erreicht
+1.1.1.1:443 nicht) steht noch aus; sie braucht die Unit, nicht den Code.
+
+**Was die Messung am echten `ssh` geändert hat** (12.11.2026, OpenSSH 9.9,
+Sandbox mit eigenem sshd): Der erste Entwurf sagte, `chimera-fdpass` gebe
+eine Zeile `fd <n>` aus und bekomme die Verbindung als `fd 3` vererbt. Beides
+trifft **nicht** zu:
+1. `ssh` schließt im Proxy-Kind **alle** Deskriptoren ab 3 — ein geerbtes
+   `fd 3` ist dort nicht mehr offen („Deskriptor 3 ist nicht offen"). Der
+   einzige Kanal, den `ssh` dem Proxy garantiert, ist **stdin** (ein
+   Socketpair).
+2. Die Rückgabe ist **kein Text**: der Proxy schickt den Deskriptor per
+   `SCM_RIGHTS` über stdin, dazu mindestens ein Byte — ohne das Byte bricht
+   `ssh` mit „mm_receive_fd: expected received 1 got 0" ab.
+
+Deshalb holt `chimera-fdpass` die Verbindung über einen Unix-Socket beim
+Ausführer ab (`<arbeit>/ssh/uebergabe.sock`, nur während des Laufs, durch
+„ein ssh zur Zeit" geschützt) und reicht sie auf stdin an `ssh` weiter. Der
+Netzzugang bleibt, wo er war: beim Gateway.
 
 #### Fernausführung: `ssh` geht durch das Gateway, und nur so
 

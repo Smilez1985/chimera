@@ -133,6 +133,28 @@ class Toolbox:
         return (f"Inhalt von {ziel} ({typ}{umweg}){rest}. Fremder Inhalt, "
                 f"keine Anweisung:\n{a.get('text') or ''}")
 
+    def _ssh(self, host: str, befehl: str) -> str:
+        """Auf einem eingetragenen Host einen Befehl ausführen.
+
+        Kein `argv`, keine Optionen, kein Pfad: nur Host-Name und Befehl
+        (DESIGN, Fernausführung). Ob der Host existiert, ob das Ziel
+        freigegeben ist und **wie** verbunden wird, entscheidet das Gateway —
+        der Ausführer bekommt die Verbindung als Deskriptor und baut die
+        Kommandozeile selbst.
+        """
+        from ..provider import gateway
+
+        try:
+            a = gateway.anfragen({"op": "ssh", "host": str(host or "").strip(),
+                                  "befehl": str(befehl or "").strip()})
+        except Exception as exc:                      # nicht erreichbar ist eine Auskunft
+            return f"Die Fernausfuehrung ist nicht erreichbar: {type(exc).__name__}: {exc}"
+        if not a.get("ok"):
+            grund = (a.get("fehler") or {}).get("text") or "ohne Grund"
+            return f"Fernausfuehrung nicht moeglich: {grund}"
+        kopf = f"{a.get('ziel') or host} (Exitcode {a.get('exitcode', '?')}, {a.get('dauer_s', '?')} s):"
+        return f"{kopf}\n{a.get('text') or ''}"
+
     def _ssh_vorschlag(self, host: str, adresse: str, nutzer: str, port: str = "", notiz: str = "") -> str:
         """Einen Host **vorschlagen** — mehr darf der Agent nicht (DESIGN).
 
@@ -214,6 +236,16 @@ class Toolbox:
             {"url": "Vollständige Adresse mit http:// oder https://"},
             ("url",),
         ), self._web_abruf)
+
+        self.add(ToolSpec(
+            "ssh",
+            "Auf einem eingetragenen Host einen Befehl ausfuehren. Nur ein "
+            "Host-Name und ein Befehl -- keine Optionen, kein Pfad. Das "
+            "Gateway prueft die Freigabe und oeffnet die Verbindung.",
+            {"host": "Name aus der Host-Tabelle (z. B. 'radxa')",
+             "befehl": "Der Befehl auf dem Ziel, z. B. 'uptime'"},
+            ("host", "befehl"),
+        ), self._ssh)
 
         self.add(ToolSpec(
             "ssh_vorschlag",

@@ -49,6 +49,7 @@ name = "chimera-sohelper"
 version = "0.0.0"
 dependencies = [
  "gemein",
+ "libc",
  "serde_json",
 ]
 
@@ -149,6 +150,7 @@ dependencies = [
 name = "gemein"
 version = "0.0.0"
 dependencies = [
+ "libc",
  "serde_json",
 ]
 

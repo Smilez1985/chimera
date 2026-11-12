@@ -149,6 +149,17 @@ sohelper_ordner() {
 	manifest_has verzeich "$CHIMERA_SOHELPER_ARBEIT" || \
 		manifest_record verzeich "$CHIMERA_SOHELPER_ARBEIT" ""
 	info "Arbeitsordner: $CHIMERA_SOHELPER_ARBEIT (700 $_so_u)"
+	# Die Schluessel der Fernausfuehrung liegen beim Ausfuehrer, nicht beim
+	# Gateway (DESIGN: das Gateway hat Netz und keinen Schluessel, der
+	# Ausfuehrer Schluessel und kein Netz). 0700 -- der Agent kommt nicht
+	# heran, der Nutzer legt Schluessel mit sudo hinein.
+	_so_ssh="$_so_p/ssh"
+	mkdir -p "$_so_ssh/keys" || { err "nicht anlegbar: $_so_ssh"; return 2; }
+	chown -R "$CHIMERA_SOHELPER_NUTZER:$CHIMERA_SOHELPER_NUTZER" "$_so_ssh" 2>/dev/null || true
+	chmod 700 "$_so_ssh" "$_so_ssh/keys"
+	manifest_has verzeich "$CHIMERA_SOHELPER_ARBEIT/ssh" || \
+		manifest_record verzeich "$CHIMERA_SOHELPER_ARBEIT/ssh" ""
+	info "Schluesselordner: $CHIMERA_SOHELPER_ARBEIT/ssh/keys (700 $_so_u)"
 	return 0
 }
 
@@ -297,6 +308,16 @@ sohelper_rueckbau() {
 	if [ -d "$_so_arbeit" ]; then
 		if is_dry_run; then
 			info "[wuerde entfernen] $CHIMERA_SOHELPER_ARBEIT (nur wenn leer)"
+		# Die leeren Unterordner der Fernausfuehrung zuerst (ssh/keys legt
+		# der Installer an). Liegt dort ein Schluessel, bleibt alles stehen:
+		# ein Schluessel gehoert dem Nutzer, nicht dem Installer.
+		elif rmdir "$_so_arbeit/ssh/keys" "$_so_arbeit/ssh" 2>/dev/null; then
+			if rmdir "$_so_arbeit" 2>/dev/null; then
+				info "entfernt: $CHIMERA_SOHELPER_ARBEIT"
+			else
+				warn "$CHIMERA_SOHELPER_ARBEIT ist nicht leer -- bleibt stehen."
+				_so_befund=1
+			fi
 		elif rmdir "$_so_arbeit" 2>/dev/null; then
 			info "entfernt: $CHIMERA_SOHELPER_ARBEIT"
 		else

@@ -708,44 +708,29 @@ Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
 ## Phase Fernausführung — `ssh` durch das Gateway (DESIGN: Regel „Jedes Werkzeug bekommt nur seine Rechte")
 
 Entschieden (smilez, 12.11.): Alles, was Chimera ins Netz will, geht durch
-das Gateway — auch `ssh`. Der Ausführer bleibt ohne Netz.
+das Gateway — auch `ssh`. Der Ausführer bleibt ohne Netz. **Gebaut 12.11.
+abends** (CHANGELOG: Host-Tabelle, `op: ssh`, Deskriptor-Übergabe, feste
+`argv`, Agenten-Werkzeuge `ssh` und `ssh_vorschlag`). Offen bleibt:
 
-- [ ] **`op: ssh`** im Gateway: `{"op":"ssh","host":"…","befehl":"…"}`; Ziel
-      für die Freigabe ist `user@host`, geprüft **vor** dem Verbinden. Danach
-      **öffnet das Gateway die TCP-Verbindung** (Adresse/Port aus der Tabelle).
-- [ ] **Deskriptor-Übergabe** statt Adressweitergabe: Socket per `SCM_RIGHTS`
-      an den Ausführer, der `ssh` mit `ProxyUseFdpass=yes` und
-      `ProxyCommand=chimera-fdpass 3` startet — ssh selbst bleibt ohne Netz
-      (`IPAddressDeny=any` unverändert). Neues kleines Programm
-      `chimera-fdpass` (gibt `fd <n>` aus).
-- [ ] **Feste `argv`** im Ausführer: BatchMode, StrictHostKeyChecking,
-      eigenes `known_hosts`, `-T`, `-p`, `-l`, `-i <schlüsselname>`, Befehl als
-      **ein** Argument hinter `--`; `-D`/`-L`/`-R`/`-A`/`-o LocalCommand`/
-      freies `-o` verboten und im Test festgenagelt.
-- [ ] **Zwei Hälften, je eine Wahrheit:** Tabelle im Gateway (Adresse, Nutzer,
-      Port, Schlüssel**name**, Rechte), Schlüsseldateien beim Ausführer
-      (`/opt/chimera/sohelper/ssh/keys/`, 0700/0600) — das Gateway hat Netz
-      und keinen Schlüssel, der Ausführer Schlüssel und kein Netz.
-      Hostschlüssel-Pin, kein `accept-new`.
-- [ ] **Hostschlüssel beim Anlegen lesen**: das Gateway liest den Schlüssel
-      einmal, das Modul zeigt den Fingerabdruck, der Nutzer bestätigt; erst
-      dann steht der Eintrag. Ein Agenten-Vorschlag kann diesen Schritt nicht
-      auslösen. **Stand 12.11.:** Die Bestätigung ist gebaut (Blob aus
-      `ssh-keyscan`, Fingerabdruck rechnet das Gateway) — das **Lesen im
-      Gateway** fehlt, weil es einen SSH-Schlüsselaustausch braucht. Gehört
-      zu `op: ssh`: dort ist der Netzweg, und `ssh_schluessel_lesen` kann
-      denselben Code benutzen.
-- [ ] **Agenten-Werkzeug `ssh`** (`{host, befehl}`) — kein `argv`, keine
-      Optionen.
-- [ ] **Gegenprobe:** ssh erreicht 1.1.1.1:443 nicht (Unit-Riegel, obwohl
-      das Programm es versucht); ein zweiter Host ist ohne neuen Auftrag nicht
-      erreichbar; unbekannter Host und `herkunft: vorschlag` abgelehnt;
-      Hostschlüssel-Wechsel bricht ab; `-D`/`-L`/`-R` werden abgelehnt.
-- [ ] **Rechte je Host** (entschieden 12.11.): `force` (Vorgabe,
-      `ForceCommand`), `rbash` (eingeschränkte Shell), `voll` — der Nutzer
-      wählt je Host; unbekannter Wert wird abgelehnt.
-- [ ] **Danach:** der Freigabe-Eintrag `ssh` hat einen Aufrufer — vorher
-      nicht (heute wirkt er nicht).
+- [ ] **`IPAddressDeny=any` am Gerät nachweisen**: ein `ssh`-Kind des
+      Ausführers erreicht 1.1.1.1:443 nicht, obwohl es das versucht — der
+      Riegel ist die Unit, und nur am Pi lässt er sich messen.
+- [ ] **Hostschlüssel im Gateway lesen** (`ssh_schluessel_lesen`): heute
+      tippt der Nutzer die Zeile aus `ssh-keyscan` ein, den Fingerabdruck
+      rechnet das Gateway. Selbst lesen heißt SSH-Schlüsselaustausch —
+      gehört hierher, weil der Netzweg jetzt existiert.
+- [ ] **Rechte je Host durchsetzen**: `force`/`rbash`/`voll` stehen in der
+      Tabelle und werden geprüft, wirken aber erst, wenn auf dem Ziel die
+      `authorized_keys`-Zeile danach gebaut ist (`ForceCommand`, `rbash`).
+      Das ist Ziel-Konfiguration, kein Code in Chimera.
+- [ ] **Gegenprobe am Gerät**: freigegebenes Ziel antwortet, nicht
+      freigegebenes nicht; ein zweiter Host ist ohne neuen Auftrag nicht
+      erreichbar; Hostschlüssel-Wechsel bricht ab; `-D`/`-L`/`-R` sind nicht
+      ausdrückbar (im Test festgenagelt, `rust/gegenprobe-ssh.sh` 16/16 rot).
+- [ ] **Schlüssel ablegen**: der Nutzer legt die privaten Schlüssel nach
+      `/opt/chimera/sohelper/ssh/keys/` (0700/0600) — der Installer legt nur
+      den Ordner an. Eine bequemere Ablage (Schlüssel erzeugen, öffentlichen
+      Teil anzeigen) ist nicht entschieden.
 
 ## Phase 6 — Agent-Härtung
 

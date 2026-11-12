@@ -51,7 +51,7 @@ CHIMERA_STEP="55-rust"; export CHIMERA_STEP
 [ -n "${CHIMERA_LOGFILE:-}" ] || log_open "rust" || \
 	warn "Kein Protokoll moeglich -- Lauf wird nicht festgehalten."
 
-log "Rust-Binaries (chimera-tor, chimera-sohelper)"
+log "Rust-Binaries (chimera-tor, chimera-sohelper, chimera-fdpass)"
 
 # Der Startbaum: der Baum, aus dem dieser Schritt laeuft (nach dem Neustart
 # aus I8 ist das source/). Dort liegt gateway/ neben installer/.
@@ -61,7 +61,7 @@ RUST_BAUM="$BINARY_REPO/rust"
 [ -n "${CHIMERA_RUST_BAUM:-}" ] && RUST_BAUM="$CHIMERA_RUST_BAUM"
 
 RC=0
-for art in tor sohelper; do
+for art in tor sohelper fdpass; do
 	binary_aus_baum "$art" 55-rust
 	_a=$?
 	case "$_a" in

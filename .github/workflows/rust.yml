@@ -122,7 +122,7 @@ jobs:
           set -eu
           soll="$(tr -d ' \t\r\n' < ../VERSION)"
           mkdir -p ../ausgabe
-          for pa in chimera-tor:chimera-tor-aarch64 chimera-sohelper:chimera-sohelper-aarch64; do
+          for pa in chimera-tor:chimera-tor-aarch64 chimera-sohelper:chimera-sohelper-aarch64 chimera-fdpass:chimera-fdpass-aarch64; do
             prog="${pa%%:*}"; asset="${pa##*:}"
             b="target/$ZIEL/release/$prog"
             file "$b"

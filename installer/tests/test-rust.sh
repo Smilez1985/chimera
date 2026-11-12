@@ -52,12 +52,22 @@ soh_bauen() { # $1 Datei, $2 Version
 	chmod 755 "$1"
 }
 
+# Ein "Binary", das wie chimera-fdpass antwortet (der Deskriptor-Helfer der
+# Fernausfuehrung).
+fd_bauen() { # $1 Datei, $2 Version
+	printf '#!/bin/sh\n[ "${1:-}" = --version ] && { echo "chimera-fdpass %s"; exit 0; }\nexit 2\n' "$2" >"$1"
+	chmod 755 "$1"
+}
+
 # Das ausgelieferte Ausfuehrer-Binary in den Startbaum legen. Der Schritt legt
-# seit 11.11. beide Programme ab; fehlt eines, ist das ein Befund (rc 1).
+# seit 11.11. beide Programme ab (seit 12.11. drei: chimera-fdpass reist mit
+# dem Ausfuehrer); fehlt eines, ist das ein Befund (rc 1).
 soh_ausliefern() { # $1 Version (leer = VERSION_SOLL)
 	mkdir -p "$T/sohelper"
 	soh_bauen "$T/sohelper/chimera-sohelper-aarch64" "${1:-$VERSION_SOLL}"
-	( cd "$T/sohelper" && sha256sum chimera-sohelper-aarch64 >chimera-sohelper-aarch64.sha256 )
+	fd_bauen "$T/sohelper/chimera-fdpass-aarch64" "${1:-$VERSION_SOLL}"
+	( cd "$T/sohelper" && sha256sum chimera-sohelper-aarch64 >chimera-sohelper-aarch64.sha256 \
+		&& sha256sum chimera-fdpass-aarch64 >chimera-fdpass-aarch64.sha256 )
 }
 
 # Startbaum: was der Schritt ausser der Wurzel braucht.
@@ -364,6 +374,9 @@ check "fremdes Modul: Datei unveraendert" "$(summe "$FR/root/opt/chimera/bin/chi
 check "fremdes Modul: kein zweiter Eintrag" "$(wc -l <"$FR/root/opt/chimera/state/manifest.tsv")" "1"
 
 # ... und Schritt 55 nimmt genau das, ohne dass etwas nachgeholt werden muss.
+# Dazu gehoert der Deskriptor-Helfer: Schritt 55 legt drei Programme ab.
+fd_bauen "$WT/sohelper/chimera-fdpass-aarch64" "$VERSION_SOLL"
+( cd "$WT/sohelper" && sha256sum chimera-fdpass-aarch64 >chimera-fdpass-aarch64.sha256 )
 mkroot werkzeug; T="$WT"
 fahr run
 check "Werkzeug -> Schritt 55: rc 0" "$RC" "0"

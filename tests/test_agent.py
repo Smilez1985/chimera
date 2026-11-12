@@ -255,6 +255,40 @@ try:
 finally:
     _gw.anfragen = _echt
 
+print("== ssh: nur Host und Befehl, die Entscheidung faellt im Gateway ==")
+_echt = _gw.anfragen
+try:
+    gesehen = []
+
+    def _fake_ssh(anfrage, **kw):
+        gesehen.append(dict(anfrage))
+        return {"ok": True, "text": " 21:04:11 up 3 days", "exitcode": 0, "dauer_s": 1,
+                "host": anfrage["host"], "ziel": "dietpi@radxa"}
+
+    _gw.anfragen = _fake_ssh
+    with tempfile.TemporaryDirectory() as td:
+        text = Toolbox(td).call("ssh", {"host": "radxa", "befehl": "uptime"})
+        check("geht als eigene Operation zum Gateway", gesehen[0]["op"], "ssh")
+        check("nur Host und Befehl gehen mit",
+              sorted(gesehen[0]), ["befehl", "host", "op"])
+        check("Ziel und Ausgabe stehen in der Antwort",
+              "dietpi@radxa" in text and "up 3 days" in text, True)
+
+    def _gesperrt_ssh(anfrage, **kw):
+        return {"ok": False, "fehler": {"code": "ssh_gesperrt",
+                "text": "Die Fernausfuehrung nach dietpi@radxa ist nicht freigegeben: "
+                        "keine Freigabe eingetragen"}}
+
+    _gw.anfragen = _gesperrt_ssh
+    with tempfile.TemporaryDirectory() as td:
+        text = Toolbox(td).call("ssh", {"host": "radxa", "befehl": "uptime"})
+        check("Ablehnung nennt Ziel und Grund",
+              "dietpi@radxa" in text and "keine Freigabe" in text, True)
+        check("kein Programmfehler, sondern eine Auskunft",
+              "Fehler in 'ssh'" not in text, True)
+finally:
+    _gw.anfragen = _echt
+
 print("== ssh_vorschlag: der Agent schlaegt nur vor, er oeffnet nichts ==")
 _echt = _gw.anfragen
 try:

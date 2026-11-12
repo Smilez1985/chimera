@@ -14,6 +14,13 @@ path = "src/lib.rs"
 name = "chimera-sohelper"
 path = "src/main.rs"
 
+# Der kleine Helfer fuer `ProxyUseFdpass`: er gibt den geerbten Deskriptor als
+# Zeile "fd <n>" aus und oeffnet selbst nichts (DESIGN, Fernausfuehrung).
+[[bin]]
+name = "chimera-fdpass"
+path = "src/fdpass_main.rs"
+
 [dependencies]
 serde_json.workspace = true
 gemein.workspace = true
+libc.workspace = true

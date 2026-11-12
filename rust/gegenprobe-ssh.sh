@@ -79,6 +79,61 @@ mut known-hosts-port \
 	'    let ziel = if port == 22 { adresse.to_string() } else { format!("[{adresse}]:{port}") };' \
 	'    let ziel = adresse.to_string();'
 
+# 15. Die Freigabe wird beim ssh-Aufruf nicht gefragt (jedes Ziel geht durch).
+mut ssh-ohne-freigabe \
+	'    if frei["erlaubt"] != true {' \
+	'    if false {'
+# 16. Die Verbindung geht ohne Deskriptor an den Ausfuehrer.
+mut ssh-ohne-deskriptor \
+	'gemein::fdpass::senden(&strom, &zeile, &[tcp.as_raw_fd()])' \
+	'gemein::fdpass::senden(&strom, &zeile, &[])'
+
+# --- der Ausfuehrer: die feste Form des ssh-Aufrufs -----------------------
+F2=crates/sohelper/src/ssh.rs
+cp "$F2" /tmp/gp-ssh2.orig
+zurueck2() { cp /tmp/gp-ssh2.orig "$F2"; }
+mut2() { # name, suchen, ersetzen
+	zurueck2
+	python3 - "$F2" "$2" "$3" <<'EOF2'
+import sys
+f, a, b = sys.argv[1], sys.argv[2], sys.argv[3]
+s = open(f).read()
+assert s.count(a) >= 1, "Muster fehlt: " + a
+open(f, "w").write(s.replace(a, b, 1))
+EOF2
+	[ $? -eq 0 ] || { echo "MUSTER FEHLT: $1"; gruen=$((gruen + 1)); return; }
+	if CARGO_TARGET_DIR=/root/chimera-target cargo test --offline -p chimera-sohelper 'ssh::' >/tmp/gp-ssh2-intern.log 2>&1; then
+		echo "GRUEN (schlecht): $1"
+		gruen=$((gruen + 1))
+	else
+		echo "rot (gut): $1"
+	fi
+}
+
+# 17. Der Hostschluessel wird nicht mehr gepinnt (accept-new statt yes).
+mut2 hostschluessel-unkritisch \
+	'"StrictHostKeyChecking=yes".into(),' \
+	'"StrictHostKeyChecking=no".into(),'
+# 18. Der Umweg ueber den Deskriptor faellt weg (ssh baut selbst auf).
+mut2 proxy-umweg-weg \
+	'"ProxyUseFdpass=yes".into(),' \
+	'"ProxyUseFdpass=no".into(),'
+# 19. Ein zweites Ziel wird einschmuggelbar.
+mut2 zweiter-host \
+	'a.adresse.clone(),
+        "--".into(),' \
+	'a.adresse.clone(),
+        "zweiter.example".into(),
+        "--".into(),'
+# 20. Ein freies -o aus dem Auftrag ist erlaubt.
+mut2 freie-option \
+	'"-o".into(),
+        "BatchMode=yes".into(),' \
+	'"-o".into(),
+        a.befehl.clone(),'
+
+zurueck2
+
 zurueck
 echo "---"
 echo "$gruen gruen (0 ist gut)"

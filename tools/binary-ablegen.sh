@@ -42,6 +42,7 @@ art_ordner() {
 	case "$1" in
 		tor)      printf '%s\n' gateway ;;
 		sohelper) printf '%s\n' sohelper ;;
+		fdpass)   printf '%s\n' sohelper ;;
 		*) return 1 ;;
 	esac
 }
@@ -50,6 +51,7 @@ art_asset() {
 	case "$1" in
 		tor)      printf '%s\n' chimera-tor-aarch64 ;;
 		sohelper) printf '%s\n' chimera-sohelper-aarch64 ;;
+		fdpass)   printf '%s\n' chimera-fdpass-aarch64 ;;
 		*) return 1 ;;
 	esac
 }
@@ -58,6 +60,7 @@ art_programm() {
 	case "$1" in
 		tor)      printf '%s\n' chimera-tor ;;
 		sohelper) printf '%s\n' chimera-sohelper ;;
+		fdpass)   printf '%s\n' chimera-fdpass ;;
 		*) return 1 ;;
 	esac
 }

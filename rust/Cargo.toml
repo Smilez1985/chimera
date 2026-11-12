@@ -25,6 +25,8 @@ ureq = { version = "3", default-features = false, features = ["json", "rustls"] 
 # Web-Oberflaeche (Regel 5m): kleiner Server ohne Laufzeit, Passwort-Hash und Zufall.
 tiny_http = { version = "0.12", default-features = false }
 ring = "0.17"
+# Deskriptor-Übergabe (SCM_RIGHTS) für die Fernausführung: sendmsg/recvmsg.
+libc = "0.2"
 gemein = { path = "crates/gemein" }
 
 # Regel 14: klein und ohne Abwickeln. `panic = "abort"` heisst, ein Panik

@@ -355,6 +355,120 @@ pub fn holen(p: &Pfade, name: &str) -> Result<Value, (&'static str, String)> {
     Ok(e.clone())
 }
 
+/// Wo der Ausführer zu erreichen ist. Im Betrieb der systemd-Socket, in
+/// Tests/Sandbox über die Umgebung.
+const SOHELPER_SOCKET: &str = "/run/chimera/sohelper.sock";
+
+/// Die Fernausführung: `{"op":"ssh","host":"…","befehl":"…"}`.
+///
+/// **Hier fällt die Entscheidung, und hier wird verbunden.** Erst die
+/// Host-Tabelle (was nicht drinsteht oder nur ein Vorschlag ist, gibt es
+/// nicht), dann die Freigabe (`user@host`, Vorgabe Positivliste), dann der
+/// TCP-Verbindungsaufbau. Der offene Socket geht als **Deskriptor** an den
+/// Ausführer — der hat kein Netz und kann keine zweite Verbindung aufbauen.
+pub fn op_ssh(p: &Pfade, host: &str, befehl: &str, jetzt: u64) -> Value {
+    let socket = std::env::var("CHIMERA_SOHELPER_SOCKET").unwrap_or_else(|_| SOHELPER_SOCKET.to_string());
+    op_ssh_mit_socket(p, host, befehl, jetzt, &socket)
+}
+
+/// Dasselbe, aber mit genanntem Ausführer-Socket — fuer Tests, die keinen
+/// Prozess starten wollen.
+pub fn op_ssh_mit_socket(p: &Pfade, host: &str, befehl: &str, jetzt: u64, socket: &str) -> Value {
+    let e = match holen(p, host) {
+        Ok(e) => e,
+        Err((code, text)) => return gemein::zeile::fehlerantwort(code, &text),
+    };
+    let nutzer = e["nutzer"].as_str().unwrap_or("");
+    let adresse = e["adresse"].as_str().unwrap_or("");
+    let port = e["port"].as_u64().unwrap_or(22) as u16;
+    if befehl.trim().is_empty() {
+        return gemein::zeile::fehlerantwort("befehl_fehlt", "ssh braucht ein Feld \"befehl\".");
+    }
+    // Das Ziel der Freigabe ist der Host, wie der Nutzer ihn eingetragen hat
+    // -- nicht die Adresse (die wechselt, der Eintrag bleibt).
+    let ziel = format!("{nutzer}@{host}");
+    let frei = crate::freigaben::pruefen(p, "ssh", Some(&ziel), jetzt);
+    if frei["erlaubt"] != true {
+        return json!({
+            "ok": false,
+            "fehler": {"code": "ssh_gesperrt",
+                "text": format!("Die Fernausführung nach {ziel} ist nicht freigegeben: {}",
+                    frei["grund"].as_str().unwrap_or("ohne Grund")),
+                "ziel": ziel, "grund": frei["grund"]},
+        });
+    }
+    let beginn = std::time::Instant::now();
+    let tcp = match verbinden(adresse, port) {
+        Ok(t) => t,
+        Err(e) => {
+            return gemein::zeile::fehlerantwort(
+                "nicht_erreichbar",
+                &format!("{adresse}:{port} ist nicht erreichbar: {e}"),
+            )
+        }
+    };
+    let antwort = an_ausfuehrer_schicken(&e, host, befehl, &tcp, socket);
+    drop(tcp);
+    match antwort {
+        Ok(mut v) => {
+            if let Some(o) = v.as_object_mut() {
+                o.insert("dauer_s".into(), json!(beginn.elapsed().as_secs()));
+                o.insert("host".into(), json!(host));
+                o.insert("ziel".into(), json!(ziel));
+            }
+            v
+        }
+        Err(e) => gemein::zeile::fehlerantwort("ausfuehrer", &e),
+    }
+}
+
+fn verbinden(adresse: &str, port: u16) -> Result<std::net::TcpStream, String> {
+    use std::net::ToSocketAddrs;
+    let ziele: Vec<_> = (adresse, port)
+        .to_socket_addrs()
+        .map_err(|e| format!("Adresse nicht auflösbar: {e}"))?
+        .collect();
+    if ziele.is_empty() {
+        return Err("keine Adresse aufgelöst".into());
+    }
+    let mut letzter = String::from("kein Versuch");
+    for z in ziele {
+        match std::net::TcpStream::connect_timeout(&z, std::time::Duration::from_secs(10)) {
+            Ok(s) => {
+                let _ = s.set_nodelay(true);
+                return Ok(s);
+            }
+            Err(e) => letzter = format!("{z}: {e}"),
+        }
+    }
+    Err(letzter)
+}
+
+/// Den Auftrag samt Deskriptor an den Ausführer geben und seine Antwort lesen.
+fn an_ausfuehrer_schicken(e: &Value, host: &str, befehl: &str, tcp: &std::net::TcpStream, pfad: &str) -> Result<Value, String> {
+    use std::os::unix::io::AsRawFd;
+    let strom = std::os::unix::net::UnixStream::connect(pfad)
+        .map_err(|e| format!("Der Ausführer ist nicht erreichbar ({pfad}: {e}); es wurde nichts ausgeführt."))?;
+    let _ = strom.set_read_timeout(Some(std::time::Duration::from_secs(300)));
+    let anfrage = json!({
+        "op": "ssh",
+        "host": host,
+        "nutzer": e["nutzer"], "adresse": e["adresse"], "port": e["port"],
+        "schluessel": e["schluessel"],
+        "hostschluessel_typ": e["hostschluessel"]["typ"],
+        "hostschluessel": e["hostschluessel"]["schluessel"],
+        "befehl": befehl,
+    });
+    let mut zeile = serde_json::to_vec(&anfrage).map_err(|e| e.to_string())?;
+    zeile.push(b'\n');
+    gemein::fdpass::senden(&strom, &zeile, &[tcp.as_raw_fd()])
+        .map_err(|e| format!("Der Deskriptor ließ sich nicht übergeben: {e}"))?;
+    let leser = strom.try_clone().map_err(|e| e.to_string())?;
+    let mut leser = std::io::BufReader::new(leser);
+    gemein::zeile::lesen(&mut leser, gemein::zeile::MAX_BYTES)
+        .map_err(|e| format!("keine Antwort vom Ausführer ({e})"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -513,6 +627,98 @@ mod tests {
         let e2 = json!({"adresse": "h.example", "port": 2222,
                         "hostschluessel": {"typ": "ssh-ed25519", "schluessel": "AAAA"}});
         assert_eq!(known_hosts_zeile(&e2).unwrap(), "[h.example]:2222 ssh-ed25519 AAAA");
+    }
+
+    /// Das Ziel auf die Positivliste der Freigabe setzen.
+    fn setzen_freigabe(p: &Pfade, werkzeug: &str, ziel: &str) {
+        crate::freigaben::setzen(p, werkzeug, &json!({"modus": "positivliste", "positiv": [ziel]}), 1000).unwrap();
+    }
+
+    /// Ein freigegebener Host, wie ihn das Modul anlegt.
+    fn host_anlegen(p: &Pfade, name: &str, adresse: &str, port: u16) {
+        let mut e = eintrag(adresse);
+        e["port"] = json!(port);
+        setzen(p, name, &e).unwrap();
+    }
+
+    #[test]
+    fn ssh_ohne_freigabe_verbindet_nicht() {
+        let p = p("ssh-frei");
+        host_anlegen(&p, "radxa", "r.example", 22);
+        let a = op_ssh_mit_socket(&p, "radxa", "uptime", 1000, "/nicht/da.sock");
+        assert_eq!(a["ok"], false);
+        assert_eq!(a["fehler"]["code"], "ssh_gesperrt");
+        assert!(a["fehler"]["text"].as_str().unwrap().contains("dietpi@radxa"));
+    }
+
+    #[test]
+    fn ssh_kennt_nur_die_tabelle() {
+        let p = p("ssh-unbekannt");
+        let a = op_ssh_mit_socket(&p, "gibtsnicht", "uptime", 1000, "/nicht/da.sock");
+        assert_eq!(a["fehler"]["code"], "host_unbekannt");
+        vorschlag(&p, "v", "v.example", "u", None, "").unwrap();
+        let a = op_ssh_mit_socket(&p, "v", "uptime", 1000, "/nicht/da.sock");
+        assert_eq!(a["fehler"]["code"], "host_unbestaetigt");
+    }
+
+    #[test]
+    fn ssh_reicht_die_verbindung_als_deskriptor_weiter() {
+        use std::io::{BufRead, Read, Write};
+        use std::os::unix::io::FromRawFd;
+        let p = p("ssh-fd");
+        // Ein "Ziel", das auf eine Verbindung wartet.
+        let ziel = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = ziel.local_addr().unwrap().port();
+        host_anlegen(&p, "radxa", "127.0.0.1", port);
+        // Eine echte Freigabe: das Ziel steht auf der Positivliste.
+        setzen_freigabe(&p, "ssh", "dietpi@radxa");
+        // Ein Ausführer, der den Deskriptor prueft statt ssh zu starten.
+        let d = std::env::temp_dir().join(format!("chimera-ssh-sock-{}", std::process::id()));
+        let _ = std::fs::remove_file(&d);
+        let horcher = std::os::unix::net::UnixListener::bind(&d).unwrap();
+        let faden = std::thread::spawn(move || {
+            let (strom, _) = horcher.accept().unwrap();
+            let (daten, fds) = gemein::fdpass::empfangen(&strom, 8192).unwrap();
+            assert_eq!(fds.len(), 1, "kein Deskriptor angekommen");
+            let auftrag: serde_json::Value = serde_json::from_slice(&daten).unwrap();
+            // Ueber den weitergereichten Deskriptor ist die Verbindung offen.
+            let mut s = unsafe { std::net::TcpStream::from_raw_fd(fds[0]) };
+            s.write_all(b"vom-ausfuehrer\n").unwrap();
+            let mut antwort = String::new();
+            {
+                let mut leser = std::io::BufReader::new(s.try_clone().unwrap());
+                leser.read_line(&mut antwort).unwrap();
+            }
+            let mut schreiber = strom.try_clone().unwrap();
+            schreiber.write_all(b"{\"ok\":true,\"text\":\"fertig\"}\n").unwrap();
+            auftrag
+        });
+        // Die Gegenseite: die Zielverbindung, auf der der Ausfuehrer schreibt.
+        let eingehend = std::thread::spawn(move || {
+            let (mut s, _) = ziel.accept().unwrap();
+            let mut zeile = String::new();
+            {
+                let mut leser = std::io::BufReader::new(s.try_clone().unwrap());
+                leser.read_line(&mut zeile).unwrap();
+            }
+            s.write_all(b"banner\n").unwrap();
+            zeile
+        });
+        let a = op_ssh_mit_socket(&p, "radxa", "uptime", 1000, &d.to_string_lossy());
+        let auftrag = faden.join().unwrap();
+        let _ = eingehend.join();
+        assert_eq!(a["ok"], true, "{a}");
+        assert_eq!(a["text"], "fertig");
+        assert_eq!(auftrag["op"], "ssh");
+        assert_eq!(auftrag["befehl"], "uptime");
+        assert_eq!(auftrag["schluessel"], "radxa_ed25519");
+        // Typ und Blob gehen getrennt mit; die known_hosts-Zeile baut der
+        // Ausführer aus Adresse, Port und beidem.
+        assert_eq!(auftrag["hostschluessel_typ"], "ssh-ed25519");
+        assert_eq!(auftrag["hostschluessel"], json!(blob()));
+        assert_eq!(auftrag["adresse"], "127.0.0.1");
+        assert_eq!(auftrag["nutzer"], "dietpi");
+        let _ = std::fs::remove_file(&d);
     }
 
     #[test]
