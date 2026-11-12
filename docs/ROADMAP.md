@@ -679,9 +679,11 @@ Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
       und ist behoben: die Datei lag in `config/` und war damit nicht
       schreibbar (Regel 5t) — jetzt eine eigene Ablage, die der Installer
       anlegt und die Unit beschreiben darf; Wächter
-      `tests/test_ablagen_wirksam.py`. Offen daran: die Anzeige der Restzeit
-      im Autotest (das JS ist nur im Browser geprüft) und der Nachweis am
-      Gerät nach dem nächsten Installerlauf.
+      `tests/test_ablagen_wirksam.py`. **Am Gerät belegt** (Stand `75012bc`,
+      13 Module ohne Fehler): setzen → Datei und Protokoll entstehen, Prüfung
+      erlaubt `gut.example` und lehnt `bose.example` über die Negativliste ab,
+      „aus“ führt zurück auf die Positivliste. Offen daran nur noch: die
+      Anzeige der Restzeit im Autotest (das JS ist nur im Browser geprüft).
 - [ ] **Stufe 2 — Prüfpunkt im Gateway:** `web_abruf` (und später jeder
       ausgehende Weg) fragt `freigaben`, bevor es verbindet; Ablehnung nennt
       Werkzeug und Grund.
