@@ -258,6 +258,9 @@ pub enum Entscheidung {
     Modelle(String),
     /// Strom an/aus (`/stream`, `/stream an|aus`).
     Strom(String),
+    /// Im eigenen Netz nach Ollama-Servern suchen (5k). Wirkt auf die
+    /// Anbieterliste des Gateways, nicht auf die Sitzung.
+    Suche,
     /// In die Hauptsitzung fragen.
     Fragen(String),
 }
@@ -280,6 +283,7 @@ pub fn entscheiden(erlaubt: &BTreeSet<i64>, e: &Eingang) -> Entscheidung {
                 let arg = t.splitn(2, char::is_whitespace).nth(1).unwrap_or("").trim().to_lowercase();
                 return Entscheidung::Strom(arg);
             }
+            "suche" | "netzsuche" => return Entscheidung::Suche,
             "model" | "modelle" => {
                 let arg = t.splitn(2, char::is_whitespace).nth(1).unwrap_or("").trim();
                 return Entscheidung::Modelle(arg.to_string());
@@ -290,8 +294,39 @@ pub fn entscheiden(erlaubt: &BTreeSet<i64>, e: &Eingang) -> Entscheidung {
     Entscheidung::Fragen(e.text.clone())
 }
 
-pub const HILFE: &str = "Ich bin Chimera. Schreib einfach los.\n/status -- was gerade laeuft\n/neu -- Gespraech von vorn\n/model -- Modelle zeigen, /model 3 oder /model <name> waehlen\n/stream -- Teilstuecke an/aus (/stream an, /stream aus)";
+pub const HILFE: &str = "Ich bin Chimera. Schreib einfach los.\n/status -- was gerade laeuft\n/neu -- Gespraech von vorn\n/model -- Modelle zeigen, /model 3 oder /model <name> waehlen\n/stream -- Teilstuecke an/aus (/stream an, /stream aus)\n/suche -- im eigenen Netz nach Ollama-Servern suchen";
 pub const ABGEWIESEN: &str = "Wir kennen uns nicht. Ich rede nur mit Eingetragenen.";
+
+/// Die Antwort der Netzsuche als Text. Rein (kein Netz, keine Datei), damit
+/// sich jeder Fall pruefen laesst: gefunden, nichts gefunden, Suche ging nicht.
+pub fn suche_text(a: &Value) -> String {
+    if a["ok"] != true {
+        let grund = a["grund"].as_str().or_else(|| a["fehler"]["text"].as_str()).unwrap_or("ohne Grund");
+        return format!("Die Suche ging nicht: {grund}. Adresse bitte auf der Web-Oberflaeche eintragen.");
+    }
+    let liste = |f: &str| -> Vec<String> {
+        a[f].as_array().map(|x| x.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default()
+    };
+    let funde = liste("funde");
+    let neu = liste("neu");
+    let kataloge = a["kataloge"].as_u64().unwrap_or(0);
+    if funde.is_empty() {
+        return "Kein Ollama-Server im Netz gefunden. Steht er in einem anderen Netz, trage seine Adresse auf der Web-Oberflaeche ein.".to_string();
+    }
+    let mut t = format!("Gefunden: {}\n", funde.join("\n"));
+    if neu.is_empty() {
+        t.push_str("Neu eingetragen: keiner (der Server war schon bekannt).");
+    } else {
+        t.push_str(&format!("Neu eingetragen: {}", neu.join(", ")));
+    }
+    if kataloge > 0 {
+        t.push_str(&format!("\nKatalog aufgefrischt: {kataloge}."));
+    }
+    if neu.is_empty() && kataloge == 0 {
+        t.push_str("\nModelle sind schon gemessen; die Wahl entscheidet, wohin Fragen gehen.");
+    }
+    t
+}
 
 /// Die Modellliste als Text: die geltende Wahl ist markiert, ein gemessen
 /// untaugliches Modell wird benannt (DESIGN 5n). Rein.
@@ -377,6 +412,7 @@ impl Tuer {
             }
             Entscheidung::Modelle(arg) => self.modell_befehl(e.chat_id, &arg),
             Entscheidung::Strom(arg) => self.stream_befehl(e.chat_id, &arg),
+            Entscheidung::Suche => self.suche_befehl(e.chat_id),
             Entscheidung::Fragen(text) => {
                 self.api.tippt(e.chat_id);
                 if let Err(f) = sitzung::fragen(&self.sitzung, TUER, &text, &format!("tg-{}", e.update_id)) {
@@ -430,6 +466,16 @@ impl Tuer {
             return;
         }
         antworten(&self.api, chat, &format!("Gewaehlt: {name}. Es gilt ab der naechsten Frage."));
+    }
+
+    /// `/suche`: im eigenen Netz nach Ollama-Servern suchen (Regel 5k).
+    /// Die Antwort nennt Funde, was neu eingetragen wurde und ob ein Katalog
+    /// aufgefrischt ist -- ein stilles "ok" waere hier wertlos.
+    fn suche_befehl(&self, chat: i64) {
+        antworten(&self.api, chat, "Ich suche im eigenen Netz nach Ollama-Servern (das dauert ein paar Sekunden).");
+        let stand = crate::dienst::Stand::neu();
+        let a = crate::netzsuche::durchgang(&stand);
+        antworten(&self.api, chat, &suche_text(&a));
     }
 
     /// `/stream`: Teilstuecke an oder aus. Der Wert steht in `wahl.json` und
@@ -768,6 +814,40 @@ mod tests {
 
     fn liste() -> BTreeSet<i64> {
         [7, 8].into_iter().collect()
+    }
+
+    #[test]
+    fn suche_wird_erkannt_und_geht_nicht_in_die_sitzung() {
+        assert_eq!(entscheiden(&liste(), &eingang(7, "/suche")), Entscheidung::Suche);
+        assert_eq!(entscheiden(&liste(), &eingang(7, "/Suche@chimera_bot")), Entscheidung::Suche);
+        assert_eq!(entscheiden(&liste(), &eingang(99, "/suche")), Entscheidung::Abweisen);
+        // "suche im netz nach ..." ist ein Auftrag an die Sitzung, kein Befehl.
+        assert_eq!(
+            entscheiden(&liste(), &eingang(7, "suche im netz nach oeffnungszeiten")),
+            Entscheidung::Fragen("suche im netz nach oeffnungszeiten".into())
+        );
+    }
+
+    #[test]
+    fn suche_text_nennt_funde_neue_und_den_grund() {
+        let t = suche_text(&json!({
+            "ok": true, "gesucht": true,
+            "funde": ["http://192.0.2.10:11434"],
+            "neu": ["ollama-192-168-178-100"], "kataloge": 1
+        }));
+        assert!(t.contains("Gefunden: http://192.0.2.10:11434"), "{t}");
+        assert!(t.contains("Neu eingetragen: ollama-192-168-178-100"), "{t}");
+        assert!(t.contains("Katalog aufgefrischt: 1"), "{t}");
+        // Schon bekannt: das wird gesagt, nicht verschwiegen.
+        let bekannt = suche_text(&json!({"ok": true, "funde": ["http://x:11434"], "neu": [], "kataloge": 0}));
+        assert!(bekannt.contains("schon bekannt"), "{bekannt}");
+        // Nichts gefunden ist kein Fehler, aber auch kein Erfolg.
+        let leer = suche_text(&json!({"ok": true, "funde": [], "neu": [], "kataloge": 0}));
+        assert!(leer.contains("Kein Ollama-Server im Netz gefunden"), "{leer}");
+        // Und eine Suche, die nicht ging, nennt den Grund.
+        let kaputt = suche_text(&json!({"ok": false, "gesucht": false, "grund": "kein angeschlossenes Subnetz gefunden"}));
+        assert!(kaputt.contains("kein angeschlossenes Subnetz"), "{kaputt}");
+        assert!(!kaputt.contains("Gefunden"), "{kaputt}");
     }
 
     #[test]

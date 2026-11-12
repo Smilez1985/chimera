@@ -438,8 +438,9 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       (`web_search_20250305`), dann OpenRouter (`openrouter:web_search`).
       Die Suchquellen mit Nutzer-Schlüssel stehen beim Faden „Netz-Werkzeuge
       und Werkzeugschalter“.
-- [ ] **Netzsuche** (5k): Selbsteintrag steht; offen: Telegram `/suche`,
-      Knopf „Jetzt suchen“ im Ollama-Modul, Installer Schritt 50.
+- [ ] **Netzsuche** (5k): Selbsteintrag steht, Telegram `/suche` ist gebaut
+      (12.11.); offen: Knopf „Jetzt suchen“ im Ollama-Modul und Installer
+      Schritt 50.
 - [ ] **Speicher am Pi** (10q): `MemoryMax=` wirkt nicht
       (`cgroup_disable=memory`); der Installer meldet das, und das Gateway
       begrenzt sich selbst (`VmRSS` prüfen, bei Überschreiten sauber

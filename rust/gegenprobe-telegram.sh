@@ -96,5 +96,20 @@ mutation ablehnung-ok "$DATEI2" \
 	's|    if a\["ok"\] != true {|    if false {|' \
 	"abgelehnte_anmeldung"
 
+# M12: /suche landet in der Sitzung statt in der Netzsuche.
+mutation suche-geht-in-sitzung "$DATEI" \
+	's#            "suche" | "netzsuche" => return Entscheidung::Suche,#            #' \
+	"suche_wird_erkannt_und_geht_nicht_in_die_sitzung"
+
+# M13: eine gescheiterte Suche nennt ihren Grund nicht mehr.
+mutation suche-ohne-grund "$DATEI" \
+	's#let grund = a\["grund"\].as_str().or_else(|| a\["fehler"\]\["text"\].as_str()).unwrap_or("ohne Grund");#let grund = "ohne Grund";#' \
+	"suche_text_nennt_funde_neue_und_den_grund"
+
+# M14: "nichts gefunden" wird als Fund gemeldet.
+mutation suche-leer-als-fund "$DATEI" \
+	's#    if funde.is_empty() {#    if false {#' \
+	"suche_text_nennt_funde_neue_und_den_grund"
+
 printf '\nErgebnis: %s ok, %s fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

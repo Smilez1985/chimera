@@ -1226,7 +1226,12 @@ Chimera installiert und startet **nie** ein eigenes Ollama.
 
 **Gesucht wird:** im Installer (Schritt 50), auf Anforderung (Telegram
 `/suche`, Web-Oberfläche) und wenn die eingetragene Adresse beim Start
-oder nach Ausfällen nicht antwortet.
+oder nach Ausfällen nicht antwortet. `/suche` ist **gebaut** (12.11.):
+schickt erst „ich suche…", führt dann `netzsuche::durchgang` aus und nennt
+Funde, neu eingetragene Anbieter und aufgefrischte Kataloge; „nichts
+gefunden" und „Suche ging nicht" sind zwei verschiedene Antworten
+(`telegram::suche_text`, rein und geprüft). Es ist ein Befehl der Tür, kein
+Auftrag an die Sitzung — „suche im netz nach …" bleibt ein Auftrag.
 
 **Selbsteintrag (smilez, 1.11.): Jeder gefundene Ollama-Server trägt sich
 selbst in die Anbieterliste ein.** Das Gateway sucht im Hintergrund (kurz

@@ -20,6 +20,17 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **`/suche` in Telegram** (DESIGN 5k): der Befehl schickt zuerst „ich suche
+  im eigenen Netz nach Ollama-Servern", führt dann `netzsuche::durchgang` aus
+  und antwortet mit den Funden, den **neu eingetragenen** Anbietern und der
+  Zahl der aufgefrischten Kataloge. Drei Fälle werden unterschieden und
+  benannt: gefunden, „nichts gefunden", „Suche ging nicht" (mit Grund, z. B.
+  kein angeschlossenes Subnetz). `/suche` ist ein Befehl der Tür und geht
+  **nicht** in die Sitzung; „suche im netz nach …" bleibt ein Auftrag.
+  Formatierung in `telegram::suche_text` (rein, kein Netz); 2 Tests, und die
+  Gegenprobe `rust/gegenprobe-telegram.sh` hat jetzt 14 Verfälschungen
+  (Befehl landet in der Sitzung, Grund verschluckt, „leer" als Fund) — alle
+  rot.
 - **Die Wahl ist überall schaltbar — GUI und Kommandozeile** (DESIGN 5h):
   Neues eingebautes Web-Modul `wahl` (`web/module/wahl/`, Rechte
   `wahl-lesen`/`wahl-schreiben`) zeigt Teilstücke, Modellkette und
