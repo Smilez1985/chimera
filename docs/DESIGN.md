@@ -1873,7 +1873,11 @@ Wert immer ausdrücklich.
 
 **Ein Feld, ein Ort.** Keine Tür liest die Datei und schreibt sie im Ganzen
 zurück: `daten::wahl_feld_setzen` prüft Feldnamen und Typ, ändert **ein**
-Feld und erhält den Rest. Telegram und die Web-Tür gehen über die dünne
+Feld und erhält den Rest. Bekannt sind `stream` (bool) und `reihenfolge`
+(Liste gültiger Verweise `<anbieter-id>/<modell>`, ohne Doppelte, höchstens
+`KETTE_MAX` = 64). Sortieren und Kürzen der Kette gehen über dieselbe Tür:
+die Oberfläche schickt die **ganze** Liste, nicht „bewege Eintrag 3" — so
+gibt es keine Teilzustände. Telegram und die Web-Tür gehen über die dünne
 Hülle `wahl.rs`, die Kommandozeile über den Socket (`op: wahl_feld_setzen`).
 Damit kann kein Web-Modul die Struktur überschreiben, und drei Fassungen
 von „lesen, ändern, schreiben" entstehen nicht. Eine kaputte `wahl.json`

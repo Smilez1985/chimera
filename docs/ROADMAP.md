@@ -463,11 +463,12 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       einen Browser auf einem anderen Rechner im LAN (der Pi hat 462 MB RAM)
       und liegt in einem Bereich der Nutzungsbedingungen, der nicht
       eindeutig ist.
-- [ ] **`wahl.json`** mit bevorzugter Liste (5h): Datei, Auflösung,
-      `/model` in Telegram sowie Ansehen und Strom-Schalter in der
-      Web-Oberfläche und auf der Kommandozeile sind gebaut (12.11., Modul
-      `wahl`); offen sind das **Sortieren** der Kette in der Oberfläche und
-      `/suche` in Telegram.
+- [ ] **`wahl.json`** mit bevorzugter Liste (5h): Datei, Auflösung und
+      `/model` in Telegram stehen; das Modul `wahl` zeigt die Kette und
+      schaltet den Strom, sortiert und kürzt sie (12.11.), die
+      Kommandozeile kann `--wahl` und `--wahl-stream`. **Offen:** `/suche`
+      in Telegram, und ein Weg, einen Verweis in der Oberfläche **neu
+      anzulegen** (heute nur über `/model` und das Ollama-Modul).
 - [ ] **Ein Verweis, ein Abgleich** (5h, gefunden 12.11. am Gerät): Die
       Netzsuche legt den Anbieter als `ollama-<host>` an, der Dienst fragt
       ihn als `ollama`. `dienst::katalog_fuer` gleicht deshalb über die

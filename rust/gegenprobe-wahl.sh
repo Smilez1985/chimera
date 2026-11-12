@@ -30,12 +30,18 @@ EOF
 # 1. Das Feld wird nicht geprueft: beliebiges Feld schreibbar.
 mut feld-ungeprueft "$D" 'if !EINZELN_SETZBAR.contains(&feld) {' 'if false {' 'wahl'
 # 2. Der Wert wird nicht geprueft: "an" als Zeichenkette gilt als wahr.
-mut wert-ungeprueft "$D" '        .as_bool()
-        .ok_or((' '        .as_bool()
-        .or(Some(true))
-        .ok_or((' 'wahl'
+mut wert-ungeprueft "$D" '            let an = wert
+                .as_bool()' '            let an = wert
+                .as_bool()
+                .or(Some(true))' 'wahl'
 # 3. Der Rest der Datei wird verworfen: die Kette stirbt beim Stromschalter.
 mut rest-verworfen "$D" 'let mut wahl = wahl_laden(p).map_err(|m| ("wahl_kaputt", format!("{}: {}", m.quelle, m.text)))?;' 'let mut wahl = json!({});' 'wahl'
+# 5. Der Verweis wird nicht geprueft: beliebiger Text landet in der Kette.
+mut verweis-ungeprueft "$D" 'if verweis_teilen(text).is_none() {' 'if false {' 'wahl'
+# 6. Doppelte Eintraege werden durchgelassen.
+mut doppelt-erlaubt "$D" 'if sauber.iter().any(|x| x == text) {' 'if false {' 'wahl'
+# 7. Die Kette wird nicht geprueft (Typ/Laenge): rohe Liste in die Datei.
+mut kette-roh "$D" 'let mut sauber: Vec<String> = Vec::with_capacity(liste.len());' 'let mut sauber: Vec<String> = liste.iter().filter_map(Value::as_str).map(str::to_string).collect(); if !sauber.is_empty() { return Ok(json!(sauber)); }' 'wahl'
 # 4. Die Web-Tuer ohne Rechtspruefung.
 mut tuer-ohne-recht "$W" '    if !schreibrecht_vergeben(m, recht) {
         return fehler(403, &format!("kein Modul hat das Recht '"'"'{recht}'"'"'"));

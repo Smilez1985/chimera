@@ -348,8 +348,55 @@ pub fn wahl_speichern(p: &Pfade, wahl: &Value) -> Result<(), String> {
 /// Felder, die einzeln gesetzt werden duerfen. Nur, was einen Aufrufer hat:
 /// eine Tuer aendert **ein Feld**, nicht die ganze Datei -- sonst koennte ein
 /// Web-Modul die Struktur ueberschreiben, und drei Tueren haetten drei
-/// Fassungen von "lesen, aendern, schreiben".
-const EINZELN_SETZBAR: &[&str] = &["stream"];
+/// Fassungen von "lesen, aendern, schreiben". Jedes Feld prueft seinen Wert
+/// selbst (`feld_wert_pruefen`), weil "gueltig" je Feld etwas anderes heisst.
+const EINZELN_SETZBAR: &[&str] = &["stream", "reihenfolge"];
+
+/// Hoechstzahl der Eintraege in der Kette. Eine Wahl mit hundert Modellen ist
+/// kein Vorschlag mehr, sondern eine Liste, die niemand pflegt.
+pub const KETTE_MAX: usize = 64;
+
+/// Den Wert fuer ein Feld pruefen und in die Form bringen, die in die Datei
+/// geht. `Err` nennt Code und Grund -- der Aufrufer meldet beides weiter.
+fn feld_wert_pruefen(feld: &str, wert: &Value) -> Result<Value, (&'static str, String)> {
+    match feld {
+        "stream" => {
+            let an = wert
+                .as_bool()
+                .ok_or(("wert_ungueltig", format!("\"stream\" braucht true oder false (bekam {wert}).")))?;
+            Ok(json!(an))
+        }
+        "reihenfolge" => {
+            let liste = wert
+                .as_array()
+                .ok_or(("wert_ungueltig", format!("\"reihenfolge\" braucht eine Liste (bekam {wert}).")))?;
+            if liste.len() > KETTE_MAX {
+                return Err((
+                    "wert_ungueltig",
+                    format!("\"reihenfolge\" hat {} Eintraege, hoechstens {KETTE_MAX}.", liste.len()),
+                ));
+            }
+            let mut sauber: Vec<String> = Vec::with_capacity(liste.len());
+            for e in liste {
+                let Some(text) = e.as_str() else {
+                    return Err(("wert_ungueltig", format!("Eintrag {e} ist kein Text.")));
+                };
+                if verweis_teilen(text).is_none() {
+                    return Err((
+                        "wert_ungueltig",
+                        format!("Eintrag \"{text}\" ist kein Verweis <anbieter-id>/<modell>."),
+                    ));
+                }
+                if sauber.iter().any(|x| x == text) {
+                    return Err(("wert_ungueltig", format!("Eintrag \"{text}\" steht doppelt.")));
+                }
+                sauber.push(text.to_string());
+            }
+            Ok(json!(sauber))
+        }
+        _ => Err(("feld_unbekannt", format!("Feld \"{feld}\" hat keine Pruefung."))),
+    }
+}
 
 /// Ein Feld in `wahl.json` setzen und den Rest der Datei erhalten.
 /// Der Wert wird gegen den Typ des Feldes geprueft, nicht angenommen.
@@ -360,17 +407,15 @@ pub fn wahl_feld_setzen(p: &Pfade, feld: &str, wert: &Value) -> Result<Value, (&
             format!("Feld \"{feld}\" laesst sich nicht einzeln setzen (bekannt: {}).", EINZELN_SETZBAR.join(", ")),
         ));
     }
-    let wert = wert
-        .as_bool()
-        .ok_or(("wert_ungueltig", format!("\"{feld}\" braucht true oder false (bekam {wert}).")))?;
+    let wert = feld_wert_pruefen(feld, wert)?;
     // Lesen, aendern, schreiben -- und zwar hier, damit es nur eine Stelle gibt.
     let mut wahl = wahl_laden(p).map_err(|m| ("wahl_kaputt", format!("{}: {}", m.quelle, m.text)))?;
     let Some(obj) = wahl.as_object_mut() else {
         return Err(("wahl_kaputt", "wahl.json ist kein Objekt.".into()));
     };
-    obj.insert(feld.to_string(), json!(wert));
+    obj.insert(feld.to_string(), wert.clone());
     wahl_speichern(p, &wahl).map_err(|e| ("wahl_ungueltig", e))?;
-    Ok(json!(wert))
+    Ok(wert)
 }
 
 /// Verweise der Reihenfolge gegen Anbieter und Katalog pruefen.

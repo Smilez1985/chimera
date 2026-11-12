@@ -31,9 +31,21 @@ pub fn strom_an(stand: &Stand) -> bool {
 
 /// Teilstuecke an oder aus.
 pub fn strom_setzen(stand: &Stand, an: bool) -> Result<(), String> {
-    let a = antworten(&json!({"op": "wahl_feld_setzen", "feld": "stream", "wert": an}), stand);
+    feld_setzen(stand, "stream", json!(an)).map(|_| ())
+}
+
+/// Die Kette (Reihenfolge der Verweise) setzen -- die Oberflaeche schickt die
+/// ganze Liste, sortiert oder gekuerzt. Geprueft wird im Dienst
+/// (`daten::feld_wert_pruefen`), nicht hier: ein Ort fuer die Regel.
+pub fn reihenfolge_setzen(stand: &Stand, reihenfolge: &[String]) -> Result<(), String> {
+    feld_setzen(stand, "reihenfolge", json!(reihenfolge)).map(|_| ())
+}
+
+/// Ein Feld setzen und die Antwort des Dienstes in ein `Result` uebersetzen.
+fn feld_setzen(stand: &Stand, feld: &str, wert: Value) -> Result<Value, String> {
+    let a = antworten(&json!({"op": "wahl_feld_setzen", "feld": feld, "wert": wert}), stand);
     if a["ok"] == true {
-        Ok(())
+        Ok(a["wert"].clone())
     } else {
         Err(a["fehler"]["text"].as_str().unwrap_or("ohne Grund").to_string())
     }
@@ -81,11 +93,46 @@ mod tests {
     #[test]
     fn fremdes_feld_und_falscher_typ_werden_abgelehnt() {
         let s = stand("abwehr");
-        let a = antworten(&json!({"op": "wahl_feld_setzen", "feld": "reihenfolge", "wert": []}), &s);
+        let a = antworten(&json!({"op": "wahl_feld_setzen", "feld": "suche", "wert": {}}), &s);
         assert_eq!(a["fehler"]["code"], "feld_unbekannt");
         let b = antworten(&json!({"op": "wahl_feld_setzen", "feld": "stream", "wert": "an"}), &s);
         assert_eq!(b["fehler"]["code"], "wert_ungueltig");
         // und nichts geschrieben
+        assert!(!s.daten.wahl_datei().exists());
+    }
+
+    /// Die Kette wird sortiert und gekuerzt -- die Oberflaeche schickt die
+    /// ganze Liste. Geprueft wird jeder Eintrag: kein Schrott in `wahl.json`.
+    #[test]
+    fn reihenfolge_wird_gesetzt_sortiert_und_gekuerzt() {
+        let s = stand("kette");
+        reihenfolge_setzen(&s, &["ollama/a".into(), "ollama/b".into()]).expect("setzen");
+        assert_eq!(lesen(&s).unwrap()["reihenfolge"], json!(["ollama/a", "ollama/b"]));
+        // sortieren
+        reihenfolge_setzen(&s, &["ollama/b".into(), "ollama/a".into()]).expect("tauschen");
+        assert_eq!(lesen(&s).unwrap()["reihenfolge"], json!(["ollama/b", "ollama/a"]));
+        // kuerzen
+        reihenfolge_setzen(&s, &["ollama/a".into()]).expect("kuerzen");
+        assert_eq!(lesen(&s).unwrap()["reihenfolge"], json!(["ollama/a"]));
+        // und der Strom bleibt, wie er war
+        assert_eq!(lesen(&s).unwrap().get("stream"), None);
+    }
+
+    #[test]
+    fn kette_nimmt_nur_gueltige_verweise_ohne_doppelte() {
+        let s = stand("ketteabwehr");
+        for (liste, grund) in [
+            (json!(["ollama/a", "ollama/a"]), "doppelt"),
+            (json!(["ohne-schraegstrich"]), "verweis"),
+            (json!(["../x/y"]), "verweis"),
+            (json!(["ollama/"]), "verweis"),
+        ] {
+            let a = antworten(&json!({"op": "wahl_feld_setzen", "feld": "reihenfolge", "wert": liste}), &s);
+            assert_eq!(a["fehler"]["code"], "wert_ungueltig", "{grund}");
+        }
+        let zuviel: Vec<String> = (0..crate::daten::KETTE_MAX + 1).map(|i| format!("ollama/m{i}")).collect();
+        let a = antworten(&json!({"op": "wahl_feld_setzen", "feld": "reihenfolge", "wert": zuviel}), &s);
+        assert_eq!(a["fehler"]["code"], "wert_ungueltig");
         assert!(!s.daten.wahl_datei().exists());
     }
 

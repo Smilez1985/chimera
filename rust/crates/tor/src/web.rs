@@ -593,6 +593,7 @@ fn wahl_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort {
     let (recht, nur_post) = match was {
         "lesen" => ("wahl-lesen", false),
         "strom" => ("wahl-schreiben", true),
+        "reihenfolge" => ("wahl-schreiben", true),
         _ => return fehler(404, "nicht gefunden"),
     };
     if !schreibrecht_vergeben(m, recht) {
@@ -620,6 +621,30 @@ fn wahl_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort {
             match crate::wahl::strom_setzen(&z.stand, an) {
                 Ok(()) => json_antwort(200, json!({"ok": true, "strom": an})),
                 Err(g) => fehler(409, &format!("nicht gespeichert: {g}")),
+            }
+        }
+        "reihenfolge" => {
+            let v: Value = match serde_json::from_slice(a.body) {
+                Ok(v @ Value::Object(_)) => v,
+                _ => return fehler(400, "kein JSON-Objekt"),
+            };
+            let Some(liste) = v["reihenfolge"].as_array() else {
+                return fehler(400, "Feld \"reihenfolge\" fehlt (Liste von Verweisen)");
+            };
+            let mut texte: Vec<String> = Vec::with_capacity(liste.len());
+            for e in liste {
+                match e.as_str() {
+                    Some(t) => texte.push(t.to_string()),
+                    None => return fehler(400, &format!("Eintrag {e} ist kein Text")),
+                }
+            }
+            // Ist die Datei kaputt, ist das kein Eingabefehler des Clients.
+            if let Err(g) = crate::wahl::lesen(&z.stand) {
+                return fehler(409, &format!("wahl.json nicht lesbar: {g}"));
+            }
+            match crate::wahl::reihenfolge_setzen(&z.stand, &texte) {
+                Ok(()) => json_antwort(200, json!({"ok": true, "reihenfolge": texte})),
+                Err(g) => fehler(400, &g),
             }
         }
         _ => fehler(404, "nicht gefunden"),

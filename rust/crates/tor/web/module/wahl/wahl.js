@@ -15,6 +15,10 @@ class ChimeraWahl extends HTMLElement {
         .kopf { display:flex; justify-content:space-between; gap:.5rem; flex-wrap:wrap; align-items:baseline; }
         .klein { color:#8a90a2; font-size:.85rem; }
         ul { margin:.3rem 0 0; padding-left:1.1rem; font-size:.9rem; }
+        ul.kette { padding-left:0; list-style:none; }
+        ul.kette li { display:flex; align-items:center; gap:.3rem; padding:.15rem 0; }
+        ul.kette .verweis { flex:1; word-break:break-all; }
+        button.klein-knopf { padding:.1rem .4rem; font-size:.85rem; }
         button { background:#7aa2ff; color:#0b0d12; border:0; border-radius:.4rem; padding:.35rem .8rem; font:inherit; cursor:pointer; }
         button.stumm { background:#2b2f3b; color:#e6e8ee; }
         .ja { color:#7be0a0; } .nein { color:#8a90a2; }
@@ -22,7 +26,8 @@ class ChimeraWahl extends HTMLElement {
       </style>
       <h3>Wahl des Gateways</h3>
       <p class="klein">Diese Einstellungen gelten fuer alle Tueren: Chat, Telegram und Kommandozeile.</p>
-      <div id="liste"></div>`;
+      <div id="liste"></div>
+      <p id="meldung" class="fehler"></p>`;
     this.$ = (id) => this.shadowRoot.getElementById(id);
     this.laden();
   }
@@ -47,6 +52,7 @@ class ChimeraWahl extends HTMLElement {
       return;
     }
     const w = r.wahl || {};
+    this.ketteListe = (w.reihenfolge || []).filter((x) => typeof x === "string");
 
     // Teilstuecke (Strom)
     const strom = this.el("div", undefined, "karte");
@@ -66,18 +72,39 @@ class ChimeraWahl extends HTMLElement {
     strom.append(b, aus);
     liste.appendChild(strom);
 
-    // Modellkette
+    // Modellkette: sortieren und kuerzen. Gesendet wird immer die ganze Liste
+    // -- eine Stelle, die den Wert prueft (daten::feld_wert_pruefen).
     const reihe = this.el("div", undefined, "karte");
     reihe.appendChild(this.el("strong", "Modellkette"));
     const rl = (w.reihenfolge || []).filter((x) => typeof x === "string");
+    const kettenAusgabe = this.el("div", undefined, "klein");
     if (rl.length) {
       const ul = this.el("ul");
-      for (const x of rl) ul.appendChild(this.el("li", x));
+      ul.className = "kette";
+      rl.forEach((x, i) => {
+        const li = this.el("li");
+        li.appendChild(this.el("span", x, "verweis"));
+        const hoch = this.el("button", "▲", "stumm klein-knopf");
+        hoch.title = "nach oben";
+        hoch.disabled = i === 0;
+        hoch.onclick = () => this.kette(i, i - 1);
+        const runter = this.el("button", "▼", "stumm klein-knopf");
+        runter.title = "nach unten";
+        runter.disabled = i === rl.length - 1;
+        runter.onclick = () => this.kette(i, i + 1);
+        const weg = this.el("button", "✕", "gefahr klein-knopf");
+        weg.title = "aus der Kette nehmen";
+        weg.onclick = () => this.kette(i, -1);
+        li.append(hoch, runter, weg);
+        ul.appendChild(li);
+      });
       reihe.appendChild(ul);
     } else {
-      reihe.appendChild(this.el("p", "Keine Vorgabe: es gilt das erste Modell, das Werkzeuge kann.", "klein"));
+      reihe.appendChild(this.el("p", "Keine Vorgabe: es gilt das erstes Modell, das Werkzeuge kann.", "klein"));
     }
-    reihe.appendChild(this.el("p", "Reihenfolge und Modelle pflegst du im Modul Ollama; /model im Telegram schreibt in dieselbe Datei.", "klein"));
+    reihe.appendChild(kettenAusgabe);
+    reihe.appendChild(this.el("p", "Die Reihenfolge bestimmt, welches Modell zuerst gefragt wird. Ein Modell ohne Werkzeuge wird bei Aufgaben mit Werkzeugen übersprungen.", "klein"));
+    reihe.appendChild(this.el("p", "Angelegte Modelle pflegst du im Modul Ollama; /model im Telegram schreibt in dieselbe Datei.", "klein"));
     liste.appendChild(reihe);
 
     // Suchquellen
@@ -97,6 +124,24 @@ class ChimeraWahl extends HTMLElement {
     for (const m of r.meldungen || []) {
       liste.appendChild(this.el("p", m.quelle + ": " + m.text, "meldung"));
     }
+  }
+
+  // Sortieren und Kuerzen der Kette. Eine Handlung = eine ganze Liste:
+  // so gibt es keine Teilzustaende und nur eine Pruefung im Dienst.
+  async kette(von, nach) {
+    const liste = (this.ketteListe || []).slice();
+    if (von < 0 || von >= liste.length) return;
+    if (nach < 0) liste.splice(von, 1);
+    else if (nach < liste.length) [liste[von], liste[nach]] = [liste[nach], liste[von]];
+    else return;
+    const meldung = this.$("meldung");
+    meldung.textContent = "";
+    const r = await this.post("/api/wahl/reihenfolge", { reihenfolge: liste });
+    if (!r.ok) {
+      meldung.textContent = (r.fehler && r.fehler.text) || r.fehler || "Fehler";
+      return;
+    }
+    this.laden();
   }
 }
 customElements.define("chimera-wahl", ChimeraWahl);

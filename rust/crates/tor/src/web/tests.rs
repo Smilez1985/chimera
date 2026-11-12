@@ -732,7 +732,11 @@ fn der_stromschalter_braucht_ein_wahrheitswert() {
 fn ohne_modul_mit_dem_recht_ist_jeder_wahlweg_403() {
     let (z, p) = anbieter_zustand("wahl-403");
     let leer: Vec<Modul> = vec![];
-    for (m, pfad, body) in [("GET", "lesen", ""), ("POST", "strom", r#"{"an":true}"#)] {
+    for (m, pfad, body) in [
+        ("GET", "lesen", ""),
+        ("POST", "strom", r#"{"an":true}"#),
+        ("POST", "reihenfolge", r#"{"reihenfolge":["ollama/a"]}"#),
+    ] {
         let r = wahl_antwort(&z, &a(m, &format!("/api/wahl/{pfad}"), "", body.as_bytes()), pfad, &leer);
         assert_eq!(r.status, 403, "{pfad} ohne Modul");
     }
@@ -740,12 +744,16 @@ fn ohne_modul_mit_dem_recht_ist_jeder_wahlweg_403() {
     let nur_lesen = vec![modul("x", &["wahl-lesen"], true)];
     let r = wahl_antwort(&z, &a("POST", "/api/wahl/strom", "", br#"{"an":true}"#), "strom", &nur_lesen);
     assert_eq!(r.status, 403);
+    let r = wahl_antwort(&z, &a("POST", "/api/wahl/reihenfolge", "", br#"{"reihenfolge":["ollama/a"]}"#), "reihenfolge", &nur_lesen);
+    assert_eq!(r.status, 403);
     assert!(!p.wahl_datei().exists());
     // Und die Methode zaehlt: Lesen ist GET, Schalten ist POST.
     let beide = vec![modul("x", &["wahl-lesen", "wahl-schreiben"], true)];
     let r = wahl_antwort(&z, &a("POST", "/api/wahl/lesen", "", b""), "lesen", &beide);
     assert_eq!(r.status, 405);
     let r = wahl_antwort(&z, &a("GET", "/api/wahl/strom", "", b""), "strom", &beide);
+    assert_eq!(r.status, 405);
+    let r = wahl_antwort(&z, &a("GET", "/api/wahl/reihenfolge", "", b""), "reihenfolge", &beide);
     assert_eq!(r.status, 405);
 }
 
@@ -760,4 +768,41 @@ fn die_kaputte_wahl_wird_als_konflikt_gemeldet_und_nicht_ueberschrieben() {
     let r = api(&z, &c, "POST", "/api/wahl/strom", r#"{"an":true}"#);
     assert_eq!(r["_status"], 409);
     assert_eq!(std::fs::read_to_string(p.wahl_datei()).unwrap(), "{nicht json");
+}
+
+#[test]
+fn die_kette_laesst_sich_ueber_die_oberflaeche_sortieren() {
+    let (z, p) = anbieter_zustand("wahl-sortieren");
+    let c = anmelden(&z);
+    crate::daten::wahl_speichern(&p, &json!({"reihenfolge": ["ollama/a", "ollama/b"], "stream": true}))
+        .expect("schreiben");
+    let r = api(&z, &c, "POST", "/api/wahl/reihenfolge", r#"{"reihenfolge":["ollama/b","ollama/a"]}"#);
+    assert_eq!(r["_status"], 200);
+    assert_eq!(r["reihenfolge"][0], "ollama/b");
+    let w = crate::daten::wahl_laden(&p).unwrap();
+    assert_eq!(w["reihenfolge"], json!(["ollama/b", "ollama/a"]));
+    assert_eq!(w["stream"], true, "der Stromschalter bleibt stehen");
+    // Kuerzen: ein Eintrag faellt weg.
+    let r = api(&z, &c, "POST", "/api/wahl/reihenfolge", r#"{"reihenfolge":["ollama/a"]}"#);
+    assert_eq!(r["_status"], 200);
+    assert_eq!(crate::daten::wahl_laden(&p).unwrap()["reihenfolge"], json!(["ollama/a"]));
+}
+
+#[test]
+fn die_kette_nimmt_keinen_schrott_und_schreibt_dann_nichts() {
+    let (z, p) = anbieter_zustand("wahl-schrott");
+    let c = anmelden(&z);
+    crate::daten::wahl_speichern(&p, &json!({"reihenfolge": ["ollama/a"]})).expect("schreiben");
+    for body in [
+        r#"{"reihenfolge":["ollama/a","ollama/a"]}"#,
+        r#"{"reihenfolge":["ohne-schraegstrich"]}"#,
+        r#"{"reihenfolge":[1,2]}"#,
+        r#"{"reihenfolge":"ollama/a"}"#,
+        r#"{}"#,
+        "kein json",
+    ] {
+        let r = api(&z, &c, "POST", "/api/wahl/reihenfolge", body);
+        assert_eq!(r["ok"], false, "{body}");
+    }
+    assert_eq!(crate::daten::wahl_laden(&p).unwrap()["reihenfolge"], json!(["ollama/a"]));
 }

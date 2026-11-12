@@ -40,6 +40,19 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Am Gateway geprüft (`--dienst --socket` mit eigenen Pfaden):
   `--wahl` → `stream:false`, `--wahl-stream an` → Datei `stream: true`,
   Kette unberührt, `--wahl-stream vielleicht` → rc 2.
+- **Die Kette lässt sich sortieren und kürzen** (12.11., DESIGN 5h): Im
+  Modul `wahl` hat jeder Eintrag ▲/▼/✕; gesendet wird immer die **ganze**
+  Liste an `POST /api/wahl/reihenfolge` — keine Teilzustände, keine zweite
+  Prüfung. `daten::feld_wert_pruefen` ist aus `wahl_feld_setzen`
+  herausgezogen und prüft je Feld: `stream` muss `true`/`false` sein,
+  `reihenfolge` eine Liste gültiger Verweise `<anbieter-id>/<modell>`, ohne
+  Doppelte, höchstens 64 Einträge; jeder Verstoß nennt den Eintrag
+  (`wert_ungueltig`) und schreibt nichts. Die Web-Tür meldet eine kaputte
+  Datei weiterhin als 409, eine abgelehnte Eingabe als 400. Tests: 2 in
+  `wahl` (sortieren/kürzen, Schrott und Doppelte), 2 in `web::tests`
+  (Oberfläche sortiert, kein Schrott in der Datei); Gegenprobe
+  `rust/gegenprobe-wahl.sh` jetzt mit **7** Verfälschungen, alle rot
+  (Verweis, Doppelte, rohe Liste kamen dazu).
 - **Websuche, erste Stufe** (DESIGN Regel 5r): `op: web_suche` im Gateway
   (`suche.rs`) und das Werkzeug `web_suche` im Agenten. Quellen in
   `wahl.json` unter `suche.quellen`, in Reihenfolge: `searxng:<adresse>`
