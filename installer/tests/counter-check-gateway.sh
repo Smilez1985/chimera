@@ -176,7 +176,7 @@ mutation katalog-nicht-schreibbar \
 # M12b: Die Ablage der Freigaben fehlt (am Geraet 12.11. als "Read-only file
 # system" aufgefallen, weil die Datei direkt in config/ lag).
 mutation freigaben-nicht-schreibbar \
-	's| -\$CHIMERA_CONFIG/freigaben||' \
+	's|-\$CHIMERA_CONFIG/freigaben ||' \
 	"Dienst: config/freigaben fehlt in ReadWritePaths"
 
 # M13: Schluesselordner offen statt 700.
