@@ -256,6 +256,8 @@ pub enum Entscheidung {
     /// Modell zeigen oder waehlen (`/model`, `/model 3`, `/model name`).
     /// Wirkt auf `wahl.json` (Daten des Gateways), nicht auf die Sitzung.
     Modelle(String),
+    /// Strom an/aus (`/stream`, `/stream an|aus`).
+    Strom(String),
     /// In die Hauptsitzung fragen.
     Fragen(String),
 }
@@ -274,6 +276,10 @@ pub fn entscheiden(erlaubt: &BTreeSet<i64>, e: &Eingang) -> Entscheidung {
             "neu" | "reset" => return Entscheidung::Neu,
             // Was hinter dem Befehl steht (Nummer oder Name), geht mit --
             // leer heisst "zeig mir die Liste" (wie im Fork von openclawgotchi).
+            "stream" => {
+                let arg = t.splitn(2, char::is_whitespace).nth(1).unwrap_or("").trim().to_lowercase();
+                return Entscheidung::Strom(arg);
+            }
             "model" | "modelle" => {
                 let arg = t.splitn(2, char::is_whitespace).nth(1).unwrap_or("").trim();
                 return Entscheidung::Modelle(arg.to_string());
@@ -284,7 +290,7 @@ pub fn entscheiden(erlaubt: &BTreeSet<i64>, e: &Eingang) -> Entscheidung {
     Entscheidung::Fragen(e.text.clone())
 }
 
-pub const HILFE: &str = "Ich bin Chimera. Schreib einfach los.\n/status -- was gerade laeuft\n/neu -- Gespraech von vorn\n/model -- Modelle zeigen, /model 3 oder /model <name> waehlen";
+pub const HILFE: &str = "Ich bin Chimera. Schreib einfach los.\n/status -- was gerade laeuft\n/neu -- Gespraech von vorn\n/model -- Modelle zeigen, /model 3 oder /model <name> waehlen\n/stream -- Teilstuecke an/aus (/stream an, /stream aus)";
 pub const ABGEWIESEN: &str = "Wir kennen uns nicht. Ich rede nur mit Eingetragenen.";
 
 /// Die Modellliste als Text: die geltende Wahl ist markiert, ein gemessen
@@ -370,6 +376,7 @@ impl Tuer {
                 // Die Bestaetigung kommt als Ereignis `neu` ueber den Strom.
             }
             Entscheidung::Modelle(arg) => self.modell_befehl(e.chat_id, &arg),
+            Entscheidung::Strom(arg) => self.stream_befehl(e.chat_id, &arg),
             Entscheidung::Fragen(text) => {
                 self.api.tippt(e.chat_id);
                 if let Err(f) = sitzung::fragen(&self.sitzung, TUER, &text, &format!("tg-{}", e.update_id)) {
@@ -423,6 +430,45 @@ impl Tuer {
             return;
         }
         antworten(&self.api, chat, &format!("Gewaehlt: {name}. Es gilt ab der naechsten Frage."));
+    }
+
+    /// `/stream`: Teilstuecke an oder aus. Der Wert steht in `wahl.json` und
+    /// gilt fuer alle Tueren (GUI, CLI, Telegram) -- er ist eine Eigenschaft
+    /// des Gateways, nicht dieses Chats.
+    fn stream_befehl(&self, chat: i64, arg: &str) {
+        let stand = crate::dienst::Stand::neu();
+        let alt = crate::dienst::antworten(&json!({"op": "wahl_lesen"}), &stand)["wahl"].clone();
+        let jetzt = alt["stream"].as_bool().unwrap_or(false);
+        let neu = match arg {
+            "" => jetzt,
+            "an" | "ein" | "on" => true,
+            "aus" | "off" => false,
+            _ => {
+                antworten(&self.api, chat, "Verstehe ich nicht. /stream an oder /stream aus.");
+                return;
+            }
+        };
+        if arg.is_empty() {
+            antworten(&self.api, chat, if jetzt {
+                "Strom ist an: Teilstuecke werden zusammengesetzt."
+            } else {
+                "Strom ist aus: eine Antwort am Stueck."
+            });
+            return;
+        }
+        let mut w = alt.as_object().cloned().unwrap_or_default();
+        w.insert("stream".into(), json!(neu));
+        let r = crate::dienst::antworten(&json!({"op": "wahl_setzen", "wahl": Value::Object(w)}), &stand);
+        if r["ok"] != true {
+            let grund = r["fehler"]["text"].as_str().unwrap_or("ohne Grund");
+            antworten(&self.api, chat, &format!("Liess sich nicht speichern: {grund}"));
+            return;
+        }
+        antworten(&self.api, chat, if neu {
+            "Strom an. Es gilt ab der naechsten Frage."
+        } else {
+            "Strom aus. Es gilt ab der naechsten Frage."
+        });
     }
 
     /// Ein Ereignis des Stroms an alle Eingetragenen schicken.
@@ -758,6 +804,13 @@ mod tests {
             entscheiden(&liste(), &eingang(7, "/model@chimera_bot qwen2.5:14b")),
             Entscheidung::Modelle("qwen2.5:14b".into())
         );
+    }
+
+    #[test]
+    fn stream_wird_erkannt_mit_und_ohne_wert() {
+        assert_eq!(entscheiden(&liste(), &eingang(7, "/stream")), Entscheidung::Strom("".into()));
+        assert_eq!(entscheiden(&liste(), &eingang(7, "/stream an")), Entscheidung::Strom("an".into()));
+        assert_eq!(entscheiden(&liste(), &eingang(7, "/stream AUS")), Entscheidung::Strom("aus".into()));
     }
 
     #[test]

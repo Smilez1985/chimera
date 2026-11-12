@@ -152,6 +152,13 @@ fn chat(id: &str, anfrage: &Value, stand: &Stand) -> Value {
         Err(f) => return f,
     };
     let mut katalog = katalog_fuer(id, Some(&adr), stand);
+    // Der Schalter gehoert dem Nutzer (wahl.json); ein ausdruecklicher Wert im
+    // Auftrag gilt vor (Tests, spaetere Oberflaechen).
+    let mut anfrage = anfrage.clone();
+    if anfrage.get("stream").is_none() {
+        anfrage["stream"] = json!(stream_aus_wahl(stand));
+    }
+    let anfrage = &anfrage;
     let a = ollama::op_chat(Some(&adr), anfrage, &katalog, &bevorzugt(id, stand));
     let genannt = anfrage.get("modell").and_then(Value::as_str).is_some_and(|m| !m.is_empty());
     if a["fehler"]["code"] == "kein_modell" && !genannt && !katalog_gemessen(&katalog) {
@@ -167,6 +174,14 @@ fn chat(id: &str, anfrage: &Value, stand: &Stand) -> Value {
 /// Die Reihenfolge, die der Nutzer in `wahl.json` fuer diesen Anbieter
 /// vorgegeben hat (5h). Fehlt die Datei oder ist sie unlesbar, ist die Liste
 /// leer -- dann gilt die Reihenfolge des Servers (kein stiller Ausfall).
+/// Ist der Strom eingeschaltet? Steht in `wahl.json` (Vorgabe: aus).
+fn stream_aus_wahl(stand: &Stand) -> bool {
+    crate::daten::wahl_laden(&stand.daten)
+        .ok()
+        .and_then(|w| w["stream"].as_bool())
+        .unwrap_or(false)
+}
+
 fn bevorzugt(id: &str, stand: &Stand) -> Vec<String> {
     match crate::daten::wahl_laden(&stand.daten) {
         Ok(w) => crate::daten::bevorzugt(&w, id),
@@ -588,6 +603,39 @@ mod tests_anbieter {
         assert_eq!(a["modell"], "b", "{a}");
         assert_eq!(crate::daten::katalog_lesen(&p, "lan")["modelle"]["b"]["tools"], true);
         h.join().unwrap();
+    }
+
+    /// Der JSON-Koerper einer aufgezeichneten Anfrage (nicht die Kopfzeilen).
+    fn koerper_von(roh: &str) -> Value {
+        let i = roh.find("\r\n\r\n").expect("Kopfzeilen fehlen");
+        serde_json::from_str(&roh[i + 4..]).expect("Koerper ist kein JSON")
+    }
+
+    #[test]
+    fn der_strom_schalter_aus_wahl_json_gilt_fuer_den_chat() {
+        // Aus: kein "stream" im Koerper. An: "stream": true -- und dann muss
+        // die Antwort trotzdem als fertige Zeile ankommen (Teilstuecke).
+        let (b, h) = ollama::tests::server(vec![
+            (200, r#"{"message":{"content":"ok"}}"#.into()),
+        ]);
+        let (s, p) = stand_mit_daten("strom-aus", None);
+        crate::daten::anbieter_speichern(&p, "lan", &json!({"typ": "ollama", "bezeichnung": "L", "adresse": b.clone()})).unwrap();
+        let a = antworten(&json!({"op": "chat", "anbieter": "lan", "modell": "m", "prompt": "x"}), &s);
+        assert_eq!(a["ok"], true, "{a}");
+        let gesehen = h.join().unwrap();
+        let koerper = koerper_von(&gesehen[0]);
+        assert_eq!(koerper["stream"], false, "aus heisst aus");
+
+        let antwort = r#"{"message":{"content":"Hallo"},"done":false}
+{"message":{"content":" Welt"},"done":true,"eval_count":2}"#;
+        let (b2, h2) = ollama::tests::server(vec![(200, antwort.into())]);
+        let (s2, p2) = stand_mit_daten("strom-an", None);
+        crate::daten::anbieter_speichern(&p2, "lan", &json!({"typ": "ollama", "bezeichnung": "L", "adresse": b2})).unwrap();
+        crate::daten::wahl_speichern(&p2, &json!({"stream": true})).unwrap();
+        let a2 = antworten(&json!({"op": "chat", "anbieter": "lan", "modell": "m", "prompt": "x"}), &s2);
+        assert_eq!(a2["text"], "Hallo Welt", "Teilstuecke zusammengesetzt: {a2}");
+        let g2 = h2.join().unwrap();
+        assert_eq!(koerper_von(&g2[0])["stream"], true, "an heisst an");
     }
 
     #[test]

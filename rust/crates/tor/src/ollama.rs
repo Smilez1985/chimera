@@ -123,6 +123,103 @@ pub fn aufrufe_aus(roh: &Value) -> Vec<Value> {
     liste.into_iter().map(|(_, e)| e).collect()
 }
 
+/// Sammelt Ollamas NDJSON-Strom (Teilstuecke je Zeile) zu **einer** Antwort
+/// in der Form von `/api/chat` ohne Strom. Rein.
+///
+/// Teilstuecke tragen `message.content` (anhaengen) und `tool_calls` mit
+/// `index`; Argumente kommen je nach Fassung als Objekt (dann Felder
+/// zusammenfuehren) oder als Text (dann aneinanderhaengen und am Ende
+/// lesen). Gezaehlt wird, solange die Gegenstelle nicht `done` meldet.
+pub fn strom_sammeln(zeilen: impl Iterator<Item = String>) -> Value {
+    let mut text = String::new();
+    let mut calls: Vec<(i64, String, String, String)> = Vec::new(); // index, id, name, args
+    let (mut eingabe, mut ausgabe) = (None, None);
+    let mut fehler: Option<String> = None;
+    for z in zeilen {
+        let z = z.trim();
+        if z.is_empty() {
+            continue;
+        }
+        let Ok(v) = serde_json::from_str::<Value>(z) else { continue };
+        if let Some(e) = v["error"].as_str().filter(|e| !e.is_empty()) {
+            fehler = Some(e.to_string());
+            continue;
+        }
+        if let Some(t) = v["message"]["content"].as_str() {
+            text.push_str(t);
+        }
+        if let Some(liste) = v["message"]["tool_calls"].as_array() {
+            for (pos, c) in liste.iter().enumerate() {
+                let idx = c["function"]["index"].as_i64().unwrap_or(pos as i64);
+                let name = c["function"]["name"].as_str().unwrap_or("").to_string();
+                let id = c["id"].as_str().unwrap_or("").to_string();
+                let roh = &c["function"]["arguments"];
+                let stelle = match calls.iter().position(|(i, _, _, _)| *i == idx) {
+                    Some(s) => s,
+                    None => {
+                        calls.push((idx, String::new(), String::new(), String::new()));
+                        calls.len() - 1
+                    }
+                };
+                if !id.is_empty() {
+                    calls[stelle].1 = id;
+                }
+                if !name.is_empty() {
+                    // Der Name kann sich ueber Teilstuecke stueckeln -- anhaengen
+                    // ist fuer beide Faelle richtig (leer + "read" = "read").
+                    calls[stelle].2.push_str(&name);
+                }
+                match roh {
+                    Value::String(t) => calls[stelle].3.push_str(t),
+                    Value::Object(_) => {
+                        let alt = calls[stelle].3.clone();
+                        let mut m = argumente_als_objekt(&Value::String(alt));
+                        if m.len() == 1 && m.get("_roh").is_some() {
+                            m = Map::new();
+                        }
+                        for (k, w) in argumente_als_objekt(roh) {
+                            m.insert(k, w);
+                        }
+                        calls[stelle].3 = Value::Object(m).to_string();
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if let Some(n) = v["prompt_eval_count"].as_u64() {
+            eingabe = Some(n);
+        }
+        if let Some(n) = v["eval_count"].as_u64() {
+            ausgabe = Some(n);
+        }
+        if v["done"].as_bool() == Some(true) {
+            break;
+        }
+    }
+    if let Some(e) = fehler {
+        return json!({"__fehler": e});
+    }
+    calls.sort_by_key(|(i, _, _, _)| *i);
+    let aufrufe: Vec<Value> = calls
+        .into_iter()
+        .map(|(idx, id, name, args)| {
+            let mut c = json!({"id": id, "function": {
+                "index": idx, "name": name,
+                "arguments": Value::Object(argumente_als_objekt(&Value::String(args))),
+            }});
+            if id.is_empty() {
+                c.as_object_mut().unwrap().remove("id");
+            }
+            c
+        })
+        .collect();
+    json!({
+        "message": {"role": "assistant", "content": text, "tool_calls": aufrufe},
+        "prompt_eval_count": eingabe,
+        "eval_count": ausgabe,
+    })
+}
+
 /// Der Anfragekoerper fuer `/api/chat`. Rein, damit er sich pruefen laesst.
 pub fn chat_koerper(modell: &str, anfrage: &Value) -> Value {
     let mut nachrichten: Vec<Value> = Vec::new();
@@ -374,12 +471,26 @@ pub fn op_chat(basis: Option<&str>, anfrage: &Value, katalog: &Value, bevorzugt:
         }
     };
     let status = r.status().as_u16();
-    let roh: Value = match r.body_mut().read_json() {
-        Ok(v) => v,
-        Err(e) => {
-            return fehlerantwort("anbieter_fehler", &format!("Antwort nicht lesbar ({status}): {e}"))
+    // Strom (DESIGN, Regel „Aufrufe, nicht Text"): Teilstuecke sammeln, damit
+    // die Antwort danach dieselbe Form hat wie ohne Strom.
+    let roh: Value = if koerper["stream"].as_bool() == Some(true) && status == 200 {
+        use std::io::BufRead;
+        let leser = std::io::BufReader::new(r.body_mut().as_reader());
+        strom_sammeln(leser.lines().map_while(Result::ok))
+    } else {
+        match r.body_mut().read_json() {
+            Ok(v) => v,
+            Err(e) => {
+                return fehlerantwort(
+                    "anbieter_fehler",
+                    &format!("Antwort nicht lesbar ({status}): {e}"),
+                )
+            }
         }
     };
+    if let Some(grund) = roh.get("__fehler").and_then(Value::as_str) {
+        return fehlerantwort("anbieter_fehler", &format!("Ollama antwortet {status}: {grund}"));
+    }
     if status != 200 {
         let grund = roh["error"].as_str().unwrap_or("ohne Angabe");
         let code = if status == 429 { "ausgelastet" } else { "anbieter_fehler" };
@@ -626,6 +737,35 @@ pub(crate) mod tests {
         // Beides leer bleibt ein Fehler.
         let leer = chat_antwort(&json!({"message": {"content": ""}}), "m", "h");
         assert_eq!(leer["fehler"]["code"], "leer");
+    }
+
+    #[test]
+    fn der_strom_wird_zu_einer_antwort_mit_text_und_aufrufen() {
+        // Ollama schickt NDJSON: Text in Stuecken, Werkzeugaufruf ueber
+        // mehrere Zeilen (Argumente als Text), am Ende die Zaehler.
+        let zeilen = vec![
+            r#"{"message":{"content":"Ich se"},"done":false}"#.to_string(),
+            r#"{"message":{"content":"he nach."},"done":false}"#.to_string(),
+            r#"{"message":{"content":"","tool_calls":[{"function":{"index":0,"name":"read_file","arguments":"{\"path\": \"a"}}]},"done":false}"#.to_string(),
+            r#"{"message":{"content":"","tool_calls":[{"function":{"index":0,"arguments":".txt\"}"}}]},"done":false}"#.to_string(),
+            r#"{"message":{"content":""},"done":true,"prompt_eval_count":11,"eval_count":7}"#.to_string(),
+        ];
+        let v = strom_sammeln(zeilen.into_iter());
+        assert_eq!(v["message"]["content"], "Ich sehe nach.");
+        assert_eq!(v["message"]["tool_calls"][0]["function"]["name"], "read_file");
+        assert_eq!(v["message"]["tool_calls"][0]["function"]["arguments"]["path"], "a.txt");
+        assert_eq!(v["prompt_eval_count"], 11);
+        assert_eq!(v["eval_count"], 7);
+        // Und daraus wird eine normale Antwort (leerer Text ist erlaubt).
+        let a = chat_antwort(&v, "m", "h");
+        assert_eq!(a["ok"], true, "{a}");
+        assert_eq!(a["werkzeuge"][0]["argumente"]["path"], "a.txt");
+    }
+
+    #[test]
+    fn ein_fehler_im_strom_wird_nicht_als_antwort_verkauft() {
+        let v = strom_sammeln(vec![r#"{"error":"model requires more system memory"}"#.to_string()].into_iter());
+        assert_eq!(v["__fehler"], "model requires more system memory");
     }
 
     #[test]

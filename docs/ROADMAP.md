@@ -414,7 +414,8 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
          kostenlose Quellen (eigene SearXNG-Instanz, Ollama-Cloud-Konto),
          dann die mit Schlüssel (Tavily, Exa, Brave nur ohne Cache).
       4. **Schalter `stream`** in GUI, CLI und Telegram (`/stream`), Wert in
-         `wahl.json`; Vorgabe aus.
+         `wahl.json`; Vorgabe aus. **Gebaut 12.11.:** Gateway und Telegram,
+         Teilstücke werden zusammengesetzt. Offen: Schalter in GUI und CLI.
       Grenzen: `max_werkzeuge_je_turn` 8, `max_werkzeuge_je_runde` 3,
       Ergebnis auf 4000 Zeichen gekürzt (wie im Fork), Loop-Erkennung bei
       dreimal gleichem Aufruf.

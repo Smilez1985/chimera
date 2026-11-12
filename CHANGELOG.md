@@ -20,6 +20,17 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **`stream` ist umschaltbar** (DESIGN, Regel „Aufrufe, nicht Text“): Das
+  Gateway liest `stream` aus `wahl.json` (Vorgabe **aus**) und setzt den Wert
+  ausdrücklich — Ollama hat sonst `true`. Ist er an, werden die NDJSON-
+  Teilstücke zusammengesetzt (`ollama::strom_sammeln`: Text anhängen,
+  Werkzeugaufrufe je `index` zusammenführen, Argumente aus Objekt **oder**
+  Text, Fehlerzeile wird nicht als Antwort verkauft), und das Ergebnis geht
+  durch dieselbe Auswertung wie eine Antwort ohne Strom. In Telegram schaltet
+  `/stream an` bzw. `/stream aus`; `/stream` allein zeigt den Zustand.
+  Tests: 2 in `ollama` (Strom mit Aufruf über zwei Zeilen, Fehlerzeile),
+  1 in `dienst` (Schalter wirkt, Teilstücke kommen als ein Text an),
+  1 in `telegram` (Befehl mit und ohne Wert).
 - **Native Werkzeugaufrufe, Stufe 1 und 2** (DESIGN, Regel „Aufrufe, nicht
   Text“; smilez 12.11.): Das Gateway trägt `tools` in der Form von Ollama
   durch (`{"type":"function","function":{…}}`), setzt `stream` immer
