@@ -730,7 +730,7 @@ abends** (CHANGELOG: Host-Tabelle, `op: ssh`, Deskriptor-Übergabe, feste
 - [ ] **Gegenprobe am Gerät**: freigegebenes Ziel antwortet, nicht
       freigegebenes nicht; ein zweiter Host ist ohne neuen Auftrag nicht
       erreichbar; Hostschlüssel-Wechsel bricht ab; `-D`/`-L`/`-R` sind nicht
-      ausdrückbar (im Test festgenagelt, `rust/gegenprobe-ssh.sh` 16/16 rot).
+      ausdrückbar (im Test festgenagelt, `rust/gegenprobe-ssh.sh` 19/19 rot).
 - [ ] **Schlüssel ablegen**: der Nutzer legt die privaten Schlüssel nach
       `/opt/chimera/sohelper/ssh/keys/` (0700/0600) — der Installer legt nur
       den Ordner an. Eine bequemere Ablage (Schlüssel erzeugen, öffentlichen

@@ -70,7 +70,7 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   `binary-ablegen.sh`, `rust.yml`), Ordner `ssh/keys` (0700) beim Ausführer.
   Agent: Werkzeug `ssh` (`{host, befehl}`). Tests: cargo 356 (17 in `ssh`),
   `chimera-sohelper` 22 + 15 (5 in `ssh`), `test_agent` 103, Gegenprobe
-  `rust/gegenprobe-ssh.sh` 16/16 rot.
+  `rust/gegenprobe-ssh.sh` 19/19 rot.
 - **Host-Tabelle der Fernausführung** (12.11., erste Stufe von „fernausführen
   über `ssh`"): `rust/crates/tor/src/ssh.rs` hält die eine Wahrheit darüber,
   welche Hosts es gibt — Adresse, Nutzer, Port, Schlüssel**name**, Rechte je
