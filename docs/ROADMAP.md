@@ -689,6 +689,10 @@ Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
       verbindet; Ablehnung nennt Werkzeug, Ziel und Grund. Offen: **jeder
       weitere** ausgehende Weg braucht denselben Prüfpunkt — heute hat ihn
       nur `web_abruf`.
+- [ ] **Befund 12.11.:** `op: chat` am Gerät endet mit „Ollama lieferte eine
+      leere Antwort“, auch bei `list_dir` (also unabhängig vom Werkzeug) —
+      der Agenten-Weg für Werkzeuge ist damit **nicht** belegt. Erst hier
+      nachsehen, bevor `web_abruf` über den Chat geprüft wird.
 - [ ] **Stufe 3 — Prüfpunkt im Ausführer:** `chimera-sohelper` kennt die
       Freigaben für `run_command`/`ssh`; die harten Regeln aus `safety.py`
       bleiben unabhängig davon in Kraft.

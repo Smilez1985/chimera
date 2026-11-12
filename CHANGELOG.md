@@ -43,6 +43,14 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   `rust/gegenprobe-abruf.sh`: 7 Verfälschungen, alle rot. Lokal am eigenen
   Gateway belegt: ohne Freigabe `abruf_gesperrt`, nach Zeitfreigabe die Seite
   geholt, eigene Adresse abgelehnt, vier Zeilen im Freigabe-Protokoll.
+  **Am Gerät belegt** (Stand `25e56b8`, 13 Module ohne Fehler): ohne Freigabe
+  `abruf_gesperrt` für `example.com`, eigene Adresse `127.0.0.1` abgelehnt
+  („eigene Adresse“ im Klartext), nach Zeitfreigabe die Seite geholt
+  (HTTP 200, `Example Domain`), Protokoll mit allen vier Entscheidungen.
+  **Nicht belegt:** der Weg über den Agenten-Chat — ein `op: chat` mit
+  `web_abruf` *und* mit dem alten `list_dir` endet am Gerät mit „Ollama
+  lieferte eine leere Antwort“; das trifft jedes Werkzeug, ist also nicht
+  dieser Bauteil (ROADMAP, Phase 6).
 - **Freigabe je Werkzeug auf Zeit** (DESIGN, Regel „Freigabe je Werkzeug auf
   Zeit“; entschieden 12.11.): `config/freigaben.json` hält je Werkzeug
   (`web_suche`, `web_abruf`, `ssh`, `run_command`) einen Modus
