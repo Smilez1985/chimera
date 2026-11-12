@@ -683,6 +683,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   läuft, harte Regeln bei Freigabe), `test_tools_socket` 26 (u. a. „ohne
   Gateway wird nichts ausgeführt"), `test_sohelper_gleichheit` 45 mit
   Gateway-Attrappe; `counter-check-sohelper.sh` prüft die verlorene Gruppe.
+  **Am Gerät belegt** (Stand `02fb472`, 13 Module ohne Fehler): ohne Freigabe
+  `'ls' ist nicht freigegeben: keine Freigabe eingetragen`, mit Zeitfreigabe
+  läuft `ls` (über den Socket als Nutzer `chimera`, also über die neue
+  Gruppe), `sudo` bleibt gesperrt („'sudo' ist gesperrt"), Protokoll mit drei
+  Zeilen. Dabei aufgefallen und behoben: der CI-Gleichheitstest nahm das
+  **eingecheckte** Binary statt des frisch gebauten — er baut es jetzt selbst
+  (`02fb472`).
   **Offen:** `ssh` hat keinen Aufrufer (Netzprogramme lehnt der Ausführer
   ab) — der Freigabe-Eintrag ist dort bis auf Weiteres wirkungslos.
 - **`OLLAMA_MODEL` entfällt** (smilez, 11.11.): `provider/gateway.py` liest
