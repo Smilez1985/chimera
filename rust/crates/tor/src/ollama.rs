@@ -459,7 +459,18 @@ pub fn op_chat(basis: Option<&str>, anfrage: &Value, katalog: &Value, bevorzugt:
             }
         }
     };
-    let koerper = chat_koerper(&modell, anfrage);
+    // Werkzeuge nur an Modelle, die sie koennen: steht im Katalog
+    // `tools: false`, wird nichts mitgeschickt und das gesagt (DESIGN,
+    // Regel „Aufrufe, nicht Text"). `tools: null` heisst unbekannt -- dann
+    // geht es raus, wie bisher.
+    let mut anfrage = anfrage.clone();
+    let mut abgeschaltet: Option<&str> = None;
+    let kann_keine = katalog["modelle"][&modell]["tools"] == Value::Bool(false);
+    if kann_keine && anfrage.get("werkzeuge").is_some() {
+        anfrage.as_object_mut().unwrap().remove("werkzeuge");
+        abgeschaltet = Some("Das Modell ist gemessen ohne Werkzeuge -- keine Schemas mitgeschickt.");
+    }
+    let koerper = chat_koerper(&modell, &anfrage);
     let url = format!("{b}/api/chat");
     let mut r = match agent(AUFRUF).post(&url).send_json(&koerper) {
         Ok(r) => r,
@@ -496,7 +507,11 @@ pub fn op_chat(basis: Option<&str>, anfrage: &Value, katalog: &Value, bevorzugt:
         let code = if status == 429 { "ausgelastet" } else { "anbieter_fehler" };
         return fehlerantwort(code, &format!("Ollama antwortet {status}: {grund}"));
     }
-    chat_antwort(&roh, &modell, &host_von(b))
+    let mut a = chat_antwort(&roh, &modell, &host_von(b));
+    if let Some(grund) = abgeschaltet {
+        a["werkzeuge_abgeschaltet"] = json!(grund);
+    }
+    a
 }
 
 #[cfg(test)]
@@ -776,6 +791,33 @@ pub(crate) mod tests {
         let a = chat_antwort(&roh, "m", "h");
         assert_eq!(a["werkzeuge"][0]["name"], "erst");
         assert_eq!(a["werkzeuge"][1]["name"], "zweit");
+    }
+
+    #[test]
+    fn einem_modell_ohne_werkzeuge_werden_keine_schemas_geschickt() {
+        let w = json!([{"name": "list_dir", "description": "x",
+                        "parameters": {"type": "object", "properties": {}}}]);
+        // Gemessen ohne Werkzeuge: der Koerper enthaelt kein `tools`, und die
+        // Antwort sagt, warum (kein stilles Weglassen).
+        let (b, h) = server(vec![(200, r#"{"message":{"content":"ok"}}"#.into())]);
+        let katalog = json!({"modelle": {"blind": {"tools": false}}});
+        let a = op_chat(Some(&b), &json!({"modell": "blind", "prompt": "x", "werkzeuge": w}), &katalog, &[]);
+        assert_eq!(a["ok"], true, "{a}");
+        assert!(a["werkzeuge_abgeschaltet"].as_str().unwrap().contains("ohne Werkzeuge"), "{a}");
+        let gesehen = h.join().unwrap();
+        let roh = &gesehen[0];
+        let koerper: Value = serde_json::from_str(&roh[roh.find("\r\n\r\n").unwrap() + 4..]).unwrap();
+        assert!(koerper.get("tools").is_none(), "keine Schemas an ein Modell ohne Werkzeuge: {koerper}");
+
+        // Unbekannt (null) ist nicht "nein": da gehen sie raus.
+        let (b2, h2) = server(vec![(200, r#"{"message":{"content":"ok"}}"#.into())]);
+        let a2 = op_chat(Some(&b2), &json!({"modell": "m", "prompt": "x", "werkzeuge": w}),
+                         &json!({"modelle": {"m": {"tools": null}}}), &[]);
+        assert!(a2.get("werkzeuge_abgeschaltet").is_none(), "{a2}");
+        let g2 = h2.join().unwrap();
+        let roh2 = &g2[0];
+        let k2: Value = serde_json::from_str(&roh2[roh2.find("\r\n\r\n").unwrap() + 4..]).unwrap();
+        assert_eq!(k2["tools"][0]["function"]["name"], "list_dir");
     }
 
     #[test]

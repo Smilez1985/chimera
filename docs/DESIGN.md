@@ -1847,6 +1847,12 @@ zusammenkleben) bzw. ihrer Blockposition (Anthropic) abgearbeitet. Grenzen
 in `wahl.json`: `max_werkzeuge_je_turn` (Vorgabe 8) und
 `max_werkzeuge_je_runde` (Vorgabe 3).
 
+**Schemas nur an Modelle, die sie können** (gebaut 12.11.2026): Steht im
+Katalog `tools: false`, schickt das Gateway keine Werkzeuge mit und sagt es in
+der Antwort (`werkzeuge_abgeschaltet`); `tools: null` ist unbekannt und gilt
+nicht als „nein“. Damit braucht der Agent kein eigenes Wissen über das Modell —
+die Entscheidung bleibt dort, wo der Katalog liegt.
+
 **Wer führt aus:** unverändert der Agent, über `chimera-sohelper` (Regel
 „Wer prüft, führt aus"). Das Gateway trägt nur Schema und Aufruf hin und
 zurück; es führt **kein** Agentenwerkzeug aus. Ausnahmen sind die

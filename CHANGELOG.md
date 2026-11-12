@@ -44,6 +44,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Hostinger, Centron), und ein Auftrag an den Agenten („Suche im Netz …")
   kam mit zwei Treffern samt URL zurück — der Weg Agent → Gateway → Netz
   ist damit durchgängig belegt, ohne dass der Dienst selbst ins Netz geht.
+- **Werkzeugschemas gehen nur an Modelle, die sie können** (DESIGN, Regel
+  „Aufrufe, nicht Text“): Steht im Katalog `tools: false`, schickt das Gateway
+  keine `tools` mit und sagt das in der Antwort
+  (`werkzeuge_abgeschaltet`). `tools: null` (nicht gemessen) gilt nicht als
+  „nein“ — da gehen sie raus wie bisher. Test: beide Fälle samt
+  Anfragekörper.
 - **`stream` ist umschaltbar** (DESIGN, Regel „Aufrufe, nicht Text“): Das
   Gateway liest `stream` aus `wahl.json` (Vorgabe **aus**) und setzt den Wert
   ausdrücklich — Ollama hat sonst `true`. Ist er an, werden die NDJSON-
