@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
 PY = ROOT / "installer" / "lib" / "py" / "fortschritt.py"
 
 spec = importlib.util.spec_from_file_location("fortschritt", PY)
@@ -110,6 +111,41 @@ check("Befund: gelb ruhig", (_p.folge[0], len(_p.folge)), ((255, 180, 0), 1))
 _p = _LEDPanel()
 mod.led_abschluss(_p, "", "")
 check("ohne Ergebnis gilt als Erfolg", len(_p.folge), 1)
+
+print("== Warten auf die Anzeige (frische Installation) ==")
+# Ohne Anzeige zeichnet der Zeichner nicht blind, sondern fragt alle zwei
+# Sekunden erneut -- auf einer frischen Installation kommt der Treiber erst im
+# Anzeigeschritt. Am Geraet 12.11.2026 war genau das der Fehler.
+import tempfile as _tf  # noqa: E402
+from chimera.display import panel as _panel_mod  # noqa: E402
+
+_echt_open = _panel_mod.open_panel
+try:
+    with _tf.TemporaryDirectory() as td:
+        spur = str(Path(td) / "spur.log")
+        marke = Path(td) / "stop"
+
+        class _Panel:                      # ein "echtes" Panel im Test
+            width, height = 240, 280
+
+        antworten = [type("NullPanel", (), {})(), _Panel()]
+        _panel_mod.open_panel = lambda kind="auto", **kw: antworten.pop(0)
+        p = mod._warte_auf_panel(spur, marke=marke, pause=None)
+        check("zweiter Versuch nimmt das Panel", type(p).__name__, "_Panel")
+        text = Path(spur).read_text(encoding="utf-8")
+        check("das Warten wird vermerkt", "warte auf den Anzeigeschritt" in text, True)
+        check("und das Finden auch", "Zeichnen beginnt" in text, True)
+
+        # Lauf zu Ende, bevor eine Anzeige da ist: kein endloses Warten.
+        spur2 = str(Path(td) / "spur2.log")
+        marke.touch()
+        _panel_mod.open_panel = lambda kind="auto", **kw: type("NullPanel", (), {})()
+        p2 = mod._warte_auf_panel(spur2, marke=marke, pause=None)
+        check("ohne Anzeige bleibt es beim NullPanel", type(p2).__name__, "NullPanel")
+        check("und das wird gesagt",
+              "KEIN Panel" in Path(spur2).read_text(encoding="utf-8"), True)
+finally:
+    _panel_mod.open_panel = _echt_open
 
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")

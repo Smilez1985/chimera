@@ -913,6 +913,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
      blind zeichnet; der Installer warnt danach statt zu schweigen.
   Test: `_einstellung()` aus einem fremden Arbeitsverzeichnis (ohne
   `CHIMERA_ROOT` → `/`, mit `CHIMERA_ROOT` → Wurzel).
+- **Auf einer frischen Installation wartet der Zeichner auf die Anzeige**
+  (`fortschritt.py`, `_warte_auf_panel`; smilez 12.11.): Treiber und Erkennung
+  kommen erst im Anzeigeschritt, vorher gibt es kein Panel. Statt blind zu
+  zeichnen, fragt er alle 2 Sekunden erneut und beginnt, sobald
+  `state/anzeige` geschrieben ist; ohne Anzeige bis zum Laufende sagt er es
+  (Spur und stderr) und der Installer warnt. Beim **Update** steht die
+  Einstellung sofort da — dann wird nicht gewartet. 5 Tests.
 - **CI rot nach den nativen Werkzeugaufrufen** (`tests/test_gesicht_zustand.py`):
   Die Attrappe der Registry nahm kein `**kw` an, und ihr Antwort-Objekt hatte
   kein `werkzeuge` — beides ist jetzt Teil des Vertrags (ein Anbieter, der

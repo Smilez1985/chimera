@@ -217,6 +217,42 @@ def _spur(pfad: str, text: str) -> None:
         pass
 
 
+def _warte_auf_panel(log: str, *, marke, pause, max_warten: float = 1800.0):
+    """Panel oeffnen -- und auf eine frische Installation warten.
+
+    Solange keine Anzeige eingestellt ist (Treiber fehlt noch, Erkennung
+    laeuft), wird alle zwei Sekunden erneut gefragt. Abgebrochen wird, wenn
+    der Lauf zu Ende ist (Marke/Pause) oder wenn ``max_warten`` um ist --
+    dann gibt es kein Bild, und das wird gesagt, statt still zu bleiben.
+    """
+    from chimera.display.panel import open_panel
+
+    start = time.monotonic()
+    gemeldet = False
+    while True:
+        p = open_panel("auto")
+        if type(p).__name__ != "NullPanel":
+            if gemeldet:
+                _spur(log, "Anzeige: gefunden, Zeichnen beginnt")
+            return p
+        if not gemeldet:
+            _spur(log, "Anzeige: noch keine -- warte auf den Anzeigeschritt")
+            gemeldet = True
+        if marke is not None and marke.exists():
+            break
+        if pause is not None and pause.exists():
+            break
+        if time.monotonic() - start > max_warten:
+            break
+        time.sleep(2.0)
+    # Kein stiller Erfolg: ohne Panel gibt es keinen Balken. Das steht in
+    # der Spur und auf stderr, und der Installer warnt danach (12.11.2026).
+    _spur(log, "Anzeige: KEIN Panel -- der Balken ist nicht sichtbar")
+    print("Kein Panel geoeffnet -- der Fortschritt ist nicht sichtbar.",
+          file=sys.stderr)
+    return p
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="fortschritt")
     ap.add_argument("--datei", required=True)
@@ -253,13 +289,12 @@ def main(argv: list[str]) -> int:
 
         panel = NullPanel(width=240, height=280)
     else:
-        panel = open_panel("auto")
-    if type(panel).__name__ == "NullPanel":
-        # Kein stiller Erfolg: ohne Panel gibt es keinen Balken. Das steht in
-        # der Spur und auf stderr, und der Installer warnt danach (12.11.2026).
-        _spur(args.log, "Anzeige: KEIN Panel -- der Balken ist nicht sichtbar")
-        print("Kein Panel geoeffnet -- der Fortschritt ist nicht sichtbar.",
-              file=sys.stderr)
+        # Auf einer **frischen** Installation gibt es die Anzeige noch nicht,
+        # wenn der Installer startet: Treiber und Erkennung kommen erst im
+        # Anzeigeschritt. Also warten und es erneut versuchen, statt blind zu
+        # zeichnen (smilez, 12.11.2026: "der Treiber muss das regeln"). Bei
+        # einem Update steht die Einstellung sofort da -- dann kein Warten.
+        panel = _warte_auf_panel(args.log, marke=marke, pause=pause)
     ren = baue(getattr(panel, "width", 240), getattr(panel, "height", 280),
                Path(args.moods) if args.moods else Path("data/moods-builtin.json"))
 

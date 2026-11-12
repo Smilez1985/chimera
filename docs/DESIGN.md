@@ -4373,6 +4373,23 @@ Jede Backlight-Änderung wird mit Grund protokolliert („Hintergrundlicht: N %
 `/run/chimera-setup/zeichner.log`. Ohne diese Spur war „das Licht geht aus"
 nicht nachvollziehbar — jede Pause und jedes `close()` schaltet es aus.
 
+**Frische Installation und Update sind zwei Fälle** (smilez, 12.11.2026):
+- **Update:** Die Anzeige steht schon (`state/anzeige`, Treiber installiert),
+  der Zeichner öffnet sie sofort. Das Gesicht `UPDATE` kommt aus
+  `data/moods-builtin.json` — es muss nichts nachinstalliert werden.
+- **Frische Installation:** Es gibt weder Einstellung noch Treiber. Der
+  Zeichner zeichnet deshalb **nicht blind**, sondern fragt alle zwei Sekunden
+  erneut; sobald der Anzeigeschritt Treiber und Erkennung hinter sich hat und
+  `state/anzeige` geschrieben ist, beginnt er. Findet er bis zum Ende des
+  Laufs keine Anzeige (Marke/Pause) oder nach 30 Minuten keine, sagt er es:
+  Spur `KEIN Panel`, stderr, und der Installer warnt.
+
+**Der Pfad der Einstellung hängt nie am Arbeitsverzeichnis:** gelesen wird
+`$CHIMERA_ROOT/opt/chimera/state/anzeige` mit `CHIMERA_ROOT` = `/`, wenn nicht
+gesetzt. Vorher stand dort ein leerer Vorgabewert, der Pfad war relativ — der
+Zeichner des Installers startet aus seinem eigenen Verzeichnis und zeichnete
+deshalb monatelang in ein `NullPanel` (am Gerät gefunden, 12.11.2026).
+
 **Grenzen:** Bei `--only` und beim Boot-Abgleich gibt es keinen Balken (nichts
 zu verteilen, bzw. der Dienst läuft weiter). Ohne Anzeige oder ohne Python wird
 das gemeldet, nicht verschwiegen.
