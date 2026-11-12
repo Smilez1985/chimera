@@ -74,14 +74,22 @@ fortschritt_start() {
 		warn "Anzeige: kein Python gefunden -- kein Fortschrittsbalken."; return 0; }
 	_fs_skript="${_HERE:-${HERE:-.}}/lib/py/fortschritt.py"
 	[ -f "$_fs_skript" ] || { warn "Anzeige: $_fs_skript fehlt."; return 0; }
+	# Die Anzeige ausdruecklich mitgeben. Der Zeichner laeuft aus dem
+	# Installer-Verzeichnis; ohne diese Zeile sucht er die Einstellung relativ
+	# zu seinem Arbeitsverzeichnis und zeichnet blind (am Geraet 12.11.2026:
+	# der Balken lief, war aber nie zu sehen).
+	_fs_anzeige="${CHIMERA_ANZEIGE:-}"
+	if [ -z "$_fs_anzeige" ] && [ -f "$(rootpath "$CHIMERA_STATE")/anzeige" ]; then
+		_fs_anzeige="$(tr -d ' \t\r\n' <"$(rootpath "$CHIMERA_STATE")/anzeige" 2>/dev/null)"
+	fi
 	_fs_src="${CHIMERA_DISPLAY_SRC:-${CHIMERA_SOURCE:-}/src}"
 	_fs_moods="${CHIMERA_SOURCE:-}/data/moods-builtin.json"
 	if command -v setsid >/dev/null 2>&1; then
-		PYTHONPATH="$_fs_src" PYTHONDONTWRITEBYTECODE=1 \
+		PYTHONPATH="$_fs_src" PYTHONDONTWRITEBYTECODE=1 CHIMERA_ANZEIGE="$_fs_anzeige" \
 			setsid "$_fs_py" "$_fs_skript" --datei "$FORT_DATEI" \
 			--marke "$FORT_MARKE" --pause "$FORT_PAUSE" --spur "$FORT_SPUR" --wieder "$FORT_WIEDER" --log "$FORT_LOG" --ergebnis "$FORT_ERGEBNIS" --moods "$_fs_moods" --text "${CHIMERA_FORTSCHRITT_TEXT:-Updating...}" </dev/null >/dev/null 2>&1 &
 	else
-		PYTHONPATH="$_fs_src" PYTHONDONTWRITEBYTECODE=1 \
+		PYTHONPATH="$_fs_src" PYTHONDONTWRITEBYTECODE=1 CHIMERA_ANZEIGE="$_fs_anzeige" \
 			"$_fs_py" "$_fs_skript" --datei "$FORT_DATEI" \
 			--marke "$FORT_MARKE" --pause "$FORT_PAUSE" --spur "$FORT_SPUR" --wieder "$FORT_WIEDER" --log "$FORT_LOG" --ergebnis "$FORT_ERGEBNIS" --moods "$_fs_moods" --text "${CHIMERA_FORTSCHRITT_TEXT:-Updating...}" </dev/null >/dev/null 2>&1 &
 	fi
@@ -91,6 +99,8 @@ fortschritt_start() {
 	_fs_pid="$(cat "$FORT_PID" 2>/dev/null || echo "")"
 	if [ -n "$_fs_pid" ] && kill -0 "$_fs_pid" 2>/dev/null; then
 		info "Anzeige: Fortschrittsbalken laeuft (PID $_fs_pid, $_FORT_SCHON/$_FORT_GESAMT)."
+	elif grep -q "KEIN Panel" "$FORT_LOG" 2>/dev/null; then
+		warn "Anzeige: Zeichner laeuft, hat aber kein Panel -- der Balken ist nicht sichtbar."
 	else
 		warn "Anzeige: Zeichner nicht gestartet -- es gibt keinen Balken."
 	fi

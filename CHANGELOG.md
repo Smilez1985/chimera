@@ -896,6 +896,23 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Das Fortschrittsgesicht des Installers war nie zu sehen** (am Gerät
+  gefunden, 12.11.): `_einstellung()` in `display/panel.py` baute den Pfad als
+  `Path(os.environ.get("CHIMERA_ROOT", "")) / "opt/chimera/state/anzeige"` —
+  ohne `CHIMERA_ROOT` ist das ein **relativer** Pfad, also abhängig vom
+  Arbeitsverzeichnis. Der Zeichner des Installers startet aus seinem
+  Verzeichnis, fand `state/anzeige` nicht und zeichnete in ein `NullPanel`:
+  Balken „lief" (Spur: `gezeichnet 0.0 … 1.0`, PID lebte) und war trotzdem
+  unsichtbar. Drei Änderungen:
+  1. `_einstellung()` nimmt `/` als Wurzel, wenn `CHIMERA_ROOT` nicht gesetzt
+     ist, und nennt den Pfad im Grund („…nicht lesbar", „…ist leer").
+  2. `installer/lib/fortschritt.sh` gibt `CHIMERA_ANZEIGE` ausdrücklich mit
+     (aus der Umgebung, sonst aus `state/anzeige`) — der Installer läuft damit
+     auch dann richtig, wenn eine ältere `panel.py` auf dem Gerät liegt.
+  3. Der Zeichner schreibt „KEIN Panel" in die Spur und auf stderr, wenn er
+     blind zeichnet; der Installer warnt danach statt zu schweigen.
+  Test: `_einstellung()` aus einem fremden Arbeitsverzeichnis (ohne
+  `CHIMERA_ROOT` → `/`, mit `CHIMERA_ROOT` → Wurzel).
 - **CI rot nach den nativen Werkzeugaufrufen** (`tests/test_gesicht_zustand.py`):
   Die Attrappe der Registry nahm kein `**kw` an, und ihr Antwort-Objekt hatte
   kein `werkzeuge` — beides ist jetzt Teil des Vertrags (ein Anbieter, der

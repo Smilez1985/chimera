@@ -35,20 +35,29 @@ __all__ = ["NullPanel", "Panel", "Profil", "to_rgb565", "open_panel"]
 
 
 def _einstellung() -> tuple[str | None, str]:
-    """(typ, quelle) der eingestellten Anzeige, ohne zu raten."""
+    """(typ, quelle) der eingestellten Anzeige, ohne zu raten.
+
+    Die Wurzel ist **"/"**, es sei denn ein Test setzt ``CHIMERA_ROOT``.
+    Vorher stand hier ``os.environ.get("CHIMERA_ROOT", "")`` — dann hing der
+    Pfad am Arbeitsverzeichnis des Aufrufers. Am Gerät (12.11.2026) war das
+    der Grund, warum das Fortschrittsgesicht des Installers nie zu sehen war:
+    der Zeichner startete aus ``/tmp``, sah die Einstellung nicht und zeichnete
+    in ein NullPanel.
+    """
     env = os.environ.get("CHIMERA_ANZEIGE", "").strip()
     if env:
         return env, "CHIMERA_ANZEIGE"
-    pfad = Path(os.environ.get("CHIMERA_ROOT", "")) / "opt/chimera/state/anzeige"
+    wurzel = os.environ.get("CHIMERA_ROOT") or "/"
+    pfad = Path(wurzel) / "opt/chimera/state/anzeige"
     try:
         wert = pfad.read_text(encoding="utf-8").strip()
     except PermissionError:
-        return None, "state/anzeige unlesbar (Dienstnutzer darf state/ nicht lesen)"
+        return None, f"{pfad} unlesbar (Dienstnutzer darf state/ nicht lesen)"
     except OSError:
-        return None, "keine Einstellung"
+        return None, f"{pfad} nicht lesbar"
     if wert:
         return wert, "state/anzeige"
-    return None, "keine Einstellung"
+    return None, f"{pfad} ist leer"
 
 
 def open_panel(kind: str = "auto", **kw) -> Panel:

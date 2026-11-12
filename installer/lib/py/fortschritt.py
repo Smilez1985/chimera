@@ -254,6 +254,12 @@ def main(argv: list[str]) -> int:
         panel = NullPanel(width=240, height=280)
     else:
         panel = open_panel("auto")
+    if type(panel).__name__ == "NullPanel":
+        # Kein stiller Erfolg: ohne Panel gibt es keinen Balken. Das steht in
+        # der Spur und auf stderr, und der Installer warnt danach (12.11.2026).
+        _spur(args.log, "Anzeige: KEIN Panel -- der Balken ist nicht sichtbar")
+        print("Kein Panel geoeffnet -- der Fortschritt ist nicht sichtbar.",
+              file=sys.stderr)
     ren = baue(getattr(panel, "width", 240), getattr(panel, "height", 280),
                Path(args.moods) if args.moods else Path("data/moods-builtin.json"))
 

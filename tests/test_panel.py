@@ -52,6 +52,35 @@ except ValueError:
 
 check("auto ohne Gerät", type(open_panel("auto")).__name__, "NullPanel")
 
+# Die Einstellung haengt NICHT am Arbeitsverzeichnis (am Geraet 12.11.2026:
+# der Installer-Zeichner startete aus /tmp und sah state/anzeige nie).
+import os, tempfile  # noqa: E402
+from pathlib import Path  # noqa: E402
+from chimera.display.panel import _einstellung  # noqa: E402
+
+_alt_cwd = os.getcwd()
+_alt_env = {k: os.environ.get(k) for k in ("CHIMERA_ROOT", "CHIMERA_ANZEIGE")}
+try:
+    os.environ.pop("CHIMERA_ANZEIGE", None)
+    os.environ.pop("CHIMERA_ROOT", None)
+    with tempfile.TemporaryDirectory() as td:
+        (Path(td) / "opt/chimera/state").mkdir(parents=True)
+        os.chdir(td)
+        typ, quelle = _einstellung()
+        check("ohne CHIMERA_ROOT gilt / -- nicht das Arbeitsverzeichnis", typ, None)
+        check("und der Grund nennt den Pfad", str(quelle).startswith("/opt/chimera/state/anzeige"), True)
+        # Mit erfundener Wurzel (Tests) gilt die Wurzel.
+        os.environ["CHIMERA_ROOT"] = td
+        (Path(td) / "opt/chimera/state/anzeige").write_text("whisplay\n")
+        check("CHIMERA_ROOT wird geehrt", _einstellung(), ("whisplay", "state/anzeige"))
+finally:
+    os.chdir(_alt_cwd)
+    for k, v in _alt_env.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+
 print("== Tempo ==")
 p2 = NullPanel()
 frame = Image.new("RGB", (240, 280), (30, 180, 220))
