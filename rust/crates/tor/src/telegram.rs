@@ -437,8 +437,7 @@ impl Tuer {
     /// des Gateways, nicht dieses Chats.
     fn stream_befehl(&self, chat: i64, arg: &str) {
         let stand = crate::dienst::Stand::neu();
-        let alt = crate::dienst::antworten(&json!({"op": "wahl_lesen"}), &stand)["wahl"].clone();
-        let jetzt = alt["stream"].as_bool().unwrap_or(false);
+        let jetzt = crate::wahl::strom_an(&stand);
         let neu = match arg {
             "" => jetzt,
             "an" | "ein" | "on" => true,
@@ -456,11 +455,7 @@ impl Tuer {
             });
             return;
         }
-        let mut w = alt.as_object().cloned().unwrap_or_default();
-        w.insert("stream".into(), json!(neu));
-        let r = crate::dienst::antworten(&json!({"op": "wahl_setzen", "wahl": Value::Object(w)}), &stand);
-        if r["ok"] != true {
-            let grund = r["fehler"]["text"].as_str().unwrap_or("ohne Grund");
+        if let Err(grund) = crate::wahl::strom_setzen(&stand, neu) {
             antworten(&self.api, chat, &format!("Liess sich nicht speichern: {grund}"));
             return;
         }

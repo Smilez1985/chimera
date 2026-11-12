@@ -1,0 +1,9 @@
+{
+  "name": "wahl",
+  "titel": {"de": "Wahl", "en": "Choice"},
+  "symbol": "🎚️",
+  "reihenfolge": 50,
+  "einstieg": "wahl.js",
+  "element": "chimera-wahl",
+  "rechte": ["wahl-lesen", "wahl-schreiben"]
+}

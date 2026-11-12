@@ -20,6 +20,26 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Die Wahl ist überall schaltbar — GUI und Kommandozeile** (DESIGN 5h):
+  Neues eingebautes Web-Modul `wahl` (`web/module/wahl/`, Rechte
+  `wahl-lesen`/`wahl-schreiben`) zeigt Teilstücke, Modellkette und
+  Suchquellen und schaltet den Strom über `POST /api/wahl/strom`. Die
+  Kommandozeile bekommt `chimera-tor --wahl [PFAD]` und
+  `chimera-tor --wahl-stream an/aus [PFAD]`. **Eine Stelle für „ein Feld
+  setzen":** `daten::wahl_feld_setzen` prüft Feldnamen (`stream`, sonst
+  `feld_unbekannt`) und Typ (`true`/`false`, sonst `wert_ungueltig`), liest
+  die Datei und erhält alle anderen Felder; `wahl.rs` ist die dünne Hülle für
+  Telegram und Web, damit keine Tür ihre eigene Fassung von „lesen, ändern,
+  schreiben" hat. Eine kaputte `wahl.json` wird gemeldet (`wahl_kaputt`,
+  HTTP 409) und **nicht** überschrieben. Tests: 5 in `wahl` (Statustest,
+  Erhalt der Kette, fremdes Feld, falscher Typ, kaputte Datei) und 5 in
+  `web::tests` (Anzeigen, Speichern, Typ, Recht/Methode, Konflikt).
+  Gegenprobe `rust/gegenprobe-wahl.sh`: 4 Verfälschungen, alle rot; die erste
+  Fassung der Gegenprobe war wertlos (Filter `wahl::` traf die Web-Tests
+  nicht) — das fiel beim Fahren auf, nicht beim Lesen.
+  Am Gateway geprüft (`--dienst --socket` mit eigenen Pfaden):
+  `--wahl` → `stream:false`, `--wahl-stream an` → Datei `stream: true`,
+  Kette unberührt, `--wahl-stream vielleicht` → rc 2.
 - **Websuche, erste Stufe** (DESIGN Regel 5r): `op: web_suche` im Gateway
   (`suche.rs`) und das Werkzeug `web_suche` im Agenten. Quellen in
   `wahl.json` unter `suche.quellen`, in Reihenfolge: `searxng:<adresse>`

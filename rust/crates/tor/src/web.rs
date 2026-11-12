@@ -60,6 +60,11 @@ const EINGEBAUT: &[Eingebaut] = &[
         manifest: include_str!("../web/module/ollama/manifest.json"),
         dateien: &[("ollama.js", "text/javascript; charset=utf-8", include_str!("../web/module/ollama/ollama.js"))],
     },
+    Eingebaut {
+        name: "wahl",
+        manifest: include_str!("../web/module/wahl/manifest.json"),
+        dateien: &[("wahl.js", "text/javascript; charset=utf-8", include_str!("../web/module/wahl/wahl.js"))],
+    },
 ];
 
 
@@ -138,7 +143,7 @@ pub struct Modul {
 /// eintragen**, wenn das Gateway ein neues Recht kennt. Ein Recht, das nicht in
 /// dieser Liste steht, verwirft das Modul -- sonst wuerde ein Tippfehler im
 /// Manifest still ein wirkungsloses Recht verlangen.
-pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben"];
+pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben", "wahl-lesen", "wahl-schreiben"];
 
 fn name_ok(s: &str) -> bool {
     !s.is_empty() && s.len() <= 32 && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
@@ -456,6 +461,7 @@ pub fn behandle(z: &Zustand, a: &Anfrage) -> Antwort {
         (_, p) if p.starts_with("/api/chat/") => chat_api(z, a, &p["/api/chat/".len()..]),
         (_, p) if p.starts_with("/api/status/") => status_api(z, a, &p["/api/status/".len()..]),
         (_, p) if p.starts_with("/api/anbieter/") => anbieter_api(z, a, &p["/api/anbieter/".len()..]),
+        (_, p) if p.starts_with("/api/wahl/") => wahl_api(z, a, &p["/api/wahl/".len()..]),
         _ => fehler(404, "nicht gefunden"),
     }
 }
@@ -573,8 +579,54 @@ fn anbieter_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort
     json_antwort(200, r)
 }
 
-fn chat_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
-    // Das Recht steht im Manifest; das Gateway reicht nur durch, was eingetragen ist.
+/// Die Wahl des Gateways als eigene Tuer (Modul `wahl`): Teilstuecke an/aus
+/// und die Modellreihenfolge zum Ansehen. Geschrieben wird nur ueber
+/// `daten::wahl_feld_setzen` -- ein Feld, ein Ort (siehe `wahl.rs`).
+fn wahl_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
+    let (m, _) = module_erkennen(z.modul_dir.as_deref());
+    wahl_antwort(z, a, was, &m)
+}
+
+/// Wie `wahl_api`, mit der Modulliste von aussen (damit ein Test den Fall
+/// „kein Modul hat das Recht" pruefen kann).
+fn wahl_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort {
+    let (recht, nur_post) = match was {
+        "lesen" => ("wahl-lesen", false),
+        "strom" => ("wahl-schreiben", true),
+        _ => return fehler(404, "nicht gefunden"),
+    };
+    if !schreibrecht_vergeben(m, recht) {
+        return fehler(403, &format!("kein Modul hat das Recht '{recht}'"));
+    }
+    if nur_post != (a.methode == "POST") {
+        return fehler(405, "Methode nicht erlaubt");
+    }
+    match was {
+        "lesen" => match crate::wahl::lesen(&z.stand) {
+            Ok(w) => json_antwort(
+                200,
+                json!({"ok": true, "strom": w["stream"].as_bool().unwrap_or(false), "wahl": w}),
+            ),
+            Err(g) => fehler(409, &format!("wahl.json nicht lesbar: {g}")),
+        },
+        "strom" => {
+            let v: Value = match serde_json::from_slice(a.body) {
+                Ok(v @ Value::Object(_)) => v,
+                _ => return fehler(400, "kein JSON-Objekt"),
+            };
+            let Some(an) = v["an"].as_bool() else {
+                return fehler(400, "Feld \"an\" fehlt (true oder false)");
+            };
+            match crate::wahl::strom_setzen(&z.stand, an) {
+                Ok(()) => json_antwort(200, json!({"ok": true, "strom": an})),
+                Err(g) => fehler(409, &format!("nicht gespeichert: {g}")),
+            }
+        }
+        _ => fehler(404, "nicht gefunden"),
+    }
+}
+
+fn chat_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {    // Das Recht steht im Manifest; das Gateway reicht nur durch, was eingetragen ist.
     let (m, _) = module_erkennen(z.modul_dir.as_deref());
     if !hat_recht(&m, "chat", "chat") {
         return fehler(403, "Modul chat hat das Recht 'chat' nicht");

@@ -158,7 +158,7 @@ fn ok_manifest(n: &str) -> String {
 fn das_eingebaute_chatmodul_ist_gueltig_und_erkannt() {
     let (m, f) = module_erkennen(None);
     assert!(f.is_empty(), "{f:?}");
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "ollama", "status"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "ollama", "wahl", "status"]);
     assert!(m.iter().all(|x| x.eingebaut));
 }
 
@@ -169,12 +169,12 @@ fn ein_neues_verzeichnis_erscheint_im_menue_ohne_codeaenderung() {
     std::fs::write(d.join("zusatz/manifest.json"), ok_manifest("zusatz")).unwrap();
     let (m, f) = module_erkennen(Some(&d));
     assert!(f.is_empty(), "{f:?}");
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "ollama", "status", "zusatz"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "ollama", "wahl", "status", "zusatz"]);
     let z = zustand(Some(d), "/x".into());
     let c = anmelden(&z);
     let r = behandle(&z, &a("GET", "/api/module", &c, b""));
     let v: Value = serde_json::from_slice(&r.body).unwrap();
-    assert_eq!(v["module"].as_array().unwrap().len(), 4);
+    assert_eq!(v["module"].as_array().unwrap().len(), 5);
 }
 
 #[test]
@@ -188,7 +188,7 @@ fn ein_kaputtes_manifest_verwirft_nur_dieses_modul_und_wird_gemeldet() {
     std::fs::create_dir_all(d.join("leer")).unwrap(); // Verzeichnis ohne Manifest
     let (m, f) = module_erkennen(Some(&d));
     let namen: Vec<_> = m.iter().map(|x| x.name.as_str()).collect();
-    assert_eq!(namen, vec!["chat", "ollama", "status", "gut"]);
+    assert_eq!(namen, vec!["chat", "ollama", "wahl", "status", "gut"]);
     assert_eq!(f.len(), 4, "{f:?}");
 }
 
@@ -198,7 +198,7 @@ fn ein_nachgelegtes_modul_ersetzt_kein_eingebautes() {
     std::fs::create_dir_all(d.join("chat")).unwrap();
     std::fs::write(d.join("chat/manifest.json"), ok_manifest("chat")).unwrap();
     let (m, f) = module_erkennen(Some(&d));
-    assert_eq!(m.len(), 3);
+    assert_eq!(m.len(), 4);
     assert!(m.iter().all(|x| x.eingebaut));
     assert_eq!(f.len(), 1);
 }
@@ -212,7 +212,7 @@ fn die_reihenfolge_kommt_aus_dem_manifest() {
             format!(r#"{{"name":"{n}","titel":"T","element":"x-{n}","einstieg":"a.js","rechte":[],"reihenfolge":{r}}}"#)).unwrap();
     }
     let (m, _) = module_erkennen(Some(&d));
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["b-zuerst", "chat", "ollama", "status", "a-zuletzt"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["b-zuerst", "chat", "ollama", "wahl", "status", "a-zuletzt"]);
 }
 
 #[test]
@@ -683,4 +683,81 @@ fn ohne_modul_mit_dem_recht_ist_jeder_anbieterweg_403() {
     let r = anbieter_antwort(&z, &a("POST", "/api/anbieter/setzen", "", br#"{"id":"a","anbieter":{"typ":"ollama","bezeichnung":"x"}}"#), "setzen", &nur_lesen);
     assert_eq!(r.status, 403);
     assert!(!p.anbieter_dir().join("a.json").exists());
+}
+
+// --- Wahl (eigenes Modul, eigene Tuere) ---
+
+#[test]
+fn die_wahl_zeigt_strom_und_kette() {
+    let (z, p) = anbieter_zustand("wahl-zeigen");
+    let c = anmelden(&z);
+    crate::daten::wahl_speichern(&p, &json!({"reihenfolge": ["ollama/qwen2.5:14b"], "stream": true}))
+        .expect("schreiben");
+    let r = api(&z, &c, "GET", "/api/wahl/lesen", "");
+    assert_eq!(r["_status"], 200);
+    assert_eq!(r["strom"], true);
+    assert_eq!(r["wahl"]["reihenfolge"][0], "ollama/qwen2.5:14b");
+}
+
+#[test]
+fn der_stromschalter_wird_gespeichert_und_erhaelt_die_kette() {
+    let (z, p) = anbieter_zustand("wahl-strom");
+    let c = anmelden(&z);
+    crate::daten::wahl_speichern(&p, &json!({"reihenfolge": ["ollama/a"]})).expect("schreiben");
+    let r = api(&z, &c, "POST", "/api/wahl/strom", r#"{"an":true}"#);
+    assert_eq!(r["_status"], 200);
+    assert_eq!(r["strom"], true);
+    // Die Datei: Strom an, Kette unberuehrt.
+    let w = crate::daten::wahl_laden(&p).expect("lesen");
+    assert_eq!(w["stream"], true);
+    assert_eq!(w["reihenfolge"][0], "ollama/a");
+    // Wieder aus.
+    let r = api(&z, &c, "POST", "/api/wahl/strom", r#"{"an":false}"#);
+    assert_eq!(r["strom"], false);
+    assert_eq!(crate::daten::wahl_laden(&p).unwrap()["stream"], false);
+}
+
+#[test]
+fn der_stromschalter_braucht_ein_wahrheitswert() {
+    let (z, p) = anbieter_zustand("wahl-typ");
+    let c = anmelden(&z);
+    for body in [r#"{"an":"an"}"#, r#"{"an":1}"#, r#"{}"#, "kein json"] {
+        let r = api(&z, &c, "POST", "/api/wahl/strom", body);
+        assert_eq!(r["ok"], false, "{body}");
+    }
+    assert!(!p.wahl_datei().exists(), "nichts geschrieben");
+}
+
+#[test]
+fn ohne_modul_mit_dem_recht_ist_jeder_wahlweg_403() {
+    let (z, p) = anbieter_zustand("wahl-403");
+    let leer: Vec<Modul> = vec![];
+    for (m, pfad, body) in [("GET", "lesen", ""), ("POST", "strom", r#"{"an":true}"#)] {
+        let r = wahl_antwort(&z, &a(m, &format!("/api/wahl/{pfad}"), "", body.as_bytes()), pfad, &leer);
+        assert_eq!(r.status, 403, "{pfad} ohne Modul");
+    }
+    // Nur das Leserecht: der Schalter bleibt zu, nichts wird geschrieben.
+    let nur_lesen = vec![modul("x", &["wahl-lesen"], true)];
+    let r = wahl_antwort(&z, &a("POST", "/api/wahl/strom", "", br#"{"an":true}"#), "strom", &nur_lesen);
+    assert_eq!(r.status, 403);
+    assert!(!p.wahl_datei().exists());
+    // Und die Methode zaehlt: Lesen ist GET, Schalten ist POST.
+    let beide = vec![modul("x", &["wahl-lesen", "wahl-schreiben"], true)];
+    let r = wahl_antwort(&z, &a("POST", "/api/wahl/lesen", "", b""), "lesen", &beide);
+    assert_eq!(r.status, 405);
+    let r = wahl_antwort(&z, &a("GET", "/api/wahl/strom", "", b""), "strom", &beide);
+    assert_eq!(r.status, 405);
+}
+
+#[test]
+fn die_kaputte_wahl_wird_als_konflikt_gemeldet_und_nicht_ueberschrieben() {
+    let (z, p) = anbieter_zustand("wahl-kaputt");
+    let c = anmelden(&z);
+    std::fs::create_dir_all(p.wahl_datei().parent().unwrap()).unwrap();
+    std::fs::write(p.wahl_datei(), "{nicht json").unwrap();
+    let r = api(&z, &c, "GET", "/api/wahl/lesen", "");
+    assert_eq!(r["_status"], 409);
+    let r = api(&z, &c, "POST", "/api/wahl/strom", r#"{"an":true}"#);
+    assert_eq!(r["_status"], 409);
+    assert_eq!(std::fs::read_to_string(p.wahl_datei()).unwrap(), "{nicht json");
 }

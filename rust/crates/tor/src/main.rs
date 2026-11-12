@@ -14,6 +14,7 @@ mod sitzung;
 mod status;
 mod suche;
 mod telegram;
+mod wahl;
 mod web;
 
 use gemein::protokoll::{melden, Stufe};
@@ -33,6 +34,9 @@ chimera-tor -- Gateway von Chimera
                           bedienen, ohne systemd mit --socket PFAD selbst binden
   chimera-tor --passwort-hash  Passwort von stdin lesen, Hash fuer CHIMERA_WEB_PASSWORT_HASH ausgeben
   chimera-tor --ping [PFAD]  Gateway fragen (Vorgabe /run/chimera/tor.sock), rc 0 = antwortet
+  chimera-tor --wahl [PFAD]  Wahl des Gateways zeigen (JSON): Strom, Modellkette, Suchquellen
+  chimera-tor --wahl-stream an|aus [PFAD]
+                          Teilstuecke umschalten -- gilt fuer alle Tueren (GUI, Chat, Telegram)
   chimera-tor --module-neu NAME --titel-de TEXT [--titel-en TEXT] [--symbol Z] [--reihenfolge N]
                           [--recht R]... [--ziel VERZ]   Web-Modul aus der Vorlage anlegen (Regel 5v)
   chimera-tor --module-pruefen VERZ   Web-Modul pruefen, Pruefsumme nennen (JSON)
@@ -40,6 +44,33 @@ chimera-tor -- Gateway von Chimera
   chimera-tor --mojo [--miracle] [--json] [--datei PFAD]   Dienste und Sockets pruefen, Ursache nennen;
                           mit --miracle die sanften Reparaturen, danach Nachpruefung (Regel Mojo).
                           Exitcode 0 sauber, 1 Warnung, 2 Fehler";
+
+/// `--wahl` und `--wahl-stream`: die Wahl zeigen bzw. den Strom umstellen.
+/// Beides geht ueber den Socket, geschrieben wird im Dienst
+/// (`daten::wahl_feld_setzen`) -- eine Stelle fuer "ein Feld setzen", damit
+/// Kommandozeile, Web und Telegram nicht drei Fassungen davon haben.
+fn wahl_befehl(pfad: &str, strom: Option<bool>) -> ExitCode {
+    let p = PathBuf::from(pfad);
+    let r = match strom {
+        None => dienst::anfragen(&p, &serde_json::json!({"op": "wahl_lesen"})),
+        Some(an) => dienst::anfragen(&p, &serde_json::json!({"op": "wahl_feld_setzen", "feld": "stream", "wert": an})),
+    };
+    match r {
+        Ok(a) if a["ok"] == true => {
+            println!("{a}");
+            ExitCode::SUCCESS
+        }
+        Ok(a) => {
+            let grund = a["fehler"]["text"].as_str().unwrap_or("ohne Grund");
+            melden(Stufe::Fehler, &format!("abgelehnt: {grund}"));
+            ExitCode::from(1)
+        }
+        Err(e) => {
+            melden(Stufe::Fehler, &format!("Gateway antwortet nicht: {e}"));
+            ExitCode::from(1)
+        }
+    }
+}
 
 fn pruefen() -> serde_json::Value {
     serde_json::json!({
@@ -540,6 +571,23 @@ fn main() -> ExitCode {
                     ExitCode::from(1)
                 }
             }
+        }
+        Some("--wahl") => wahl_befehl(args.get(1).map(String::as_str).unwrap_or(SOCKET), None),
+        Some("--wahl-stream") => {
+            let wert = args.get(1).map(String::as_str).unwrap_or("");
+            let an = match wert {
+                "an" | "ein" | "on" => true,
+                "aus" | "off" => false,
+                "" => {
+                    melden(Stufe::Fehler, "--wahl-stream braucht an oder aus.");
+                    return ExitCode::from(2);
+                }
+                anders => {
+                    melden(Stufe::Fehler, &format!("--wahl-stream kennt nur an oder aus, nicht '{anders}'."));
+                    return ExitCode::from(2);
+                }
+            };
+            wahl_befehl(args.get(2).map(String::as_str).unwrap_or(SOCKET), Some(an))
         }
         Some(anderes) => {
             melden(Stufe::Fehler, &format!("unbekannte Option: {anderes}"));

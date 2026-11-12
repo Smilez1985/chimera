@@ -1277,7 +1277,7 @@ Folgt aus 5n und ersetzt die Fassung 1 (zwei Schreiber).
 | | Inhalt | liest | schreibt | Ort |
 |---|---|---|---|---|
 | **Anbieter** | Adressen, Schlüssel, Anmeldung, Telegram-Token, Web-Passwort (Hash) | Gateway | Gateway (Web-Oberfläche, Selbstübernahme), Installer | `/opt/chimera/config/.env`, **root:chimera-tor 660** |
-| **Wahl** | Reihenfolge, Ketten, Sprache, Zeitgrenzen | Gateway | Gateway (Telegram `/model`, Web) | `/opt/chimera/config/wahl.json`, root:chimera-tor 660 |
+| **Wahl** | Reihenfolge, Ketten, Sprache, Zeitgrenzen | Gateway | Gateway (Telegram `/model`, Web, CLI) | `/opt/chimera/config/wahl.json`, root:chimera-tor 660 |
 
 Der Agentennutzer `chimera` kann **keine** der beiden Dateien lesen.
 Was er von der Wahl wissen muss (z. B. die Sprache), bekommt er über den
@@ -1353,8 +1353,8 @@ modular.
   Gateway; ein Zusatzmodul nennt im Manifest einen Unix-Socket, an den das
   Gateway weiterreicht (Regel 14, keine Fremdbibliothek im Gateway).
 - **Rechte:** Das Manifest nennt, was ein Modul darf (z. B. `chat`,
-  `anbieter-lesen`, `anbieter-schreiben`, `anzeige`). Das Gateway reicht nur
-  durch, was eingetragen ist.
+  `anbieter-lesen`, `anbieter-schreiben`, `wahl-lesen`, `wahl-schreiben`,
+  `anzeige`). Das Gateway reicht nur durch, was eingetragen ist.
 - **Anzeigespiegel:** Der Renderer (Regel 7, ein Prozess, ein Framebuffer)
   legt das fertige Bild lesbar im Shared Memory ab; das Gateway liest nur
   und liefert es als Bildfolge an die Seite. Das Gateway schreibt nie ins
@@ -1866,9 +1866,18 @@ Formaten werden IDs neu vergeben.
 
 **Streaming ist umschaltbar** (`stream` in `wahl.json`, Vorgabe **aus**):
 aus = eine Antwort, keine Akkumulation. An = NDJSON, Teilstücke je `index`
-zusammenkleben, Werkzeuge erst nach `done` ausführen. Der Schalter gehört in
-GUI, CLI und Telegram (`/stream`). Ollama hat `stream` default **true** —
-das Gateway setzt den Wert immer ausdrücklich.
+zusammenkleben, Werkzeuge erst nach `done` ausführen. Der Schalter steht in
+GUI (Modul `wahl`), CLI (`chimera-tor --wahl-stream an|aus`) und Telegram
+(`/stream`). Ollama hat `stream` default **true** — das Gateway setzt den
+Wert immer ausdrücklich.
+
+**Ein Feld, ein Ort.** Keine Tür liest die Datei und schreibt sie im Ganzen
+zurück: `daten::wahl_feld_setzen` prüft Feldnamen und Typ, ändert **ein**
+Feld und erhält den Rest. Telegram und die Web-Tür gehen über die dünne
+Hülle `wahl.rs`, die Kommandozeile über den Socket (`op: wahl_feld_setzen`).
+Damit kann kein Web-Modul die Struktur überschreiben, und drei Fassungen
+von „lesen, ändern, schreiben" entstehen nicht. Eine kaputte `wahl.json`
+wird gemeldet (409/`wahl_kaputt`) und nicht überschrieben.
 
 ### Architekturregel 5b, Ergänzung — Die Abo-Anmeldung ist Opt-in mit Hinweis
 

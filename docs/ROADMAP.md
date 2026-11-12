@@ -406,8 +406,6 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       - Suchquellen mit Nutzer-Schlüssel: Tavily, Exa; Brave nur ohne
         Platten-Cache. Auf dem Pi läuft keine eigene Instanz (462 MB RAM,
         159 MB frei) — `ddg` ist dort der Weg ohne Infrastruktur.
-      - `stream`-Schalter in GUI und CLI (Gateway und Telegram können es
-        bereits, Wert steht in `wahl.json`).
       - Anthropic-Serialisierer für das neutrale Werkzeugformat — kommt mit
         dem Claude-Weg ins Gateway (5n), nicht vorher.
       - Grenzen: je Runde 3 Aufrufe sind gebaut; **offen** sind die 8 je Turn,
@@ -465,9 +463,11 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       einen Browser auf einem anderen Rechner im LAN (der Pi hat 462 MB RAM)
       und liegt in einem Bereich der Nutzungsbedingungen, der nicht
       eindeutig ist.
-- [ ] **`wahl.json`** mit bevorzugter Liste (5h): Datei, Auflösung und
-      `/model` in Telegram sind gebaut (12.11.); offen sind die
-      Web-Oberfläche zum Sortieren und `/suche`.
+- [ ] **`wahl.json`** mit bevorzugter Liste (5h): Datei, Auflösung,
+      `/model` in Telegram sowie Ansehen und Strom-Schalter in der
+      Web-Oberfläche und auf der Kommandozeile sind gebaut (12.11., Modul
+      `wahl`); offen sind das **Sortieren** der Kette in der Oberfläche und
+      `/suche` in Telegram.
 - [ ] **CLI** als Socket-Client, ohne eigene Anzeige.
 - [ ] HTTPS als Opt-in: Reverse-Proxy dokumentieren, selbstsigniertes
       Zertifikat für alle ohne Proxy.

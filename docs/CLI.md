@@ -140,6 +140,8 @@ only process with network access.
 | `--dienst --socket PFAD` | Ohne systemd selbst binden. / Bind yourself, without systemd. |
 | `--passwort-hash` | Passwort von stdin lesen, Hash für `CHIMERA_WEB_PASSWORT_HASH` ausgeben (mind. 8 Zeichen). / Read a password from stdin, print the hash for `CHIMERA_WEB_PASSWORT_HASH` (min. 8 chars). |
 | `--ping [PFAD]` | Gateway fragen (Vorgabe `/run/chimera/tor.sock`), rc 0 = antwortet. / Ask the gateway, rc 0 = answers. |
+| `--wahl [PFAD]` | Die Wahl des Gateways zeigen (JSON): Teilstücke (Strom), Modellkette, Suchquellen. / Show the gateway's choice as JSON: streaming, model chain, search sources. |
+| `--wahl-stream an/aus [PFAD]` | Teilstücke umschalten; gilt für alle Türen (GUI, Chat, Telegram), weil es eine Eigenschaft des Gateways ist. Geschrieben wird im Dienst. / Toggle streaming; applies to all doors because it is a property of the gateway. |
 | `--module-neu NAME --titel-de TEXT` | Web-Modul aus der Vorlage anlegen (Regel 5v). Prüft mit demselben Code wie das Laden, überschreibt nie. / Create a web module from the template; checks with the same code as loading, never overwrites. |
 | `--titel-en TEXT` | (bei `--module-neu`) Titel englisch; Vorgabe = deutscher Titel. / English title; default = German title. |
 | `--symbol ZEICHEN` | (bei `--module-neu`) Zeichen vor dem Titel im Menü. / Character before the menu title. |
@@ -208,6 +210,7 @@ Braucht `CHIMERA_LOG_RAM` und `CHIMERA_LOG_KARTE`. / Needs both variables.
 | `sh rust/gegenprobe-daten.sh` | Gegenprobe der Datenschicht (Anbieter, Schlüssel, Katalog, Wahl). / Data layer counter-check. |
 | `sh rust/gegenprobe-anbieter.sh` | Gegenprobe der Anbieter-Schnittstelle und des Katalogs. / Provider API and catalogue counter-check. |
 | `sh rust/gegenprobe-netzsuche.sh` | Gegenprobe der Netzsuche. / Network discovery counter-check. |
+| `sh rust/gegenprobe-wahl.sh` | Gegenprobe der Wahl (Feld prüfen, Wert prüfen, Rest erhalten, Tür ohne Recht). / Choice counter-check (field, value, preserved rest, door without right). |
 | `sh rust/gegenprobe-mojo.sh` | Gegenprobe von Mojo (Ursachen, Reparaturen, Nachprüfung, Meldung). / Mojo counter-check. |
 | `cd rust && cargo test --locked` | Rust-Tests. / Rust tests. |
 | `python3 tools/check-globals.py` | Namen finden, die gelesen, aber nie definiert werden. / Find names read as globals but never defined. |

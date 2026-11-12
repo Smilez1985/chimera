@@ -345,6 +345,34 @@ pub fn wahl_speichern(p: &Pfade, wahl: &Value) -> Result<(), String> {
     json_schreiben(&p.wahl_datei(), wahl, 0o640)
 }
 
+/// Felder, die einzeln gesetzt werden duerfen. Nur, was einen Aufrufer hat:
+/// eine Tuer aendert **ein Feld**, nicht die ganze Datei -- sonst koennte ein
+/// Web-Modul die Struktur ueberschreiben, und drei Tueren haetten drei
+/// Fassungen von "lesen, aendern, schreiben".
+const EINZELN_SETZBAR: &[&str] = &["stream"];
+
+/// Ein Feld in `wahl.json` setzen und den Rest der Datei erhalten.
+/// Der Wert wird gegen den Typ des Feldes geprueft, nicht angenommen.
+pub fn wahl_feld_setzen(p: &Pfade, feld: &str, wert: &Value) -> Result<Value, (&'static str, String)> {
+    if !EINZELN_SETZBAR.contains(&feld) {
+        return Err((
+            "feld_unbekannt",
+            format!("Feld \"{feld}\" laesst sich nicht einzeln setzen (bekannt: {}).", EINZELN_SETZBAR.join(", ")),
+        ));
+    }
+    let wert = wert
+        .as_bool()
+        .ok_or(("wert_ungueltig", format!("\"{feld}\" braucht true oder false (bekam {wert}).")))?;
+    // Lesen, aendern, schreiben -- und zwar hier, damit es nur eine Stelle gibt.
+    let mut wahl = wahl_laden(p).map_err(|m| ("wahl_kaputt", format!("{}: {}", m.quelle, m.text)))?;
+    let Some(obj) = wahl.as_object_mut() else {
+        return Err(("wahl_kaputt", "wahl.json ist kein Objekt.".into()));
+    };
+    obj.insert(feld.to_string(), json!(wert));
+    wahl_speichern(p, &wahl).map_err(|e| ("wahl_ungueltig", e))?;
+    Ok(json!(wert))
+}
+
 /// Verweise der Reihenfolge gegen Anbieter und Katalog pruefen.
 /// Rueckgabe: (brauchbare Verweise in Reihenfolge, Meldungen zu den
 /// uebrigen). Nichts wird geloescht. Eine leere Kette ist selbst eine
@@ -470,6 +498,14 @@ pub fn op(name: &str, a: &Value, p: &Pfade) -> Option<Value> {
             },
             None => fehler("wahl_fehlt", "Die Anfrage braucht ein Feld \"wahl\"."),
         },
+        "wahl_feld_setzen" => {
+            let feld = a.get("feld").and_then(Value::as_str).unwrap_or("");
+            let wert = a.get("wert").cloned().unwrap_or(Value::Null);
+            match wahl_feld_setzen(p, feld, &wert) {
+                Ok(v) => json!({"ok": true, "feld": feld, "wert": v}),
+                Err((code, text)) => fehler(code, &text),
+            }
+        }
         _ => return None,
     })
 }
