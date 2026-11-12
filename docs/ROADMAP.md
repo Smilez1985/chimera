@@ -413,7 +413,9 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       3. **Web-Werkzeuge** `web_suche`/`web_abruf` am Gateway (5r): erst
          kostenlose Quellen (eigene SearXNG-Instanz, Ollama-Cloud-Konto),
          dann die mit Schlüssel (Tavily, Exa, Brave nur ohne Cache).
-         **`web_suche` gebaut 12.11.** (SearXNG + Ollama-Cloud). Offen:
+         **`web_suche` gebaut 12.11.** (SearXNG, Ollama-Cloud, DuckDuckGo
+         lite als Opt-in — die einzige Quelle, die ohne Schlüssel und ohne
+         eigene Instanz läuft). Offen:
          `web_abruf` (braucht eine Positivliste erlaubter Ziele) und die
          Schlüssel-Quellen; außerdem gibt es auf dem Pi **keine** Suchquelle
          — ohne Eintrag in `wahl.json` antwortet das Werkzeug `keine_quelle`.

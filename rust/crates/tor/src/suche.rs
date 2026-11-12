@@ -38,6 +38,9 @@ pub const GESAMT: usize = 8_000;
 pub enum Quelle {
     Searxng(String),
     Ollama(String),
+    /// DuckDuckGo (lite), **Opt-in**: kein Vertrag, kann jederzeit brechen
+    /// (5r). Kostet nichts und braucht keinen Schluessel.
+    Duckduckgo,
 }
 
 /// Liest die Quellen aus `wahl.json`, in der Reihenfolge ihres Auftretens.
@@ -66,6 +69,7 @@ pub fn quellen_aus(wahl: &Value) -> (Vec<Quelle>, Vec<String>) {
                 }
             }
             "ollama" => gut.push(Quelle::Ollama(String::new())),
+            "ddg" | "duckduckgo" => gut.push(Quelle::Duckduckgo),
             anderes => msg.push(format!("unbekannte Suchquelle: {anderes}")),
         }
     }
@@ -104,6 +108,120 @@ pub fn treffer_normalisieren(roh: &Value, art: &str, max: u64) -> Vec<Value> {
             "url": url,
             "auszug": a,
             "quelle": art,
+        }));
+    }
+    out
+}
+
+/// `%XX` und `+` aufloesen. Reicht fuer die Ziele, die DuckDuckGo liefert.
+pub fn prozent_lesen(text: &str) -> String {
+    let b = text.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'+' => {
+                out.push(b' ');
+                i += 1;
+            }
+            b'%' if i + 2 < b.len() => {
+                let hex = std::str::from_utf8(&b[i + 1..i + 3]).unwrap_or("");
+                match u8::from_str_radix(hex, 16) {
+                    Ok(v) => {
+                        out.push(v);
+                        i += 3;
+                    }
+                    Err(_) => {
+                        out.push(b[i]);
+                        i += 1;
+                    }
+                }
+            }
+            c => {
+                out.push(c);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).to_string()
+}
+
+/// Tags und Entitaeten grob entfernen -- Auszuege sollen lesbar sein, nicht
+/// vollstaendig korrekt.
+fn text_von(html: &str) -> String {
+    let mut t = String::new();
+    let mut drin = false;
+    for c in html.chars() {
+        match c {
+            '<' => drin = true,
+            '>' => {
+                drin = false;
+                t.push(' ');
+            }
+            c if !drin => t.push(c),
+            _ => {}
+        }
+    }
+    let t = t
+        .replace("&amp;", "&")
+        .replace("&quot;", "\"")
+        .replace("&#x27;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&nbsp;", " ");
+    t.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// DuckDuckGo lite: die Treffer stehen in `class='result-link'`, das Ziel
+/// steckt im `uddg=`-Parameter (prozent-kodiert), der Auszug in
+/// `class='result-snippet'`. Rein, damit es sich ohne Netz pruefen laesst.
+pub fn ddg_treffer(html: &str, max: u64) -> Vec<Value> {
+    let mut ziele: Vec<(String, String)> = Vec::new();
+    let mut rest = html;
+    while let Some(pos) = rest.find("class='result-link'") {
+        let tail = &rest[pos..];
+        // Rueckwaerts zum href dieses Ankers, vorwaerts zum Titel.
+        let anker_ende = tail.find('>').map(|i| pos + i + 1).unwrap_or(rest.len());
+        let anker_anfang = rest[..pos].rfind("<a ").unwrap_or(pos);
+        let kopf = &rest[anker_anfang..pos];
+        let href = kopf
+            .split("href=\"")
+            .nth(1)
+            .and_then(|r| r.split('"').next())
+            .unwrap_or("");
+        let ziel = match href.split("uddg=").nth(1) {
+            Some(r) => prozent_lesen(r.split('&').next().unwrap_or("")),
+            None => href.to_string(),
+        };
+        let titel_ende = rest[anker_ende..].find("</a>").map(|i| anker_ende + i).unwrap_or(rest.len());
+        let titel = text_von(&rest[anker_ende..titel_ende]);
+        if ziel.starts_with("http") {
+            ziele.push((titel, ziel));
+        }
+        rest = &rest[titel_ende..];
+    }
+    // Auszuege in der Reihenfolge ihres Auftretens.
+    let mut auszuege: Vec<String> = Vec::new();
+    let mut r2 = html;
+    while let Some(pos) = r2.find("class='result-snippet'") {
+        let start = r2[pos..].find('>').map(|i| pos + i + 1).unwrap_or(r2.len());
+        let ende = r2[start..].find("</td>").map(|i| start + i).unwrap_or(r2.len());
+        auszuege.push(text_von(&r2[start..ende]));
+        r2 = &r2[ende..];
+    }
+    let mut out = Vec::new();
+    let mut gesamt = 0usize;
+    for (i, (titel, url)) in ziele.into_iter().enumerate() {
+        if out.len() as u64 >= max || gesamt >= GESAMT {
+            break;
+        }
+        let a = kuerzen(auszuege.get(i).map(String::as_str).unwrap_or(""), AUSZUG);
+        gesamt += a.chars().count() + url.chars().count() + titel.chars().count();
+        out.push(json!({
+            "titel": kuerzen(&titel, 160),
+            "url": url,
+            "auszug": a,
+            "quelle": "ddg",
         }));
     }
     out
@@ -152,6 +270,31 @@ fn searxng_suchen(adr: &str, frage: &str, max: u64) -> Result<Value, String> {
             .query("safesearch", "1"),
     )
     .and_then(|roh| Ok(json!({"results": treffer_normalisieren(&roh, "searxng", max)})))
+}
+
+fn ddg_suchen(frage: &str, max: u64) -> Result<Value, String> {
+    let mut r = agent(FRIST)
+        .get("https://lite.duckduckgo.com/lite/")
+        .query("q", frage)
+        .header("user-agent", "Mozilla/5.0 (X11; Linux aarch64) Chimera")
+        .header("accept", "text/html")
+        .call()
+        .map_err(|e| format!("nicht erreichbar: {e}"))?;
+    let status = r.status().as_u16();
+    if status != 200 {
+        return Err(match status {
+            429 => "429 -- DuckDuckGo bremst".to_string(),
+            _ => format!("Antwort {status}"),
+        });
+    }
+    let html = r.body_mut().read_to_string().map_err(|e| format!("Antwort nicht lesbar: {e}"))?;
+    let treffer = ddg_treffer(&html, max);
+    if treffer.is_empty() {
+        // Kein Treffer **und** kein Fehler waere ein stiller Erfolg: die
+        // Seite hat sich dann vermutlich geaendert oder gebremst.
+        return Err("keine Treffer gelesen -- Seite geaendert oder gebremst (Opt-in-Quelle)".to_string());
+    }
+    Ok(json!({"results": treffer}))
 }
 
 fn ollama_suchen(schluessel: &str, frage: &str, max: u64) -> Result<Value, String> {
@@ -210,6 +353,7 @@ pub fn op_web_suche(a: &Value, wahl: &Value, schluessel: Option<&str>) -> Value 
         let r = match q {
             Quelle::Searxng(adr) => searxng_suchen(adr, frage, max),
             Quelle::Ollama(_) => ollama_suchen(schluessel.unwrap_or(""), frage, max),
+            Quelle::Duckduckgo => ddg_suchen(frage, max),
         };
         match r {
             Ok(v) => {
@@ -217,6 +361,7 @@ pub fn op_web_suche(a: &Value, wahl: &Value, schluessel: Option<&str>) -> Value 
                 let art = match q {
                     Quelle::Searxng(_) => "searxng",
                     Quelle::Ollama(_) => "ollama",
+                    Quelle::Duckduckgo => "ddg",
                 };
                 return json!({
                     "ok": true, "frage": frage, "quelle": art,
@@ -228,6 +373,7 @@ pub fn op_web_suche(a: &Value, wahl: &Value, schluessel: Option<&str>) -> Value 
                 match q {
                     Quelle::Searxng(_) => "searxng",
                     Quelle::Ollama(_) => "ollama",
+                    Quelle::Duckduckgo => "ddg",
                 }
             )),
         }
@@ -344,6 +490,36 @@ mod tests {
         assert_eq!(a["ok"], true, "{a}");
         assert_eq!(a["treffer"], json!([]), "leere Trefferliste ist eine gueltige Antwort");
         h.join().unwrap();
+    }
+
+    #[test]
+    fn duckduckgo_ziele_werden_aus_dem_weiterleitungs_link_gelesen() {
+        // Ausschnitt der echten Seite (lite.duckduckgo.com, 12.11.2026):
+        // das Ziel steckt prozent-kodiert im Parameter uddg.
+        let html = r#"
+<tr><td><a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Follama.com%2F&amp;rut=abc" class='result-link'>Ollama &amp; Co</a></td></tr>
+<tr><td class='result-snippet'><b>Ollama</b> is the easiest way to run open models.</td></tr>
+<tr><td><a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.org%2Fa%3Fb%3D1&amp;rut=def" class='result-link'>Zweiter</a></td></tr>
+<tr><td class='result-snippet'>Auszug zwei</td></tr>
+"#;
+        let t = ddg_treffer(html, 5);
+        assert_eq!(t.len(), 2, "{t:?}");
+        assert_eq!(t[0]["url"], "https://ollama.com/");
+        assert_eq!(t[0]["titel"], "Ollama & Co", "Entitaeten und Tags raus");
+        assert_eq!(t[0]["auszug"], "Ollama is the easiest way to run open models.");
+        assert_eq!(t[0]["quelle"], "ddg");
+        assert_eq!(t[1]["url"], "https://example.org/a?b=1");
+        assert_eq!(ddg_treffer(html, 1).len(), 1);
+        // Eine Seite ohne Treffer (Bot-Check) liefert nichts -- der Aufrufer
+        // macht daraus einen benannten Fehler, keinen stillen Erfolg.
+        assert!(ddg_treffer("<html><body>Blocked</body></html>", 5).is_empty());
+    }
+
+    #[test]
+    fn prozent_und_plus_werden_aufgeloest() {
+        assert_eq!(prozent_lesen("a%2Fb%3Fc%3D1"), "a/b?c=1");
+        assert_eq!(prozent_lesen("zwei+woerter"), "zwei woerter");
+        assert_eq!(prozent_lesen("kaputt%zz"), "kaputt%zz");
     }
 
     #[test]

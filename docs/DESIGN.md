@@ -1781,6 +1781,11 @@ stehen in `wahl.json` unter `suche.quellen` als Liste, in dieser Reihenfolge:
   JSON nicht führt (sonst sucht jemand an der falschen Stelle).
 - `ollama` — `https://ollama.com/api/web_search` mit **`OLLAMA_API_KEY`** aus
   der Umgebung des Gateways (`.env`, nur das Gateway liest sie).
+- `ddg` — `https://lite.duckduckgo.com/lite/`, **ohne Schlüssel und ohne
+  eigene Instanz**. Bewusst Opt-in: kein Vertrag, die Seite kann sich ändern
+  oder bremsen. Die Treffer stehen hinter einem Weiterleitungs-Link
+  (`uddg=`-Parameter, prozent-kodiert); liefert die Seite keine Treffer,
+  ist das ein **benannter Fehler**, kein stiller Erfolg.
 - Fällt eine Quelle aus, wird die nächste versucht; scheitern alle, kommt
   `suche_gescheitert` mit jedem Grund. Ist **keine** Quelle eingetragen,
   kommt `keine_quelle` mit einem Beispiel — kein stiller Ausfall.

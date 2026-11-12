@@ -32,6 +32,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Tests: 8 in `suche` (Quellen lesen, Kürzen, 403-Text, Ausfall der ersten
   Quelle, fehlender Schlüssel) und 6 in `test_agent` (Gateway wird gefragt,
   Antwort wird lesbar, „keine Quelle" wird genannt).
+- **Suchquelle `ddg` (DuckDuckGo lite), kostenlos und ohne Schlüssel**
+  (`suche.rs`): die Ziele stehen prozent-kodiert im `uddg=`-Parameter des
+  Weiterleitungs-Links, Auszüge in `class='result-snippet'`. Bewusst
+  **Opt-in** (5r): kein Vertrag, die Seite kann brechen. Liefert sie keine
+  Treffer, ist das ein benannter Fehler statt eines leeren Erfolgs.
+  2 Tests mit einem echten Seitenausschnitt (Ziele, Entitäten, Kürzung,
+  Bot-Seite ohne Treffer) und einer für `%XX`/`+`.
 - **`stream` ist umschaltbar** (DESIGN, Regel „Aufrufe, nicht Text“): Das
   Gateway liest `stream` aus `wahl.json` (Vorgabe **aus**) und setzt den Wert
   ausdrücklich — Ollama hat sonst `true`. Ist er an, werden die NDJSON-
