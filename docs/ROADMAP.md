@@ -325,10 +325,10 @@ Kann parallel zu Phase 4 laufen; berührt den Renderer nicht.
 - [ ] Aufgabenzuordnung konfigurierbar: Gespräch → Anthropic,
       Mood-Erfindung und Zusammenfassen → Ollama
 - [ ] Aus dem eigenen Fork übernehmen (Ideen, nicht Code —
-      `docs/DESIGN.md`, „Sprachmodelle: Provider-Schicht"): ~~`/model`-Befehl zum Umschalten im Chat~~ (gebaut 12.11.),
-      **persistente Modellwahl** über Neustarts, Platzhalter-Adresse als
-      „nicht gesetzt" behandeln statt Verbindungsfehler, Installer fragt
-      die Ollama-Adresse ab
+      `docs/DESIGN.md`, „Sprachmodelle: Provider-Schicht"): Platzhalter-Adresse
+      als „nicht gesetzt" behandeln statt Verbindungsfehler, Installer fragt
+      die Ollama-Adresse ab. (`/model` und die gespeicherte Wahl sind seit
+      12.11. gebaut — siehe CHANGELOG.)
 - [ ] Fehlender Schlüssel ⇒ Connector meldet sich als nicht verfügbar,
       kein Startabbruch
 - [ ] `.env.example` mit Platzhaltern für alle Anbieter
@@ -399,32 +399,20 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       gewählten Modells; Anzeige „geladen / kalt“ und letzte Antwortzeit je
       Modell im Ollama-Modul. Der Dienst fragt dafür das Gateway, nicht den
       Server.
-- [ ] **Native Werkzeugaufrufe (Regel „Aufrufe, nicht Text“, smilez 12.11.)**, in vier Stufen:
-      1. **Gateway trägt Werkzeuge** (`rust/crates/tor/src/ollama.rs`):
-         `tools` durchreichen, `tool_calls` zurückgeben, neutrales Format mit
-         Serialisierern (Ollama Objekt, OpenAI String, Anthropic
-         `input_schema`/`tool_use`), `content: ""` kein Fehler, `stream`
-         ausdrücklich gesetzt.
-      2. **Agent nutzt sie** (`src/chimera/agent/loop.py`): Schemas aus
-         `Toolbox.schemas()` mitschicken, Aufrufe über `tools.call()` →
-         `chimera-sohelper`, Ergebnis als `role:"tool"` in den Verlauf;
-         Text-Protokoll bleibt Rückfall, wenn der Katalog keine Werkzeuge
-         misst.
-      3. **Web-Werkzeuge** `web_suche`/`web_abruf` am Gateway (5r): erst
-         kostenlose Quellen (eigene SearXNG-Instanz, Ollama-Cloud-Konto),
-         dann die mit Schlüssel (Tavily, Exa, Brave nur ohne Cache).
-         **`web_suche` gebaut 12.11.** (SearXNG, Ollama-Cloud, DuckDuckGo
-         lite als Opt-in — die einzige Quelle, die ohne Schlüssel und ohne
-         eigene Instanz läuft). Offen:
-         `web_abruf` (braucht eine Positivliste erlaubter Ziele) und die
-         Schlüssel-Quellen; außerdem gibt es auf dem Pi **keine** Suchquelle
-         — ohne Eintrag in `wahl.json` antwortet das Werkzeug `keine_quelle`.
-      4. **Schalter `stream`** in GUI, CLI und Telegram (`/stream`), Wert in
-         `wahl.json`; Vorgabe aus. **Gebaut 12.11.:** Gateway und Telegram,
-         Teilstücke werden zusammengesetzt. Offen: Schalter in GUI und CLI.
-      Grenzen: `max_werkzeuge_je_turn` 8, `max_werkzeuge_je_runde` 3,
-      Ergebnis auf 4000 Zeichen gekürzt (wie im Fork), Loop-Erkennung bei
-      dreimal gleichem Aufruf.
+- [ ] **Netz-Werkzeuge und Werkzeugschalter** (Regel „Aufrufe, nicht Text“;
+      was fertig ist, steht im CHANGELOG):
+      - `web_abruf` am Gateway — braucht zuerst eine Positivliste erlaubter
+        Ziele, sonst verletzt es 5n („nie eine beliebige URL“).
+      - Suchquellen mit Nutzer-Schlüssel: Tavily, Exa; Brave nur ohne
+        Platten-Cache. Auf dem Pi läuft keine eigene Instanz (462 MB RAM,
+        159 MB frei) — `ddg` ist dort der Weg ohne Infrastruktur.
+      - `stream`-Schalter in GUI und CLI (Gateway und Telegram können es
+        bereits, Wert steht in `wahl.json`).
+      - Anthropic-Serialisierer für das neutrale Werkzeugformat — kommt mit
+        dem Claude-Weg ins Gateway (5n), nicht vorher.
+      - Grenzen: je Runde 3 Aufrufe sind gebaut; **offen** sind die 8 je Turn,
+        das Kürzen des Ergebnisses auf 4000 Zeichen und die Loop-Erkennung
+        bei dreimal gleichem Aufruf (Vorbild: der Fork).
 - [ ] **Der Dienst verliert sein Netz** (5n): Er ruft heute Ollama und
       Anthropic noch selbst über `urllib` auf (`IPAddressDeny` ist leer);
       der Weg über das Gateway ist nur ein zusätzlicher Pfad, `discover()`
@@ -448,9 +436,10 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       active, refusing“), der Dienst lief ohne Sitzungs-Socket weiter. Der
       Nachweis von Schritt 99 muss den Zustand beider Sockets prüfen, nicht
       nur den des Gateway-Sockets.
-- [ ] **Websuche** (5r): zuerst Anthropic serverseitig, dann OpenRouter,
-      dann Suchquellen mit Nutzer-Schlüssel (Ollama Cloud, Tavily, Exa,
-      SearXNG; Brave ohne Platten-Cache; ddgs nur Opt-in).
+- [ ] **Websuche bei den Anbietern** (5r): Anthropic serverseitig
+      (`web_search_20250305`), dann OpenRouter (`openrouter:web_search`).
+      Die Suchquellen mit Nutzer-Schlüssel stehen beim Faden „Netz-Werkzeuge
+      und Werkzeugschalter“.
 - [ ] **Netzsuche** (5k): Selbsteintrag steht; offen: Telegram `/suche`,
       Knopf „Jetzt suchen“ im Ollama-Modul, Installer Schritt 50.
 - [ ] **Speicher am Pi** (10q): `MemoryMax=` wirkt nicht
