@@ -90,7 +90,13 @@ jobs:
         # "Exec format error" (derselbe Test ueberspringt dort und sagt es).
         run: |
           set -eu
-          CHIMERA_SOHELPER_BIN="$PWD/target/$ZIEL/release/chimera-sohelper" \
+          # Das Binary muss **hier** gebaut werden: `cargo test` baut nur die
+          # Testfassung, und ohne Pfad nahm der Test das eingecheckte Binary
+          # aus sohelper/ -- also den letzten Stand aus dem Repo, nicht den
+          # dieses Commits. Genau daran ist der Lauf zu b5bad82 gescheitert
+          # (dem alten Binary fehlte --tor).
+          cargo build --locked --target "$ZIEL" --bin chimera-sohelper
+          CHIMERA_SOHELPER_BIN="$PWD/target/$ZIEL/debug/chimera-sohelper" \
             python3 ../tests/test_sohelper_gleichheit.py
 
       - name: Lizenzen und Schwachstellen (cargo deny)
