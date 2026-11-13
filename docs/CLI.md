@@ -217,6 +217,8 @@ Braucht `CHIMERA_LOG_RAM` und `CHIMERA_LOG_KARTE`. / Needs both variables.
 | `sh rust/gegenprobe-abruf.sh` | Gegenprobe des Webabrufs (Freigabe übergangen, eigene Adresse frei, Umleitung ungeprüft, Nicht-Text, keine Kürzung, falsches Schema, Anmeldung in der Adresse). / Web-fetch counter-check. |
 | `sh rust/gegenprobe-ssh.sh` | Gegenprobe der Host-Tabelle (Vorschlag wirkt, Vorschlag überschreibt, Hostschlüssel fehlt, geändertes Ziel, Fingerabdruck geglaubt, Pfad als Schlüsselname, unbekannte Rechte, unbestätigter Host, freie Namen, known_hosts ohne Port). / Host-table counter-check. |
 | `sh rust/gegenprobe-mojo.sh` | Gegenprobe von Mojo (Ursachen, Reparaturen, Nachprüfung, Meldung). / Mojo counter-check. |
+| `sh rust/gegenprobe-quota.sh` | Gegenprobe des Guthabens (Währung je Pool, Herkunft, veraltet, Retry-After, Schlüssel vor dem Abruf, Grund statt Zahl, alter Stand, Frische, abgeschalteter Anbieter, Kennung). / Balance counter-check. |
+| `python3 tests/gegenprobe_guthaben.py` | Gegenprobe der Guthaben-Texte (Komma, Währungen getrennt, veraltet, Grund statt 0, leerer Bestand). / Balance-text counter-check. |
 | `sh rust/gegenprobe-deepseek.sh` | Gegenprobe der DeepSeek-Anbindung (Bearer, 402 als »kein Guthaben«, Usage im Strom, `include_usage`, Denktext, Denken-aus, `tool_choice: required`, Usage-null als unbekannt, Argumente, eigene Reihenfolge). / DeepSeek adapter counter-check. |
 | `sh rust/gegenprobe-denken.sh` | Gegenprobe der Antwort-Auswertung bei Denkmodellen (Denktext ignoriert, Auszug unbegrenzt, Denktext als Antwort, Aufruf neben Denktext als Fehler, Zeitgrenze als »nicht erreichbar«). / Reasoning-model answer counter-check. |
 | `cd rust && cargo test --locked` | Rust-Tests. / Rust tests. |

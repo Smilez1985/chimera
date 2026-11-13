@@ -1105,6 +1105,16 @@ lag der Katalog unter der gefundenen Id und die Wahl sah einen leeren.
 `dienst::katalog_fuer` sucht deshalb zuerst unter der Id, dann unter der
 gleichen Adresse — eine Stelle, kein zweiter Weg.
 
+**Folge für die Sperre** (Lesart notes, zu bestätigen): Die Wahl gehört
+dorthin, wo die Adresse liegt — ans Gateway. Der Dienst braucht
+`OLLAMA_MODEL` nicht aus der `.env`: Nennt er kein Modell, entscheidet
+das Gateway an einer Stelle. **Gebaut 11.11. so:** gespeicherter Katalog →
+erstes Modell mit gemessenem `tools` → sonst `kein_modell`; die
+„gespeicherte Wahl" (`wahl.json`, 5t) und `OLLAMA_MODEL` aus seiner eigenen
+Umgebung sind **nicht** gebaut und werden nicht nachgeholt. Eine
+Abweichung vom Fork ist schon entschieden (Regel 5l): Die Adresse wird
+nicht im Chat gesetzt.
+
 ### Anbieter vom Typ `deepseek` (13.11.2026)
 
 **Auftrag smilez:** DeepSeek als Anbieter über die OpenAI-kompatible API.
@@ -1150,15 +1160,49 @@ die Web-Oberfläche und die Anbieter-Probe erreichbar — die Auswahl durch den
 Agenten (Reihenfolge nach 5h) ist der nächste Schritt und steht in der
 ROADMAP.
 
-**Folge für die Sperre** (Lesart notes, zu bestätigen): Die Wahl gehört
-dorthin, wo die Adresse liegt — ans Gateway. Der Dienst braucht
-`OLLAMA_MODEL` nicht aus der `.env`: Nennt er kein Modell, entscheidet
-das Gateway an einer Stelle. **Gebaut 11.11. so:** gespeicherter Katalog →
-erstes Modell mit gemessenem `tools` → sonst `kein_modell`; die
-„gespeicherte Wahl" (`wahl.json`, 5t) und `OLLAMA_MODEL` aus seiner eigenen
-Umgebung sind **nicht** gebaut und werden nicht nachgeholt. Eine
-Abweichung vom Fork ist schon entschieden (Regel 5l): Die Adresse wird
-nicht im Chat gesetzt.
+### Guthaben je Anbieter (13.11.2026)
+
+**Auftrag smilez:** „Kosten können bei den meisten Anbietern aus der API
+abgerufen werden"; Muster bei OpenMinis abgeschaut (`provider/quota/`).
+
+**Ein Adapter je Typ** (`quota::art_von`): `deepseek` → `GET /user/balance`
+(offizielle API, dokumentiert); `ollama` → kein Guthaben nötig (eigenes
+Netz); alles andere → **kein Abruf**, mit Grund im Klartext. Für `anthropic`
+lautet der Grund: die Usage/Cost-API verlangt einen Admin-Schlüssel —
+deshalb steht dort der Link zur Abrechnung und **keine Zahl**. Eine
+erfundene Zahl wäre schlimmer als keine.
+
+**Drei Zusagen, die den Bau bestimmen:**
+
+1. **Je Währung ein eigener Pool.** `balance_infos` wird nicht summiert und
+   nicht umgerechnet (OpenMinis: „currencies are never converted or
+   summed"); die Antwort trägt `waehrung`, `gesamt`, `geschenkt`,
+   `aufgeladen` je Eintrag.
+2. **Herkunft immer mitliefern** — `quelle`, `belegtheit`, `endpunkt`, und
+   der Zeitpunkt als `geholt`/`alter_s`. Kein Abruf ohne diese Angabe.
+3. **Veraltet wird gezeigt, nicht versteckt.** Aktive Abfragen höchstens
+   alle 10 Minuten (`FRISCHE_S`); ein älterer Stand steht als
+   `veraltet: true` da. Ein **`Retry-After`** des Anbieters bindet auch
+   einen erzwungenen Abruf (`gesperrt_bis` in der Ablage) — sonst würde ein
+   Knopf den Anbieter hämmern.
+
+**Ablage:** `state/quota/<id>.json` (Regel 5t), 0600, enthält die letzte
+Rohtantwort und `geholt`/`gesperrt_bis` — **nie** den Schlüssel. Der
+Schlüssel kommt aus `config/geheim/<id>` oder `DEEPSEEK_API_KEY`; fehlt er,
+sagt der Eintrag das, statt einen 401 zu produzieren.
+
+**Zwei Türen, ein Zustand:** `op: quota_lesen` (Socket) und
+`/api/quota/lesen` bzw. `/api/quota/erneuern` (Web). Lesen verlangt
+`anbieter-lesen`, **neu holen** `anbieter-schreiben` — ein Abruf kostet beim
+Anbieter und ist keine Leseoperation an unserem Zustand.
+
+**Das Agenten-Werkzeug `guthaben`** ist ein **natives** Werkzeug
+(`ToolSpec` + Schema ⇒ `tool_calls`, kein Text-Protokoll). Es ruft
+`op: quota_lesen` und macht daraus einen Satz je Anbieter
+(`agent/tools.py:guthaben_als_text`, rein und ohne Netz): Beträge mit Komma
+(`12.34` → `12,34`), je Währung ein Betrag, „veraltet, Stand vor 2 Stunden",
+und wo es keine Zahl gibt, der **Grund** statt `0`. Damit funktioniert die
+Frage auch über PTT/TTS: „Wie viel Guthaben habe ich noch?"
 
 **Entschieden (smilez, 10.11.2026):**
 

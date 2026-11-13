@@ -99,6 +99,9 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
             _ => zeile::fehlerantwort("id_ungueltig", "Die Anfrage braucht eine gueltige \"id\"."),
         },
         "katalog_aktualisieren" => katalog_aktualisieren(anfrage, stand, ollama::KATALOG_BUDGET),
+        // Guthaben je Anbieter (ROADMAP, Auftrag 13.11.). `neu: true` ist der
+        // Knopf in der Oberflaeche; `Retry-After` bindet auch ihn.
+        "quota_lesen" => crate::quota::op_lesen(&stand.daten, anfrage, jetzt_s()),
         // Websuche ist ein Werkzeug des Gateways (DESIGN Regel 5r): der Agent
         // hat kein Netz, hier wird gesucht. Quellen stehen in wahl.json.
         "web_suche" => {

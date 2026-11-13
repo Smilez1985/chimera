@@ -20,6 +20,25 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Guthaben je Anbieter** (Auftrag smilez 13.11., zweiter Punkt der
+  Reihenfolge): neues Gateway-Modul `quota.rs`. Ein Adapter je Typ
+  (`deepseek` → `GET /user/balance`, `ollama` → kein Guthaben nötig, alles
+  andere → **kein Abruf mit Grund**, für `anthropic` mit Link zur Abrechnung
+  statt einer erfundenen Zahl). Je **Währung ein eigener Pool** (nie
+  umgerechnet, nie summiert), **Herkunft** immer mitgeliefert (`quelle`,
+  `belegtheit`, `endpunkt`, `geholt`), aktive Abfrage höchstens alle 10 min,
+  ältere Stände als `veraltet` gezeigt, `Retry-After` bindet auch den Knopf.
+  Ablage `state/quota/<id>.json` (0600, Regel 5t — Installer und
+  `ReadWritePaths` nachgezogen). Op `quota_lesen`, Web-Modul **„Konten"**
+  (Karte je Währung, „Neu holen") über `/api/quota/lesen` und
+  `/api/quota/erneuern` (Erneuern verlangt `anbieter-schreiben`).
+  **Natives Agenten-Werkzeug `guthaben`** (`ToolSpec` + Schema, Aufruf über
+  `tool_calls`, kein Text-Protokoll): ruft `op: quota_lesen` und formuliert
+  einen Satz je Anbieter — Beträge mit Komma, je Währung einer, „veraltet,
+  Stand vor 2 Stunden", ohne Zahl den **Grund** statt `0`. Damit ist die
+  Frage auch über PTT/TTS beantwortbar. Tests: cargo 439 (14 neue),
+  `test_agent` 122 (19 neue), `rust/gegenprobe-quota.sh` 10 Mutationen,
+  `tests/gegenprobe_guthaben.py` 5 Mutationen (alle rot).
 - **DeepSeek als Anbieter** (Auftrag smilez 13.11.): neues Gateway-Modul
   `deepseek.rs` (OpenAI-kompatible API, `POST /chat/completions`, `GET /models`).
   `dienst::anbieter_finden` liefert `(typ, adresse)` und verteilt Chat und

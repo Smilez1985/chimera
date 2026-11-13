@@ -76,6 +76,11 @@ const EINGEBAUT: &[Eingebaut] = &[
         dateien: &[("ssh.js", "text/javascript; charset=utf-8", include_str!("../web/module/ssh/ssh.js"))],
     },
     Eingebaut {
+        name: "konten",
+        manifest: include_str!("../web/module/konten/manifest.json"),
+        dateien: &[("konten.js", "text/javascript; charset=utf-8", include_str!("../web/module/konten/konten.js"))],
+    },
+    Eingebaut {
         name: "netz",
         manifest: include_str!("../web/module/netz/manifest.json"),
         dateien: &[("netz.js", "text/javascript; charset=utf-8", include_str!("../web/module/netz/netz.js"))],
@@ -485,6 +490,7 @@ pub fn behandle(z: &Zustand, a: &Anfrage) -> Antwort {
         (_, p) if p.starts_with("/api/freigaben/") => freigaben_api(z, a, &p["/api/freigaben/".len()..]),
         (_, p) if p.starts_with("/api/ssh/") => ssh_api(z, a, &p["/api/ssh/".len()..]),
         (_, p) if p.starts_with("/api/netz/") => netz_api(z, a, &p["/api/netz/".len()..]),
+        (_, p) if p.starts_with("/api/quota/") => quota_api(z, a, &p["/api/quota/".len()..]),
         _ => fehler(404, "nicht gefunden"),
     }
 }
@@ -841,6 +847,43 @@ fn ssh_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
 /// Die Freigaben je Werkzeug (DESIGN, Regel "Freigabe je Werkzeug auf Zeit"):
 /// ansehen und setzen. Gesetzt wird ueber `freigaben::setzen` -- dieselbe
 /// Stelle, die die Kommandozeile und Telegram benutzen.
+/// Die Guthaben-Schnittstelle fuer das Modul „Konten" (ROADMAP, Auftrag
+/// 13.11.). Lesen darf, wer `anbieter-lesen` hat; **neu holen** ist ein
+/// schreibender Weg (`anbieter-schreiben`) -- ein Abruf beim Anbieter ist
+/// keine Leseoperation an unserem Zustand, er kostet beim Anbieter.
+fn quota_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
+    let (m, _) = module_erkennen(z.modul_dir.as_deref());
+    quota_antwort(z, a, was, &m)
+}
+
+fn quota_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort {
+    let (recht, nur_post) = match was {
+        "lesen" => ("anbieter-lesen", false),
+        "erneuern" => ("anbieter-schreiben", true),
+        _ => return fehler(404, "nicht gefunden"),
+    };
+    if !schreibrecht_vergeben(m, recht) {
+        return fehler(403, &format!("kein Modul hat das Recht '{recht}'"));
+    }
+    if nur_post != (a.methode == "POST") {
+        return fehler(405, "Methode nicht erlaubt");
+    }
+    let mut anfrage = json!({"op": "quota_lesen"});
+    if was == "erneuern" {
+        anfrage["neu"] = json!(true);
+        // Der Anbieter darf im Koerper stehen; ohne ihn werden alle erneuert.
+        if let Ok(Value::Object(o)) = serde_json::from_slice::<Value>(&a.body) {
+            if let Some(id) = o.get("id").and_then(Value::as_str) {
+                anfrage["id"] = json!(id);
+            }
+        }
+    }
+    if let Some(id) = query_wert(a.query, "id") {
+        anfrage["id"] = json!(id);
+    }
+    json_antwort(200, crate::dienst::antworten(&anfrage, &z.stand))
+}
+
 fn freigaben_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
     let (m, _) = module_erkennen(z.modul_dir.as_deref());
     freigaben_antwort(z, a, was, &m)

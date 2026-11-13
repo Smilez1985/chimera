@@ -417,29 +417,20 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
   filtert `typ === "ollama"`); heute legt man ihn über
   `/api/anbieter/setzen` an.
 
-- [ ] **Guthaben und Kosten je Anbieter** (Auftrag smilez, 13.11.: „Kosten
-  können bei den meisten Anbietern aus der API abgerufen werden"). Muster
-  abgeschaut bei **OpenMinis** (`provider/quota/`, Adapter je Anbieter):
-  - **Abfrage je Anbieter, je ein Adapter.** DeepSeek:
-    `GET /user/balance` → je **Währung ein eigener Pool** (nie umrechnen, nie
-    summieren), mit `total_balance`, Aufteilung `granted_balance`/
-    `topped_up_balance`, „verfügbar" aus `is_available`, Bindung kontoweit
-    („von allen Modellen dieses Kontos geteilt").
-  - **Herkunft immer mitliefern**: Quelle (`offizielle API` /
-    `Dashboard-API` / `unbekannt`), Belegtheit (`dokumentiert` /
-    `beobachtet`), Endpunkt, Zeitpunkt. Kein Abruf ohne diese Angabe.
-  - **Anthropic mit API-Schlüssel: kein Abruf.** Die Usage/Cost-API verlangt
-    einen **Admin-Key**; OpenMinis zeigt dort bewusst nur den Link zur
-    Abrechnungsseite (`UnsupportedQuotaAdapter`). Nicht so tun, als käme
-    eine Zahl.
-  - **Claude-Abo**: aktiv `GET /api/oauth/usage` (Beta-Header), passiv die
-    `anthropic-ratelimit-unified-*`-Header jeder Antwort; Herkunft
-    „Dashboard-API / beobachtet", nie „offiziell".
-  - **Frische**: aktive Abfragen höchstens alle 10 min, Abo-Kontingente im
-    5-Minuten-Fenster; älter ⇒ „veraltet" anzeigen, nicht verstecken.
-    `Retry-After` bindet auch den Knopf.
-  - Ablage `state/quota/<anbieter>.json` (Regel 5t), Op `quota_lesen`,
-    Modul „Konten" mit Karte je Währung.
+- [ ] **Guthaben je Anbieter — Restarbeiten** (gebaut 13.11., siehe
+  `docs/DESIGN.md`, „Guthaben je Anbieter"): Das Gateway fragt den Anbieter
+  (`quota_lesen`, Ablage `state/quota/<id>.json`), Mo­dul „Konten" im Web,
+  natives Agenten-Werkzeug `guthaben` (für PTT/TTS brauchbar formuliert).
+  **Offen:**
+  - **Claude-Abo (OAuth):** aktiv `GET /api/oauth/usage` mit Beta-Header
+    `oauth-2025-04-20`, passiv die `anthropic-ratelimit-unified-*`-Header
+    jeder Antwort. Beides fehlt, weil es in chimera noch **keine**
+    Abo-Anmeldung gibt (Typ `anthropic` wird vom Chat-Weg nicht bedient).
+    Herkunft dann „Dashboard-API / beobachtet", nie „offiziell".
+  - **Anthropic mit API-Schlüssel** bleibt bewusst ohne Zahl (Admin-Key
+    nötig, Link zur Abrechnung) — das ist fertig, nicht offen.
+  - Weitere Adapter (OpenAI, OpenRouter …) erst, wenn ein Anbieter
+    eingetragen wird, der eine Guthaben-API hat; `art_von()` ist der Ort.
 - [ ] **Kosten aus Token × Preis** (Entscheidung smilez 13.11.: „beides").
   Je Aufruf einen Datensatz (Zeit, Anbieter, `model_raw` **und**
   `model_billed` nach Alias-Abbildung, `prompt_cache_hit_tokens`,

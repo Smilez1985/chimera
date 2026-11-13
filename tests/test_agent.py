@@ -332,6 +332,83 @@ try:
 finally:
     _gw.anfragen = _echt
 
+print("== Guthaben: ein natives Werkzeug, kein Text-Trick ==")
+from chimera.agent.tools import guthaben_als_text  # noqa: E402
+
+with tempfile.TemporaryDirectory() as td:
+    tb = Toolbox(td)
+    namen = tb.names()
+    check("guthaben ist ein Werkzeug des Agenten", "guthaben" in namen, True)
+    schema = [s for s in tb.schemas() if s["name"] == "guthaben"]
+    check("und geht als Schema an das Modell", len(schema), 1)
+    check("keine Pflichtfelder — die Frage allein genuegt",
+          schema[0]["parameters"]["required"], [])
+    check("der Anbieter ist optional",
+          "anbieter" in schema[0]["parameters"]["properties"], True)
+
+# Text ohne Netz: je Waehrung ein Betrag, Komma statt Punkt, Grund statt 0.
+check("Betrag wird gesprochen geschrieben", "12,34 CNY" in guthaben_als_text({"anbieter": [
+    {"bezeichnung": "DeepSeek", "zustand": "gut",
+     "pools": [{"waehrung": "CNY", "gesamt": "12.34"}],
+     "herkunft": {"quelle": "offizielle API"}}]}), True)
+text = guthaben_als_text({"anbieter": [
+    {"bezeichnung": "D", "zustand": "gut", "pools": [
+        {"waehrung": "CNY", "gesamt": "1.00"}, {"waehrung": "USD", "gesamt": "2.00"}]}]})
+check("zwei Waehrungen bleiben zwei Betraege", ("1,00 CNY" in text and "2,00 USD" in text), True)
+check("nichts wird summiert", "3,00" in text, False)
+check("veraltet wird gesagt, nicht verschwiegen",
+      "veraltet, Stand vor 2 Stunden" in guthaben_als_text({"anbieter": [
+          {"bezeichnung": "D", "zustand": "gut", "pools": [{"waehrung": "CNY", "gesamt": "1"}],
+           "veraltet": True, "alter_s": 7200}]}), True)
+check("lokal braucht kein Guthaben",
+      "kein Guthaben noetig" in guthaben_als_text({"anbieter": [
+          {"bezeichnung": "Ollama", "zustand": "kein_guthaben_noetig"}]}), True)
+check("nicht abrufbar nennt den Grund",
+      "Admin-Schluessel" in guthaben_als_text({"anbieter": [
+          {"bezeichnung": "Anthropic", "zustand": "nicht_abrufbar",
+           "hinweis": "Admin-Schluessel noetig"}]}), True)
+check("ohne Anbieter kommt ein Satz, keine leere Antwort",
+      guthaben_als_text({"ok": True, "anbieter": []}),
+      "Es ist kein Anbieter eingetragen -- es gibt kein Guthaben abzufragen.")
+check("ohne Zahl steht der Fehler, keine 0",
+      "keine Zahl -- 500 kaputt" in guthaben_als_text({"anbieter": [
+          {"bezeichnung": "X", "zustand": "abruf_gescheitert", "fehler": {"text": "500 kaputt"}}]}), True)
+
+# Der Weg zum Gateway: eine Operation, nichts nachgebaut.
+_gw = __import__("chimera.provider.gateway", fromlist=["anfragen"])
+_echt_gw = _gw.anfragen
+try:
+    gesehen = []
+
+    def _fake_quota(anfrage, **kw):
+        gesehen.append(dict(anfrage))
+        return {"ok": True, "anbieter": [{"bezeichnung": "DeepSeek", "zustand": "gut",
+                "pools": [{"waehrung": "CNY", "gesamt": "5.00"}]}]}
+
+    _gw.anfragen = _fake_quota
+    with tempfile.TemporaryDirectory() as td:
+        tb = Toolbox(td)
+        text = tb.call("guthaben", {})
+        check("geht als eigene Operation zum Gateway", gesehen[0]["op"], "quota_lesen")
+        check("ohne Anbieter wird keiner geschickt", "id" in gesehen[0], False)
+        check("kein Neuladen ohne Auftrag", "neu" in gesehen[0], False)
+        check("die Zahl steht in der Antwort", "5,00 CNY" in text, True)
+        tb.call("guthaben", {"anbieter": "deepseek", "neu": "ja"})
+        check("ein genannter Anbieter geht mit", gesehen[1]["id"], "deepseek")
+        check("'neu: ja' erzwingt den Abruf", gesehen[1].get("neu"), True)
+
+    def _kaputt(anfrage, **kw):
+        return {"ok": False, "fehler": {"code": "schluessel_falsch",
+                "text": "api.deepseek.com nimmt den Schluessel nicht an (401)"}}
+
+    _gw.anfragen = _kaputt
+    with tempfile.TemporaryDirectory() as td:
+        text = Toolbox(td).call("guthaben", {})
+        check("Ablehnung kommt als Satz, nicht als Programmfehler",
+              "401" in text and "Fehler in" not in text, True)
+finally:
+    _gw.anfragen = _echt_gw
+
 print("== Native Werkzeugaufrufe (DESIGN, Regel „Aufrufe, nicht Text“) ==")
 # Der Anbieter liefert strukturierte Aufrufe -- kein Text-Protokoll.
 from chimera.provider.base import Access, CostClass, Reply  # noqa: E402

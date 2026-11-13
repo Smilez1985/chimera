@@ -1,0 +1,9 @@
+{
+  "name": "konten",
+  "titel": {"de": "Konten", "en": "Accounts"},
+  "symbol": "💳",
+  "reihenfolge": 55,
+  "einstieg": "konten.js",
+  "element": "chimera-konten",
+  "rechte": ["anbieter-lesen", "anbieter-schreiben"]
+}

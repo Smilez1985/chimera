@@ -14,6 +14,7 @@ mod mojo;
 mod netzsuche;
 mod neustart;
 mod ollama;
+mod quota;
 mod sitzung;
 mod ssh;
 mod status;
