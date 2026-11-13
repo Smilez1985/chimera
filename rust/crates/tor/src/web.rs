@@ -75,6 +75,11 @@ const EINGEBAUT: &[Eingebaut] = &[
         manifest: include_str!("../web/module/ssh/manifest.json"),
         dateien: &[("ssh.js", "text/javascript; charset=utf-8", include_str!("../web/module/ssh/ssh.js"))],
     },
+    Eingebaut {
+        name: "netz",
+        manifest: include_str!("../web/module/netz/manifest.json"),
+        dateien: &[("netz.js", "text/javascript; charset=utf-8", include_str!("../web/module/netz/netz.js"))],
+    },
 ];
 
 
@@ -153,7 +158,7 @@ pub struct Modul {
 /// eintragen**, wenn das Gateway ein neues Recht kennt. Ein Recht, das nicht in
 /// dieser Liste steht, verwirft das Modul -- sonst wuerde ein Tippfehler im
 /// Manifest still ein wirkungsloses Recht verlangen.
-pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben", "wahl-lesen", "wahl-schreiben", "freigaben-lesen", "freigaben-schreiben", "ssh-lesen", "ssh-schreiben"];
+pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben", "wahl-lesen", "wahl-schreiben", "freigaben-lesen", "freigaben-schreiben", "ssh-lesen", "ssh-schreiben", "netz-lesen", "netz-schreiben"];
 
 fn name_ok(s: &str) -> bool {
     !s.is_empty() && s.len() <= 32 && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
@@ -479,6 +484,7 @@ pub fn behandle(z: &Zustand, a: &Anfrage) -> Antwort {
         (_, p) if p.starts_with("/api/wahl/") => wahl_api(z, a, &p["/api/wahl/".len()..]),
         (_, p) if p.starts_with("/api/freigaben/") => freigaben_api(z, a, &p["/api/freigaben/".len()..]),
         (_, p) if p.starts_with("/api/ssh/") => ssh_api(z, a, &p["/api/ssh/".len()..]),
+        (_, p) if p.starts_with("/api/netz/") => netz_api(z, a, &p["/api/netz/".len()..]),
         _ => fehler(404, "nicht gefunden"),
     }
 }
@@ -672,6 +678,50 @@ fn wahl_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort {
 /// bekommt nur seine Rechte"): ansehen, anlegen/aendern, loeschen. Der Agent
 /// kommt hier nicht durch -- er hat genau eine Op (`ssh_vorschlag`), die nur
 /// anlegen darf; bestaetigen tut der Nutzer, hier.
+/// Das Netz-Modul: Tailnet-Zustand lesen und schalten (DESIGN, Regel
+/// "Tailscale -- gelesen, nicht gesteuert"). Lesen braucht `netz-lesen`,
+/// Schalten `netz-schreiben` -- und zusaetzlich die Freigabe `tailscale`,
+/// die der Dienst prueft (er entscheidet, nicht die Oberflaeche).
+fn netz_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
+    let (m, _) = module_erkennen(z.modul_dir.as_deref());
+    netz_antwort(z, a, was, &m)
+}
+
+/// Wie `netz_api`, mit der Modulliste von aussen (so prueft ein Test die
+/// Rechte, ohne ein Verzeichnis anzulegen).
+fn netz_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort {
+    let (recht, nur_post) = match was {
+        "tailscale" => ("netz-lesen", false),
+        "steuern" => ("netz-schreiben", true),
+        _ => return fehler(404, "nicht gefunden"),
+    };
+    if !schreibrecht_vergeben(m, recht) {
+        return fehler(403, &format!("kein Modul hat das Recht '{recht}'"));
+    }
+    if nur_post != (a.methode == "POST") {
+        return fehler(405, "Methode nicht erlaubt");
+    }
+    match was {
+        "tailscale" => {
+            let r = crate::dienst::antworten(&json!({"op": "tailscale"}), &z.stand);
+            json_antwort(200, r)
+        }
+        _ => {
+            let v: Value = match serde_json::from_slice(a.body) {
+                Ok(v @ Value::Object(_)) => v,
+                _ => return fehler(400, "kein JSON-Objekt"),
+            };
+            let aktion = v["aktion"].as_str().unwrap_or("");
+            let r = crate::dienst::antworten(&json!({"op": "tailscale_steuern", "aktion": aktion}), &z.stand);
+            if r["ok"] == true {
+                json_antwort(200, r)
+            } else {
+                fehler(400, r["fehler"]["text"].as_str().unwrap_or("abgelehnt"))
+            }
+        }
+    }
+}
+
 fn ssh_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
     let (m, _) = module_erkennen(z.modul_dir.as_deref());
     let (recht, nur_post) = match was {

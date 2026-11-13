@@ -158,7 +158,7 @@ fn ok_manifest(n: &str) -> String {
 fn das_eingebaute_chatmodul_ist_gueltig_und_erkannt() {
     let (m, f) = module_erkennen(None);
     assert!(f.is_empty(), "{f:?}");
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "ollama", "wahl", "freigaben", "ssh", "status"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "ollama", "wahl", "freigaben", "ssh", "netz", "status"]);
     assert!(m.iter().all(|x| x.eingebaut));
 }
 
@@ -169,12 +169,12 @@ fn ein_neues_verzeichnis_erscheint_im_menue_ohne_codeaenderung() {
     std::fs::write(d.join("zusatz/manifest.json"), ok_manifest("zusatz")).unwrap();
     let (m, f) = module_erkennen(Some(&d));
     assert!(f.is_empty(), "{f:?}");
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "ollama", "wahl", "freigaben", "ssh", "status", "zusatz"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "ollama", "wahl", "freigaben", "ssh", "netz", "status", "zusatz"]);
     let z = zustand(Some(d), "/x".into());
     let c = anmelden(&z);
     let r = behandle(&z, &a("GET", "/api/module", &c, b""));
     let v: Value = serde_json::from_slice(&r.body).unwrap();
-    assert_eq!(v["module"].as_array().unwrap().len(), 7);
+    assert_eq!(v["module"].as_array().unwrap().len(), 8);
 }
 
 #[test]
@@ -188,7 +188,7 @@ fn ein_kaputtes_manifest_verwirft_nur_dieses_modul_und_wird_gemeldet() {
     std::fs::create_dir_all(d.join("leer")).unwrap(); // Verzeichnis ohne Manifest
     let (m, f) = module_erkennen(Some(&d));
     let namen: Vec<_> = m.iter().map(|x| x.name.as_str()).collect();
-    assert_eq!(namen, vec!["chat", "ollama", "wahl", "freigaben", "ssh", "status", "gut"]);
+    assert_eq!(namen, vec!["chat", "ollama", "wahl", "freigaben", "ssh", "netz", "status", "gut"]);
     assert_eq!(f.len(), 4, "{f:?}");
 }
 
@@ -198,7 +198,7 @@ fn ein_nachgelegtes_modul_ersetzt_kein_eingebautes() {
     std::fs::create_dir_all(d.join("chat")).unwrap();
     std::fs::write(d.join("chat/manifest.json"), ok_manifest("chat")).unwrap();
     let (m, f) = module_erkennen(Some(&d));
-    assert_eq!(m.len(), 6);
+    assert_eq!(m.len(), 7);
     assert!(m.iter().all(|x| x.eingebaut));
     assert_eq!(f.len(), 1);
 }
@@ -212,7 +212,7 @@ fn die_reihenfolge_kommt_aus_dem_manifest() {
             format!(r#"{{"name":"{n}","titel":"T","element":"x-{n}","einstieg":"a.js","rechte":[],"reihenfolge":{r}}}"#)).unwrap();
     }
     let (m, _) = module_erkennen(Some(&d));
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["b-zuerst", "chat", "ollama", "wahl", "freigaben", "ssh", "status", "a-zuletzt"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["b-zuerst", "chat", "ollama", "wahl", "freigaben", "ssh", "netz", "status", "a-zuletzt"]);
 }
 
 #[test]
@@ -907,6 +907,29 @@ fn die_bestaetigung_nach_der_aufnahme_macht_den_eintrag_brauchbar() {
     assert_eq!(ohne["_status"], 200, "{ohne}");
     assert_eq!(ohne["eintrag"]["brauchbar"], false, "{ohne}");
     assert_eq!(ohne["eintrag"]["hostschluessel"], Value::Null, "{ohne}");
+}
+
+#[test]
+fn das_netz_modul_braucht_seine_rechte() {
+    // Lesen und Schalten sind zwei Rechte: ein Modul, das nur anzeigen darf,
+    // schaltet nichts, und ohne Modul geht gar nichts (DESIGN, Regel
+    // "Tailscale -- gelesen, nicht gesteuert").
+    let (z, _) = anbieter_zustand("netz-rechte");
+    let c = anmelden(&z);
+    let leer: Vec<Modul> = vec![];
+    let r = netz_antwort(&z, &a("GET", "/api/netz/tailscale", &c, b""), "tailscale", &leer);
+    assert_eq!(r.status, 403, "ohne Modul");
+    let nur_lesen = vec![modul("netz", &["netz-lesen"], true)];
+    let r = netz_antwort(&z, &a("GET", "/api/netz/tailscale", &c, b""), "tailscale", &nur_lesen);
+    assert_eq!(r.status, 200, "lesen erlaubt");
+    let r = netz_antwort(&z, &a("POST", "/api/netz/steuern", &c, br#"{"aktion":"aus"}"#), "steuern", &nur_lesen);
+    assert_eq!(r.status, 403, "schalten ohne netz-schreiben");
+    // Schalten mit Recht, aber ohne Freigabe `tailscale`: der Dienst sagt nein.
+    let mit_schreiben = vec![modul("netz", &["netz-lesen", "netz-schreiben"], true)];
+    let r = netz_antwort(&z, &a("POST", "/api/netz/steuern", &c, br#"{"aktion":"aus"}"#), "steuern", &mit_schreiben);
+    let v: Value = serde_json::from_slice(&r.body).unwrap();
+    assert_eq!(r.status, 400, "{v}");
+    assert!(v["fehler"].as_str().unwrap_or("").contains("nicht freigegeben"), "{v}");
 }
 
 #[test]

@@ -1,0 +1,9 @@
+{
+  "name": "netz",
+  "titel": {"de": "Netz", "en": "Network"},
+  "symbol": "🌐",
+  "reihenfolge": 85,
+  "einstieg": "netz.js",
+  "element": "chimera-netz",
+  "rechte": ["netz-lesen", "netz-schreiben"]
+}

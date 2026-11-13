@@ -820,6 +820,15 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Das Tailnet hat jetzt eine Oberfläche und einen Telegram-Befehl** (13.11.):
+  neues Modul **„Netz“** (`netz.js`, Rechte `netz-lesen`/`netz-schreiben`) mit
+  Zustand, Peer-Zahl und einem Schalter „Tailnet ein-/ausschalten“; dazu
+  `/tailscale` (zeigen), `/tailscale an|aus` (schalten) in Telegram. Beide Wege
+  gehen über denselben Dienst und damit über dieselbe **Freigabe `tailscale`** —
+  die Oberfläche entscheidet nicht selbst. Test
+  `web::tests::das_netz_modul_braucht_seine_rechte` (403 ohne Modul, 403 fürs
+  Schalten ohne `netz-schreiben`, „nicht freigegeben“ mit Recht aber ohne
+  Freigabe) und vier Fälle in der Telegram-Auswertung.
 - **Das Tailnet lässt sich jetzt auch schalten** (13.11., nach dem Pi-Einbau):
   Der Gateway-Nutzer ist auf dem Pi **`operator`** von `tailscaled`
   (`tailscale set --operator=chimera-tor`, Entscheidung smilez) — damit darf

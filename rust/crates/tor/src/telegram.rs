@@ -264,6 +264,9 @@ pub enum Entscheidung {
     /// Freigabe je Werkzeug auf Zeit: zeigen (`/frei`) oder setzen
     /// (`/frei web_abruf 30m`, `/frei ssh immer`, `/frei ssh aus`).
     Frei(String),
+    /// Tailnet zeigen oder schalten (`/tailscale`, `/tailscale an|aus`).
+    /// Wirkt auf das Betriebssystem des Geraets, nicht auf die Sitzung.
+    Tailscale(String),
     /// In die Hauptsitzung fragen.
     Fragen(String),
 }
@@ -287,6 +290,10 @@ pub fn entscheiden(erlaubt: &BTreeSet<i64>, e: &Eingang) -> Entscheidung {
                 return Entscheidung::Strom(arg);
             }
             "suche" | "netzsuche" => return Entscheidung::Suche,
+            "tailscale" | "tailnet" => {
+                let arg = t.splitn(2, char::is_whitespace).nth(1).unwrap_or("").trim().to_lowercase();
+                return Entscheidung::Tailscale(arg);
+            }
             "frei" | "freigabe" | "freigaben" => {
                 let arg = t.splitn(2, char::is_whitespace).nth(1).unwrap_or("").trim().to_string();
                 return Entscheidung::Frei(arg);
@@ -307,7 +314,7 @@ fn jetzt_s() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
-pub const HILFE: &str = "Ich bin Chimera. Schreib einfach los.\n/status -- was gerade laeuft\n/neu -- Gespraech von vorn\n/model -- Modelle zeigen, /model 3 oder /model <name> waehlen\n/stream -- Teilstuecke an/aus (/stream an, /stream aus)\n/suche -- im eigenen Netz nach Ollama-Servern suchen\n/frei -- Freigaben zeigen; /frei <werkzeug> 30m | 2h | 3d | immer | aus";
+pub const HILFE: &str = "Ich bin Chimera. Schreib einfach los.\n/status -- was gerade laeuft\n/neu -- Gespraech von vorn\n/model -- Modelle zeigen, /model 3 oder /model <name> waehlen\n/stream -- Teilstuecke an/aus (/stream an, /stream aus)\n/suche -- im eigenen Netz nach Ollama-Servern suchen\n/frei -- Freigaben zeigen; /frei <werkzeug> 30m | 2h | 3d | immer | aus\n/tailscale -- Tailnet zeigen; /tailscale an | aus";
 pub const ABGEWIESEN: &str = "Wir kennen uns nicht. Ich rede nur mit Eingetragenen.";
 
 /// Dauer aus einem Telegram-Argument: `30m`, `2h`, `3d`, `immer`, `aus`.
@@ -395,9 +402,34 @@ pub fn frei_text(a: &Value, jetzt: u64) -> String {
     t
 }
 
+/// Die Antwort von `op: tailscale` in einem Satz. Die Tuer zeigt **nur
+/// lesbare Angaben** -- kein JSON, keine Rohfelder.
+fn tailscale_text(a: &serde_json::Value) -> String {
+    if a["ok"] != true {
+        return format!("Nicht lesbar: {}", a["fehler"]["text"].as_str().unwrap_or("ohne Grund"));
+    }
+    if a["eingerichtet"] != true {
+        return "Tailscale ist hier nicht eingerichtet (tailscaled läuft nicht).".to_string();
+    }
+    let mut t = format!("Tailnet: {}", a["zustand"].as_str().unwrap_or("unbekannt"));
+    if let Some(h) = a["hostname"].as_str().filter(|h| !h.is_empty()) {
+        t.push_str(&format!(" · {h}"));
+    }
+    if let Some(ip) = a["adressen"].as_array().and_then(|x| x.first()).and_then(|x| x.as_str()) {
+        t.push_str(&format!(" {ip}"));
+    }
+    if let Some(n) = a["peers_gesamt"].as_u64() {
+        t.push_str(&format!("
+{} von {} Peers online.", a["peers_online"].as_u64().unwrap_or(0), n));
+    }
+    t.push_str("
+Schalten: /tailscale an oder /tailscale aus.");
+    t
+}
+
 /// Die Antwort der Netzsuche als Text. Rein (kein Netz, keine Datei), damit
 /// sich jeder Fall pruefen laesst: gefunden, nichts gefunden, Suche ging nicht.
-pub fn suche_text(a: &Value) -> String {
+fn suche_text(a: &Value) -> String {
     if a["ok"] != true {
         let grund = a["grund"].as_str().or_else(|| a["fehler"]["text"].as_str()).unwrap_or("ohne Grund");
         return format!("Die Suche ging nicht: {grund}. Adresse bitte auf der Web-Oberflaeche eintragen.");
@@ -512,6 +544,7 @@ impl Tuer {
             Entscheidung::Strom(arg) => self.stream_befehl(e.chat_id, &arg),
             Entscheidung::Suche => self.suche_befehl(e.chat_id),
             Entscheidung::Frei(arg) => self.frei_befehl(e.chat_id, &arg),
+            Entscheidung::Tailscale(arg) => self.tailscale_befehl(e.chat_id, &arg),
             Entscheidung::Fragen(text) => {
                 self.api.tippt(e.chat_id);
                 if let Err(f) = sitzung::fragen(&self.sitzung, TUER, &text, &format!("tg-{}", e.update_id)) {
@@ -621,6 +654,32 @@ impl Tuer {
         let stand = crate::dienst::Stand::neu();
         let a = crate::netzsuche::durchgang(&stand);
         antworten(&self.api, chat, &suche_text(&a));
+    }
+
+    /// `/tailscale`: Tailnet zeigen oder schalten.
+    ///
+    /// Schalten geht denselben Weg wie jedes andere Werkzeug: der Dienst
+    /// entscheidet, und der prueft die **Freigabe `tailscale`**. Fehlt sie,
+    /// nennt die Antwort den Grund -- die Tuer schaltet nicht an der Freigabe
+    /// vorbei, sonst waere sie ein zweiter Ort fuer dieselbe Entscheidung.
+    fn tailscale_befehl(&self, chat: i64, arg: &str) {
+        let stand = crate::dienst::Stand::neu();
+        match arg {
+            "" | "status" => {
+                let a = crate::dienst::antworten(&json!({"op": "tailscale"}), &stand);
+                antworten(&self.api, chat, &tailscale_text(&a));
+            }
+            "an" | "ein" | "on" | "aus" | "off" => {
+                let aktion = if arg == "aus" || arg == "off" { "aus" } else { "an" };
+                let a = crate::dienst::antworten(&json!({"op": "tailscale_steuern", "aktion": aktion}), &stand);
+                if a["ok"] == true {
+                    antworten(&self.api, chat, &format!("Tailnet {aktion}. {}", a["text"].as_str().unwrap_or("")));
+                } else {
+                    antworten(&self.api, chat, &format!("Nicht geschaltet: {}", a["fehler"]["text"].as_str().unwrap_or("ohne Grund")));
+                }
+            }
+            _ => antworten(&self.api, chat, "Verstehe ich nicht. /tailscale, /tailscale an oder /tailscale aus."),
+        }
     }
 
     /// `/stream`: Teilstuecke an oder aus. Der Wert steht in `wahl.json` und
@@ -1051,6 +1110,12 @@ mod tests {
         assert_eq!(entscheiden(&liste(), &eingang(7, "/start")), Entscheidung::Hilfe);
         assert_eq!(entscheiden(&liste(), &eingang(7, "/Hilfe")), Entscheidung::Hilfe);
         assert_eq!(entscheiden(&liste(), &eingang(7, "/status")), Entscheidung::Status);
+        // /tailscale traegt sein Argument mit; ohne Argument heisst "zeigen".
+        assert_eq!(entscheiden(&liste(), &eingang(7, "/tailscale")), Entscheidung::Tailscale("".into()));
+        assert_eq!(entscheiden(&liste(), &eingang(7, "/tailscale an")), Entscheidung::Tailscale("an".into()));
+        assert_eq!(entscheiden(&liste(), &eingang(7, "/TAILSCALE aus")), Entscheidung::Tailscale("aus".into()));
+        // Ein Fremder schaltet nichts.
+        assert_eq!(entscheiden(&liste(), &eingang(99, "/tailscale aus")), Entscheidung::Abweisen);
         assert_eq!(entscheiden(&liste(), &eingang(7, "/neu@chimera_bot")), Entscheidung::Neu);
         assert_eq!(entscheiden(&liste(), &eingang(7, "/reset")), Entscheidung::Neu);
     }
