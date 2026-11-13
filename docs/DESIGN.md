@@ -3698,7 +3698,8 @@ Gateway schreibt, der Agent liest sie **nie** — er bekommt „erlaubt“ oder
   "werkzeuge": {
     "web_abruf": {
       "modus": "offen",
-      "bis": 1794490000,
+      "seit": 1794486400,
+      "erinnern_alle": 300,
       "positiv": ["api.example.com"],
       "negativ": ["intern.example.com"],
       "notiz": "12.11., auf Zeit freigegeben"
@@ -3709,8 +3710,14 @@ Gateway schreibt, der Agent liest sie **nie** — er bekommt „erlaubt“ oder
 
 - **`modus`** — `positivliste` (Vorgabe, nur Ziele in `positiv`) oder
   `offen` (jedes Ziel außer `negativ`).
-- **`bis`** — Zeitpunkt; `null` heißt **für immer**. Vergangen = es gilt
-  wieder `positivliste`.
+*Soll-Zustand (noch nicht gebaut):*
+
+- **`seit`** — wann die Freigabe geöffnet wurde (Unix-Zeit). Nicht die Frist:
+  seit dem 13.11. läuft eine Freigabe **nicht** ab.
+- **`erinnern_alle`** — Sekunden zwischen zwei Erinnerungstönen (Vorgabe 300).
+- **`bis`** — **nur noch Altbestand.** Neue Freigaben schreiben es nicht mehr;
+  ein Eintrag mit `bis` in der Vergangenheit wird weiter als `positivliste`
+  gelesen, damit eine alte Frist nicht rückwirkend aufgeht.
 - **`positiv` / `negativ`** — Ziele in der Form des Werkzeugs (Host bei
   `web_abruf`, `user@host` bei `ssh`, Quellenname bei `web_suche`).
   **`negativ` gilt immer** — auch in `offen`, auch bei `bis: null`,
@@ -3719,9 +3726,34 @@ Gateway schreibt, der Agent liest sie **nie** — er bekommt „erlaubt“ oder
   steht, wird abgelehnt (`werkzeug_unbekannt`) — sonst öffnet ein Tippfehler
   still gar nichts oder, schlimmer, alles.
 
-**Ablauf entscheidet die Uhr, geprüft wird beim Ausführen.** `bis` wird
-**beim Prüfen** ausgewertet, nicht von einem Timer: ein ausgefallener oder
-neu gestarteter Dienst darf eine Freigabe nicht verlängern. Die Prüfung
+**Kein Ablauf mehr — der Ton erinnert** (Vorgabe smilez, 13.11.2026;
+*entschieden, noch nicht gebaut* — der Code lässt Freigaben bis dahin weiter
+ablaufen, siehe ROADMAP).
+Die Fassung vom 12.11. ließ die Uhr entscheiden: Nach `bis` galt wieder
+`positivliste`, ohne dass jemand etwas tat. Das ist still — und im Alltag
+heißt es, dass eine Freigabe mitten in der Arbeit zumacht, ohne dass man es
+merkt. Jetzt gilt: **Eine Freigabe bleibt offen, bis der Nutzer sie beendet.**
+Statt der Uhr entscheidet die **Aufmerksamkeit**: Solange eine Freigabe offen
+ist, ertönt am Gerät **alle 5 Minuten** ein Ton (`erinnern_alle`, einstellbar),
+so lange, bis die Freigabe geschlossen wird. Der Ton ist die Erinnerung, nicht
+der Ablauf.
+
+- **Was das kostet, ehrlich benannt:** Ist niemand am Gerät, piept es weiter
+  und die Tür bleibt offen. Das ist die bewusste Entscheidung — der Ton ist
+  das einzige Signal, und er hört erst auf, wenn jemand sie schließt.
+- **Altbestand wird nicht aufgeweckt:** Ein Eintrag mit einem `bis` in der
+  **Vergangenheit** wird beim Einlesen als `positivliste` gelesen (die alte
+  Frist war abgelaufen — sie darf nicht rückwirkend aufgehen). Ein `bis` in der
+  Zukunft bleibt offen, mit Erinnerung ab jetzt.
+- **Der Ton kommt vom Dienst, nicht vom Gateway.** Der Lautsprecher hängt an
+  der Anzeige (Whisplay HAT: ALSA-Karte `whisplaysound`, `aplay` vorhanden);
+  das Gateway hat kein Audio. Auslöser ist der Zeitgeber des Dienstes, die
+  Wahrheit über „ist etwas offen" bleibt im Gateway (`op: freigaben_lesen`).
+
+**Geprüft wird beim Ausführen, nicht vom Zeitgeber.** Der Zustand wird
+**beim Prüfen** gelesen, nicht von einem Timer gepflegt: ein ausgefallener oder
+neu gestarteter Dienst darf eine Freigabe weder verlängern noch (seit 13.11.)
+verkürzen. Die Prüfung
 sitzt dort, wo ausgeführt wird — Netzwege im Gateway, Befehle im Ausführer
 (Regel „Wer prüft, führt aus“); der Agent fragt nie selbst „darf ich?“ und
 bekommt auch keine Restzeit zu sehen.

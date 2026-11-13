@@ -33,6 +33,43 @@ zram wird nicht angefasst, wenn es läuft.
       ist damit keine Entscheidung mehr, sondern nur der Anlass: Tritt ein
       Bruch auf, wird die Grenze gesetzt und der Fall hier vermerkt.
 
+- [ ] **Freigaben laufen nicht mehr ab — der Ton erinnert** (entschieden
+      smilez, 13.11.; DESIGN-Absatz „Kein Ablauf mehr — der Ton erinnert“).
+      **Noch nicht gebaut.** Der Code lässt Freigaben weiterhin nach `bis`
+      ablaufen.
+      **Bauplan (in dieser Reihenfolge, jede Stufe für sich lauffähig):**
+      1. **Rust** (`freigaben.rs`): `Eintrag` bekommt `seit` und
+         `erinnern_alle` (Vorgabe 300 s, mindestens 60 s); `setzen` schreibt
+         kein `bis` mehr, sondern `seit` (beim Öffnen gesetzt, bleibt beim
+         Speichern der Listen stehen) und `erinnern_alle`; `laden` füllt beide
+         auf. `bis` bleibt **nur als Lese-Altbestand**: ein Eintrag mit `bis`
+         in der Vergangenheit gilt weiter als `positivliste`, sonst ginge eine
+         alte Frist rückwirkend auf. `offen_bis` heißt dann `ist_offen` und
+         fragt den Ablauf nur noch für Altbestand.
+      2. **Türen**: Web-Modul `freigaben.js` (Schalter „Freigeben“ ohne
+         Dauerwahl, dafür „Erinnern alle …“) und Telegram `/frei <werkzeug>`
+         ohne Dauer — sonst schreiben beide weiter eine Frist.
+      3. **Ton**: Der Python-Dienst (er hat den Lautsprecher, ALSA-Karte
+         `whisplaysound`, `aplay` vorhanden) fragt über `op: freigaben_lesen`,
+         ob etwas offen ist, und spielt alle `erinnern_alle` Sekunden einen
+         kurzen Ton. Wiederholen, bis die Freigabe geschlossen ist — auch wenn
+         niemand da ist (bewusste Entscheidung). Zeitgeber des Dienstes, kein
+         eigenes Timer-Unit.
+      **Tests je Stufe:** `freigaben::` in cargo (neu: offen bleibt offen,
+      Altbestand mit alter Frist bleibt zu, `erinnern_alle` zu klein wird
+      abgelehnt), Gegenprobe `rust/gegenprobe-freigaben.sh` erweitern, JS-Test
+      für den Schalter, Python-Test für „Ton nur, wenn offen, und im Abstand“.
+
+- [ ] **Hostschlüssel: `ssh-keyscan` im Gateway** (entschieden smilez, 13.11.):
+      Das Gateway holt den Hostschlüssel selbst, statt dass der Nutzer die
+      `ssh-keyscan`-Zeile eintippt. Es hat Netz und darf ein Programm starten;
+      die geprüfte OpenSSH-Implementierung erledigt KEX und Signatur — kein
+      eigener SSH-Code. Offen im Zuschnitt: (a) Aufruf als Kindprozess mit
+      fester `argv` und Zeitgrenze, (b) Ergebnis gegen die Tabelle prüfen
+      (Adresse + Port), (c) ein **geänderter** Schlüssel wird nicht still
+      übernommen, sondern als Befund gemeldet (`brauchbar: false` mit Grund),
+      (d) Protokollzeile je Abruf. Baut auf `ssh.rs` auf (`op_ssh_aufnahme`).
+
 - [ ] **Die CI fährt keine Gegenproben.** Gemessen 13.11.: Die Python-Jobs
       rufen nur `tests/test_*.py`, die Installer-Jobs nur
       `installer/tests/test-*.sh` — die 13 `tests/gegenprobe_*.py` und die
