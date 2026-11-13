@@ -1,9 +1,9 @@
 # Fremdcode-Prüfung: aiavatar-pi, rpi-permission-gate
 
 Zwei Bibliotheken wurden am 13.11.2026 auf Brauchbarkeit geprüft, bevor jemand
-Zeit hineinsteckt. Beide Berichte liegen vollständig unter
-`/var/minis/shared/chimera/recherche/`; hier steht nur, was für Entscheidungen
-zählt.
+Zeit hineinsteckt. Die vollständigen Berichte liegen in der Recherche-Ablage
+außerhalb des Repos (aus dem Gerät erzeugt, mit Quellen und Abrufdatum); hier
+steht nur, was für Entscheidungen zählt.
 
 ## aiavatar-pi (`uezo/aiavatar-pi`, Apache-2.0, v0.1.3)
 
