@@ -20,6 +20,15 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **„Eintrag bestätigen" über die Oberfläche belegt** (13.11.): Der ganze
+  Aufnahme-Weg ist in der Sandbox gegen einen echten `sshd` und den echten
+  Ausführer gefahren — Formular „zur Aufnahme anlegen", Passwortfeld, „Jetzt
+  aufnehmen" (Fingerabdruck und `authorized_keys`-Zeile erscheinen), „Eintrag
+  bestätigen" schreibt (`brauchbar: true`), das Passwort ist danach aus der
+  Ablage weg. Festgenagelt in
+  `web::tests::die_bestaetigung_nach_der_aufnahme_macht_den_eintrag_brauchbar`;
+  Gegenproben von Hand, beide rot (Hostschlüssel aus der Bestätigung ignoriert
+  bzw. `brauchbar()` ohne Fingerabdruck).
 - **Die Aufnahme läuft am Gerät** (13.11., chimera-pi): gegen einen
   temporären Nutzer `sshtest` auf 127.0.0.1 durchgespielt — Host zur Aufnahme
   angelegt, Passwort über `--geheim-ssh` abgelegt (nie angezeigt), Aufnahme
@@ -1180,6 +1189,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Die Oberfläche zeigt bei abgelaufener Sitzung wieder die Anmeldung**
+  (13.11.): Ein Neustart des Gateways räumt die Sitzungen ab; jeder Klick
+  danach kam als `401 nicht angemeldet` zurück, im Modul sah das aus wie
+  „Modul nicht ladbar" oder wie ein Fehler der Aufnahme. Jetzt blendet der
+  Rahmen bei `401` die Anmeldung ein, statt den Fehler in einem Modul zu
+  zeigen. Gefunden beim Durchspielen von „Eintrag bestätigen" (`fee3d9c`).
 - **Ein ersetztes Binary startet seinen Dienst neu** (13.11., am Pi
   gefunden): Der Installer legte das neue Programm ab, aber
   `systemctl enable --now` startet einen **laufenden** Dienst nicht neu. Auf

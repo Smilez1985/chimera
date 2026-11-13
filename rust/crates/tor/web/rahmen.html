@@ -52,6 +52,13 @@ const sprache = (navigator.language || "de").slice(0, 2);
 const api = async (pfad, opt = {}) => {
   const r = await fetch(pfad, { ...opt, headers: { "X-Chimera": "1", "Content-Type": "application/json" } });
   let j = {}; try { j = await r.json(); } catch (_) {}
+  // Die Sitzung kann zwischen zwei Klicks ablaufen (Neustart des Gateways
+  // räumt sie ab). Ohne diesen Griff sähe das aus wie "Modul nicht ladbar"
+  // oder ein Fehler im Modul -- der Nutzer soll stattdessen die Anmeldung sehen.
+  if (r.status === 401 && pfad !== "/api/login") {
+    $("kopf").hidden = true;
+    $("anmeldung").style.display = "block";
+  }
   return { status: r.status, ...j };
 };
 window.chimera = { api, sprache };

@@ -734,17 +734,6 @@ abends** (CHANGELOG: Host-Tabelle, `op: ssh`, Deskriptor-Übergabe, feste
       freigegebenes nicht; ein zweiter Host ist ohne neuen Auftrag nicht
       erreichbar; Hostschlüssel-Wechsel bricht ab; `-D`/`-L`/`-R` sind nicht
       ausdrückbar (im Test festgenagelt, `rust/gegenprobe-ssh.sh` 19/19 rot).
-- [ ] **„Eintrag bestätigen" im Modul zu Ende prüfen** (13.11., unterbrochen):
-      Der Weg bis dorthin ist im Browser belegt — Formular legt den Host an,
-      Passwortfeld hinterlegt, „Jetzt aufnehmen" erscheint, der Klick ruft die
-      API und zeigt Fingerabdruck und Zeile. Der **Klick auf „Eintrag
-      bestätigen" hat aber nicht geschrieben** (`brauchbar` blieb `false`);
-      Ursache noch nicht gefunden. Verdacht: der Aufruf scheitert im
-      `post("/api/ssh/setzen", …)` und die Fehlermeldung landet in einem
-      Element, das beim `laden()` ersetzt wird. Die JS-Aufrufe im
-      Browser-Werkzeug liefen dabei mehrfach in einen 30-s-Timeout, während
-      dieselbe API per `curl` in 0,5 s antwortete — erst das trennen
-      (Werkzeug oder Seite?), dann den Handler prüfen.
 - [ ] **Tailscale/Headscale anbinden** (Idee smilez 13.11.): auf dem Pi-hole
       läuft ein **Headscale**-Server. Entscheidung steht noch aus; meine
       Lesart: `tailscaled` läuft **auf Betriebssystem-Ebene** (es braucht
