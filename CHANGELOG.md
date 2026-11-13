@@ -20,6 +20,15 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Die Erinnerung klingelt am Gerät** (13.11., gemessen am `chimera-pi`,
+  Stand `3259b5b`): Freigabe `ssh` über den Socket geöffnet
+  (`erinnern_alle: 60`) → drei Töne im Abstand von 61 s im Journal
+  („Erinnerung: ssh ist offen.“), `aplay -q -D default` spielt über die
+  ALSA-Karte `whisplaysound` (keine Warnung), danach geschlossen → **2 min
+  Ruhe**. Die Datei ist 15 920 Byte, 0,18 s, 44,1 kHz. Damit ist auch die
+  Gruppe geklärt: `sudo -u chimera` allein scheitert („Cannot get card index
+  for whisplaysound“), die Unit hat aber `SupplementaryGroups=audio spi gpio`
+  — der Dienst darf spielen.
 - **Der Ton erinnert an offene Freigaben** (13.11., Entscheidung smilez;
   dritte Stufe von „kein Ablauf mehr“): `src/chimera/freigabe_erinnerung.py`
   fragt über `op: freigabe_lesen` nach offenen Freigaben und spielt alle
@@ -1277,6 +1286,14 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Die Erinnerung fragte die falsche Op** (13.11., am Gerät gefunden,
+  behoben): Der Dienst schickte `freigaben_lesen`, das Gateway kennt nur
+  `freigabe_lesen` — die Erinnerung hätte auf dem Pi **nie** geklingelt. Der
+  Test war grün, weil die Gateway-Attrappe auf jeden Namen antwortete: ein
+  Testdoppel, das nicht prüft, *was* gefragt wird, prüft nur sich selbst.
+  Jetzt hält ein Test die Op aus `app.py` gegen den Verteiler in `dienst.rs`
+  („Op muss im Gateway stehen"), dazu ein Fall mit namensgebundenem Gateway;
+  Gegenprobe-Mutation `op-name-erfunden` (8/8 rot).
 - **Eine Zeitgrenze hieß „nicht erreichbar"** (13.11.): Bricht das Gateway
   einen Chat nach 300 s ab (`ollama::AUFRUF`), meldete es
   „<host> antwortet nicht: …" — als wäre der Server weg. Bei einem Denkmodell

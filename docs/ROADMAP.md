@@ -33,12 +33,6 @@ zram wird nicht angefasst, wenn es läuft.
       ist damit keine Entscheidung mehr, sondern nur der Anlass: Tritt ein
       Bruch auf, wird die Grenze gesetzt und der Fall hier vermerkt.
 
-- [ ] **Freigabe-Erinnerung am Gerät belegen** (gebaut 13.11., CHANGELOG,
-      DESIGN „Kein Ablauf mehr — der Ton erinnert“). Offen ist nur die
-      **Messung auf dem Pi**: klingelt `aplay -q -D default` dort wirklich
-      über die ALSA-Karte `whisplaysound`, und wie laut ist die erzeugte
-      Datei? Bisher gemessen: cargo-Tests, JS-Test mit DOM-Ersatz, die
-      Dienstschleife mit Testdoppel und `aplay` gegen eine Attrappe.
 - [ ] **Hostschlüssel: `ssh-keyscan` im Gateway** (entschieden smilez, 13.11.):
       Das Gateway holt den Hostschlüssel selbst, statt dass der Nutzer die
       `ssh-keyscan`-Zeile eintippt. Es hat Netz und darf ein Programm starten;
