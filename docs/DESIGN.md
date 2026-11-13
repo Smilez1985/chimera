@@ -948,6 +948,14 @@ Agent bekommt Netz nur, „wenn die Security Gates den Zugriff durchwinken“.
    abgelehnt. Braucht ein Werkzeug Netz, ist es ein Werkzeug des Gateways
    (Regel 5r).
 
+   **Am 13.11. im Ausführer selbst gemessen** (chimera-pi): ein Befehl, den
+   der Ausführer über seinen Socket ausführt, bekommt gegen `1.1.1.1:443`
+   und gegen `127.0.0.1:22` je `TimeoutError: timed out`; derselbe Aufruf
+   außerhalb der Unit verbindet. Auch ein root-Prozess, per `cgroup.procs`
+   in das cgroup der Unit geschoben, wird abgewiesen — der Riegel ist die
+   Unit, nicht der Nutzer. Der einzige Weg ins Netz bleibt der Deskriptor,
+   den das Gateway reicht. `PrivateTmp=yes` trennt zusätzlich `/tmp`.
+
 **Vorrang bei Widerspruch (10.11.2026).** An drei Stellen sagt dieses
 Dokument noch, der Agent lese die `.env`: im Pfadschema der Regel 10r
 (`config/ root:chimera 750, .env 640`), in Regel 5t („der Agent liest dort

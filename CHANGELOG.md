@@ -1535,6 +1535,21 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   nicht gemessen.
 
 ### Geprüft
+- **Der Ausführer kommt nicht ins Netz — gemessen in seinem eigenen Prozess**
+  (13.11., chimera-pi, Stand `cebd9da`): `IPAddressDeny` war bisher nur an der
+  Unit und an einem fremden Prozess im selben cgroup gemessen. Jetzt lief die
+  Probe **durch den Ausführer selbst**: eine Zeitfreigabe für `run_command`
+  mit der Positivliste `["python3"]` (10 min, danach zurückgenommen), dann
+  `{"op":"run","command":"python3 probe/netzprobe.py 1.1.1.1 443"}` über
+  `/run/chimera/sohelper.sock`. Antwort:
+  `ABGELEHNT 1.1.1.1:443 -> TimeoutError: timed out`, ebenso gegen
+  `127.0.0.1:22`. Gegenproben: derselbe Aufruf **außerhalb** der Unit
+  (`VERBUNDEN` auf beide Ziele), und ein root-Prozess, per `cgroup.procs` in
+  das cgroup der Unit geschoben, bekommt ebenfalls `timed out` — der Riegel
+  ist also das cgroup bzw. die Unit, nicht der Nutzer. Der Ausführer kann
+  Netzzugang ausschließlich über einen von außen gereichten Deskriptor
+  bekommen; `PrivateTmp=yes` trennt dabei auch `/tmp` (die Probe musste in
+  den Arbeitsordner).
 - **Am chimera-pi eingespielt (11.11.2026, Stand `a8098b4`):** Module 55 und
   99-sohelper grün, `tools/abgleich.sh` meldet „der eingespielte Stand
   entspricht der Quelle". Nachweise am laufenden System: Nutzer

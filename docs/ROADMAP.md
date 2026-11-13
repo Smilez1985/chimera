@@ -713,12 +713,6 @@ das Gateway — auch `ssh`. Der Ausführer bleibt ohne Netz. **Gebaut 12.11.
 abends** (CHANGELOG: Host-Tabelle, `op: ssh`, Deskriptor-Übergabe, feste
 `argv`, Agenten-Werkzeuge `ssh` und `ssh_vorschlag`). Offen bleibt:
 
-- [ ] **`IPAddressDeny=any` am Gerät nachweisen** — **gemessen 13.11.**:
-      Unit `chimera-sohelper` trägt `IPAddressDeny=::/0 0.0.0.0/0`, `Allow`
-      ist leer; `ssh` in einer Unit mit derselben Property endet mit
-      `Connection timed out` gegen 1.1.1.1:443, ohne sie mit
-      `Connection closed by 1.1.1.1 port 443`. Offen bleibt nur die Probe
-      **im** Ausführer selbst (er startet ssh nur über den Deskriptor).
 - [ ] **Hostschlüssel im Gateway lesen** (`ssh_schluessel_lesen`): heute
       tippt der Nutzer die Zeile aus `ssh-keyscan` ein, den Fingerabdruck
       rechnet das Gateway. Selbst lesen heißt SSH-Schlüsselaustausch —
