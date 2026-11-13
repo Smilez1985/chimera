@@ -302,7 +302,7 @@ fn modelle(id: &str, stand: &Stand) -> Value {
 }
 
 /// Der Schluessel eines Anbieters: erst die Ablage, die die Oberflaeche
-/// fuellt (`state/keys/`), dann die Umgebung. Beide sind Eigentum des
+/// fuellt (`config/geheim/`), dann die Umgebung. Beide sind Eigentum des
 /// Gateways; der Agent sieht keinen Wert (DESIGN 5l).
 fn schluessel_von(id: &str, stand: &Stand) -> Option<String> {
     crate::daten::schluessel_lesen(&stand.daten, id).or_else(deepseek::schluessel_aus_umgebung)

@@ -5,7 +5,7 @@
 //!
 //! Der Schlüssel gehört dem Gateway. Er kommt aus der Umgebung
 //! (`DEEPSEEK_API_KEY`, nur das Gateway liest die `.env`, DESIGN 5l) oder aus
-//! der Schlüsselablage der Anbietertabelle (`state/keys/`), die die Oberfläche
+//! der Schlüsselablage der Anbietertabelle (`config/geheim/`), die die Oberfläche
 //! füllt. Er steht in keiner Antwort und in keiner Fehlermeldung.
 //!
 //! Die Fakten stehen in `docs/RECHERCHE-deepseek.md` (Abruf 13.11.), die

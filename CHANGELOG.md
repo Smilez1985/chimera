@@ -34,7 +34,7 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   (`schluessel_falsch` 401, `kein_guthaben` 402, `parameter_falsch` 422,
   `ausgelastet` 429). Werkzeugaufrufe kommen in der neutralen Form des
   Agenten (`name`/`argumente`) heraus, Argumente aus dem JSON-**Text** gelesen.
-  Schlüssel: Ablage der Oberfläche (`state/keys/<id>`) vor
+  Schlüssel: Ablage der Oberfläche (`config/geheim/<id>`) vor
   `DEEPSEEK_API_KEY`; fehlt er, `nicht_eingerichtet` mit Klartext, bevor
   etwas geschickt wird. Tests: cargo 422 (24 neue), `dienst`-Verdrahtung
   (Chat, Modelle, ausgeschalteter Anbieter, fremder Typ), Gegenprobe

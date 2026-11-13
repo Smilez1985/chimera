@@ -1138,7 +1138,7 @@ wie es der Vertrag des Agenten verlangt (`provider/base.py`, `Reply`).
 DeepSeeks `arguments` ist ein JSON-**Text** — er wird gelesen, nicht
 weitergereicht.
 
-**Schlüssel:** erst die Ablage der Oberfläche (`state/keys/<id>`, gefüllt
+**Schlüssel:** erst die Ablage der Oberfläche (`config/geheim/<id>`, gefüllt
 vom Modul „Anbieter"), dann `DEEPSEEK_API_KEY` aus der `.env`. Beide liest
 nur das Gateway; in Antworten steht nur, **dass** einer da ist. Ein fehlender
 Schlüssel ergibt `nicht_eingerichtet` mit Klartext, bevor irgendetwas
