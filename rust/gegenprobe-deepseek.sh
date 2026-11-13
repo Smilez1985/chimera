@@ -111,6 +111,12 @@ mut eigene-reihenfolge-ignoriert \
         }
     }'
 
+# 11. Die Anbietermeldung zu 401 geht wieder mit -- DeepSeek schreibt darin
+#     die letzten vier Zeichen des Schluessels (am 13.11. gemessen).
+mut schluesselrest-im-text \
+	'            format!("{host} nimmt den Schlüssel nicht an (401) -- er ist falsch, abgelaufen oder gesperrt."),' \
+	'            format!("{host} nimmt den Schlüssel nicht an (401): {meldung}"),'
+
 zurueck
 echo "---"
 if [ "$gruen" -eq 0 ]; then

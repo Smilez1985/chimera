@@ -339,9 +339,13 @@ pub fn statusfehler(status: u16, koerper: &Value, host: &str) -> Value {
             "anfrage_falsch",
             format!("{host} lehnt die Anfrage ab (400): {meldung}"),
         ),
+        // Bei 401 wird die Meldung des Anbieters **nicht** weitergegeben:
+        // DeepSeek schreibt darin die letzten vier Zeichen des Schluessels
+        // ("Your api key: ****test is invalid", am 13.11. gemessen). Der
+        // Grund ist ohnehin klar -- ein Schluessel gehoert in keine Antwort.
         401 => (
             "schluessel_falsch",
-            format!("{host} nimmt den Schlüssel nicht an (401): {meldung}"),
+            format!("{host} nimmt den Schlüssel nicht an (401) -- er ist falsch, abgelaufen oder gesperrt."),
         ),
         402 => (
             "kein_guthaben",
@@ -733,6 +737,11 @@ mod tests {
         assert_eq!(f(503), "anbieter_fehler");
         let t = statusfehler(402, &json!({"error": {"message": "Insufficient Balance"}}), "api.deepseek.com");
         assert!(t["fehler"]["text"].as_str().unwrap().contains("Insufficient Balance"));
+        // 401 gibt die Anbietermeldung nicht weiter -- sie enthaelt bei
+        // DeepSeek die letzten vier Zeichen des Schluessels.
+        let s = statusfehler(401, &json!({"error": {"message": "Your api key: ****test is invalid"}}), "h");
+        let text = s["fehler"]["text"].as_str().unwrap();
+        assert!(!text.contains("test"), "Schluesselrest in der Antwort: {text}");
     }
 
     #[test]
