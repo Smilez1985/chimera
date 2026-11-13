@@ -3392,6 +3392,20 @@ Daraus folgt:
   entschieden** und gehört, falls gewollt, in ein Installermodul mit
   Sicherung und Rückweg.
 
+**Messreste gehören nicht nach `/tmp` (entschieden 13.11., am Pi
+gefunden).** Auf dem Pi ist `/tmp` eine **tmpfs** — jeder Messbaum liegt
+also im RAM und zählt gegen dieselben 462 MB, die der Dienst braucht. Am
+13.11. lagen dort 276 MB alter Messungen (fünf Bäume, alte Quell-Tarballs);
+`free` meldete 309 MB „benutzt", obwohl alle Prozesse zusammen 36 MB
+belegten — htop zeigt das als Last. Dazu kommt: ein Neustart räumt `/tmp`,
+die Messung ist dann weg und der Prüfbaum nicht mehr nachvollziehbar.
+Messbäume, Zwischenstände und Prüfbäume gehören deshalb nach
+**`/opt/chimera/logs/messungen/<thema>/`** (Disk, auf dem Pi die SD/eMMC)
+— dort, wo auch die Installer-Protokolle liegen; auf einem Rechner ohne
+viel RAM ist `/var/tmp` die zweite Wahl (Disk, aber ohne Aufräumregel).
+Nach der Auswertung wird der Baum gelöscht oder klein gehalten: ein
+Messbaum ist ein Beweis, kein Vorrat.
+
 **Nachweis eines Speichertods:** Unter Linux gibt es keinen
 Absturzbericht, der Kernel beendet den Prozess per SIGKILL. Ohne
 Speicher-Controller kann systemd den Tod nicht als `oom-kill` einordnen,

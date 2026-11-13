@@ -807,6 +807,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Messreste gehören nicht nach `/tmp`** (13.11.): Am Pi lagen 276 MB alter
+  Messbäume in `/tmp` — und `/tmp` ist dort eine tmpfs, also RAM. `free`
+  meldete 309 MB „benutzt", während alle Prozesse zusammen 36 MB belegten
+  (Gateway 1,8 MB, Ausführer 0,6 MB, Python-Dienst 48 MB). Geräumt; Messbäume
+  und Zwischenstände gehören nach `/opt/chimera/logs/messungen/<thema>/`
+  (Disk), nicht in eine tmpfs, die ein Neustart ohnehin leert. DESIGN,
+  Regel 10q.
 - **Der Ausführer fragt vor jeder Ausführung die Freigabe** (DESIGN, Regel
   „Freigabe je Werkzeug auf Zeit", **Stufe 3**; entschieden 12.11.: „Gateway
   fragen"): `chimera-sohelper` schickt vor dem Start
