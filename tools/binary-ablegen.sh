@@ -36,7 +36,7 @@ REPO="$(cd "$_HERE/.." && pwd)"
 . "$REPO/installer/lib/source.sh"
 
 # art | Ordner im Repo | Dateiname | Programmname in --version
-ABLEGE_ARTEN="tor sohelper"
+ABLEGE_ARTEN="tor sohelper fdpass"
 
 art_ordner() {
 	case "$1" in
