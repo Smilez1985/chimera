@@ -4225,9 +4225,14 @@ auch von Hand eintragen kann.
    **wo** es eingegeben wird (nie: „tippe es hier").
 2. Freigabe prüfen wie bei `op: ssh` (Ziel `user@host`), Gateway öffnet die
    TCP-Verbindung, Deskriptor an den Ausführer. Der Netznutzer bleibt einer.
-3. Das Gateway legt das Passwort als Datei in den Arbeitsordner des
-   Ausführers (`<arbeit>/ssh/.passwort`, 0600) — kurzlebig, nur für diesen
-   Lauf, danach gelöscht. Über den Socket geht nur der Pfad, nie das Passwort.
+3. Das Passwort geht **über den Socket** an den Ausführer (er kann die
+   Geheim-Ablage des Gateways nicht lesen, und das Gateway kann nicht in
+   seinen Ordner schreiben — 0700 `chimera-sohelper`; ein erster Entwurf mit
+   „Gateway legt die Datei ab" war so nicht ausführbar). Der Ausführer
+   schreibt es selbst als `<arbeit>/ssh/.passwort` (0600) für den
+   Askpass-Helfer und **löscht die Datei nach dem Lauf**, auch bei Abbruch.
+   Das Passwort steht damit in genau einem Puffer mehr als beim Ablegen — und
+   in keiner Datei, die jemand anderes lesen kann.
 4. Der Ausführer startet `ssh` mit **Passwort-Anmeldung ohne TTY**:
    `SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force` + `setsid`; der Askpass-Helfer
    liest die Passwortdatei. **Gemessen 12.11.2026 (OpenSSH 9.9):** das

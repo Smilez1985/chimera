@@ -265,10 +265,16 @@ pub fn setzen(p: &Pfade, name: &str, wert: &Value) -> Result<Value, (&'static st
                     "Adresse oder Port haben sich geaendert -- der Hostschluessel muss neu bestaetigt werden.".into(),
                 ))
             }
+            // Ein Eintrag ohne Hostschluessel ist erlaubt, wenn er
+            // ausdruecklich zur **Aufnahme** angelegt wird: der Schluessel
+            // wird dann beim ersten Verbinden geholt und vom Nutzer
+            // bestaetigt (DESIGN, "Aufnahme eines Hosts").
+            None if wert.get("aufnahme").and_then(Value::as_bool) == Some(true) => Value::Null,
             None => {
                 return Err((
                     "hostschluessel_fehlt",
-                    "Ohne Hostschluessel kein Eintrag: Typ und Blob aus \"ssh-keyscan\" mitgeben.".into(),
+                    "Ohne Hostschluessel kein Eintrag: Typ und Blob aus \"ssh-keyscan\" mitgeben \
+                     (oder den Host zur Aufnahme anlegen, Feld \"aufnahme\": true).".into(),
                 ))
             }
         },
@@ -286,7 +292,9 @@ pub fn setzen(p: &Pfade, name: &str, wert: &Value) -> Result<Value, (&'static st
             h.insert(name.to_string(), neu.clone());
             schreiben(p, &ganz2).map_err(|e| ("nicht_gespeichert", e))?;
             let mut out = neu.clone();
-            out["brauchbar"] = json!(true);
+            // Die Antwort sagt die Wahrheit: ein Eintrag zur Aufnahme ist
+            // noch **nicht** brauchbar (kein Hostschluessel).
+            out["brauchbar"] = json!(brauchbar(&neu));
             out["neu"] = json!(neu_angelegt);
             Ok(out)
         }
@@ -337,6 +345,22 @@ pub fn loeschen(p: &Pfade, name: &str) -> Result<bool, (&'static str, String)> {
         schreiben(p, &ganz).map_err(|e| ("nicht_gespeichert", e))?;
     }
     Ok(weg)
+}
+
+/// Ein Host, den die **Aufnahme** benutzen darf: er muss vom Nutzer stammen,
+/// einen Hostschluessel braucht er noch nicht (der wird ja gerade geholt).
+pub fn holen_fuer_aufnahme(p: &Pfade, name: &str) -> Result<Value, (&'static str, String)> {
+    let ganz = roh(p);
+    let Some(e) = ganz.get("hosts").and_then(|h| h.get(name)) else {
+        return Err(("host_unbekannt", format!("\"{name}\" steht nicht in der Host-Tabelle.")));
+    };
+    if e.get("herkunft").and_then(Value::as_str) != Some("nutzer") {
+        return Err((
+            "host_unbestaetigt",
+            format!("\"{name}\" ist nur ein Vorschlag -- der Nutzer hat ihn nicht bestaetigt."),
+        ));
+    }
+    Ok(e.clone())
 }
 
 /// Ein Host, den `op: ssh` benutzen darf. Alles andere gibt es nicht --
@@ -425,6 +449,113 @@ pub fn op_ssh_mit_socket(p: &Pfade, host: &str, befehl: &str, jetzt: u64, socket
     }
 }
 
+/// Die **Aufnahme**: Passwort-Anmeldung, Schlüssel erzeugen lassen,
+/// **eine** Zeile auf dem Ziel, Passwort danach weg.
+///
+/// Das gilt nur für Hosts mit `herkunft: nutzer`; ein Vorschlag des Agenten
+/// ist nicht aufnehmbar. Und es braucht ein Passwort in der Ablage — der
+/// Hinweis sagt, **wo** es eingegeben wird, nie „tippe es hier".
+pub fn op_ssh_aufnahme(p: &Pfade, host: &str, jetzt: u64) -> Value {
+    let socket = std::env::var("CHIMERA_SOHELPER_SOCKET").unwrap_or_else(|_| SOHELPER_SOCKET.to_string());
+    op_ssh_aufnahme_mit_socket(p, host, jetzt, &socket)
+}
+
+pub fn op_ssh_aufnahme_mit_socket(p: &Pfade, host: &str, jetzt: u64, socket: &str) -> Value {
+    let e = match holen_fuer_aufnahme(p, host) {
+        Ok(e) => e,
+        Err((code, text)) => return gemein::zeile::fehlerantwort(code, &text),
+    };
+    let nutzer = e["nutzer"].as_str().unwrap_or("");
+    let adresse = e["adresse"].as_str().unwrap_or("");
+    let port = e["port"].as_u64().unwrap_or(22) as u16;
+    let ziel = format!("{nutzer}@{host}");
+    let frei = crate::freigaben::pruefen(p, "ssh", Some(&ziel), jetzt);
+    if frei["erlaubt"] != true {
+        return json!({
+            "ok": false,
+            "fehler": {"code": "ssh_gesperrt",
+                "text": format!("Die Aufnahme für {ziel} ist nicht freigegeben: {}",
+                    frei["grund"].as_str().unwrap_or("ohne Grund")),
+                "ziel": ziel},
+        });
+    }
+    let Some(passwort) = crate::geheim::lesen(p, host) else {
+        return json!({
+            "ok": false,
+            "fehler": {"code": "passwort_fehlt",
+                "text": format!("Für \"{host}\" liegt kein Passwort in der Ablage. Es wird im Modul \
+                                 \"Fernzugriff\" eingetragen (Feld am Host) oder über \
+                                 `chimera-tor --geheim-ssh {host}` von der Kommandozeile -- nie im Chat."),
+                "ziel": ziel},
+        });
+    };
+    let tcp = match verbinden(adresse, port) {
+        Ok(t) => t,
+        Err(err) => {
+            return gemein::zeile::fehlerantwort(
+                "nicht_erreichbar",
+                &format!("{adresse}:{port} ist nicht erreichbar: {err}"),
+            )
+        }
+    };
+    let begonn = std::time::Instant::now();
+    let antwort = an_ausfuehrer_aufnahme(&e, host, &passwort, &tcp, socket);
+    drop(tcp);
+    match antwort {
+        Ok(mut v) => {
+            if v["ok"] == true {
+                // Erst wenn der Schlüssel wirklich steht, ist das Passwort
+                // entbehrlich. Danach wird es nicht mehr gebraucht.
+                let _ = crate::geheim::loeschen(p, host);
+                // Der Ausfuehrer liefert Typ und Blob getrennt (als Text),
+                // nicht als Objekt -- hier wird daraus der Tabelleneintrag.
+                let typ = v.get("hostschluessel_typ").and_then(Value::as_str).unwrap_or("").to_string();
+                let blob = v.get("hostschluessel").and_then(Value::as_str).unwrap_or("").to_string();
+                if let Some(o) = v.as_object_mut() {
+                    let (typ, blob) = (typ.as_str(), blob.as_str());
+                    let fp = fingerabdruck(blob).unwrap_or_default();
+                    o.insert("fingerabdruck".into(), json!(fp));
+                    o.insert("hostschluessel".into(), json!({
+                        "typ": typ, "schluessel": blob, "fingerabdruck": fp
+                    }));
+                    o.insert("host".into(), json!(host));
+                    o.insert("ziel".into(), json!(ziel));
+                    o.insert("dauer_s".into(), json!(begonn.elapsed().as_secs()));
+                    o.insert("hinweis".into(), json!(
+                        "Der Eintrag wirkt noch nicht: im Modul \"Fernzugriff\" bestätigen."));
+                }
+            }
+            v
+        }
+        Err(e) => gemein::zeile::fehlerantwort("ausfuehrer", &e),
+    }
+}
+
+/// Den Aufnahme-Auftrag samt Deskriptor an den Ausführer geben.
+fn an_ausfuehrer_aufnahme(e: &Value, host: &str, passwort: &str, tcp: &std::net::TcpStream, pfad: &str) -> Result<Value, String> {
+    use std::os::unix::io::AsRawFd;
+    let strom = std::os::unix::net::UnixStream::connect(pfad)
+        .map_err(|e| format!("Der Ausführer ist nicht erreichbar ({pfad}: {e}); es wurde nichts geändert."))?;
+    let _ = strom.set_read_timeout(Some(std::time::Duration::from_secs(300)));
+    let anfrage = json!({
+        "op": "ssh_aufnahme",
+        "host": host,
+        "nutzer": e["nutzer"], "adresse": e["adresse"], "port": e["port"],
+        "schluessel": e["schluessel"],
+        "rechte": e["rechte"], "zaun": e.get("zaun").cloned().unwrap_or(Value::Null),
+        "passwort": passwort,
+    });
+    let mut zeile = serde_json::to_vec(&anfrage).map_err(|e| e.to_string())?;
+    zeile.push(b'\n');
+    // Der Deskriptor geht mit: ohne ihn hat der Ausführer keine Verbindung.
+    gemein::fdpass::senden(&strom, &zeile, &[tcp.as_raw_fd()])
+        .map_err(|e| format!("Der Deskriptor ließ sich nicht übergeben: {e}"))?;
+    let leser = strom.try_clone().map_err(|e| e.to_string())?;
+    let mut leser = std::io::BufReader::new(leser);
+    gemein::zeile::lesen(&mut leser, gemein::zeile::MAX_BYTES)
+        .map_err(|e| format!("keine Antwort vom Ausführer ({e})"))
+}
+
 fn verbinden(adresse: &str, port: u16) -> Result<std::net::TcpStream, String> {
     use std::net::ToSocketAddrs;
     let ziele: Vec<_> = (adresse, port)
@@ -464,6 +595,7 @@ fn an_ausfuehrer_schicken(e: &Value, host: &str, befehl: &str, tcp: &std::net::T
     });
     let mut zeile = serde_json::to_vec(&anfrage).map_err(|e| e.to_string())?;
     zeile.push(b'\n');
+    // Dauerbetrieb: dieselbe Uebergabe wie bei der Aufnahme.
     gemein::fdpass::senden(&strom, &zeile, &[tcp.as_raw_fd()])
         .map_err(|e| format!("Der Deskriptor ließ sich nicht übergeben: {e}"))?;
     let leser = strom.try_clone().map_err(|e| e.to_string())?;
@@ -736,6 +868,40 @@ mod tests {
         assert_eq!(auftrag["adresse"], "127.0.0.1");
         assert_eq!(auftrag["nutzer"], "dietpi");
         let _ = std::fs::remove_file(&d);
+    }
+
+    #[test]
+    fn aufnahme_ohne_passwort_sagt_wo_es_hingehoert() {
+        let p = p("auf-pw");
+        host_anlegen(&p, "radxa", "r.example", 22);
+        setzen_freigabe(&p, "ssh", "dietpi@radxa");
+        let a = op_ssh_aufnahme_mit_socket(&p, "radxa", 1000, "/nicht/da.sock");
+        assert_eq!(a["fehler"]["code"], "passwort_fehlt");
+        let t = a["fehler"]["text"].as_str().unwrap();
+        assert!(t.contains("Fernzugriff") && t.contains("--geheim-ssh"), "{t}");
+        // Und der Hinweis sagt nicht "tippe es hier".
+        assert!(!t.contains("tippe"), "{t}");
+    }
+
+    #[test]
+    fn aufnahme_gilt_nur_fuer_hosts_des_nutzers() {
+        let p = p("auf-herkunft");
+        vorschlag(&p, "v", "v.example", "u", None, "").unwrap();
+        let a = op_ssh_aufnahme_mit_socket(&p, "v", 1000, "/nicht/da.sock");
+        assert_eq!(a["fehler"]["code"], "host_unbestaetigt");
+        let a = op_ssh_aufnahme_mit_socket(&p, "gibtsnicht", 1000, "/nicht/da.sock");
+        assert_eq!(a["fehler"]["code"], "host_unbekannt");
+    }
+
+    #[test]
+    fn aufnahme_ohne_freigabe_verbindet_nicht() {
+        let p = p("auf-frei");
+        host_anlegen(&p, "radxa", "r.example", 22);
+        crate::geheim::setzen(&p, "radxa", "Geheim123").unwrap();
+        let a = op_ssh_aufnahme_mit_socket(&p, "radxa", 1000, "/nicht/da.sock");
+        assert_eq!(a["fehler"]["code"], "ssh_gesperrt");
+        // Das Passwort bleibt liegen: es ist noch nicht verbraucht.
+        assert_eq!(crate::geheim::lesen(&p, "radxa").as_deref(), Some("Geheim123"));
     }
 
     #[test]

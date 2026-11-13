@@ -161,6 +161,48 @@ class ChimeraSsh extends HTMLElement {
     zeige(!!e.geheim);
     k.append(pwZeile);
 
+    // Die Aufnahme: Passwort-Anmeldung, Schluessel erzeugen, **eine** Zeile
+    // aufs Ziel. Danach steht der Eintrag noch nicht -- der Fingerabdruck
+    // wird hier angezeigt und muss bestaetigt werden.
+    if (e.geheim && !e.brauchbar) {
+      const auf = this.el("button", "Jetzt aufnehmen");
+      const erg = this.el("div", undefined, "klein");
+      auf.onclick = async () => {
+        auf.disabled = true;
+        erg.className = "klein";
+        erg.textContent = "läuft … (Passwort-Anmeldung, Schlüssel eintragen)";
+        const r = await this.post("/api/ssh/aufnahme", { host: name });
+        auf.disabled = false;
+        if (!r.ok) {
+          erg.className = "fehler";
+          erg.textContent = (r.fehler && r.fehler.text) || r.fehler || "Fehler";
+          return;
+        }
+        erg.className = "klein";
+        erg.replaceChildren();
+        erg.append(
+          this.el("p", `Hostschlüssel ${r.hostschluessel.typ} ${r.hostschluessel.fingerabdruck}`, "offen"),
+          this.el("p", "Öffentlicher Schlüssel auf dem Ziel: " + r.zeile, "klein"),
+          this.el("p", "Stimmt der Fingerabdruck? Dann bestätigen — vorher wirkt der Eintrag nicht.", "klein")
+        );
+        const ja = this.el("button", "Eintrag bestätigen");
+        ja.onclick = async () => {
+          const w = { adresse: e.adresse, nutzer: e.nutzer, port: e.port, schluessel: e.schluessel,
+                      rechte: e.rechte, hostschluessel: r.hostschluessel };
+          const b = await this.post("/api/ssh/setzen", { host: name, wert: w });
+          if (!b.ok) { erg.className = "fehler"; erg.textContent = (b.fehler && b.fehler.text) || "Fehler"; return; }
+          erg.className = "klein";
+          erg.textContent = "Bestätigt.";
+          this.laden();
+        };
+        erg.append(ja);
+      };
+      k.append(this.el("p", "Passwort liegt vor — Aufnahme möglich.", "klein"));
+      k.append(auf, erg);
+    } else if (e.geheim && e.brauchbar) {
+      k.append(this.el("p", "Passwort liegt noch vor, obwohl der Host bestätigt ist — kannst du löschen.", "klein"));
+    }
+
     const aendern = this.el("button", "In das Formular", "stumm");
     aendern.onclick = () => {
       this.$("name").value = name;

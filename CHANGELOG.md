@@ -20,6 +20,26 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Die Aufnahme eines Hosts ist gebaut** (13.11. nachts): `op: ssh_aufnahme`
+  (Gateway) + `ssh_aufnahme` im Ausführer. Ablauf in einem
+  Verbindungsaufbau: Passwort-Anmeldung ohne TTY (`SSH_ASKPASS` +
+  `SSH_ASKPASS_REQUIRE=force`, Helfer als 0700-Wrapper im Arbeitsordner, weil
+  `ssh` ihm nur den Prompt als Argument mitgibt), Schlüsselpaar **im
+  Ausführer** erzeugen (ed25519, 0600, privater Teil bleibt dort), **eine**
+  `authorized_keys`-Zeile aufs Ziel (`mkdir -p ~/.ssh`, `chmod 700`, `grep
+  -qxF … || printf … >>`, `chmod 600` — sonst nichts), Hostschlüssel aus der
+  eigenen `known_hosts` erfassen, Fingerabdruck im Gateway rechnen,
+  **Passwortdatei und Passwort in der Ablage löschen**.
+  Ein Host kann dafür ohne Hostschlüssel angelegt werden (`"aufnahme": true`);
+  er bleibt `brauchbar: false`, bis der Nutzer im Modul bestätigt — die
+  Aufnahme schreibt selbst nichts in die Tabelle.
+  **Am echten sshd belegt** (Sandbox, eigener sshd 127.0.0.1:2225, Nutzer
+  mit Passwort): Aufnahme meldet `ok`, die Zeile steht als
+  `restrict ssh-ed25519 … chimera:lokal` in `~/.ssh/authorized_keys`, das
+  Passwort ist aus `config/geheim/ssh/` verschwunden, und nach der
+  Bestätigung läuft `op: ssh` über den Schlüssel („per-schluessel",
+  Exitcode 0). Tests: cargo 365 (21 in `ssh`), sohelper 18 (8 in `ssh`),
+  Gegenprobe `rust/gegenprobe-ssh.sh` 23/23 rot.
 - **Geheim-Ablage für die Aufnahme** (12.11., erster Schritt der Host-Aufnahme):
   `config/geheim/ssh/<host>` (0600, `chimera-tor`), geschrieben über
   `chimera-tor --geheim-ssh <host>` (Passwort von stdin, **ohne Echo** am

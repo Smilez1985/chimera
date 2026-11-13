@@ -72,6 +72,30 @@ fn main() {
                     .unwrap_or_else(|| "/run/chimera/sohelper.sock".to_string());
                 std::process::exit(pingen(Path::new(&pfad)));
             }
+            // Der Askpass-Helfer, den `ssh` bei der Aufnahme aufruft: er gibt
+            // das Passwort aus einer 0600-Datei aus, die nur fuer diesen Lauf
+            // existiert (DESIGN, "Aufnahme eines Hosts"). Kein TTY, kein argv:
+            // die Datei steht in CHIMERA_ASKPASS_DATEI.
+            "--askpass" => {
+                // `ssh` ruft den Helfer mit dem Prompt als Argument auf --
+                // brauchbar ist das nicht. Die Datei kommt deshalb aus der
+                // Umgebung, die unser Aufruf gesetzt hat.
+                let datei = match std::env::var("CHIMERA_ASKPASS_DATEI") {
+                    Ok(d) if !d.trim().is_empty() => PathBuf::from(d),
+                    _ => {
+                        eprintln!("askpass: CHIMERA_ASKPASS_DATEI fehlt");
+                        std::process::exit(2);
+                    }
+                };
+                match std::fs::read_to_string(&datei) {
+                    Ok(t) => print!("{}", t.trim_end_matches(['\n', '\r'])),
+                    Err(e) => {
+                        eprintln!("askpass: {}: {e}", datei.display());
+                        std::process::exit(1);
+                    }
+                }
+                std::process::exit(0);
+            }
             "--arbeit" => arbeit = args.next().map(PathBuf::from),
             // Wo das Gateway zu erreichen ist (Vorgabe: der Dienstpfad, oder
             // CHIMERA_TOR_SOCKET aus der Umgebung). Fuer Tests und Sandbox.
@@ -297,7 +321,7 @@ fn bearbeite(
     let op = wert.get("op").and_then(Value::as_str).unwrap_or("");
     // Ein Deskriptor ist ein Recht. Wer ihn schickt, ohne dass die Operation
     // ihn braucht, bekommt ihn geschlossen zurück -- kein Recht auf Vorrat.
-    if !fds.is_empty() && op != "ssh" {
+    if !fds.is_empty() && op != "ssh" && op != "ssh_aufnahme" {
         for fd in fds {
             gemein::fdpass::schliessen(*fd);
         }
@@ -342,6 +366,36 @@ fn bearbeite(
             }
             let fdpass = fdpass_pfad();
             antwort_ok(ssh_ausfuehren(&auftrag, &keydir, &known_hosts, &fdpass, fd, grenzen))
+        }
+        // Die Aufnahme: Passwort-Anmeldung, Schluesselpaar hier erzeugen,
+        // **eine** authorized_keys-Zeile auf dem Ziel, Passwortdatei weg.
+        // Der Hostschluessel wird dabei erfasst und zurueckgegeben; die
+        // Tabelle schreibt erst der Nutzer (Bestaetigung im Modul).
+        "ssh_aufnahme" => {
+            let fd = match fds {
+                [eine] => *eine,
+                _ => {
+                    return antwort_fehler(
+                        "deskriptor_fehlt",
+                        "Die Aufnahme braucht genau eine offene Verbindung (Deskriptor) vom Gateway.",
+                    )
+                }
+            };
+            let aufnahme = match sohelper::ssh::aufnahme_aus(wert) {
+                Ok(a) => a,
+                Err(e) => {
+                    gemein::fdpass::schliessen(fd);
+                    return antwort_fehler("abgelehnt", &e.0);
+                }
+            };
+            let passwort = match wert.get("passwort").and_then(Value::as_str) {
+                Some(p) if !p.is_empty() => p.to_string(),
+                _ => {
+                    gemein::fdpass::schliessen(fd);
+                    return antwort_fehler("passwort_fehlt", "Die Aufnahme braucht ein Passwort.");
+                }
+            };
+            aufnahme_ausfuehren(&aufnahme, &passwort, arbeit, fd, grenzen)
         }
         "_ende" => antwort_ok(json!({"text": ""})),
         "_zu_lang" => antwort_fehler("zu_lang", "Die Anfrage ist laenger als erlaubt."),
@@ -574,6 +628,190 @@ fn ssh_ausfuehren(
         "exitcode": code,
         "dauer_s": start.elapsed().as_secs(),
     })
+}
+
+/// Die Aufnahme eines Hosts (DESIGN, „Aufnahme eines Hosts: das Passwort
+/// einmal, der Schlüssel danach").
+///
+/// **Ein** Verbindungsaufbau für alles: Passwort-Anmeldung, `~/.ssh` anlegen,
+/// die eine Zeile eintragen, Rechte setzen, fertig. Hostschlüssel fällt dabei
+/// als Nebenprodukt ab (eigene `known_hosts`) und geht zurück.
+fn aufnahme_ausfuehren(aufnahme: &sohelper::ssh::Aufnahme, passwort: &str, arbeit: &Path, fd: RawFd, grenzen: &Grenzen) -> Value {
+    let _wache = SSH_SPERRE.lock().unwrap_or_else(|g| g.into_inner());
+    let (keydir, _) = sohelper::ssh::ordner(arbeit);
+    let ssh_ordner = keydir.parent().unwrap_or(arbeit).to_path_buf();
+    let known_hosts = ssh_ordner.join("known_hosts.aufnahme");
+    let passwort_datei = ssh_ordner.join(".passwort");
+    let uebergabe = ssh_ordner.join("uebergabe.sock");
+
+    // Aufraeumen ist Teil des Vertrags: Passwortdatei weg, auch bei Abbruch.
+    let aufraeumen = |pw: &Path, uebergabe: &Path| {
+        let _ = std::fs::remove_file(pw);
+        let _ = std::fs::remove_file(uebergabe);
+        let _ = std::fs::remove_file(uebergabe.parent().unwrap_or(Path::new("/")).join("askpass.sh"));
+    };
+
+    // 1. Schluesselpaar erzeugen (hier, nicht auf dem Ziel).
+    let pubkey = match sohelper::ssh::schluessel_erzeugen(&keydir, &aufnahme.schluessel, &format!("chimera:{}", aufnahme.host)) {
+        Ok(k) => k,
+        Err(e) => {
+            gemein::fdpass::schliessen(fd);
+            aufraeumen(&passwort_datei, &uebergabe);
+            return antwort_fehler("schluessel", &e);
+        }
+    };
+    let mut teile = pubkey.split_whitespace();
+    let (Some(typ), Some(blob)) = (teile.next(), teile.next()) else {
+        gemein::fdpass::schliessen(fd);
+        return antwort_fehler("schluessel", "Der erzeugte oeffentliche Schluessel ist unlesbar.");
+    };
+    let zeile = match sohelper::ssh::authorized_keys_zeile(typ, blob, &aufnahme.rechte, aufnahme.zaun.as_deref(), &format!("chimera:{}", aufnahme.host)) {
+        Ok(z) => z,
+        Err(e) => {
+            let _ = std::fs::remove_file(keydir.join(&aufnahme.schluessel));
+            let _ = std::fs::remove_file(keydir.join(format!("{}.pub", aufnahme.schluessel)));
+            gemein::fdpass::schliessen(fd);
+            aufraeumen(&passwort_datei, &uebergabe);
+            return antwort_fehler("rechte", &e.0);
+        }
+    };
+    let befehl = sohelper::ssh::aufnahme_befehl(&zeile);
+
+    // 2. Passwortdatei und leere known_hosts fuer genau diesen Lauf.
+    if let Err(e) = std::fs::create_dir_all(&ssh_ordner) {
+        gemein::fdpass::schliessen(fd);
+        return antwort_fehler("ordner", &format!("{}: {e}", ssh_ordner.display()));
+    }
+    if let Err(e) = sohelper::ssh::known_hosts_schreiben(&passwort_datei, passwort) {
+        gemein::fdpass::schliessen(fd);
+        return antwort_fehler("passwort", &format!("Passwortdatei nicht schreibbar: {e}"));
+    }
+    let _ = std::fs::remove_file(&known_hosts);
+    if let Err(e) = std::fs::File::create(&known_hosts) {
+        gemein::fdpass::schliessen(fd);
+        aufraeumen(&passwort_datei, &uebergabe);
+        return antwort_fehler("known_hosts", &format!("{}: {e}", known_hosts.display()));
+    }
+
+    // 3. Uebergabe-Socket fuer den Proxy (ssh schliesst alles ab 3).
+    let _ = std::fs::remove_file(&uebergabe);
+    let horcher = match std::os::unix::net::UnixListener::bind(&uebergabe) {
+        Ok(h) => h,
+        Err(e) => {
+            gemein::fdpass::schliessen(fd);
+            aufraeumen(&passwort_datei, &uebergabe);
+            return antwort_fehler("uebergabe", &format!("{}: {e}", uebergabe.display()));
+        }
+    };
+
+    // 4. ssh mit Passwort-Anmeldung, ohne TTY.
+    //
+    // `ssh` ruft den Askpass-Helfer als `$SSH_ASKPASS "<frage>"` auf -- ein
+    // eigenes Argument koennte er nicht mitgeben. Deshalb ein winziger
+    // Wrapper im Arbeitsordner, der unser eigenes `--askpass` startet; die
+    // Passwortdatei steht in der Umgebung (CHIMERA_ASKPASS_DATEI).
+    let eigen = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("/opt/chimera/bin/chimera-sohelper"));
+    let askpass = ssh_ordner.join("askpass.sh");
+    let skript = format!("#!/bin/sh\nexec '{}' --askpass\n", eigen.display());
+    if let Err(e) = sohelper::ssh::known_hosts_schreiben(&askpass, skript.trim_end()) {
+        gemein::fdpass::schliessen(fd);
+        aufraeumen(&passwort_datei, &uebergabe);
+        return antwort_fehler("askpass", &format!("Askpass-Wrapper nicht schreibbar: {e}"));
+    }
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(&askpass, std::fs::Permissions::from_mode(0o700));
+    let argv = sohelper::ssh::argv_aufnahme(&aufnahme.als_auftrag(), &known_hosts, &fdpass_pfad(), &uebergabe, &befehl);
+    let start = Instant::now();
+    let mut kind = match Command::new(&argv[0])
+        .args(&argv[1..])
+        .current_dir(&ssh_ordner)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
+        .env("SSH_ASKPASS", &askpass)
+        .env("SSH_ASKPASS_REQUIRE", "force")
+        .env("CHIMERA_ASKPASS_DATEI", &passwort_datei)
+        .spawn()
+    {
+        Ok(k) => k,
+        Err(e) => {
+            gemein::fdpass::schliessen(fd);
+            aufraeumen(&passwort_datei, &uebergabe);
+            return antwort_fehler("ssh_nicht_gestartet", &format!("{e}"));
+        }
+    };
+    // Der Askpass-Helfer muss die Datei kennen -- ueber das eigene Argument,
+    // nicht ueber die Umgebung (ssh reicht keine Umgebung weiter).
+    // (Der Helfer liest CHIMERA_ASKPASS_DATEI; ssh selbst startet ihn.)
+    let _ = horcher.set_nonblocking(true);
+    let mut gegeben = false;
+    let frist_uebergabe = Instant::now() + Duration::from_secs(15);
+    while Instant::now() < frist_uebergabe {
+        match horcher.accept() {
+            Ok((strom, _)) => {
+                let r = uebergabe_schicken(&strom, fd);
+                gemein::fdpass::schliessen(fd);
+                gegeben = r.is_ok();
+                break;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(20)),
+            Err(_) => break,
+        }
+    }
+    if !gegeben {
+        let _ = kind.kill();
+    }
+    let aus = kind.stdout.take();
+    let fehler = kind.stderr.take();
+    let leser_out = aus.map(|mut r| std::thread::spawn(move || { let mut v = Vec::new(); let _ = std::io::Read::read_to_end(&mut r, &mut v); v }));
+    let leser_err = fehler.map(|mut r| std::thread::spawn(move || { let mut v = Vec::new(); let _ = std::io::Read::read_to_end(&mut r, &mut v); v }));
+    let frist = Duration::from_secs(grenzen.frist_s);
+    let status = loop {
+        match kind.try_wait() {
+            Ok(Some(s)) => break Some(s),
+            Ok(None) if start.elapsed() >= frist => { let _ = kind.kill(); let _ = kind.wait(); break None; }
+            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+            Err(_) => break None,
+        }
+    };
+    let _ = leser_out.map(|h| h.join());
+    let fehler_text = leser_err.and_then(|h| h.join().ok()).map(|v| String::from_utf8_lossy(&v).trim().to_string()).unwrap_or_default();
+
+    // 5. Hostschluessel aus der eigenen known_hosts.
+    let hostzeile = std::fs::read_to_string(&known_hosts).ok().and_then(|t| {
+        t.lines().find(|z| !z.trim().is_empty() && !z.starts_with('#')).map(|z| z.trim().to_string())
+    });
+    let (hk_typ, hk_blob) = match hostzeile {
+        Some(z) => {
+            let mut t = z.split_whitespace();
+            let _ziel = t.next();
+            (t.next().map(str::to_string), t.next().map(str::to_string))
+        }
+        None => (None, None),
+    };
+    let code = status.and_then(|s| s.code());
+    aufraeumen(&passwort_datei, &uebergabe);
+    let _ = std::fs::remove_file(&known_hosts);
+
+    if code != Some(0) || hk_typ.is_none() {
+        // Kein Eintrag entstehen lassen, wenn die Aufnahme nicht durchlief.
+        let _ = std::fs::remove_file(keydir.join(&aufnahme.schluessel));
+        let _ = std::fs::remove_file(keydir.join(format!("{}.pub", aufnahme.schluessel)));
+        return antwort_fehler(
+            "aufnahme_gescheitert",
+            &format!("Die Aufnahme lief nicht durch (Exitcode {code:?}). {fehler_text}"),
+        );
+    }
+    antwort_ok(json!({
+        "aufnahme": true,
+        "pubkey": pubkey,
+        "zeile": zeile,
+        "hostschluessel_typ": hk_typ,
+        "hostschluessel": hk_blob,
+        "text": "Schluessel eingetragen",
+    }))
 }
 
 /// Den Verbindungs-Deskriptor an den Proxy geben (ein Byte + `SCM_RIGHTS`).

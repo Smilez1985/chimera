@@ -163,6 +163,10 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
                 Err((code, text)) => zeile::fehlerantwort(code, &text),
             }
         }
+        "ssh_aufnahme" => {
+            let host = anfrage.get("host").and_then(Value::as_str).unwrap_or("");
+            crate::ssh::op_ssh_aufnahme(&stand.daten, host, jetzt_s())
+        }
         "ssh" => {
             let host = anfrage.get("host").and_then(Value::as_str).unwrap_or("");
             let befehl = anfrage.get("befehl").and_then(Value::as_str).unwrap_or("");

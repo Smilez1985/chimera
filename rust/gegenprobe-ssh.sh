@@ -85,8 +85,10 @@ mut ssh-ohne-freigabe \
 	'    if false {'
 # 16. Die Verbindung geht ohne Deskriptor an den Ausfuehrer.
 mut ssh-ohne-deskriptor \
-	'gemein::fdpass::senden(&strom, &zeile, &[tcp.as_raw_fd()])' \
-	'gemein::fdpass::senden(&strom, &zeile, &[])'
+	'    // Dauerbetrieb: dieselbe Uebergabe wie bei der Aufnahme.
+    gemein::fdpass::senden(&strom, &zeile, &[tcp.as_raw_fd()])' \
+	'    // Dauerbetrieb: dieselbe Uebergabe wie bei der Aufnahme.
+    gemein::fdpass::senden(&strom, &zeile, &[])'
 
 # --- der Ausfuehrer: die feste Form des ssh-Aufrufs -----------------------
 F2=crates/sohelper/src/ssh.rs
@@ -132,7 +134,40 @@ mut2 freie-option \
 	'"-o".into(),
         a.befehl.clone(),'
 
+# 24. `force` ohne Zaun-Pfad wird durchgelassen (Zeile ohne command=).
+mut2 force-ohne-zaun \
+	'        "force" => {
+            let Some(z) = zaun.map(str::trim).filter(|z| !z.is_empty()) else {' \
+	'        "force" => {
+            let Some(z) = zaun.map(str::trim).filter(|z| !z.is_empty()).or(Some("/bin/sh")) else {'
+# 25. Die Aufnahme haengt die Zeile jedes Mal an (kein grep davor).
+mut2 zeile-doppelt \
+	"grep -qxF '{z}' ~/.ssh/authorized_keys || printf" \
+	"printf"
+
 zurueck2
+
+# --- die Aufnahme selbst --------------------------------------------------
+# 26. Die Aufnahme fragt die Freigabe nicht (jedes Ziel ginge durch).
+mut aufnahme-ohne-freigabe \
+	'    if frei["erlaubt"] != true {
+        return json!({
+            "ok": false,
+            "fehler": {"code": "ssh_gesperrt",' \
+	'    if false {
+        return json!({
+            "ok": false,
+            "fehler": {"code": "ssh_gesperrt",'
+# 27. Ein Vorschlag des Agenten wird aufgenommen.
+mut aufnahme-nimmt-vorschlag \
+	'    if e.get("herkunft").and_then(Value::as_str) != Some("nutzer") {
+        return Err((
+            "host_unbestaetigt",
+            format!("\"{name}\" ist nur ein Vorschlag -- der Nutzer hat ihn nicht bestaetigt."),
+        ));
+    }
+    Ok(e.clone())' \
+	'    Ok(e.clone())'
 
 # --- die Geheim-Ablage (Aufnahme) ----------------------------------------
 F3=crates/tor/src/geheim.rs

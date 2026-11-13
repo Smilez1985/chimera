@@ -731,10 +731,21 @@ abends** (CHANGELOG: Host-Tabelle, `op: ssh`, Deskriptor-Übergabe, feste
       freigegebenes nicht; ein zweiter Host ist ohne neuen Auftrag nicht
       erreichbar; Hostschlüssel-Wechsel bricht ab; `-D`/`-L`/`-R` sind nicht
       ausdrückbar (im Test festgenagelt, `rust/gegenprobe-ssh.sh` 19/19 rot).
-- [ ] **Schlüssel ablegen**: der Nutzer legt die privaten Schlüssel nach
-      `/opt/chimera/sohelper/ssh/keys/` (0700/0600) — der Installer legt nur
-      den Ordner an. Eine bequemere Ablage (Schlüssel erzeugen, öffentlichen
-      Teil anzeigen) ist nicht entschieden.
+- [ ] **Aufnahme am Gerät belegen**: Code steht (13.11. nachts, in der
+      Sandbox gegen einen echten sshd belegt); am Pi fehlt der Lauf mit
+      einem echten Ziel — inklusive Passwort-Eingabe im Modul.
+- [ ] **Tailscale/Headscale anbinden** (Idee smilez 13.11.): auf dem Pi-hole
+      läuft ein **Headscale**-Server. Entscheidung steht noch aus; meine
+      Lesart: `tailscaled` läuft **auf Betriebssystem-Ebene** (es braucht
+      TUN und root), Chimera spricht es **nicht** selbst — ein
+      Tailscale-Protokoll im Gateway wäre dieselbe Fläche, die wir bei `ssh`
+      gerade herausgehalten haben. Das Gateway würde nur die
+      **LocalAPI** (`/var/run/tailscale/tailscaled.sock`) lesen
+      (Adresse, Peers, ob der Netzzugang steht) und im Modul anzeigen;
+      Datenverkehr geht normal über den Kernel. Dazu gehören zwei
+      Sicherheitsfragen: `100.64.0.0/10` (CGNAT, Tailnet) muss in
+      `web_abruf` als **eigene Adresse** gelten und braucht wie jede andere
+      einen ausdrücklichen Positiv-Eintrag.
 
 ## Phase 6 — Agent-Härtung
 

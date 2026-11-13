@@ -681,6 +681,9 @@ fn ssh_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
         // Das Passwort fuer die Aufnahme: schreiben und loeschen, **nie
         // lesen** -- es gibt bewusst keinen Weg, es sich anzeigen zu lassen.
         "geheim" => ("ssh-schreiben", true),
+        // Die Aufnahme laeuft aus dem Modul heraus an; sie schreibt nichts in
+        // die Tabelle -- das tut erst "setzen" nach der Bestaetigung.
+        "aufnahme" => ("ssh-schreiben", true),
         "geheim-loeschen" => ("ssh-schreiben", true),
         _ => return fehler(404, "nicht gefunden"),
     };
@@ -703,6 +706,22 @@ fn ssh_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
                 }
             }
             json_antwort(200, json!({"ok": true, "rechte": crate::ssh::RECHTE, "hosts": hosts}))
+        }
+        "aufnahme" => {
+            let v: Value = match serde_json::from_slice(a.body) {
+                Ok(v @ Value::Object(_)) => v,
+                _ => return fehler(400, "kein JSON-Objekt"),
+            };
+            let Some(name) = v["host"].as_str() else {
+                return fehler(400, "Feld \"host\" fehlt");
+            };
+            let r = crate::dienst::antworten(&json!({"op": "ssh_aufnahme", "host": name}), &z.stand);
+            if r["ok"] == true {
+                json_antwort(200, r)
+            } else {
+                let text = r["fehler"]["text"].as_str().unwrap_or("abgelehnt").to_string();
+                fehler(400, &text)
+            }
         }
         "geheim" | "geheim-loeschen" => {
             let v: Value = match serde_json::from_slice(a.body) {
