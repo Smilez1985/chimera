@@ -66,6 +66,13 @@ MUTATIONEN = [
         "weiterhin ein Ton",
     ),
     (
+        "op-name-erfunden",
+        "chimera/app.py",
+        '{"op": "freigabe_lesen"}',
+        '{"op": "freigaben_lesen"}',
+        "Op 'freigaben_lesen' steht im Gateway",
+    ),
+    (
         "dienst-ruft-nicht",
         DIENST,
         "            if erinnern is not None:\n                erinnern()",

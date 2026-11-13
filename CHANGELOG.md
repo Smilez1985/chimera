@@ -22,7 +22,7 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
 ### Hinzugefügt
 - **Der Ton erinnert an offene Freigaben** (13.11., Entscheidung smilez;
   dritte Stufe von „kein Ablauf mehr“): `src/chimera/freigabe_erinnerung.py`
-  fragt über `op: freigaben_lesen` nach offenen Freigaben und spielt alle
+  fragt über `op: freigabe_lesen` nach offenen Freigaben und spielt alle
   `erinnern_alle` Sekunden (Vorgabe 300, mindestens 60) einen kurzen Ton —
   **wiederholt, bis die Freigabe geschlossen ist**, auch wenn niemand da ist.
   Erster Ton erst **nach** dem Abstand (wer gerade freigegeben hat, soll nicht

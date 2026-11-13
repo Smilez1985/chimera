@@ -154,6 +154,50 @@ def main() -> int:
     pruef("nichts faellig: kein Ton", klingeln([], pfad=ziel, lauf=lauf), "")
     pruef("weiterhin ein Ton", len(gerufen), 1)
 
+    # --- Der Op-Name ist nicht erfunden ----------------------------------
+    # **Am Gerät gefunden (13.11., 21:20):** Der Dienst fragte
+    # ``freigaben_lesen``, das Gateway kennt nur ``freigabe_lesen`` — die
+    # Erinnerung hätte dort nie geklingelt, und dieser Test war grün, weil
+    # die Attrappe auf jeden Namen antwortete. Ein Testdoppel, das nicht
+    # prüft, WAS gefragt wird, prüft nur sich selbst.
+    import re
+
+    from chimera import app as app_modul
+    from chimera import freigabe_erinnerung as fe
+    from chimera.provider import gateway as gw
+
+    app_quelle = (SRC / "chimera" / "app.py").read_text(encoding="utf-8")
+    dienst_quelle = (HIER / "rust" / "crates" / "tor" / "src" / "dienst.rs").read_text(encoding="utf-8")
+    gefragt = re.findall(r'anfragen\(\{"op": "([a-z_]+)"', app_quelle)
+    wahr("app.py fragt ueberhaupt eine Op", gefragt)
+    for op in gefragt:
+        wahr(f"Op '{op}' steht im Gateway (dienst.rs)", f'"{op}" =>' in dienst_quelle)
+
+    # Und die Antwort wird wirklich verarbeitet, nicht nur angefragt.
+    gesehen = []
+
+    def falsches_gateway(anfrage, **_k):
+        gesehen.append(anfrage)
+        return {"ok": True, "freigaben": {"werkzeuge": {
+            "ssh": {"modus": "offen", "seit": J - 600, "erinnern_alle": 60}}}}
+
+    alt_anfragen = gw.anfragen
+    alt_klingeln = fe.klingeln
+    gespielt = []
+    gw.anfragen = falsches_gateway
+    fe.klingeln = lambda namen, **_k: gespielt.append(list(namen)) or ""
+    try:
+        chi = app_modul.Chimera.__new__(app_modul.Chimera)
+        chi.erinnerung = Erinnerung()
+        chi.ton_pfad = ziel
+        pruef("erste Frage erinnert noch nicht", chi.erinnere(jetzt=J), [])
+        pruef("nach dem Abstand erinnert es", chi.erinnere(jetzt=J + 60), ["ssh"])
+        pruef("Op Name wie im Gateway", gesehen[0].get("op"), gefragt[0])
+        pruef("ein Ton gespielt", gespielt, [["ssh"]])
+    finally:
+        gw.anfragen = alt_anfragen
+        fe.klingeln = alt_klingeln
+
     # --- Verdrahtet, nicht nur gebaut ------------------------------------
     # Regel: "Gebaut ist erst, wenn verdrahtet ist." Der Dienst muss die
     # Erinnerung im Takt wirklich aufrufen -- ein Modul ohne Aufrufer ist ein

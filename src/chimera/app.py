@@ -303,7 +303,7 @@ class Chimera:
     def erinnere(self, jetzt: int | None = None) -> list[str]:
         """An offene Freigaben erinnern: fragen, entscheiden, einen Ton.
 
-        Fragt **das Gateway** (``op: freigaben_lesen``) -- die Datei gehoert
+        Fragt **das Gateway** (``op: freigabe_lesen``) -- die Datei gehoert
         dem Gateway, der Dienst liest sie nicht selbst (Regel 10g). Ist das
         Gateway nicht erreichbar, wird nicht erinnert und **nicht** geworfen:
         Der Dienst soll weiterlaufen.
@@ -318,7 +318,7 @@ class Chimera:
         if self.erinnerung is None:
             return []
         try:
-            a = gateway.anfragen({"op": "freigaben_lesen"}, warten=5.0)
+            a = gateway.anfragen({"op": "freigabe_lesen"}, warten=5.0)
         except LLMError as exc:
             log.debug("Freigaben nicht lesbar, keine Erinnerung: %s", exc)
             return []

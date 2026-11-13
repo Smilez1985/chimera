@@ -3748,7 +3748,7 @@ der Ablauf.
 - **Der Ton kommt vom Dienst, nicht vom Gateway.** Der Lautsprecher hängt an
   der Anzeige (Whisplay HAT: ALSA-Karte `whisplaysound`, `aplay` vorhanden);
   das Gateway hat kein Audio. Auslöser ist der Zeitgeber des Dienstes, die
-  Wahrheit über „ist etwas offen" bleibt im Gateway (`op: freigaben_lesen`).
+  Wahrheit über „ist etwas offen" bleibt im Gateway (`op: freigabe_lesen`).
   **Gebaut** in `src/chimera/freigabe_erinnerung.py`, eingehängt in die
   bestehende Dienstschleife (30 s Takt, kein zweiter Faden): der erste Ton
   kommt **nach** dem Abstand, nach einer Pause einmal statt nachgeholt, und
