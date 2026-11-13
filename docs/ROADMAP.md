@@ -33,6 +33,17 @@ zram wird nicht angefasst, wenn es läuft.
       ist damit keine Entscheidung mehr, sondern nur der Anlass: Tritt ein
       Bruch auf, wird die Grenze gesetzt und der Fall hier vermerkt.
 
+- [ ] **Die CI fährt keine Gegenproben.** Gemessen 13.11.: Die Python-Jobs
+      rufen nur `tests/test_*.py`, die Installer-Jobs nur
+      `installer/tests/test-*.sh` — die 13 `tests/gegenprobe_*.py` und die
+      `installer/tests/counter-check-*.sh` laufen dort **nie** (nur von Hand).
+      Damit kann eine Mutation unbemerkt durchrutschen, und ein Test, dessen
+      Gegenprobe niemand fährt, ist eine Zusage ohne Beleg. Ein Lauf aller
+      Python-Gegenproben dauert hier rund 4,5 Minuten; eine Gegenprobe
+      (`gegenprobe_displays.py`) ist ohne Gerät schon rot, taugt also nicht
+      ungeprüft für die CI. Nächster Schritt: je Gegenprobe feststellen, ob sie
+      ohne Gerät grün ist, und die tauglichen in einen eigenen CI-Job nehmen.
+
 - [ ] **Das Gateway ordnet ausgehende Ziele ein** (DESIGN 5n, entschieden
       11.11.): `ip_im_lan` (`web.rs`, heute nur für eingehende Web-Anfragen)
       auch für ausgehende Verbindungen benutzen; geprüft wird die **aufgelöste**
@@ -682,8 +693,15 @@ Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
       `tests/test_ablagen_wirksam.py`. **Am Gerät belegt** (Stand `75012bc`,
       13 Module ohne Fehler): setzen → Datei und Protokoll entstehen, Prüfung
       erlaubt `gut.example` und lehnt `bose.example` über die Negativliste ab,
-      „aus“ führt zurück auf die Positivliste. Offen daran nur noch: die
-      Anzeige der Restzeit im Autotest (das JS ist nur im Browser geprüft).
+      „aus“ führt zurück auf die Positivliste. **Die Restzeit-Anzeige hat seit
+      13.11. einen Autotest:** `tests/js/freigaben_restzeit.mjs` (in Node, mit
+      minimalem DOM-Ersatz, lädt die echte `freigaben.js`) prüft die Rechnung
+      *und* dass die Karte den Text wirklich zeigt — 23 Punkte, Rahmen
+      `tests/test_freigaben_restzeit.py`, Gegenprobe
+      `tests/gegenprobe_freigaben_restzeit.py` (4 Verfälschungen, alle rot).
+      **Dabei festgehalten:** Eine abgelaufene Freigabe zeigt wieder „fragt
+      einzeln“ — die Karte sagt *nicht*, dass etwas abgelaufen ist. Ob das
+      gemeldet werden soll, ist die offene Entscheidung weiter unten.
 - [ ] **Stufe 2 — Prüfpunkt im Gateway: für `web_abruf` gebaut 12.11.**
       (CHANGELOG): `abruf::durchgang` fragt `freigaben::pruefen`, bevor es
       verbindet; Ablehnung nennt Werkzeug, Ziel und Grund. Offen: **jeder

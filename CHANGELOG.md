@@ -1631,6 +1631,19 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   nicht gemessen.
 
 ### Geprüft
+- **Die Restzeit-Anzeige der Freigaben hat jetzt einen Autotest** (13.11.):
+  Bisher war das JS nur von Hand im Browser geprüft (ROADMAP). Neu:
+  `tests/js/freigaben_restzeit.mjs` lädt die **echte** `freigaben.js` in Node
+  (minimaler DOM-Ersatz, kein nachgebautes Modul) und prüft 23 Punkte — die
+  Rechnung `dauerText` über alle Grenzen (unbefristet, abgelaufen, Sekunden
+  unter 90, Minuten bis 1,5 h, Stunden bis 2 Tage, Tage) **und** dass die Karte
+  den Text wirklich anzeigt. Rahmen `tests/test_freigaben_restzeit.py` (ohne
+  `node` übersprungen, nicht still grün), Gegenprobe
+  `tests/gegenprobe_freigaben_restzeit.py` mit vier Verfälschungen (Schwelle
+  verschoben, Ablauf ignoriert, unbefristet als abgelaufen, Restzeit nicht
+  angezeigt) — alle rot an der erwarteten Stelle. Dabei festgehalten: Eine
+  abgelaufene Freigabe zeigt wieder „fragt einzeln“ und sagt **nicht**, dass
+  sie abgelaufen ist (offene Entscheidung, ROADMAP).
 - **Tailnet auf dem Pi: eingerichtet, gelesen und geschaltet** (13.11.,
   chimera-pi, Stand `00ca63e`): `tailscaled` 1.104.7 aus dem Tailscale-Repo
   installiert, Anmeldung am Headscale mit einem Preauth-Key über stdin (nie in
