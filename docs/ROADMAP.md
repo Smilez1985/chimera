@@ -713,9 +713,12 @@ das Gateway — auch `ssh`. Der Ausführer bleibt ohne Netz. **Gebaut 12.11.
 abends** (CHANGELOG: Host-Tabelle, `op: ssh`, Deskriptor-Übergabe, feste
 `argv`, Agenten-Werkzeuge `ssh` und `ssh_vorschlag`). Offen bleibt:
 
-- [ ] **`IPAddressDeny=any` am Gerät nachweisen**: ein `ssh`-Kind des
-      Ausführers erreicht 1.1.1.1:443 nicht, obwohl es das versucht — der
-      Riegel ist die Unit, und nur am Pi lässt er sich messen.
+- [ ] **`IPAddressDeny=any` am Gerät nachweisen** — **gemessen 13.11.**:
+      Unit `chimera-sohelper` trägt `IPAddressDeny=::/0 0.0.0.0/0`, `Allow`
+      ist leer; `ssh` in einer Unit mit derselben Property endet mit
+      `Connection timed out` gegen 1.1.1.1:443, ohne sie mit
+      `Connection closed by 1.1.1.1 port 443`. Offen bleibt nur die Probe
+      **im** Ausführer selbst (er startet ssh nur über den Deskriptor).
 - [ ] **Hostschlüssel im Gateway lesen** (`ssh_schluessel_lesen`): heute
       tippt der Nutzer die Zeile aus `ssh-keyscan` ein, den Fingerabdruck
       rechnet das Gateway. Selbst lesen heißt SSH-Schlüsselaustausch —
@@ -731,9 +734,10 @@ abends** (CHANGELOG: Host-Tabelle, `op: ssh`, Deskriptor-Übergabe, feste
       freigegebenes nicht; ein zweiter Host ist ohne neuen Auftrag nicht
       erreichbar; Hostschlüssel-Wechsel bricht ab; `-D`/`-L`/`-R` sind nicht
       ausdrückbar (im Test festgenagelt, `rust/gegenprobe-ssh.sh` 19/19 rot).
-- [ ] **Aufnahme am Gerät belegen**: Code steht (13.11. nachts, in der
-      Sandbox gegen einen echten sshd belegt); am Pi fehlt der Lauf mit
-      einem echten Ziel — inklusive Passwort-Eingabe im Modul.
+- [ ] **Passwort-Eingabe im Modul am Gerät**: die Aufnahme selbst ist am Pi
+      belegt (13.11., gegen einen temporären Nutzer, CHANGELOG); gefehlt hat
+      nur der Weg über die Oberfläche — Passwort tippen, „Jetzt aufnehmen",
+      bestätigen. Die API dafür steht (`/api/ssh/geheim`, `/api/ssh/aufnahme`).
 - [ ] **Tailscale/Headscale anbinden** (Idee smilez 13.11.): auf dem Pi-hole
       läuft ein **Headscale**-Server. Entscheidung steht noch aus; meine
       Lesart: `tailscaled` läuft **auf Betriebssystem-Ebene** (es braucht

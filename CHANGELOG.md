@@ -20,6 +20,18 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Die Aufnahme läuft am Gerät** (13.11., chimera-pi): gegen einen
+  temporären Nutzer `sshtest` auf 127.0.0.1 durchgespielt — Host zur Aufnahme
+  angelegt, Passwort über `--geheim-ssh` abgelegt (nie angezeigt), Aufnahme
+  meldet `ok` mit Fingerabdruck `SHA256:RRE73…`, die Zeile
+  `restrict ssh-ed25519 … chimera:sshtest-lokal` steht in
+  `/home/sshtest/.ssh/authorized_keys` (`~/.ssh` 700, Datei 600), das
+  Passwort ist aus der Ablage verschwunden, nach der Bestätigung läuft
+  `op: ssh` über den Schlüssel (`id -un` → `sshtest`, Exitcode 0).
+  Aufgeräumt: Nutzer (`userdel -r`), Schlüsselpaar, Host-Eintrag und
+  Freigabe sind wieder weg. **Zwei Gerätebefunde dabei** (beide unten unter
+  „Behoben"): der laufende Ausführer war eine alte Fassung, und das Gateway
+  kam nicht an dessen Socket.
 - **Die Aufnahme eines Hosts ist gebaut** (13.11. nachts): `op: ssh_aufnahme`
   (Gateway) + `ssh_aufnahme` im Ausführer. Ablauf in einem
   Verbindungsaufbau: Passwort-Anmeldung ohne TTY (`SSH_ASKPASS` +
