@@ -404,6 +404,59 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       Cloud-Anbieter), **Positivliste der Ziele für `web_abruf`** (mit den
       Web-Werkzeugen aus 5r), **Rückfrage beim Nutzer** (Weg wie 10s; wann
       sie auslöst, ist festzulegen). Jedes Tor mit Gegenprobe.
+- [ ] **DeepSeek als Anbieter** (Auftrag smilez, 13.11.): Chat, Modelle,
+  Werkzeuge über die OpenAI-kompatible API (`https://api.deepseek.com`,
+  `POST /chat/completions`, `GET /models`). Modell: ein eigenes Modul im
+  **Gateway** (wie `ollama.rs`), Typ `deepseek` in der Anbietertabelle,
+  Schlüssel aus der Umgebung (`DEEPSEEK_API_KEY`, nur das Gateway liest sie).
+  Abweichungen zur OpenAI-Form, die man wissen muss: `thinking`/
+  `reasoning_effort` sind Zusatzfelder (im OpenAI-SDK via `extra_body`), der
+  Denktext steht in `message.reasoning_content` **neben** `content`,
+  `tool_choice: required` ist im Thinking-Modus verboten (400),
+  `frequency_penalty`/`presence_penalty` werden ignoriert, und im **Stream**
+  gibt es **keinen** separaten Usage-Chunk — die Zahlen hängen am letzten
+  Inhalts-Chunk. Modelle heute: `deepseek-flash`, `deepseek-v4-pro`
+  (1M Kontext); Preise `docs/RECHERCHE-deepseek.md`.
+
+- [ ] **Guthaben und Kosten je Anbieter** (Auftrag smilez, 13.11.: „Kosten
+  können bei den meisten Anbietern aus der API abgerufen werden"). Muster
+  abgeschaut bei **OpenMinis** (`provider/quota/`, Adapter je Anbieter):
+  - **Abfrage je Anbieter, je ein Adapter.** DeepSeek:
+    `GET /user/balance` → je **Währung ein eigener Pool** (nie umrechnen, nie
+    summieren), mit `total_balance`, Aufteilung `granted_balance`/
+    `topped_up_balance`, „verfügbar" aus `is_available`, Bindung kontoweit
+    („von allen Modellen dieses Kontos geteilt").
+  - **Herkunft immer mitliefern**: Quelle (`offizielle API` /
+    `Dashboard-API` / `unbekannt`), Belegtheit (`dokumentiert` /
+    `beobachtet`), Endpunkt, Zeitpunkt. Kein Abruf ohne diese Angabe.
+  - **Anthropic mit API-Schlüssel: kein Abruf.** Die Usage/Cost-API verlangt
+    einen **Admin-Key**; OpenMinis zeigt dort bewusst nur den Link zur
+    Abrechnungsseite (`UnsupportedQuotaAdapter`). Nicht so tun, als käme
+    eine Zahl.
+  - **Claude-Abo**: aktiv `GET /api/oauth/usage` (Beta-Header), passiv die
+    `anthropic-ratelimit-unified-*`-Header jeder Antwort; Herkunft
+    „Dashboard-API / beobachtet", nie „offiziell".
+  - **Frische**: aktive Abfragen höchstens alle 10 min, Abo-Kontingente im
+    5-Minuten-Fenster; älter ⇒ „veraltet" anzeigen, nicht verstecken.
+    `Retry-After` bindet auch den Knopf.
+  - Ablage `state/quota/<anbieter>.json` (Regel 5t), Op `quota_lesen`,
+    Modul „Konten" mit Karte je Währung.
+- [ ] **Kosten aus Token × Preis** (Entscheidung smilez 13.11.: „beides").
+  Je Aufruf einen Datensatz (Zeit, Anbieter, `model_raw` **und**
+  `model_billed` nach Alias-Abbildung, `prompt_cache_hit_tokens`,
+  `prompt_cache_miss_tokens`, `completion_tokens`, `reasoning_tokens`,
+  HTTP-Status, `peak`-Flag, `price_version`), Summen je Modell/Tag. Preise
+  als **versionierte Datei mit Stand-Datum** aus dem models.dev-Katalog
+  (`src/android/app/src/main/assets/models-dev-api.json` im OpenMinis-Repo;
+  DeepSeek, Anthropic inkl. `cache_read`/`cache_write`). Rechnen in
+  Ganzzahl-Mikro-USD, Peak-Fenster DeepSeek 01–04 und 06–10 UTC Mo–Fr.
+  Streaming ohne Usage ⇒ als „ohne Usage" zählen, nicht 0 buchen.
+
+- [ ] **Lip-Sync aus aiavatar-pi** (Prüfbericht `docs/FREMDCODE.md`):
+  `lipsync.py` (Apache-2.0, 246 Zeilen) plus RMS/Spektralcentroid aus
+  `display/base.py` übernehmen, fünf Mundformen mit selbstlernenden
+  Schwellen; Herkunft im Dateikopf nennen, Lizenz beilegen.
+
 - [ ] **Ton bei offener Rückfrage** (smilez, 13.11.; der eigentliche Zweck des
       Tons): Wartet das Gerät auf eine **Antwort des Nutzers** (Rückfrage nach
       DESIGN 5n, „Rückfrage beim Nutzer"), soll es klingeln — wiederholt, bis
