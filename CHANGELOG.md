@@ -20,6 +20,26 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **DeepSeek als Anbieter** (Auftrag smilez 13.11.): neues Gateway-Modul
+  `deepseek.rs` (OpenAI-kompatible API, `POST /chat/completions`, `GET /models`).
+  `dienst::anbieter_finden` liefert `(typ, adresse)` und verteilt Chat und
+  Modellliste daran — ein Typ ohne Modul (`anthropic`) wird benannt, nicht
+  geraten. Behandelt die belegten Eigenheiten: Denktext in
+  `message.reasoning_content` neben `content` (nur gedacht ⇒ `nur_gedacht`),
+  `thinking`/`reasoning_effort` nur auf Auftrag (`denken`), `tool_choice:
+  "required"` fällt im Denkmodus weg und wird als `werkzeug_wahl_ignoriert`
+  gesagt, `stream_options.include_usage` plus eigener **SSE**-Sammler
+  (`: keep-alive` und `usage: null` werden toleriert), `frequency_penalty`/
+  `presence_penalty` gar nicht erst mitgeschickt, Fehler mit eigenen Codes
+  (`schluessel_falsch` 401, `kein_guthaben` 402, `parameter_falsch` 422,
+  `ausgelastet` 429). Werkzeugaufrufe kommen in der neutralen Form des
+  Agenten (`name`/`argumente`) heraus, Argumente aus dem JSON-**Text** gelesen.
+  Schlüssel: Ablage der Oberfläche (`state/keys/<id>`) vor
+  `DEEPSEEK_API_KEY`; fehlt er, `nicht_eingerichtet` mit Klartext, bevor
+  etwas geschickt wird. Tests: cargo 422 (24 neue), `dienst`-Verdrahtung
+  (Chat, Modelle, ausgeschalteter Anbieter, fremder Typ), Gegenprobe
+  `rust/gegenprobe-deepseek.sh` mit 10 Mutationen (alle rot). Der Agent fragt
+  selbst noch `ollama` — die Auswahl dort steht in der ROADMAP.
 - **Das Gateway holt den Hostschluessel selbst** (`ssh_schluessel_lesen`,
   13.11., Entscheidung smilez): statt die Zeile aus `ssh-keyscan` einzutippen,
   startet das Gateway das Programm als **Kindprozess mit fester `argv`**

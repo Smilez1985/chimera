@@ -13,6 +13,7 @@
 //! - **selbst binden** (`--socket PFAD`): fuer Tests und den Betrieb ohne
 //!   systemd.
 
+use crate::deepseek;
 use crate::ollama;
 use gemein::protokoll::{melden, Stufe};
 use gemein::zeile;
@@ -83,14 +84,7 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
             None => zeile::fehlerantwort("anbieter_fehlt", "Der Chat braucht ein Feld \"anbieter\"."),
         },
         "modelle" => match anfrage.get("anbieter").and_then(Value::as_str) {
-            Some(a) => match ollama_adresse(a, stand) {
-                Ok(adr) => ollama::op_modelle(
-                    adr.as_deref(),
-                    &katalog_fuer(a, adr.as_deref(), stand),
-                    &bevorzugt(a, stand),
-                ),
-                Err(f) => f,
-            },
+            Some(a) => modelle(a, stand),
             None => zeile::fehlerantwort("anbieter_fehlt", "Die Abfrage braucht ein Feld \"anbieter\"."),
         },
         // Was das Gateway ueber die Modelle gemessen hat (Werkzeuge, Fenster).
@@ -244,52 +238,122 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
     }
 }
 
-/// Die Adresse eines Ollama-Anbieters. `ollama` ohne eigene Datei ist der
-/// Anbieter aus der `.env` (Rueckfall bis zur Umstellung); jede andere Id muss
-/// eine Anbieterdatei vom Typ `ollama` haben. `Ok(None)` heisst „nicht
-/// eingerichtet“ (die Antwort der Operation sagt das selbst).
-fn ollama_adresse(id: &str, stand: &Stand) -> Result<Option<String>, Value> {
+/// Ein Anbieter aus der Anbietertabelle: `(typ, adresse)`. `ollama` ohne
+/// eigene Datei ist der Anbieter aus der `.env` (Rueckfall bis zur
+/// Umstellung); jede andere Id muss eine Datei haben. `Ok(None)` als Adresse
+/// heisst „nicht eingerichtet“ oder „Vorgabe des Typs“ (DeepSeek etwa nimmt
+/// dann seine feste Basis) -- die Antwort der Operation sagt das selbst.
+///
+/// Der Typ entscheidet, **welches Modul** den Anbieter bedient. Kein Weg
+/// bedient „irgendeinen“ Typ: ein Eintrag, den kein Modul kennt, wird
+/// benannt und nicht geraten.
+fn anbieter_finden(id: &str, stand: &Stand) -> Result<(String, Option<String>), Value> {
     if !crate::daten::id_gueltig(id) {
         return Err(zeile::fehlerantwort("anbieter_unbekannt", &format!("Unbekannter Anbieter: {id}")));
     }
     let (liste, _) = crate::daten::anbieter_laden(&stand.daten);
     if let Some((_, a)) = liste.iter().find(|(i, _)| i == id) {
-        if a["typ"] != "ollama" {
-            return Err(zeile::fehlerantwort(
-                "anbieter_unbekannt",
-                &format!("Anbieter {id} hat den Typ {}, den dieser Weg nicht bedient.", a["typ"]),
-            ));
-        }
         if a.get("an").and_then(Value::as_bool) == Some(false) {
             return Err(zeile::fehlerantwort("anbieter_aus", &format!("Anbieter {id} ist ausgeschaltet.")));
         }
-        return Ok(ollama::adresse_aus(a["adresse"].as_str()));
+        let typ = a["typ"].as_str().unwrap_or("").trim().to_string();
+        let adresse = a["adresse"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
+        return Ok((typ, adresse));
     }
     if id == "ollama" {
-        return Ok(stand.ollama.clone());
+        return Ok(("ollama".to_string(), stand.ollama.clone()));
     }
     Err(zeile::fehlerantwort("anbieter_unbekannt", &format!("Unbekannter Anbieter: {id}")))
 }
 
-/// `op: chat`: nimmt den gespeicherten Katalog mit, damit ohne genanntes
-/// Modell nach dem gemessenen `tools` gewaehlt wird (DESIGN 5n, „Das Modell
-/// kommt vom Server"). Ist nichts gemessen (frischer Anbieter, Katalog leer),
-/// wird **einmal** gemessen und erneut gefragt -- sonst bliebe ein Anbieter,
-/// den die Netzsuche nicht auffrischt (`auto: false`), dauerhaft ohne Antwort.
+/// Der Typ, den dieser Weg nicht bedient -- mit Klartext statt „unbekannt“.
+fn typ_nicht_bedient(id: &str, typ: &str) -> Value {
+    zeile::fehlerantwort(
+        "anbieter_unbekannt",
+        &format!("Anbieter {id} hat den Typ {typ}, den dieser Weg nicht bedient."),
+    )
+}
+
+/// Die Adresse eines Ollama-Anbieters, oder der Fehler, dass er keiner ist.
+fn ollama_adresse(id: &str, stand: &Stand) -> Result<Option<String>, Value> {
+    let (typ, adr) = anbieter_finden(id, stand)?;
+    if typ != "ollama" {
+        return Err(typ_nicht_bedient(id, &typ));
+    }
+    Ok(ollama::adresse_aus(adr.as_deref()))
+}
+
+/// `op: modelle`: welcher Weg fragt, entscheidet der **Typ** des Anbieters.
+fn modelle(id: &str, stand: &Stand) -> Value {
+    match anbieter_finden(id, stand) {
+        Ok((typ, adr)) if typ == "ollama" => {
+            let a = ollama::adresse_aus(adr.as_deref());
+            ollama::op_modelle(a.as_deref(), &katalog_fuer(id, a.as_deref(), stand), &bevorzugt(id, stand))
+        }
+        Ok((typ, adr)) if typ == "deepseek" => deepseek::op_modelle(
+            &deepseek::basis_aus(adr.as_deref()),
+            schluessel_von(id, stand).as_deref(),
+            &bevorzugt(id, stand),
+            id,
+        ),
+        Ok((typ, _)) => typ_nicht_bedient(id, &typ),
+        Err(f) => f,
+    }
+}
+
+/// Der Schluessel eines Anbieters: erst die Ablage, die die Oberflaeche
+/// fuellt (`state/keys/`), dann die Umgebung. Beide sind Eigentum des
+/// Gateways; der Agent sieht keinen Wert (DESIGN 5l).
+fn schluessel_von(id: &str, stand: &Stand) -> Option<String> {
+    crate::daten::schluessel_lesen(&stand.daten, id).or_else(deepseek::schluessel_aus_umgebung)
+}
+
+/// Der Strom ist ein Schalter des Nutzers (`wahl.json`); ein ausdruecklicher
+/// Wert im Auftrag gilt vorher.
+fn mit_stromwahl(anfrage: &Value, stand: &Stand) -> Value {
+    let mut a = anfrage.clone();
+    if a.get("stream").is_none() {
+        a["stream"] = json!(stream_aus_wahl(stand));
+    }
+    a
+}
+
+/// `op: chat`: welcher Weg spricht, entscheidet der **Typ** des Anbieters.
 fn chat(id: &str, anfrage: &Value, stand: &Stand) -> Value {
-    let adr = match ollama_adresse(id, stand) {
-        Ok(Some(a)) => a,
-        Ok(None) => return ollama::op_chat(None, anfrage, &json!({}), &[]),
-        Err(f) => return f,
+    match anbieter_finden(id, stand) {
+        Ok((typ, adr)) if typ == "ollama" => {
+            chat_ollama(id, ollama::adresse_aus(adr.as_deref()), anfrage, stand)
+        }
+        Ok((typ, adr)) if typ == "deepseek" => {
+            let a = mit_stromwahl(anfrage, stand);
+            deepseek::op_chat(
+                id,
+                adr.as_deref(),
+                schluessel_von(id, stand).as_deref(),
+                &a,
+                &bevorzugt(id, stand),
+            )
+        }
+        Ok((typ, _)) => typ_nicht_bedient(id, &typ),
+        Err(f) => f,
+    }
+}
+
+/// `op: chat` mit einem Anbieter vom Typ `ollama`: nimmt den gespeicherten
+/// Katalog mit, damit ohne genanntes Modell nach dem gemessenen `tools`
+/// gewaehlt wird (DESIGN 5n, „Das Modell kommt vom Server"). Ist nichts
+/// gemessen (frischer Anbieter, Katalog leer), wird **einmal** gemessen und
+/// erneut gefragt -- sonst bliebe ein Anbieter, den die Netzsuche nicht
+/// auffrischt (`auto: false`), dauerhaft ohne Antwort.
+fn chat_ollama(id: &str, adr: Option<String>, anfrage: &Value, stand: &Stand) -> Value {
+    let adr = match adr {
+        Some(a) => a,
+        None => return ollama::op_chat(None, anfrage, &json!({}), &[]),
     };
     let mut katalog = katalog_fuer(id, Some(&adr), stand);
     // Der Schalter gehoert dem Nutzer (wahl.json); ein ausdruecklicher Wert im
     // Auftrag gilt vor (Tests, spaetere Oberflaechen).
-    let mut anfrage = anfrage.clone();
-    if anfrage.get("stream").is_none() {
-        anfrage["stream"] = json!(stream_aus_wahl(stand));
-    }
-    let anfrage = &anfrage;
+    let anfrage = &mit_stromwahl(anfrage, stand);
     let a = ollama::op_chat(Some(&adr), anfrage, &katalog, &bevorzugt(id, stand));
     let genannt = anfrage.get("modell").and_then(Value::as_str).is_some_and(|m| !m.is_empty());
     if a["fehler"]["code"] == "kein_modell" && !genannt && !katalog_gemessen(&katalog) {
@@ -783,5 +847,86 @@ mod tests_anbieter {
         let a = antworten(&json!({"op": "chat", "anbieter": "lan", "modell": "a", "prompt": "x"}), &s);
         assert_eq!(a["ok"], true, "{a}");
         h.join().unwrap();
+    }
+}
+
+#[cfg(test)]
+mod tests_deepseek {
+    use super::*;
+
+    fn stand_mit_daten(n: &str) -> (Stand, crate::daten::Pfade) {
+        let d = std::env::temp_dir().join(format!("chimera-ds-{n}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let p = crate::daten::Pfade::neu(d.join("config"), d.join("state"));
+        (Stand::mit(None, p.clone()), p)
+    }
+
+    #[test]
+    fn anbieter_vom_typ_deepseek_wird_ueber_sein_modul_bedient() {
+        let (b, h) = ollama::tests::server(vec![(
+            200,
+            r#"{"choices":[{"message":{"content":"Hallo"}}],"usage":{"prompt_tokens":3,"completion_tokens":1}}"#
+                .into(),
+        )]);
+        let (s, p) = stand_mit_daten("chat");
+        crate::daten::anbieter_speichern(
+            &p,
+            "ds",
+            &json!({"typ": "deepseek", "bezeichnung": "DeepSeek", "adresse": b}),
+        )
+        .unwrap();
+        // Der Schlüssel liegt in der Ablage, nicht in der Umgebung: dieselbe
+        // Stelle, die die Oberfläche füllt.
+        crate::daten::schluessel_setzen(&p, "ds", "sk-aus-der-ablage").unwrap();
+        let a = antworten(&json!({"op": "chat", "anbieter": "ds", "modell": "deepseek-flash", "prompt": "x"}), &s);
+        assert_eq!(a["ok"], true, "{a}");
+        assert_eq!(a["text"], "Hallo");
+        assert_eq!(a["anbieter"], "ds");
+        let anfragen = h.join().unwrap();
+        assert!(anfragen[0].starts_with("POST /chat/completions"), "{}", anfragen[0]);
+        assert!(anfragen[0].to_lowercase().contains("authorization: bearer sk-aus-der-ablage"));
+    }
+
+    #[test]
+    fn modelle_gehen_fuer_deepseek_an_das_deepseek_modul() {
+        let (b, h) = ollama::tests::server(vec![(
+            200,
+            r#"{"data":[{"id":"deepseek-flash"},{"id":"deepseek-v4-pro"}]}"#.into(),
+        )]);
+        let (s, p) = stand_mit_daten("modelle");
+        crate::daten::anbieter_speichern(
+            &p,
+            "ds",
+            &json!({"typ": "deepseek", "bezeichnung": "DeepSeek", "adresse": b}),
+        )
+        .unwrap();
+        crate::daten::schluessel_setzen(&p, "ds", "k").unwrap();
+        let a = antworten(&json!({"op": "modelle", "anbieter": "ds"}), &s);
+        assert_eq!(a["ok"], true, "{a}");
+        assert_eq!(a["modelle"], json!(["deepseek-flash", "deepseek-v4-pro"]));
+        assert_eq!(a["wahl"], "deepseek-flash");
+        h.join().unwrap();
+    }
+
+    #[test]
+    fn ein_ausgeschalteter_deepseek_anbieter_wird_nicht_gefragt() {
+        let (s, p) = stand_mit_daten("aus");
+        crate::daten::anbieter_speichern(
+            &p,
+            "ds",
+            &json!({"typ": "deepseek", "bezeichnung": "D", "adresse": "http://127.0.0.1:1", "an": false}),
+        )
+        .unwrap();
+        let a = antworten(&json!({"op": "chat", "anbieter": "ds", "prompt": "x"}), &s);
+        assert_eq!(a["fehler"]["code"], "anbieter_aus", "{a}");
+    }
+
+    #[test]
+    fn ein_typ_ohne_modul_wird_benannt() {
+        let (s, p) = stand_mit_daten("typ");
+        crate::daten::anbieter_speichern(&p, "cloud", &json!({"typ": "litellm", "bezeichnung": "C"})).unwrap();
+        let a = antworten(&json!({"op": "chat", "anbieter": "cloud", "prompt": "x"}), &s);
+        assert_eq!(a["fehler"]["code"], "anbieter_unbekannt");
+        assert!(a["fehler"]["text"].as_str().unwrap().contains("litellm"), "{a}");
     }
 }

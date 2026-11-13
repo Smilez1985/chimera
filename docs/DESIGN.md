@@ -1105,6 +1105,51 @@ lag der Katalog unter der gefundenen Id und die Wahl sah einen leeren.
 `dienst::katalog_fuer` sucht deshalb zuerst unter der Id, dann unter der
 gleichen Adresse — eine Stelle, kein zweiter Weg.
 
+### Anbieter vom Typ `deepseek` (13.11.2026)
+
+**Auftrag smilez:** DeepSeek als Anbieter über die OpenAI-kompatible API.
+Die Fakten stehen in `docs/RECHERCHE-deepseek.md` (Abruf 13.11.).
+
+**Ein Modul je Typ, gewählt über `typ` in der Anbietertabelle.**
+`dienst::anbieter_finden` liefert `(typ, adresse)`; `chat`/`modelle`
+verteilen danach. Ein Typ, den kein Modul kennt, wird **benannt** („Anbieter
+X hat den Typ Y, den dieser Weg nicht bedient") und nicht geraten — das gilt
+auch weiterhin für `anthropic` (die Anthropic-Tür ist noch nicht umgezogen).
+
+**Was bei DeepSeek anders ist als bei Ollama, und wie es gebaut ist:**
+
+| Eigenheit (belegt) | Gebaut |
+|---|---|
+| Denktext steht in `message.reasoning_content` **neben** `content` | gelesen; nur Denktext ⇒ `nur_gedacht` mit Länge und Auszug, kein leerer Text |
+| Denken ist **vorgabe an**, `reasoning_effort` `low`/`high`/`max` | nur auf Auftrag gesetzt (`denken`: `false` / `low` / `medium` / `high` / `max`); ohne Angabe wird **nichts** behauptet. Unbekannte Stufe ⇒ kein Feld statt geraten |
+| `tool_choice: "required"` ist im Thinking-Modus **400** | wird dann weggelassen und in der Antwort als `werkzeug_wahl_ignoriert` **gesagt** |
+| Im Strom **kein** eigener Usage-Chunk | `stream_options.include_usage` gesetzt; Usage hängt am letzten Chunk; `usage: null` und `: keep-alive` werden toleriert |
+| `frequency_penalty`/`presence_penalty` werden ignoriert | nicht mitgeschickt |
+| Fehler 402 = Konto leer, 401 = Schlüssel, 429 = Nebenläufigkeit | eigene Codes (`kein_guthaben`, `schluessel_falsch`, `ausgelastet`), nicht „anbieter_fehler" für alles |
+
+**Wahl ohne Modellangabe:** DeepSeek misst keine `tools` (die Doku sagt:
+alle Chat-Modelle können Werkzeuge, `/models` liefert keine Eigenschaften).
+Deshalb gilt die Reihenfolge des Nutzers (`wahl.json`), sonst das erste
+Modell der Serverliste — und die Antwort **nennt** das gewählte Modell.
+
+**Werkzeugaufrufe antwortet das Gateway in der neutralen Form**
+(`[{"name", "argumente", "id"?}]`), so wie Ollama es seit dem 11.11. tut und
+wie es der Vertrag des Agenten verlangt (`provider/base.py`, `Reply`).
+DeepSeeks `arguments` ist ein JSON-**Text** — er wird gelesen, nicht
+weitergereicht.
+
+**Schlüssel:** erst die Ablage der Oberfläche (`state/keys/<id>`, gefüllt
+vom Modul „Anbieter"), dann `DEEPSEEK_API_KEY` aus der `.env`. Beide liest
+nur das Gateway; in Antworten steht nur, **dass** einer da ist. Ein fehlender
+Schlüssel ergibt `nicht_eingerichtet` mit Klartext, bevor irgendetwas
+geschickt wird.
+
+**Der Agent selbst fragt noch `ollama`** (`provider/gateway.py`,
+`op: chat` mit `"anbieter": "ollama"`). DeepSeek ist damit über den Socket,
+die Web-Oberfläche und die Anbieter-Probe erreichbar — die Auswahl durch den
+Agenten (Reihenfolge nach 5h) ist der nächste Schritt und steht in der
+ROADMAP.
+
 **Folge für die Sperre** (Lesart notes, zu bestätigen): Die Wahl gehört
 dorthin, wo die Adresse liegt — ans Gateway. Der Dienst braucht
 `OLLAMA_MODEL` nicht aus der `.env`: Nennt er kein Modell, entscheidet

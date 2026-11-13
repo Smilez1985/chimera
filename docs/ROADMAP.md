@@ -404,19 +404,18 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       Cloud-Anbieter), **Positivliste der Ziele für `web_abruf`** (mit den
       Web-Werkzeugen aus 5r), **Rückfrage beim Nutzer** (Weg wie 10s; wann
       sie auslöst, ist festzulegen). Jedes Tor mit Gegenprobe.
-- [ ] **DeepSeek als Anbieter** (Auftrag smilez, 13.11.): Chat, Modelle,
-  Werkzeuge über die OpenAI-kompatible API (`https://api.deepseek.com`,
-  `POST /chat/completions`, `GET /models`). Modell: ein eigenes Modul im
-  **Gateway** (wie `ollama.rs`), Typ `deepseek` in der Anbietertabelle,
-  Schlüssel aus der Umgebung (`DEEPSEEK_API_KEY`, nur das Gateway liest sie).
-  Abweichungen zur OpenAI-Form, die man wissen muss: `thinking`/
-  `reasoning_effort` sind Zusatzfelder (im OpenAI-SDK via `extra_body`), der
-  Denktext steht in `message.reasoning_content` **neben** `content`,
-  `tool_choice: required` ist im Thinking-Modus verboten (400),
-  `frequency_penalty`/`presence_penalty` werden ignoriert, und im **Stream**
-  gibt es **keinen** separaten Usage-Chunk — die Zahlen hängen am letzten
-  Inhalts-Chunk. Modelle heute: `deepseek-flash`, `deepseek-v4-pro`
-  (1M Kontext); Preise `docs/RECHERCHE-deepseek.md`.
+- [ ] **DeepSeek im Agenten auswählen** (Folge von „DeepSeek als Anbieter",
+  gebaut 13.11.): `src/chimera/provider/gateway.py` fragt `op: chat` fest mit
+  `"anbieter": "ollama"`. Offen sind (a) ein Weg, wie der Agent den Anbieter
+  erfährt (Reihenfolge aus `wahl.json`, 5h — nicht nachgebaut im Dienst),
+  (b) `provider/registry.py`: „Abo" gegen „Schlüssel" trennen (`access`,
+  `cost`), damit DeepSeek als bezahlter Schlüssel erscheint und nicht als
+  lokal, (c) Anzeige von Modell und Anbieter in der Statuszeile, (d) Kosten
+  dieser Aufrufe (nächster Punkt). Bis dahin ist DeepSeek über den Socket,
+  die Web-Oberfläche und die Anbieter-Probe erreichbar, nicht im Gespräch.
+  **Auch offen:** ein eigenes Web-Modul für den Anbieter (das Modul `ollama`
+  filtert `typ === "ollama"`); heute legt man ihn über
+  `/api/anbieter/setzen` an.
 
 - [ ] **Guthaben und Kosten je Anbieter** (Auftrag smilez, 13.11.: „Kosten
   können bei den meisten Anbietern aus der API abgerufen werden"). Muster

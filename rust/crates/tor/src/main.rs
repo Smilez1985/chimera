@@ -5,6 +5,7 @@
 
 mod abruf;
 mod daten;
+mod deepseek;
 mod freigaben;
 mod geheim;
 mod dienst;
