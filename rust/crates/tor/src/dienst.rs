@@ -150,6 +150,22 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
         "ssh_hosts" => json!({"ok": true, "hosts": crate::ssh::laden(&stand.daten)["hosts"]}),
         // Tailscale: **nur lesen** (LocalAPI, GET). Fehlt der Socket, ist das
         // kein Fehler -- Tailscale ist opt-in (DESIGN, "Tailscale/Headscale").
+        // Was das Tailnet **ändert**, hängt an der Freigabe `tailscale` --
+        // ein Knopf, der den Netzzugang abschaltet, gehört nicht immer an.
+        "tailscale_steuern" => {
+            let aktion = anfrage.get("aktion").and_then(Value::as_str).unwrap_or("");
+            let frei = crate::freigaben::pruefen(&stand.daten, "tailscale", None, jetzt_s());
+            if frei["erlaubt"] != true {
+                json!({"ok": false, "fehler": {"code": "tailscale_gesperrt",
+                    "text": format!("Das Tailnet zu steuern ist nicht freigegeben: {}",
+                        frei["grund"].as_str().unwrap_or("ohne Grund"))}})
+            } else {
+                match crate::tailscale::steuern(aktion) {
+                    Ok(t) => json!({"ok": true, "aktion": aktion, "text": t}),
+                    Err(e) => zeile::fehlerantwort("tailscale_fehler", &e),
+                }
+            }
+        }
         "tailscale" => {
             let pfad = std::env::var("CHIMERA_TAILSCALE_SOCKET")
                 .unwrap_or_else(|_| crate::tailscale::SOCKET.to_string());

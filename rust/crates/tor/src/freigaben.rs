@@ -24,7 +24,7 @@ use std::io::Write;
 /// Werkzeuge, die freigegeben werden koennen. **Geschlossen**: was hier nicht
 /// steht, laesst sich nicht freigeben. Neue Werkzeuge kommen mit ihrem
 /// Aufrufer dazu, nicht auf Verdacht.
-pub const WERKZEUGE: &[&str] = &["web_suche", "web_abruf", "ssh", "run_command"];
+pub const WERKZEUGE: &[&str] = &["web_suche", "web_abruf", "ssh", "run_command", "tailscale"];
 
 /// Laenger als das Protokoll nicht, bevor es rotiert.
 const PROTOKOLL_MAX: u64 = 512 * 1024;

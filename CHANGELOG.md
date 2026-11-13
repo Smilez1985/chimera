@@ -820,6 +820,19 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Das Tailnet lässt sich jetzt auch schalten** (13.11., nach dem Pi-Einbau):
+  Der Gateway-Nutzer ist auf dem Pi **`operator`** von `tailscaled`
+  (`tailscale set --operator=chimera-tor`, Entscheidung smilez) — damit darf
+  Chimera den Knoten nicht nur lesen, sondern **an- und abschalten**. Neu:
+  `tailscale::steuern` + Op `tailscale_steuern` (`an`, `aus`, `status`), das
+  über `tailscale up`/`down` geht und **nicht** über `POST /localapi/v0/prefs`
+  (ein Teil-Prefs-POST kann andere Einstellungen auf Vorgaben zurückwerfen).
+  Der Aufruf hängt an der **Freigabe `tailscale`** — ein Knopf, der den
+  Netzzugang abschaltet, gehört nicht immer an. Beim Prüfen fiel ein Fehler
+  auf: die LocalAPI verlangt den **Host-Kopf `local-tailscaled.sock`**;
+  mit `localhost` antwortet sie 403, was wie ein Rechteproblem aussah. Test
+  `tailscale::tests::die_anfrage_traegt_den_host_kopf_den_die_localapi_verlangt`
+  (Gegenprobe: Host auf `localhost` → rot).
 - **Messreste gehören nicht nach `/tmp`** (13.11.): Am Pi lagen 276 MB alter
   Messbäume in `/tmp` — und `/tmp` ist dort eine tmpfs, also RAM. `free`
   meldete 309 MB „benutzt", während alle Prozesse zusammen 36 MB belegten

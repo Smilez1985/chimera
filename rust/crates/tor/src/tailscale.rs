@@ -42,9 +42,11 @@ pub fn holen(socket: &str) -> Result<Zustand, String> {
     let mut s = UnixStream::connect(socket).map_err(|e| format!("{socket}: {e}"))?;
     let _ = s.set_read_timeout(Some(Duration::from_secs(5)));
     let _ = s.set_write_timeout(Some(Duration::from_secs(5)));
-    // `GET` und sonst nichts: Die LocalAPI kann auch ändern (POST). Was hier
-    // steht, darf das nicht können.
-    let anfrage = "GET /localapi/v0/status HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    // `GET` und sonst nichts: Die LocalAPI kann auch ändern (POST) — was hier
+    // steht, darf das nicht können. Der **Host-Kopf muss `local-tailscaled.sock`
+    // sein**: mit `localhost` antwortet die LocalAPI 403, und das sah am 13.11.
+    // wie ein Rechteproblem aus (es war die Anfrage).
+    let anfrage = "GET /localapi/v0/status HTTP/1.1\r\nHost: local-tailscaled.sock\r\nConnection: close\r\n\r\n";
     s.write_all(anfrage.as_bytes()).map_err(|e| format!("schreiben: {e}"))?;
     let mut roh = Vec::new();
     s.read_to_end(&mut roh).map_err(|e| format!("lesen: {e}"))?;
@@ -142,6 +144,43 @@ pub fn zeile(socket: &str) -> Zeile {
     }
 }
 
+/// **Steuern** — den Netzzugang an- und abschalten.
+///
+/// Warum über das Programm und nicht über die LocalAPI: Ein `POST` auf
+/// `/localapi/v0/prefs` ersetzt Einstellungen; schickte man nur
+/// `WantRunning`, könnte alles andere auf Vorgaben zurückfallen. `tailscale
+/// up`/`down` liest die Einstellungen, ändert genau das Nötige und schreibt
+/// sie zurück — dieselbe Handlung, die der Nutzer auf der Kommandozeile
+/// macht, und die einzige, die Tailscale selbst als Schnittstelle zusagt.
+///
+/// Das Gateway darf das, weil es als **`operator`** eingetragen ist
+/// (`tailscale set --operator=chimera-tor`, Entscheidung smilez 13.11.).
+/// Der Aufruf hängt trotzdem an der **Freigabe** `tailscale` — ein Knopf,
+/// der den Netzzugang abschaltet, gehört nicht immer an.
+pub fn steuern(aktion: &str) -> Result<String, String> {
+    let (programm_args, was) = match aktion {
+        "an" => (vec!["up"], "eingeschaltet"),
+        "aus" => (vec!["down"], "ausgeschaltet"),
+        "status" => (vec!["status"], "abgefragt"),
+        andere => {
+            return Err(format!(
+                "Aktion \"{andere}\" gibt es nicht (an, aus, status)."
+            ))
+        }
+    };
+    let ausgabe = std::process::Command::new("tailscale")
+        .args(&programm_args)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .map_err(|e| format!("tailscale laesst sich nicht starten: {e}"))?;
+    let text = String::from_utf8_lossy(&ausgabe.stdout).trim().to_string();
+    let fehler = String::from_utf8_lossy(&ausgabe.stderr).trim().to_string();
+    if !ausgabe.status.success() {
+        return Err(if fehler.is_empty() { format!("tailscale {} endete mit {:?}", programm_args.join(" "), ausgabe.status.code()) } else { fehler });
+    }
+    Ok(if text.is_empty() { format!("Tailnet {was}.") } else { text })
+}
+
 /// Sonde für die Statusseite — mit Frist, damit nicht alle 3 s ein
 /// Socket-Aufruf nötig ist.
 pub struct Tailnet {
@@ -203,6 +242,37 @@ mod tests {
                 let _ = c.write_all(antworttext.as_bytes());
             }
         })
+    }
+
+    /// Ein LocalAPI-Ersatz, der die Anfrage **prüft**: ohne den richtigen
+    /// Host-Kopf antwortet das echte tailscaled mit „invalid localapi request"
+    /// (am 13.11. hiess das faelschlich 403 und sah wie ein Rechteproblem aus).
+    fn strenge_attrappe(listener: std::os::unix::net::UnixListener, antworttext: String) -> std::thread::JoinHandle<String> {
+        std::thread::spawn(move || {
+            let (mut c, _) = listener.accept().unwrap();
+            let mut puffer = [0u8; 2048];
+            let n = c.read(&mut puffer).unwrap_or(0);
+            let anfrage = String::from_utf8_lossy(&puffer[..n]).to_string();
+            if !anfrage.starts_with("GET /localapi/v0/status ") || !anfrage.contains("Host: local-tailscaled.sock") {
+                let _ = c.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n");
+            } else {
+                let _ = c.write_all(antworttext.as_bytes());
+            }
+            anfrage
+        })
+    }
+
+    #[test]
+    fn die_anfrage_traegt_den_host_kopf_den_die_localapi_verlangt() {
+        let d = ordner("hostkopf");
+        let l = lauscher(&d);
+        let json = r#"{"BackendState":"Running","Self":{"HostName":"pi"}}"#;
+        let h = strenge_attrappe(l, antwort(json, false));
+        let z = holen(d.join("s.sock").to_str().unwrap());
+        let anfrage = h.join().unwrap();
+        assert!(anfrage.contains("Host: local-tailscaled.sock"), "{anfrage}");
+        assert_eq!(z.unwrap().backend, "Running");
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     fn lauscher(d: &std::path::Path) -> std::os::unix::net::UnixListener {
