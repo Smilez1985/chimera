@@ -1189,6 +1189,16 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **`force` war im Modul wählbar, aber nie erfüllbar** (13.11.): Die Stufe
+  verlangt den Pfad des Zauns auf dem Ziel; ein Feld dafür gab es weder in
+  der Tabelle noch im Modul — jede Aufnahme mit `force` endete in
+  „force braucht einen Zaun-Pfad". Jetzt nimmt `ssh_host_setzen` das Feld
+  `zaun` an (geprüft: absolut, ohne Leerraum, `"` und `,`) und **verlangt**
+  es bei `force`; das Modul hat das Feld und schickt es bei der Bestätigung
+  mit. Am laufenden Gateway belegt: die Zeile wird zu
+  `restrict,command="/usr/local/bin/chimera-zaun" ssh-ed25519 …`.
+  Test `ssh::tests::force_verlangt_einen_zaun_und_der_wird_abgelegt`,
+  Gegenproben von Hand (Prüfung aus, Feld nicht abgelegt) — beide rot.
 - **Die Oberfläche zeigt bei abgelaufener Sitzung wieder die Anmeldung**
   (13.11.): Ein Neustart des Gateways räumt die Sitzungen ab; jeder Klick
   danach kam als `401 nicht angemeldet` zurück, im Modul sah das aus wie

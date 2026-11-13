@@ -51,6 +51,8 @@ class ChimeraSsh extends HTMLElement {
               <option value="voll">voll — der Schlüssel darf, was der Zielnutzer darf (wie ssh-copy-id)</option>
             </select>
           </div>
+          <div><label class="klein">Zaun-Pfad auf dem Ziel (nur bei <code>force</code>)</label>
+            <input id="zaun" placeholder="/usr/local/bin/chimera-zaun"></div>
         </div>
         <label class="klein"><input type="checkbox" id="aufnahme" style="width:auto;margin-right:.4rem">
           zur Aufnahme anlegen — der Hostschlüssel wird beim ersten Verbinden geholt und hier bestätigt</label>
@@ -191,6 +193,9 @@ class ChimeraSsh extends HTMLElement {
         ja.onclick = async () => {
           const w = { adresse: e.adresse, nutzer: e.nutzer, port: e.port, schluessel: e.schluessel,
                       rechte: e.rechte, hostschluessel: r.hostschluessel };
+          // `force` braucht den Zaun-Pfad auch bei der Bestaetigung -- er
+          // steht schon in der Tabelle und wird hier nur mitgeschickt.
+          if (e.zaun) w.zaun = e.zaun;
           const b = await this.post("/api/ssh/setzen", { host: name, wert: w });
           if (!b.ok) { erg.className = "fehler"; erg.textContent = (b.fehler && b.fehler.text) || "Fehler"; return; }
           erg.className = "klein";
@@ -213,6 +218,7 @@ class ChimeraSsh extends HTMLElement {
       this.$("port").value = e.port || 22;
       this.$("schluessel").value = e.schluessel || "";
       this.$("rechte").value = e.rechte || "zaun";
+      this.$("zaun").value = e.zaun || "";
       this.$("notiz").value = e.notiz || "";
       this.$("hostschluessel").value = "";
       this.melden(e.brauchbar ? "Zum Ändern: Felder prüfen, dann speichern. Der Hostschlüssel bleibt, solange Adresse und Port gleich bleiben." : "Zum Bestätigen: Hostschlüssel einfügen (ssh-keyscan) und speichern.", false);
@@ -238,6 +244,8 @@ class ChimeraSsh extends HTMLElement {
       rechte: this.$("rechte").value,
       notiz: this.$("notiz").value.trim(),
     };
+    const zaun = this.$("zaun").value.trim();
+    if (zaun) wert.zaun = zaun;
     const aufnahme = this.$("aufnahme").checked;
     if (aufnahme) wert.aufnahme = true;
     const roh = this.$("hostschluessel").value.trim();

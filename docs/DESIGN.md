@@ -4129,6 +4129,11 @@ anderes abgebildet — Pre-Alpha, es gibt keinen Bestand, den das bräche.
 **Pfad** (`zaun: "/usr/local/bin/chimera-zaun"`), kein Code; Chimera schreibt
 **nichts** auf ein Zielsystem — das wäre heimliche Codeverteilung, und der
 Zaun ist genau die Stelle, an der der Nutzer die Kontrolle behalten muss.
+Das Modul fragt ihn im Feld „Zaun-Pfad" ab; `ssh_host_setzen` prüft die Form
+(absolut, ohne Leerraum, ohne `"` und `,` — sonst zerlegt der Pfad die
+`authorized_keys`-Zeile) und **verlangt** ihn bei `force`. Damit fällt ein
+fehlender Zaun beim Speichern auf und nicht erst bei der Aufnahme, die dann
+schon gelaufen ist (13.11.).
 Das Modul zeigt einen **Vorschlag zum Kopieren**, aus der Befehlsliste des
 Hosts erzeugt; abgelegt und geprüft wird er vom Nutzer.
 

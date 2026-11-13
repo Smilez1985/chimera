@@ -723,13 +723,6 @@ abends** (CHANGELOG: Host-Tabelle, `op: ssh`, Deskriptor-Übergabe, feste
       tippt der Nutzer die Zeile aus `ssh-keyscan` ein, den Fingerabdruck
       rechnet das Gateway. Selbst lesen heißt SSH-Schlüsselaustausch —
       gehört hierher, weil der Netzweg jetzt existiert.
-- [ ] **Rechte je Host durchsetzen** (DESIGN, „Welche Rechte auf dem Ziel",
-      nachgeprüft an `sshd(8)`): `force` = `restrict,command="<zaun>"`,
-      `zaun` = `restrict`, `voll` = keine Optionen. Die Tabelle führt den
-      Wert schon und lehnt Unbekanntes ab; die `authorized_keys`-Zeile baut
-      die **Aufnahme** (nächster Punkt). Den Zaun selbst legt der Nutzer auf
-      dem Ziel an (`zaun`-Pfad in der Tabelle) — Chimera schreibt keinen
-      fremden Code auf ein Zielsystem.
 - [ ] **Gegenprobe am Gerät**: freigegebenes Ziel antwortet, nicht
       freigegebenes nicht; ein zweiter Host ist ohne neuen Auftrag nicht
       erreichbar; Hostschlüssel-Wechsel bricht ab; `-D`/`-L`/`-R` sind nicht

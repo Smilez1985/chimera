@@ -246,6 +246,29 @@ pub fn setzen(p: &Pfade, name: &str, wert: &Value) -> Result<Value, (&'static st
     if notiz.chars().count() > 200 {
         return Err(("wert_ungueltig", "Die Notiz ist laenger als 200 Zeichen.".into()));
     }
+    // Der Zaun-Pfad: nur bei `force` gebraucht, aber **hier** geprueft -- sonst
+    // faellt es erst bei der Aufnahme auf, und die ist dann schon gelaufen.
+    // Geprueft wird dieselbe Form, die der Ausfuehrer verlangt: absolut, ohne
+    // Leerraum, ohne " und ohne , (sonst zerlegt der Pfad die Zeile).
+    let zaun = wert.get("zaun").and_then(Value::as_str).unwrap_or("").trim().to_string();
+    if !zaun.is_empty()
+        && (zaun.len() > 200
+            || !zaun.starts_with('/')
+            || zaun.chars().any(|c| c.is_whitespace() || c == '"' || c == ',' || c.is_control()))
+    {
+        return Err((
+            "wert_ungueltig",
+            format!("Der Zaun-Pfad \"{zaun}\" muss absolut sein und darf keinen Leerraum, kein \" und kein , enthalten."),
+        ));
+    }
+    if rechte == "force" && zaun.is_empty() {
+        return Err((
+            "wert_ungueltig",
+            "Die Stufe `force` braucht den Pfad des Zauns auf dem Ziel (zaun=\"/usr/local/bin/chimera-zaun\") \
+             -- ohne ihn waere `command=` nur eine Weiterleitung."
+                .into(),
+        ));
+    }
     // Hostschluessel: neu mitgeben, oder den alten behalten, wenn sich das
     // Ziel nicht geaendert hat.
     let gleiches_ziel = alt
@@ -281,7 +304,7 @@ pub fn setzen(p: &Pfade, name: &str, wert: &Value) -> Result<Value, (&'static st
     };
     let neu = json!({
         "adresse": adresse, "nutzer": nutzer, "port": port, "schluessel": schluessel,
-        "hostschluessel": hostschluessel, "rechte": rechte,
+        "hostschluessel": hostschluessel, "rechte": rechte, "zaun": if zaun.is_empty() { Value::Null } else { json!(zaun) },
         "herkunft": "nutzer", "notiz": notiz,
     });
     let mut ganz2 = ganz.clone();
@@ -758,6 +781,33 @@ mod tests {
         // `rbash` gibt es nicht mehr: eine eingeschraenkte Shell ist kein Zaun.
         e["rechte"] = json!("rbash");
         assert_eq!(setzen(&p, "h", &e).unwrap_err().0, "wert_ungueltig");
+    }
+
+    #[test]
+    fn force_verlangt_einen_zaun_und_der_wird_abgelegt() {
+        // DESIGN, "Welche Rechte auf dem Ziel": in der Tabelle steht der
+        // **Pfad** des Zauns. Ohne ihn ist `command=` eine Weiterleitung,
+        // darum wird die Stufe hier abgelehnt und nicht erst bei der Aufnahme.
+        let p = p("zaun-pfad");
+        let mut e = eintrag("h.example");
+        e["rechte"] = json!("force");
+        assert_eq!(setzen(&p, "h", &e).unwrap_err().0, "wert_ungueltig");
+        assert!(laden(&p)["hosts"].as_object().map(|h| h.is_empty()).unwrap_or(true), "nichts abgelegt");
+        // Ein Pfad, der die Zeile zerlegen wuerde, ebenso wenig.
+        for boese in ["relativ/pfad", "/mit leerraum", "/mit\"zitat", "/mit,komma", "-x"] {
+            e["zaun"] = json!(boese);
+            assert_eq!(setzen(&p, "h", &e).unwrap_err().0, "wert_ungueltig", "{boese:?}");
+        }
+        e["zaun"] = json!("/usr/local/bin/chimera-zaun");
+        let v = setzen(&p, "h", &e).unwrap();
+        assert_eq!(v["zaun"], "/usr/local/bin/chimera-zaun");
+        // Er steht in der Ablage und kommt beim Lesen unveraendert zurueck.
+        assert_eq!(laden(&p)["hosts"]["h"]["zaun"], "/usr/local/bin/chimera-zaun");
+        // Ohne `force` bleibt der Pfad erlaubt, aber nicht vorgeschrieben.
+        e["rechte"] = json!("zaun");
+        e.as_object_mut().unwrap().remove("zaun");
+        let v = setzen(&p, "h", &e).unwrap();
+        assert_eq!(v["zaun"], Value::Null);
     }
 
     #[test]
