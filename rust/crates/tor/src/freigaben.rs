@@ -6,8 +6,10 @@
 //! steht (`offen`).
 //!
 //! **Kein Ablauf mehr (Entscheidung smilez, 13.11.2026).** Eine Freigabe
-//! bleibt offen, bis der Nutzer sie schliesst; statt still zuzumachen
-//! erinnert ein Ton (`erinnern_alle` Sekunden, Vorgabe 300, mindestens 60).
+//! bleibt offen, bis der Nutzer sie schliesst. Ein Ton kann daran erinnern --
+//! **opt-in**: `erinnern_alle` ist die Vorgabe **0 (aus)**; wer ihn will,
+//! setzt mindestens 60 Sekunden (smilez, 13.11.: der Ton gehoert zu offenen
+//! Rueckfragen, nicht zu jeder Freigabe).
 //! `bis` steht nur noch als **Lese-Altbestand** in der Datei: ein Eintrag von
 //! gestern mit einer Frist in der Vergangenheit gilt weiterhin als
 //! `positivliste` -- sonst ginge eine alte Frist rueckwirkend auf.
@@ -36,8 +38,10 @@ pub const WERKZEUGE: &[&str] = &["web_suche", "web_abruf", "ssh", "run_command",
 /// Laenger als das Protokoll nicht, bevor es rotiert.
 const PROTOKOLL_MAX: u64 = 512 * 1024;
 
-/// Abstand der Erinnerung, wenn nichts anderes gesetzt ist (Sekunden).
-pub const ERINNERN_VORGABE: u64 = 300;
+/// Vorgabe des Erinnerungsabstands: **0 = aus** (opt-in, Entscheidung
+/// smilez 13.11.). Der Ton ist fuer offene Rueckfragen gedacht, nicht fuer
+/// jede Freigabe.
+pub const ERINNERN_VORGABE: u64 = 0;
 /// Kuerzer als das waere kein Erinnern, sondern ein Dauerpiepen.
 pub const ERINNERN_MIN: u64 = 60;
 
@@ -98,10 +102,12 @@ impl Eintrag {
                 .map(|a| a.iter().filter_map(Value::as_str).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
                 .unwrap_or_default()
         };
+        // 0 heisst "aus"; alles dazwischen (1..59) ist Unsinn und faellt auf
+        // die Vorgabe zurueck -- nie auf einen Ton, den niemand bestellt hat.
         let erinnern_alle = v
             .get("erinnern_alle")
             .and_then(Value::as_u64)
-            .filter(|s| *s >= ERINNERN_MIN)
+            .filter(|s| *s == 0 || *s >= ERINNERN_MIN)
             .unwrap_or(ERINNERN_VORGABE);
         Eintrag {
             modus_offen: v.get("modus").and_then(Value::as_str) == Some("offen"),
@@ -239,11 +245,13 @@ pub fn setzen(p: &Pfade, werkzeug: &str, wert: &Value, jetzt: u64) -> Result<Val
     let erinnern_alle = match wert.get("erinnern_alle") {
         None | Some(Value::Null) => None,
         Some(v) => match v.as_u64() {
+            // 0 = aus (Vorgabe, opt-in).
+            Some(0) => Some(0),
             Some(s) if s >= ERINNERN_MIN => Some(s),
             Some(s) => {
                 return Err((
                     "wert_ungueltig",
-                    format!("\"erinnern_alle\" braucht mindestens {ERINNERN_MIN} Sekunden (bekam {s}); darunter waere es kein Erinnern, sondern Dauerpiepen."),
+                    format!("\"erinnern_alle\" ist 0 (aus) oder mindestens {ERINNERN_MIN} Sekunden (bekam {s}); darunter waere es kein Erinnern, sondern Dauerpiepen."),
                 ))
             }
             None => return Err(("wert_ungueltig", format!("\"erinnern_alle\" braucht eine Zahl (Sekunden), bekam {v}."))),
@@ -308,8 +316,11 @@ fn beschreibung(e: &Value) -> String {
         Some(s) => format!("seit {s}"),
         None => "nicht offen".into(),
     };
-    let erinnern = e["erinnern_alle"].as_u64().unwrap_or(ERINNERN_VORGABE);
-    format!("{} ({}), erinnern alle {erinnern}s, positiv {}, negativ {}", e["modus"].as_str().unwrap_or("?"), seit,
+    let erinnern = match e["erinnern_alle"].as_u64().unwrap_or(ERINNERN_VORGABE) {
+        0 => "ohne Ton".to_string(),
+        n => format!("erinnern alle {n}s"),
+    };
+    format!("{} ({}), {}, positiv {}, negativ {}", e["modus"].as_str().unwrap_or("?"), seit, erinnern,
         e["positiv"].as_array().map(|a| a.len()).unwrap_or(0),
         e["negativ"].as_array().map(|a| a.len()).unwrap_or(0))
 }
@@ -455,9 +466,12 @@ mod tests {
         assert_eq!(e.0, "wert_ungueltig");
         assert!(e.1.contains("mindestens"), "{}", e.1);
         assert_eq!(setzen(&p, "ssh", &json!({"modus": "offen", "erinnern_alle": null}), 1000).unwrap()["erinnern_alle"], 120);
-        // In der Anzeige steht die Vorgabe, wenn nie etwas gesetzt wurde.
+        // **0 heisst aus** und ist ausdruecklich erlaubt (opt-in).
+        assert_eq!(setzen(&p, "ssh", &json!({"modus": "offen", "erinnern_alle": 0}), 1000).unwrap()["erinnern_alle"], 0);
+        // In der Anzeige steht die Vorgabe -- und die ist **aus**.
         let leer = laden(&p);
-        assert_eq!(leer["werkzeuge"]["web_suche"]["erinnern_alle"], ERINNERN_VORGABE, "{leer}");
+        assert_eq!(ERINNERN_VORGABE, 0, "der Ton ist opt-in (Entscheidung smilez, 13.11.)");
+        assert_eq!(leer["werkzeuge"]["web_suche"]["erinnern_alle"], 0, "{leer}");
     }
 
     #[test]

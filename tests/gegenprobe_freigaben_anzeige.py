@@ -49,6 +49,12 @@ MUTATIONEN = [
         "Karte zeigt seit wann",
     ),
     (
+        "ton-wird-aufgedraengt",
+        "auswahl.value = String(e.erinnern_alle == null ? 0 : e.erinnern_alle);",
+        "auswahl.value = String(e.erinnern_alle || 300);",
+        "Vorgabe ist ohne Ton",
+    ),
+    (
         "altbestand-frist-ignoriert",
         'const offen = e.modus === "offen" && (!e.bis || e.bis > jetzt);',
         'const offen = e.modus === "offen";',

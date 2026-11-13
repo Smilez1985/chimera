@@ -27,7 +27,7 @@ class ChimeraFreigaben extends HTMLElement {
         ul { margin:.3rem 0 0; padding-left:1.1rem; font-size:.9rem; }
       </style>
       <h3>Freigaben</h3>
-      <p class="klein">Je Werkzeug: <strong>einzeln fragen</strong> (nur Ziele auf der Positivliste) oder <strong>offen</strong> — dann geht alles durch, was nicht auf der Negativliste steht. Eine Freigabe <strong>läuft nicht mehr ab</strong>: sie bleibt offen, bis du sie schließt, und ein Ton erinnert dich daran. Die Negativliste gilt immer. Der Agent kann hier nichts ändern.</p>
+      <p class="klein">Je Werkzeug: <strong>einzeln fragen</strong> (nur Ziele auf der Positivliste) oder <strong>offen</strong> — dann geht alles durch, was nicht auf der Negativliste steht. Eine Freigabe <strong>läuft nicht mehr ab</strong>: sie bleibt offen, bis du sie schließt. Ein Ton kann daran erinnern, ist aber <strong>aus, solange du ihn nicht einschaltest</strong>. Die Negativliste gilt immer. Der Agent kann hier nichts ändern.</p>
       <div id="liste"></div>
       <p id="meldung" class="fehler"></p>`;
     this.$ = (id) => this.shadowRoot.getElementById(id);
@@ -90,12 +90,14 @@ class ChimeraFreigaben extends HTMLElement {
     // Freigeben: keine Dauerwahl, dafür der Abstand der Erinnerung.
     const zeile = this.el("div");
     const auswahl = this.el("select");
-    for (const [wert, text] of [["60", "jede Minute"], ["300", "alle 5 Minuten"], ["600", "alle 10 Minuten"], ["1800", "alle 30 Minuten"]]) {
+    // Der Ton ist **opt-in** (Entscheidung smilez, 13.11.): er gehoert zu
+    // offenen Rueckfragen, nicht zu jeder Freigabe. Vorgabe: ohne Ton.
+    for (const [wert, text] of [["0", "ohne Ton (Vorgabe)"], ["300", "alle 5 Minuten"], ["600", "alle 10 Minuten"], ["1800", "alle 30 Minuten"]]) {
       const o = this.el("option", text);
       o.value = wert;
       auswahl.appendChild(o);
     }
-    auswahl.value = String(e.erinnern_alle || 300);
+    auswahl.value = String(e.erinnern_alle == null ? 0 : e.erinnern_alle);
     const frei = this.el("button", "Freigeben");
     const zu = this.el("button", offen ? "Freigabe beenden" : "Einzeln fragen", "stumm");
     const aus = this.el("div", undefined, "klein");
@@ -130,7 +132,7 @@ class ChimeraFreigaben extends HTMLElement {
       const teile = (t) => t.split(",").map((x) => x.trim()).filter((x) => x.length);
       schicken({
         modus: e.modus === "offen" ? "offen" : "positivliste",
-        erinnern_alle: e.erinnern_alle || 300,
+        erinnern_alle: e.erinnern_alle == null ? 0 : e.erinnern_alle,
         positiv: teile(lp.value),
         negativ: teile(ln.value),
         notiz: e.notiz || "",

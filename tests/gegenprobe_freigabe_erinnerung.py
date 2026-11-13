@@ -45,10 +45,17 @@ MUTATIONEN = [
         "neu geoeffnet: erst still",
     ),
     (
+        "aus-wird-trotzdem-gespielt",
+        MODUL,
+        "            if roh <= 0:\n                continue",
+        "            if roh < 0:\n                continue",
+        "0 heisst aus",
+    ),
+    (
         "mindestabstand-ignoriert",
         MODUL,
-        "                abstand = max(ABSTAND_MIN, roh)",
-        "                abstand = roh",
+        "            out[str(name)] = max(ABSTAND_MIN, int(roh))",
+        "            out[str(name)] = int(roh)",
         "zu kurz wird auf das Minimum gehoben",
     ),
     (

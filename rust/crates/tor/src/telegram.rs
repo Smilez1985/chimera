@@ -383,7 +383,13 @@ pub fn frei_text(a: &Value, jetzt: u64) -> String {
                     _ => "seit unbekannt (Altbestand)".to_string(),
                 };
                 let alle = e["erinnern_alle"].as_u64().unwrap_or(crate::freigaben::ERINNERN_VORGABE);
-                format!("{name}: offen, {seit}, erinnert alle {}", spanne_text(alle))
+                if alle == 0 {
+                    // Der Ton ist opt-in -- wer ihn nicht bestellt hat, sieht
+                    // hier auch keinen.
+                    format!("{name}: offen, {seit}")
+                } else {
+                    format!("{name}: offen, {seit}, erinnert alle {}", spanne_text(alle))
+                }
             } else {
                 let p = e["positiv"].as_array().map(|x| x.len()).unwrap_or(0);
                 format!("{name}: fragt einzeln ({p} erlaubte Ziele)")
@@ -1045,6 +1051,12 @@ mod tests {
         }}});
         let t = frei_text(&a, 1_000_000);
         assert!(t.contains("web_abruf: offen, seit 10 min, erinnert alle 5 min"), "{t}");
+        // Ohne bestellten Ton steht auch keiner da (opt-in, 13.11.).
+        let stumm = frei_text(&json!({"ok": true, "freigaben": {"werkzeuge": {
+            "ssh": {"modus": "offen", "seit": 999_400, "erinnern_alle": 0, "positiv": [], "negativ": []}
+        }}}), 1_000_000);
+        assert!(stumm.contains("ssh: offen, seit 10 min"), "{stumm}");
+        assert!(!stumm.contains("erinnert alle"), "{stumm}");
         assert!(t.contains("1 gesperrt"), "{t}");
         assert!(t.contains("ssh: fragt einzeln (1 erlaubte Ziele)"), "{t}");
         assert!(t.contains("/frei <werkzeug>"), "{t}");

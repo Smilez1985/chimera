@@ -58,18 +58,23 @@ def main() -> int:
     J = 1_700_000_000
 
     # --- Wann ------------------------------------------------------------
+    # Vorgabe ist **aus**: eine Freigabe ohne bestellten Ton klingelt nie.
     e = Erinnerung()
-    pruef("erster Tick klingelt nicht", e.tick(offen(ssh={}), J), [])
-    pruef("kurz vor dem Abstand still", e.tick(offen(ssh={}), J + ABSTAND_VORGABE - 1), [])
-    pruef("nach der Vorgabe faellig", e.tick(offen(ssh={}), J + ABSTAND_VORGABE), ["ssh"])
-    pruef("danach wieder still", e.tick(offen(ssh={}), J + ABSTAND_VORGABE + 1), [])
-    pruef("dann wieder nach dem Abstand", e.tick(offen(ssh={}), J + 2 * ABSTAND_VORGABE), ["ssh"])
+    pruef("ohne erinnern_alle klingelt nichts", e.tick(offen(ssh={}), J + 10_000), [])
+    pruef("auch nach einer Stunde nicht", e.tick(offen(ssh={}), J + 3_600_000), [])
+
+    e = Erinnerung()
+    pruef("erster Tick klingelt nicht", e.tick(offen(ssh={"erinnern_alle": 300}), J), [])
+    pruef("kurz vor dem Abstand still", e.tick(offen(ssh={"erinnern_alle": 300}), J + 299), [])
+    pruef("nach dem Abstand faellig", e.tick(offen(ssh={"erinnern_alle": 300}), J + 300), ["ssh"])
+    pruef("danach wieder still", e.tick(offen(ssh={"erinnern_alle": 300}), J + 301), [])
+    pruef("dann wieder nach dem Abstand", e.tick(offen(ssh={"erinnern_alle": 300}), J + 600), ["ssh"])
 
     # Nachholen: eine Stunde Stillstand ergibt EINEN Ton, nicht zwoelf.
     e = Erinnerung()
-    e.tick(offen(ssh={}), J)
-    pruef("nach langer Pause einmal", e.tick(offen(ssh={}), J + 3600), ["ssh"])
-    pruef("und dann erst wieder nach Abstand", e.tick(offen(ssh={}), J + 3600 + 299), [])
+    e.tick(offen(ssh={"erinnern_alle": 300}), J)
+    pruef("nach langer Pause einmal", e.tick(offen(ssh={"erinnern_alle": 300}), J + 3600), ["ssh"])
+    pruef("und dann erst wieder nach Abstand", e.tick(offen(ssh={"erinnern_alle": 300}), J + 3600 + 299), [])
 
     # Eigener Abstand des Eintrags.
     e = Erinnerung()
@@ -81,15 +86,16 @@ def main() -> int:
     e = Erinnerung()
     pruef("Positivliste erinnert nicht", e.tick(offen(ssh={"modus": "positivliste"}), J + 10_000), [])
     e = Erinnerung()
-    e.tick(offen(ssh={}, web_abruf={}), J)
-    pruef("zwei offene: beide", e.tick(offen(ssh={}, web_abruf={}), J + ABSTAND_VORGABE), ["ssh", "web_abruf"])
+    e.tick(offen(ssh={"erinnern_alle": 300}, web_abruf={"erinnern_alle": 300}), J)
+    pruef("zwei offene: beide", e.tick(offen(ssh={"erinnern_alle": 300}, web_abruf={"erinnern_alle": 300}), J + 300),
+          ["ssh", "web_abruf"])
 
     # Geschlossen: vergessen -- und neu geoeffnet wieder mit vollem Abstand.
     e = Erinnerung()
-    e.tick(offen(ssh={}), J)
-    pruef("geschlossen erinnert nicht", e.tick(offen(ssh={"modus": "positivliste"}), J + ABSTAND_VORGABE), [])
-    pruef("neu geoeffnet: erst still", e.tick(offen(ssh={}), J + ABSTAND_VORGABE + 1), [])
-    pruef("neu geoeffnet: nach Abstand", e.tick(offen(ssh={}), J + 2 * ABSTAND_VORGABE + 1), ["ssh"])
+    e.tick(offen(ssh={"erinnern_alle": 300}), J)
+    pruef("geschlossen erinnert nicht", e.tick(offen(ssh={"modus": "positivliste"}), J + 300), [])
+    pruef("neu geoeffnet: erst still", e.tick(offen(ssh={"erinnern_alle": 300}), J + 301), [])
+    pruef("neu geoeffnet: nach Abstand", e.tick(offen(ssh={"erinnern_alle": 300}), J + 601), ["ssh"])
 
     # Zu kurz und kaputt gesetzt: die Grenze gilt, nicht der Eintrag.
     e = Erinnerung()
@@ -97,8 +103,10 @@ def main() -> int:
     pruef("zu kurz wird auf das Minimum gehoben", e.tick(offen(ssh={"erinnern_alle": 10}), J + ABSTAND_MIN - 1), [])
     pruef("zu kurz klingelt beim Minimum", e.tick(offen(ssh={"erinnern_alle": 10}), J + ABSTAND_MIN), ["ssh"])
     e = Erinnerung()
-    pruef("kaputter Wert faellt auf die Vorgabe", e.offene(offen(ssh={"erinnern_alle": "viel"})), {"ssh": ABSTAND_VORGABE})
-    pruef("fehlender Wert faellt auf die Vorgabe", e.offene(offen(ssh={})), {"ssh": ABSTAND_VORGABE})
+    pruef("kaputter Wert heisst aus", e.offene(offen(ssh={"erinnern_alle": "viel"})), {})
+    pruef("fehlender Wert heisst aus", e.offene(offen(ssh={})), {})
+    pruef("0 heisst aus", e.offene(offen(ssh={"erinnern_alle": 0})), {})
+    pruef("die Vorgabe ist aus", ABSTAND_VORGABE, 0)
 
     # Unbekannte Formen sind still, nicht toedlich.
     pruef("kein Objekt ergibt nichts", Erinnerung().tick({}, J), [])

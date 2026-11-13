@@ -3733,14 +3733,20 @@ Die Fassung vom 12.11. ließ die Uhr entscheiden: Nach `bis` galt wieder
 `positivliste`, ohne dass jemand etwas tat. Das ist still — und im Alltag
 heißt es, dass eine Freigabe mitten in der Arbeit zumacht, ohne dass man es
 merkt. Jetzt gilt: **Eine Freigabe bleibt offen, bis der Nutzer sie beendet.**
-Statt der Uhr entscheidet die **Aufmerksamkeit**: Solange eine Freigabe offen
-ist, ertönt am Gerät **alle 5 Minuten** ein Ton (`erinnern_alle`, einstellbar),
-so lange, bis die Freigabe geschlossen wird. Der Ton ist die Erinnerung, nicht
-der Ablauf.
+Statt der Uhr entscheidet die **Aufmerksamkeit** — aber nur, wenn der Nutzer
+sie bestellt. Der Ton an einer offenen Freigabe ist **opt-in** (smilez,
+13.11. nachmittags, nachdem der erste Bau piepte): `erinnern_alle` ist
+**Vorgabe 0 = aus**; wer ihn will, setzt 60 s oder mehr, und dann ertönt er
+**wiederholt**, bis die Freigabe geschlossen wird.
 
-- **Was das kostet, ehrlich benannt:** Ist niemand am Gerät, piept es weiter
-  und die Tür bleibt offen. Das ist die bewusste Entscheidung — der Ton ist
-  das einzige Signal, und er hört erst auf, wenn jemand sie schließt.
+- **Warum opt-in:** Der Ton war für **offene Rückfragen** gedacht (das Gerät
+  wartet auf eine Antwort des Nutzers), nicht für jede Freigabe. Eine
+  Freigabe, die still offen bleibt, ist harmlos — der Zaun und die
+  Negativliste gelten weiter; ein Dauerpiepen bei jeder Freigabe wäre nur
+  Lärm. Der Rückfrage-Ton ist ein eigener Punkt (ROADMAP).
+- **Was das kostet, ehrlich benannt:** Ist der Ton eingeschaltet und niemand
+  am Gerät, piept es weiter, bis jemand die Freigabe schließt. Das ist dann
+  die bewusste Entscheidung des Nutzers — er hat den Ton bestellt.
 - **Altbestand wird nicht aufgeweckt:** Ein Eintrag mit einem `bis` in der
   **Vergangenheit** wird beim Einlesen als `positivliste` gelesen (die alte
   Frist war abgelaufen — sie darf nicht rückwirkend aufgehen). Ein `bis` in der
@@ -3753,7 +3759,8 @@ der Ablauf.
   bestehende Dienstschleife (30 s Takt, kein zweiter Faden): der erste Ton
   kommt **nach** dem Abstand, nach einer Pause einmal statt nachgeholt, und
   für alle fälligen Werkzeuge **ein** Ton. Fehlt `aplay`, wird das gemeldet —
-  nicht geworfen; der Dienst läuft weiter.
+  nicht geworfen; der Dienst läuft weiter. Ohne bestellten Abstand (`0`) wird
+  für den Eintrag gar nichts geplant — kein Timer, kein Ton.
 - **Eine Dauer wird nicht still umgedeutet.** Web und Telegram bieten keine
   mehr an; wer trotzdem `30m` schickt, bekommt eine Ablehnung mit Grund
   („Freigaben laufen nicht mehr ab“) statt einer Freigabe, die heimlich

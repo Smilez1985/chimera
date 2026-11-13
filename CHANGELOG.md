@@ -32,7 +32,8 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
 - **Der Ton erinnert an offene Freigaben** (13.11., Entscheidung smilez;
   dritte Stufe von „kein Ablauf mehr“): `src/chimera/freigabe_erinnerung.py`
   fragt über `op: freigabe_lesen` nach offenen Freigaben und spielt alle
-  `erinnern_alle` Sekunden (Vorgabe 300, mindestens 60) einen kurzen Ton —
+  `erinnern_alle` Sekunden (mindestens 60, **Vorgabe 0 = aus**) einen kurzen
+  Ton —
   **wiederholt, bis die Freigabe geschlossen ist**, auch wenn niemand da ist.
   Erster Ton erst **nach** dem Abstand (wer gerade freigegeben hat, soll nicht
   im selben Moment einen Ton bekommen); nach einer Pause klingelt es einmal,
@@ -844,6 +845,18 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Der Erinnerungston ist opt-in** (smilez, 13.11.): Er war für **offene
+  Rückfragen** gedacht, nicht für jede Freigabe. `erinnern_alle` ist jetzt
+  **Vorgabe 0 = aus**; wer ihn will, wählt im Modul „alle 5/10/30 Minuten".
+  Eine Freigabe bleibt auch ohne Ton offen (Zaun und Negativliste gelten
+  weiter) — ein Dauerpiepen bei jeder Freigabe wäre nur Lärm. Karte, `/frei`
+  und der Protokolltext sagen „ohne Ton", solange keiner bestellt ist; der
+  Dienst plant für einen Eintrag mit 0 gar nichts. Tests: cargo
+  (`erinnern_alle` 0 erlaubt, Vorgabe aus), JS 24 Punkte („Vorgabe ist ohne
+  Ton"), Python 48 („0 heisst aus"); Gegenproben um je eine Mutation
+  erweitert (`ton-wird-aufgedraengt`, `aus-wird-trotzdem-gespielt`).
+  Der Ton bei **offenen Rückfragen** ist damit noch nicht gebaut — er steht
+  als eigener Punkt in der ROADMAP.
 - **Freigaben laufen nicht mehr ab** (13.11., Entscheidung smilez; Stufen 1
   und 2): `freigaben::Eintrag` führt `seit` und `erinnern_alle` statt `bis`;
   `setzen` schreibt keine Frist mehr (ein mitgeschicktes `bis` wird **nicht**

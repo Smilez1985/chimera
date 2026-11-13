@@ -414,6 +414,18 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       Cloud-Anbieter), **Positivliste der Ziele für `web_abruf`** (mit den
       Web-Werkzeugen aus 5r), **Rückfrage beim Nutzer** (Weg wie 10s; wann
       sie auslöst, ist festzulegen). Jedes Tor mit Gegenprobe.
+- [ ] **Ton bei offener Rückfrage** (smilez, 13.11.; der eigentliche Zweck des
+      Tons): Wartet das Gerät auf eine **Antwort des Nutzers** (Rückfrage nach
+      DESIGN 5n, „Rückfrage beim Nutzer"), soll es klingeln — wiederholt, bis
+      geantwortet ist. Der Weg dafür steht schon: `Erinnerung` +
+      `freigabe_erinnerung.klingeln` im Dienst (gebaut 13.11.), heute nur an
+      offene **Freigaben** gehängt, und dort **opt-in, Vorgabe aus**. Offen:
+      (a) wo der Dienst eine offene Rückfrage erfährt (Op am Gateway oder
+      eigener Zustand), (b) ein Ton statt einer je Rückfrage, (c) die
+      Freigabe-Erinnerung darauf umhängen oder beide Quellen in denselben
+      Takt nehmen. **Erst wenn es die Rückfrage gibt** — ein Ton ohne Anlass
+      wäre nur Lärm.
+
 - [ ] **Ollama im Gateway ganz abfragen** (5n, 5k): `/api/ps` (geladen,
       VRAM, Ablauf), die Zeiten aus der Antwort (`load_duration`,
       `total_duration`, `eval_duration`), `keep_alive` und Vorladen des

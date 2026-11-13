@@ -4,9 +4,10 @@ der Ton erinnert").
 Warum es das gibt (Entscheidung smilez, 13.11.2026): Freigaben laufen nicht
 mehr ab. Der stille Ablauf machte mitten in der Arbeit zu, ohne dass man es
 merkte -- aber ohne Ablauf bliebe eine vergessene Freigabe fuer immer offen.
-Deshalb erinnert ein kurzer Ton alle ``erinnern_alle`` Sekunden, **wiederholt
-bis der Nutzer die Freigabe schliesst** (auch wenn niemand da ist -- bewusste
-Entscheidung).
+Ein Ton kann daran erinnern, **wiederholt bis der Nutzer die Freigabe
+schliesst** (auch wenn niemand da ist -- bewusste Entscheidung). Er ist aber
+**opt-in** (smilez, 13.11.): ``erinnern_alle`` ist Vorgabe **0 = aus**; der Ton
+gehoert zu offenen Rueckfragen, nicht zu jeder Freigabe.
 
 Aufteilung: die Entscheidung *wann* ist rein (:class:`Erinnerung`, ohne Uhr
 und ohne Ton, dadurch pruefbar). Nur die Ausgabe (:func:`abspielen`) fasst
@@ -30,8 +31,8 @@ from pathlib import Path
 
 log = logging.getLogger("chimera.freigabe")
 
-#: Abstand, wenn der Eintrag keinen nennt.
-ABSTAND_VORGABE = 300
+#: Abstand, wenn der Eintrag keinen nennt: **aus** (opt-in).
+ABSTAND_VORGABE = 0
 #: Kuerzer ist kein Erinnern, sondern Dauerpiepen (dieselbe Grenze wie in Rust).
 ABSTAND_MIN = 60
 #: Laenge und Hoehe des Tons. Kurz und nicht schrill: er soll auffallen,
@@ -65,10 +66,12 @@ class Erinnerung:
                 continue
             roh = e.get("erinnern_alle")
             if isinstance(roh, bool) or not isinstance(roh, int):
-                abstand = self.abstand_vorgabe
-            else:
-                abstand = max(ABSTAND_MIN, roh)
-            out[str(name)] = int(abstand)
+                roh = self.abstand_vorgabe
+            # 0 heisst aus -- und alles unter der Grenze ist kein Erinnern,
+            # sondern Dauerpiepen; ein bestellter Ton klingelt aber.
+            if roh <= 0:
+                continue
+            out[str(name)] = max(ABSTAND_MIN, int(roh))
         return out
 
     def tick(self, freigaben: dict, jetzt: int) -> list[str]:

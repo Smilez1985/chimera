@@ -157,6 +157,34 @@ kartePruefen("Altbestand mit alter Frist fragt einzeln", { modus: "offen", bis: 
 // Und eine Frist in der Zukunft (Altbestand, noch nicht vorbei) schon.
 kartePruefen("Altbestand mit laufender Frist ist offen", { modus: "offen", bis: J + 600 }, J, "offen — seit unbekannt");
 
+// Der Ton ist opt-in (Entscheidung 13.11.): die Karte bietet ihn an, aber
+// die Vorgabe ist "ohne Ton". Wer ihn nicht bestellt, bekommt keinen.
+function finde(knoten, tag) {
+  if (!knoten || typeof knoten !== "object") return null;
+  if (knoten.tagName === tag) return knoten;
+  for (const k of knoten.children || []) {
+    const t = finde(k, tag);
+    if (t) return t;
+  }
+  return null;
+}
+
+function wahlPruefen(name, eintrag, soll) {
+  const select = finde(probe.karte("ssh", eintrag, J), "select");
+  const ist = select && select.value;
+  if (ist === soll) {
+    pass += 1;
+    console.log(`  ok    ${name} -> "${ist}"`);
+  } else {
+    fail += 1;
+    console.log(`  FAIL  ${name} -- erwartet "${soll}", bekam "${ist}"`);
+  }
+}
+
+wahlPruefen("Vorgabe ist ohne Ton", { modus: "offen", seit: J - 60 }, "0");
+wahlPruefen("bestellter Ton bleibt gewaehlt", { modus: "offen", seit: J - 60, erinnern_alle: 600 }, "600");
+wahlPruefen("Alteintrag mit 300 zeigt 5 Minuten", { modus: "offen", seit: J - 60, erinnern_alle: 300 }, "300");
+
 // Keine Frist mehr im Text: weder "läuft ab" noch eine Dauerwahl.
 karteOhne("Karte nennt keinen Ablauf", { modus: "offen", seit: J - 60 }, J, "läuft ab");
 karteOhne("Karte bietet keine Dauer mehr an", { modus: "offen", seit: J - 60 }, J, "für immer");
