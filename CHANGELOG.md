@@ -1246,6 +1246,18 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Eine Zeitgrenze hieß „nicht erreichbar"** (13.11.): Bricht das Gateway
+  einen Chat nach 300 s ab (`ollama::AUFRUF`), meldete es
+  „<host> antwortet nicht: …" — als wäre der Server weg. Bei einem Denkmodell
+  ist er aber da und denkt noch; die Meldung schickt den Suchenden zum Netz
+  statt zum Modell. Neu: `ollama::fehler_bei_aufruf` erkennt
+  `ureq::Error::Timeout` und antwortet `zeitgrenze` mit Grenze und Verdacht im
+  Text; alles andere bleibt `nicht_erreichbar`. Am Pi gemessen (13.11.):
+  derselbe Chat, warmes `qwen3.6:27b`, **31 s** — die Grenze ist nicht knapp,
+  aber sie ist endlich. Tests
+  `ollama::tests::zeitgrenze_ist_nicht_nicht_erreichbar` und
+  `…::andere_aufruffehler_bleiben_nicht_erreichbar`; Gegenprobe
+  `rust/gegenprobe-denken.sh` um eine fünfte Mutation erweitert.
 - **Ein Denkmodell, das nur denkt, meldete „leere Antwort"** (13.11.): Ollama
   liefert den Gedankengang getrennt vom Antworttext in `message.thinking`. Das
   Gateway las das Feld **nie** — kam weder Text noch Werkzeugaufruf, hieß es

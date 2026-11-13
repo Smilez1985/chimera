@@ -728,9 +728,12 @@ Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
       gelesen — ein Modell, das nur denkt, meldet `nur_gedacht` mit Länge und
       Auszug statt „leer" (CHANGELOG, Gegenprobe `rust/gegenprobe-denken.sh`).
       Ob „leer" je vorkam, bleibt offen; die Meldung sagt jetzt aber, woran es
-      liegt. Dazu eine offene Frage, die nur am laufenden Modell zu klären
-      wäre: Bricht ein Denkmodell seine Antwort ab, weil die Zeitgrenze des
-      Gateways (300 s) vor dem Denkende greift?
+      liegt. **Die Zeitgrenze ist ebenfalls benannt** (13.11.): Ein Abbruch nach
+      300 s heißt jetzt `zeitgrenze` statt „nicht erreichbar". Gemessen: ein
+      warmer Chat mit `qwen3.6:27b` braucht 31 s — die Grenze greift im
+      Normalfall also nicht. Ob ein sehr langer Gedankengang sie reißt, ist
+      nicht gemessen; dafür bräuchte es einen Versuch mit einer bewusst
+      schweren Aufgabe.
 - [ ] **Stufe 3 — Prüfpunkt im Ausführer: für `run_command` gebaut und am
       Gerät belegt** (12.11., `02fb472`; entschieden: „Gateway fragen",
       CHANGELOG). **`ssh` hat diesen Weg jetzt bekommen** (12.11., `bbb8e1d`):

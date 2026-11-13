@@ -51,6 +51,12 @@ mut aufruf-mit-denktext-ist-fehler \
 	'    if text.is_empty() && aufrufe.is_empty() {' \
 	'    if text.is_empty() {'
 
+# 5. Eine Zeitgrenze gilt wieder als "nicht erreichbar" -- der alte Zustand:
+#    der Suchende schaut zum Netz, obwohl das Modell noch denkt.
+mut zeitgrenze-als-nicht-erreichbar \
+	'if matches!(e, ureq::Error::Timeout(_)) {' \
+	'if false {'
+
 zurueck
 echo "== $gruen gruen =="
 [ "$gruen" -eq 0 ]

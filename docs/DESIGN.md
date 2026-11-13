@@ -1877,6 +1877,17 @@ Grenze wird genau einmal konvertiert.
 Werkzeugaufruf leeren Text. „Leer" ist nur, wenn **weder** Text **noch**
 Aufruf kommt. Abbruch der Schleife: keine Aufrufe mehr.
 
+**Eine Zeitgrenze ist nicht „nicht erreichbar"** (13.11.2026). Das Gateway
+bricht einen Chat nach 300 s ab (`ollama::AUFRUF`). Ein Denkmodell antwortet
+in dieser Zeit womöglich nicht, weil es noch denkt — der Server ist aber da.
+Bisher hieß jeder Aufruffehler „<host> antwortet nicht: …"; das schickt den
+Suchenden zum Netz, obwohl die Ursache am Modell liegt (zu große Aufgabe, zu
+langer Gedankengang). Jetzt wird die Zeitgrenze eigens erkannt: Code
+`zeitgrenze`, Text nennt die Grenze und den Verdacht. Alles andere bleibt
+`nicht_erreichbar`. Gemessen am 13.11. am Pi: derselbe Chat mit `qwen3.6:27b`
+und warmer Ladung braucht 31 s — die Grenze ist also nicht knapp, aber sie ist
+endlich.
+
 **Denktext ist keine Antwort** (13.11.2026). Ein Denkmodell liefert seinen
 Gedankengang in `message.thinking`, getrennt vom Antworttext. Der zählt
 weder als Text noch als Aufruf: Er wird **nicht** als Antwort ausgegeben —

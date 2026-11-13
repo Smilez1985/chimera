@@ -301,6 +301,25 @@ fn nicht_eingerichtet() -> Value {
     )
 }
 
+/// Aus einem Aufruffehler die Antwort des Gateways machen.
+///
+/// Eine Zeitgrenze ist **kein** „nicht erreichbar" (DESIGN, 13.11.): Ein
+/// Denkmodell antwortet nach 300 s womoeglich noch nicht, weil es denkt --
+/// der Server ist da. „antwortet nicht" schickt den Suchenden zum Netz statt
+/// zum Modell, und das ist dieselbe Fehlerklasse wie „leere Antwort".
+pub fn fehler_bei_aufruf(e: &ureq::Error, host: &str, grenze: Duration) -> Value {
+    if matches!(e, ureq::Error::Timeout(_)) {
+        return fehlerantwort(
+            "zeitgrenze",
+            &format!(
+                "{host} hat nach {} s nicht geantwortet -- ein Denkmodell kann laenger denken, als die Zeitgrenze erlaubt.",
+                grenze.as_secs()
+            ),
+        );
+    }
+    fehlerantwort("nicht_erreichbar", &format!("{host} antwortet nicht: {e}"))
+}
+
 /// Rohe Eintraege von `/api/tags`.
 pub fn tags_roh(basis: &str) -> Result<Vec<Value>, Value> {
     let url = format!("{basis}/api/tags");
@@ -508,12 +527,7 @@ pub fn op_chat(basis: Option<&str>, anfrage: &Value, katalog: &Value, bevorzugt:
     let url = format!("{b}/api/chat");
     let mut r = match agent(AUFRUF).post(&url).send_json(&koerper) {
         Ok(r) => r,
-        Err(e) => {
-            return fehlerantwort(
-                "nicht_erreichbar",
-                &format!("{} antwortet nicht: {e}", host_von(b)),
-            )
-        }
+        Err(e) => return fehler_bei_aufruf(&e, &host_von(b), AUFRUF),
     };
     let status = r.status().as_u16();
     // Strom (DESIGN, Regel „Aufrufe, nicht Text"): Teilstuecke sammeln, damit
@@ -592,6 +606,26 @@ pub(crate) mod tests {
         let a = chat_antwort(&json!({"message": {"content": ""}}), "m", "h");
         assert_eq!(a["ok"], false);
         assert_eq!(a["fehler"]["code"], "leer");
+    }
+
+    #[test]
+    fn zeitgrenze_ist_nicht_nicht_erreichbar() {
+        // Ein Denkmodell antwortet nach 300 s womoeglich noch nicht -- der
+        // Server ist da. "antwortet nicht" waere die falsche Auskunft.
+        let e = ureq::Error::Timeout(ureq::Timeout::Global);
+        let a = fehler_bei_aufruf(&e, "ollama.example:11434", AUFRUF);
+        assert_eq!(a["fehler"]["code"], "zeitgrenze");
+        let t = a["fehler"]["text"].as_str().unwrap();
+        assert!(t.contains("300 s"), "Grenze fehlt im Text: {t}");
+        assert!(t.contains("ollama.example:11434"), "Host fehlt im Text: {t}");
+    }
+
+    #[test]
+    fn andere_aufruffehler_bleiben_nicht_erreichbar() {
+        let e = ureq::Error::HostNotFound;
+        let a = fehler_bei_aufruf(&e, "w eg", VERBINDUNG);
+        assert_eq!(a["fehler"]["code"], "nicht_erreichbar");
+        assert!(a["fehler"]["text"].as_str().unwrap().contains("antwortet nicht"));
     }
 
     #[test]
