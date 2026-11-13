@@ -878,6 +878,38 @@ fn das_passwort_wird_abgelegt_aber_nie_zurueckgegeben() {
 }
 
 #[test]
+fn die_bestaetigung_nach_der_aufnahme_macht_den_eintrag_brauchbar() {
+    let (z, _) = anbieter_zustand("auf-bestaetigen");
+    let c = anmelden(&z);
+    let blob = "AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    // 1. "zur Aufnahme anlegen": ohne Hostschluessel erlaubt, aber nicht brauchbar.
+    let a = api(&z, &c, "POST", "/api/ssh/setzen",
+        r#"{"host":"box","wert":{"adresse":"box.example","nutzer":"dietpi","schluessel":"k","aufnahme":true}}"#);
+    assert_eq!(a["_status"], 200, "{a}");
+    assert_eq!(a["eintrag"]["brauchbar"], false, "{a}");
+    // 2. Die Bestaetigung schickt genau das, was die Aufnahme zurueckgab:
+    //    das Hostschluessel-Objekt, **ohne** "aufnahme".
+    let b = api(&z, &c, "POST", "/api/ssh/setzen",
+        &format!(r#"{{"host":"box","wert":{{"adresse":"box.example","nutzer":"dietpi","port":22,"schluessel":"k","rechte":"zaun","hostschluessel":{{"typ":"ssh-ed25519","schluessel":"{blob}"}}}}}}"#));
+    assert_eq!(b["_status"], 200, "{b}");
+    assert_eq!(b["eintrag"]["brauchbar"], true, "{b}");
+    let l = api(&z, &c, "GET", "/api/ssh/lesen", "");
+    assert_eq!(l["hosts"]["box"]["brauchbar"], true, "{l}");
+    // 3. Gegenprobe: dieselbe Anfrage **ohne** Hostschluessel darf den
+    //    bestehenden Eintrag nicht nachtraeglich brauchbar machen -- sonst
+    //    waere die Bestaetigung eine Formsache.
+    let (z2, _) = anbieter_zustand("auf-bestaetigen-ohne");
+    let c2 = anmelden(&z2);
+    let _ = api(&z2, &c2, "POST", "/api/ssh/setzen",
+        r#"{"host":"box","wert":{"adresse":"box.example","nutzer":"dietpi","schluessel":"k","aufnahme":true}}"#);
+    let ohne = api(&z2, &c2, "POST", "/api/ssh/setzen",
+        r#"{"host":"box","wert":{"adresse":"box.example","nutzer":"dietpi","schluessel":"k","rechte":"zaun"}}"#);
+    assert_eq!(ohne["_status"], 200, "{ohne}");
+    assert_eq!(ohne["eintrag"]["brauchbar"], false, "{ohne}");
+    assert_eq!(ohne["eintrag"]["hostschluessel"], Value::Null, "{ohne}");
+}
+
+#[test]
 fn ohne_modul_mit_dem_recht_ist_jeder_freigabeweg_403() {
     let (z, p) = anbieter_zustand("frei-403");
     let leer: Vec<Modul> = vec![];
