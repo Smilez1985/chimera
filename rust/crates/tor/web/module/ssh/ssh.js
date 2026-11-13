@@ -52,8 +52,10 @@ class ChimeraSsh extends HTMLElement {
             </select>
           </div>
         </div>
+        <label class="klein"><input type="checkbox" id="aufnahme" style="width:auto;margin-right:.4rem">
+          zur Aufnahme anlegen — der Hostschlüssel wird beim ersten Verbinden geholt und hier bestätigt</label>
         <label class="klein">Hostschlüssel — Zeile aus <code>ssh-keyscan -t ed25519 &lt;adresse&gt;</code>
-          (nur beim ersten Mal oder wenn Adresse/Port sich ändern)</label>
+          (nur beim ersten Mal oder wenn Adresse/Port sich ändern; bei „zur Aufnahme" leer lassen)</label>
         <textarea id="hostschluessel" placeholder="host.example ssh-ed25519 AAAAC3NzaC1lZDI1NTE5..."></textarea>
         <label class="klein">Notiz</label><input id="notiz" placeholder="optional">
         <button id="speichern">Speichern</button>
@@ -136,8 +138,7 @@ class ChimeraSsh extends HTMLElement {
         weg.onclick = async () => {
           const r = await this.post("/api/ssh/geheim-loeschen", { host: name });
           if (!r.ok) { pwMeldung.className = "fehler"; pwMeldung.textContent = (r.fehler && r.fehler.text) || "Fehler"; return; }
-          pwMeldung.className = "klein"; pwMeldung.textContent = "Passwort gelöscht.";
-          zeige(false);
+          this.laden();
         };
         pwZeile.append(weg);
       } else {
@@ -151,8 +152,9 @@ class ChimeraSsh extends HTMLElement {
           const r = await this.post("/api/ssh/geheim", { host: name, passwort: feld.value });
           feld.value = "";
           if (!r.ok) { pwMeldung.className = "fehler"; pwMeldung.textContent = (r.fehler && r.fehler.text) || "Fehler"; return; }
-          pwMeldung.className = "klein"; pwMeldung.textContent = "Passwort hinterlegt.";
-          zeige(true);
+          // Neu laden, nicht nur die Zeile tauschen: der Aufnahme-Knopf
+          // haengt an e.geheim und entsteht nur beim Neuaufbau der Karte.
+          this.laden();
         };
         pwZeile.append(feld, knopf);
       }
@@ -236,6 +238,8 @@ class ChimeraSsh extends HTMLElement {
       rechte: this.$("rechte").value,
       notiz: this.$("notiz").value.trim(),
     };
+    const aufnahme = this.$("aufnahme").checked;
+    if (aufnahme) wert.aufnahme = true;
     const roh = this.$("hostschluessel").value.trim();
     if (roh) {
       const h = this.zerlegen(roh);

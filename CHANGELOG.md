@@ -1082,7 +1082,6 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   CI-Build. Geprüft werden dabei Prüfsumme, Lauf und Version; ein
   geänderter Baum oder eine neue `VERSION` hebt es auf. Anlass: Jeder
   Doku-Commit erzeugte einen Befund und einen unnötigen CI-Build.
-
 - **Der Installer ist der einzige Weg auf ein Gerät** (DESIGN Regel 13):
   Zuordnung „Changelog-Bereich → Modul" in `docs/INSTALLER.md`, Abschnitt „Was welches Modul aus dem Changelog einspielt", neues
   Werkzeug `tools/abgleich.sh` vergleicht Quellbaum, eingespielten Stand
@@ -1144,7 +1143,6 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   zeigen auf Abschnittsnamen statt auf `§9` („`docs/INSTALLER.md`, Abschnitt
   „Was welches Modul aus dem Changelog einspielt""). Im Repo steht kein `§`
   mehr; `tests/test_regelnamen.py` hält neue Nummern fern.
-
 - **Der zweite Reparaturlauf wartet, statt auszufallen** (smilez, 11.11.):
   Ist `state/mojo.lock` belegt, wartet `--miracle` bis zu fünf Minuten
   (`CHIMERA_MOJO_FRIST`) und kommt danach dran. Nach dem Warten wird **frisch
@@ -1152,6 +1150,19 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   vorhin überholt sind. Erst wenn die Sperre nach der Frist noch belegt ist,
   endet der Lauf mit 75. Tests: warten bis frei, aufgeben nach Frist,
   Gegenprobe (nicht warten → rot). 266 Tests grün.
+- **Modul „Fernzugriff" kann einen Host zur Aufnahme anlegen** (13.11.): neues
+  Häkchen „zur Aufnahme anlegen" (setzt `aufnahme: true`, Hostschlüssel bleibt
+  leer); nach dem Hinterlegen des Passworts wird die Karte **neu aufgebaut**,
+  damit „Jetzt aufnehmen" überhaupt entsteht (vorher blieb der Knopf aus, weil
+  er an `geheim` hängt und nur beim Neuaufbau entsteht). Am echten Browser
+  belegt: Formular legt den Host an („lokal gespeichert"), Passwortfeld
+  hinterlegt das Geheimnis, der Knopf erscheint, der Klick ruft die API auf
+  und zeigt deren Antwort im Modul (Fingerabdruck, Zeile, „Eintrag
+  bestätigen").
+- **Neu-Aufnahme benutzt den vorhandenen Schlüssel** (13.11.): Ist der
+  Schlüssel schon da (Ziel neu installiert, `authorized_keys` weg), wird
+  derselbe weiterverwendet statt „liegt schon da" abzubrechen. Der Name steht
+  je Host in der Tabelle, ein fremdes Paar kann dort nicht landen.
 
 ### Entfernt
 - **Vorab-Laden im Hintergrund wieder entfernt** (`installer/lib/vorab.sh`,

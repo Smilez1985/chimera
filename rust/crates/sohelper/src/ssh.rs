@@ -351,7 +351,17 @@ pub fn schluessel_erzeugen(keydir: &Path, name: &str, kommentar: &str) -> Result
     std::fs::create_dir_all(keydir).map_err(|e| format!("{}: {e}", keydir.display()))?;
     let pfad = keydir.join(name);
     if pfad.exists() {
-        return Err(format!("Der Schluessel \"{name}\" liegt schon da -- es wird kein zweiter erzeugt."));
+        // Neu-Aufnahme (Ziel neu installiert, Zeile geloescht): derselbe
+        // Schluessel wird weiterbenutzt, kein zweiter erzeugt. Der Name steht
+        // je Host in der Tabelle -- ein fremdes Paar kann hier nicht landen.
+        let oeffentlich = pfad.with_extension("pub");
+        let text = std::fs::read_to_string(&oeffentlich)
+            .map_err(|e| format!("Der Schluessel \"{name}\" liegt da, sein oeffentlicher Teil ist aber nicht lesbar: {e}"))?;
+        let text = text.trim().to_string();
+        if !text.starts_with("ssh-") && !text.starts_with("ecdsa-") {
+            return Err(format!("\"{name}\" liegt da, ist aber kein oeffentlicher Schluessel."));
+        }
+        return Ok(text);
     }
     let o = std::process::Command::new("ssh-keygen")
         .args(["-q", "-t", "ed25519", "-N", "", "-C", kommentar, "-f"])
@@ -536,8 +546,10 @@ mod tests {
         let privat = d.join("testkey");
         assert!(privat.is_file());
         assert_eq!(std::fs::metadata(&privat).unwrap().permissions().mode() & 0o777, 0o600);
-        // Ein zweiter Lauf ueberschreibt nichts.
-        assert!(schluessel_erzeugen(&d, "testkey", "x").is_err());
+        // Ein zweiter Lauf erzeugt keinen zweiten Schluessel, sondern nimmt
+        // denselben (Neu-Aufnahme ist der Normalfall).
+        let nochmal = schluessel_erzeugen(&d, "testkey", "x").unwrap();
+        assert_eq!(nochmal, pubkey, "derselbe Schluessel, kein neuer");
     }
 
     #[test]
