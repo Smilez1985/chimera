@@ -717,10 +717,6 @@ abends** (CHANGELOG: Host-Tabelle, `op: ssh`, Deskriptor-Übergabe, feste
       tippt der Nutzer die Zeile aus `ssh-keyscan` ein, den Fingerabdruck
       rechnet das Gateway. Selbst lesen heißt SSH-Schlüsselaustausch —
       gehört hierher, weil der Netzweg jetzt existiert.
-- [ ] **Gegenprobe am Gerät**: freigegebenes Ziel antwortet, nicht
-      freigegebenes nicht; ein zweiter Host ist ohne neuen Auftrag nicht
-      erreichbar; Hostschlüssel-Wechsel bricht ab; `-D`/`-L`/`-R` sind nicht
-      ausdrückbar (im Test festgenagelt, `rust/gegenprobe-ssh.sh` 19/19 rot).
 - [ ] **Tailscale/Headscale anbinden** (Idee smilez 13.11.): auf dem Pi-hole
       läuft ein **Headscale**-Server. Entscheidung steht noch aus; meine
       Lesart: `tailscaled` läuft **auf Betriebssystem-Ebene** (es braucht

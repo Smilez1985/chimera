@@ -1545,6 +1545,30 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   nicht gemessen.
 
 ### Geprüft
+- **Die Fernausführung am Gerät geprüft — die vier Zusagen der Phase**
+  (13.11., chimera-pi, Stand `585bb03`): zwei temporäre Nutzer `probe1`/
+  `probe2` auf dem Gerät, zwei Hosts `p1`/`p2` auf `127.0.0.1:22`, beide über
+  die normale Aufnahme angelegt und bestätigt. Dann:
+  1. **Das freigegebene Ziel antwortet, ein anderes nicht.** Freigabe `ssh`
+     nur für `probe1@p1`: `{"op":"ssh","host":"p1","befehl":"id -un"}` →
+     `exitcode 0`, Text `probe1`; `host:"p2"` → `ssh_gesperrt` mit Grund.
+  2. **Ein Hostschlüssel-Wechsel bricht ab.** Der eingetragene Hostschlüssel
+     von `p1` gegen einen fremden (gültigen) ed25519 ausgetauscht → `ssh`
+     endet mit `exitcode 255` und
+     „WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED"; der alte Schlüssel
+     zurückgeschrieben → wieder `brauchbar: true`.
+  3. **`-D`/`-L`/`-R` sind nicht ausdrückbar.** `befehl:"-L 8080:127.0.0.1:22"`
+     bzw. `"-o ProxyCommand=…"` erreichen das Ziel als **Befehl** (die
+     Ziel-Shell antwortet „bash: -L: Ungültige Option"), und auf dem Gerät
+     entsteht kein Listener (port 8080 gehört `chimera-tor`, der
+     Web-Oberfläche). Ein leerer `befehl` wird mit `befehl_fehlt` abgelehnt.
+  4. **Dabei gefunden:** `sudo chimera-tor --geheim-ssh` legte das Passwort
+     als `root:root` ab, das Gateway sah es nicht (siehe „Behoben", `0def7e6`)
+     — behoben und am Gerät nachgemessen: die Datei gehört danach
+     `chimera-tor`, die Aufnahme liest sie.
+  Aufgeräumt: Freigabe zurück auf die leere Positivliste, beide Hosts
+  gelöscht, Schlüssel gelöscht, Nutzer `probe1`/`probe2` entfernt
+  (`userdel -r`), Hilfsskripte weg. Dienste aktiv, `/tmp` 1,4 MB.
 - **Der Ausführer kommt nicht ins Netz — gemessen in seinem eigenen Prozess**
   (13.11., chimera-pi, Stand `cebd9da`): `IPAddressDeny` war bisher nur an der
   Unit und an einem fremden Prozess im selben cgroup gemessen. Jetzt lief die
