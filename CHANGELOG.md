@@ -1412,6 +1412,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
 - **Installer:** Eine Datei mit Zeilenumbruch im Namen fiel still aus der
   Prüfsumme heraus; jetzt bricht die Prüfung benannt ab.
 
+### Sicherheit
+- **Tailnet-Adressen gelten als eigene Adressen** (13.11.): `100.64.0.0/10`
+  ist CGNAT — dort liegen Tailscale-/Headscale-Adressen. `web_abruf` holt von
+  dort nur noch mit ausdrücklichem Eintrag in der Positivliste, wie von jeder
+  anderen eigenen Adresse. Vorher galt das Tailnet als „das Internet".
+
 ### Bekannte Einschränkungen
 - **Die CI veröffentlicht kein Prerelease mehr von selbst** (smilez,
   11.11.): Der Installer nimmt das Binary aus `gateway/`. Gebaut und

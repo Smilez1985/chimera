@@ -104,6 +104,10 @@ fn eigene_adresse(host: &str) -> bool {
     let o = ip.octets();
     o[0] == 127 || o[0] == 10 || (o[0] == 172 && (16..=31).contains(&o[1]))
         || (o[0] == 192 && o[1] == 168) || (o[0] == 169 && o[1] == 254) || o[0] == 0
+        // 100.64.0.0/10 ist CGNAT -- dort liegen Tailscale-/Headscale-Adressen.
+        // Sie sind **eigene** Adressen: erreichbar, aber nicht "das Internet",
+        // also nur mit ausdruecklichem Eintrag (DESIGN 5r).
+        || (o[0] == 100 && (64..=127).contains(&o[1]))
 }
 
 /// Grund, der bei einer eigenen Adresse im Protokoll und in der Antwort steht.
@@ -317,6 +321,19 @@ mod tests {
         ] {
             let e = zerlegen(url).expect_err(url);
             assert!(e.contains(teil), "{url}: {e}");
+        }
+    }
+
+    #[test]
+    fn tailnet_adressen_sind_eigene_adressen() {
+        // 100.64.0.0/10 (CGNAT) ist der Bereich, in dem Tailscale/Headscale
+        // seine Adressen vergibt. Ohne diese Zeile ginge `web_abruf` dort
+        // ohne Positiv-Eintrag durch -- das Tailnet ist aber kein Internet.
+        for a in ["100.64.0.1", "100.100.100.100", "100.127.255.254"] {
+            assert!(eigene_adresse(a), "{a}");
+        }
+        for a in ["100.63.255.255", "100.128.0.1", "8.8.8.8"] {
+            assert!(!eigene_adresse(a), "{a}");
         }
     }
 
