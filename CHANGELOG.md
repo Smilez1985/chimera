@@ -1246,6 +1246,20 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Ein Denkmodell, das nur denkt, meldete „leere Antwort"** (13.11.): Ollama
+  liefert den Gedankengang getrennt vom Antworttext in `message.thinking`. Das
+  Gateway las das Feld **nie** — kam weder Text noch Werkzeugaufruf, hieß es
+  pauschal „Ollama lieferte eine leere Antwort", und der Suchende schaute am
+  falschen Ende (Netz, Modell, Format). Jetzt ist das ein eigener Fehler
+  **`nur_gedacht`** mit Länge und Auszug (`fehler.denkzeichen`,
+  `fehler.denkauszug`, 400 Zeichen); der Gedankengang geht **nie** als Antwort
+  durch. Belegt am 13.11. am Modellserver: ein Strom-Block mit 127 Zeichen
+  `thinking` und danach die `tool_calls` — das Feld ist real. Derselbe Text im
+  Python-Anbieter (`provider/ollama.py`), damit beide Wege dieselbe Auskunft
+  geben. Tests `ollama::tests::nur_gedacht_ist_ein_eigener_fehler_kein_leerer_text`,
+  `…::denkauszug_ist_begrenzt`, `…::denktext_neben_einem_aufruf_aendert_nichts`,
+  vier Fälle in `tests/test_provider.py`; Gegenprobe `rust/gegenprobe-denken.sh`
+  (vier Mutationen, alle rot).
 - **Nach dem Selbstneustart blieben die Dienste aus** (13.11., vom neuen Test
   `test-klammer-lauf.sh` gefunden): Nachdem Schritt 00 `source/` erneuert und
   der Installer sich per `exec` neu gestartet hatte, rief der neue Prozess

@@ -148,6 +148,14 @@ class OllamaConnector(Connector):
 
         text = (data.get("message") or {}).get("content", "")
         if not text:
+            # Denktext ist keine Antwort (DESIGN, Regel „Aufrufe, nicht Text"):
+            # weder ausgeben noch verschweigen -- "leer" waere die falsche Auskunft.
+            gedacht = (data.get("message") or {}).get("thinking") or ""
+            if gedacht.strip():
+                raise LLMError(
+                    "Ollama hat nur gedacht und keine Antwort geliefert "
+                    f"({len(gedacht)} Zeichen Denktext)."
+                )
             raise LLMError("Ollama lieferte eine leere Antwort.")
         return text
 

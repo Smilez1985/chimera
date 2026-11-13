@@ -259,11 +259,22 @@ pub fn chat_koerper(modell: &str, anfrage: &Value) -> Value {
 /// Aus Ollamas Antwort die Antwort des Gateways machen.
 ///
 /// `content: ""` ist bei einem Werkzeugaufruf der Normalfall (DESIGN, Regel „Aufrufe, nicht Text“) --
-/// „leer" ist nur, wenn weder Text noch Aufruf kommt.
+/// „leer" ist nur, wenn weder Text noch Aufruf kommt. Denktext (`message.thinking`) ist
+/// ebenfalls keine Antwort: er wird nicht ausgegeben, aber auch nicht verschwiegen --
+/// dann heisst der Fehler `nur_gedacht` und nennt Laenge und Auszug (DESIGN, 13.11.).
 pub fn chat_antwort(roh: &Value, modell: &str, host: &str) -> Value {
     let text = roh["message"]["content"].as_str().unwrap_or("");
     let aufrufe = aufrufe_aus(roh);
     if text.is_empty() && aufrufe.is_empty() {
+        if let Some(gedacht) = roh["message"]["thinking"].as_str().filter(|s| !s.trim().is_empty()) {
+            let mut f = fehlerantwort(
+                "nur_gedacht",
+                "Ollama hat nur gedacht und keine Antwort geliefert.",
+            );
+            f["fehler"]["denkzeichen"] = json!(gedacht.chars().count());
+            f["fehler"]["denkauszug"] = json!(gedacht.chars().take(400).collect::<String>());
+            return f;
+        }
         return fehlerantwort("leer", "Ollama lieferte eine leere Antwort.");
     }
     let mut a = json!({
@@ -581,6 +592,42 @@ pub(crate) mod tests {
         let a = chat_antwort(&json!({"message": {"content": ""}}), "m", "h");
         assert_eq!(a["ok"], false);
         assert_eq!(a["fehler"]["code"], "leer");
+    }
+
+    #[test]
+    fn nur_gedacht_ist_ein_eigener_fehler_kein_leerer_text() {
+        // Ollama liefert bei Denkmodellen den Gedankengang in `message.thinking`.
+        // Er ist keine Antwort -- aber "leer" waere die falsche Auskunft.
+        let r = json!({"message": {"content": "", "thinking": "Ich sollte zuerst /tmp auflisten."}});
+        let a = chat_antwort(&r, "qwen3", "h");
+        assert_eq!(a["ok"], false);
+        assert_eq!(a["fehler"]["code"], "nur_gedacht");
+        assert_eq!(a["fehler"]["denkzeichen"], 33);
+        assert_eq!(a["fehler"]["denkauszug"], "Ich sollte zuerst /tmp auflisten.");
+        // Kein Textfeld: die Gedanken dürfen nie als Antwort durchgehen.
+        assert!(a.get("text").is_none());
+    }
+
+    #[test]
+    fn denkauszug_ist_begrenzt() {
+        let lang = "a".repeat(900);
+        let r = json!({"message": {"content": "", "thinking": lang}});
+        let a = chat_antwort(&r, "m", "h");
+        assert_eq!(a["fehler"]["code"], "nur_gedacht");
+        assert_eq!(a["fehler"]["denkzeichen"], 900);
+        assert_eq!(a["fehler"]["denkauszug"].as_str().unwrap().chars().count(), 400);
+    }
+
+    #[test]
+    fn denktext_neben_einem_aufruf_aendert_nichts() {
+        // Der Normalfall bei Denkmodellen mit Werkzeugen: leerer content, Denktext,
+        // ein Aufruf. Das ist ein Erfolg -- kein `nur_gedacht`.
+        let r = json!({"message": {"content": "", "thinking": "ich nehme list_dir",
+            "tool_calls": [{"function": {"name": "list_dir", "arguments": {"pfad": "/tmp"}}}]}});
+        let a = chat_antwort(&r, "m", "h");
+        assert_eq!(a["ok"], true);
+        assert_eq!(a["text"], "");
+        assert_eq!(a["werkzeuge"].as_array().unwrap().len(), 1);
     }
 
     #[test]

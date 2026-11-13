@@ -1877,6 +1877,18 @@ Grenze wird genau einmal konvertiert.
 Werkzeugaufruf leeren Text. „Leer" ist nur, wenn **weder** Text **noch**
 Aufruf kommt. Abbruch der Schleife: keine Aufrufe mehr.
 
+**Denktext ist keine Antwort** (13.11.2026). Ein Denkmodell liefert seinen
+Gedankengang in `message.thinking`, getrennt vom Antworttext. Der zählt
+weder als Text noch als Aufruf: Er wird **nicht** als Antwort ausgegeben —
+der Agent würde das Selbstgespräch des Modells als Ergebnis nehmen — und auch
+**nicht verschwiegen**. Kommt weder Text noch Aufruf, aber Denktext, lautet
+der Fehler `nur_gedacht` und nennt Länge und Auszug (`fehler.denkzeichen`,
+`fehler.denkauszug`, 400 Zeichen). „leer" schickt den Suchenden in die falsche
+Richtung (Netz, Modell, Format); „nur_gedacht" sagt, wo es hängt: Das Modell
+denkt und kommt vor der Antwort nicht mehr zum Zug. Gemessen am 13.11. am
+Modellserver: ein Strom-Block mit 127 Zeichen `thinking` und danach die
+`tool_calls` — der Denktext kommt also real vor.
+
 **Mehrere Aufrufe je Antwort** sind erlaubt (beide Anbieter können das) und
 werden in der Reihenfolge ihrer `index` (Ollama; im Strom Teilstücke
 zusammenkleben) bzw. ihrer Blockposition (Anthropic) abgearbeitet. Grenzen

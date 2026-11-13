@@ -706,9 +706,13 @@ Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
       `…::werkzeuge_ohne_namen_sind_ein_fehler_kein_stiller_verzicht`
       (Gegenproben von Hand, beide rot).
       **Offen bleibt:** die Meldung „Ollama lieferte eine leere Antwort" ist
-      **nicht reproduziert**; `message.thinking` wird nirgends gelesen — ein
-      Modell, das nur denkt und weder Text noch Aufruf liefert, meldet
-      „leer". Ob das je vorkam, ist ungeklärt.
+      **nicht reproduziert**. **Gebaut 13.11.:** `message.thinking` wird jetzt
+      gelesen — ein Modell, das nur denkt, meldet `nur_gedacht` mit Länge und
+      Auszug statt „leer" (CHANGELOG, Gegenprobe `rust/gegenprobe-denken.sh`).
+      Ob „leer" je vorkam, bleibt offen; die Meldung sagt jetzt aber, woran es
+      liegt. Dazu eine offene Frage, die nur am laufenden Modell zu klären
+      wäre: Bricht ein Denkmodell seine Antwort ab, weil die Zeitgrenze des
+      Gateways (300 s) vor dem Denkende greift?
 - [ ] **Stufe 3 — Prüfpunkt im Ausführer: für `run_command` gebaut und am
       Gerät belegt** (12.11., `02fb472`; entschieden: „Gateway fragen",
       CHANGELOG). **`ssh` hat diesen Weg jetzt bekommen** (12.11., `bbb8e1d`):

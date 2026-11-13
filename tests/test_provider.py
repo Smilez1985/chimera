@@ -141,6 +141,49 @@ check("leer ist nicht eingerichtet", OllamaConnector(base_url="").configured, Fa
 ok("echte Adresse gilt") if OllamaConnector(base_url="http://10.0.0.5:11434").configured \
     else bad("echte Adresse abgelehnt")
 
+print("== Ollama: Denktext ist keine Antwort ==")
+# Der Anbieter (Python-Weg) muss dieselbe Auskunft geben wie das Gateway
+# (DESIGN, Regel „Aufrufe, nicht Text"): Ein Denkmodell, das nur denkt,
+# liefert keinen Text -- aber "leer" waere die falsche Auskunft.
+from chimera.provider import ollama as _olm  # noqa: E402
+
+class _Antwort:
+    """Was urlopen liefert, so weit der Anbieter es anfasst."""
+    def __init__(self, nutzlast):
+        self._b = nutzlast.encode("utf-8")
+    def read(self): return self._b
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+
+def _mit_antwort(nutzlast, fn):
+    _orig = _olm.urllib.request.urlopen
+    _olm.urllib.request.urlopen = lambda *a, **k: _Antwort(nutzlast)
+    try:
+        return fn()
+    finally:
+        _olm.urllib.request.urlopen = _orig
+
+_oc = OllamaConnector(base_url="http://10.0.0.5:11434", default_model="qwen3")
+
+def _fehler_von(fn):
+    try:
+        fn()
+    except LLMError as exc:
+        return str(exc)
+    return ""
+
+check("leer: alte Meldung", _mit_antwort(
+    '{"message": {"content": ""}}', lambda: _fehler_von(lambda: _oc.call("hallo", []))),
+    "Ollama lieferte eine leere Antwort.")
+_txt = _mit_antwort(
+    '{"message": {"content": "", "thinking": "erst nachdenken"}}',
+    lambda: _fehler_von(lambda: _oc.call("hallo", [])))
+ok("nur gedacht: eigener Text") if "nur gedacht" in _txt else bad(f"unklar: {_txt!r}")
+ok("nur gedacht: nennt die Laenge") if "15 Zeichen" in _txt else bad(f"ohne Laenge: {_txt!r}")
+check("Text kommt weiter durch", _mit_antwort(
+    '{"message": {"content": "fertig", "thinking": "hm"}}',
+    lambda: _oc.call("hallo", [])), "fertig")
+
 print("== Claude-Kennung (PR #407) ==")
 from chimera.provider import anthropic as ant  # noqa: E402
 v = ant.claude_cli_version()
