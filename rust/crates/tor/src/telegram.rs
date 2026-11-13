@@ -314,55 +314,44 @@ fn jetzt_s() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
-pub const HILFE: &str = "Ich bin Chimera. Schreib einfach los.\n/status -- was gerade laeuft\n/neu -- Gespraech von vorn\n/model -- Modelle zeigen, /model 3 oder /model <name> waehlen\n/stream -- Teilstuecke an/aus (/stream an, /stream aus)\n/suche -- im eigenen Netz nach Ollama-Servern suchen\n/frei -- Freigaben zeigen; /frei <werkzeug> 30m | 2h | 3d | immer | aus\n/tailscale -- Tailnet zeigen; /tailscale an | aus";
+pub const HILFE: &str = "Ich bin Chimera. Schreib einfach los.\n/status -- was gerade laeuft\n/neu -- Gespraech von vorn\n/model -- Modelle zeigen, /model 3 oder /model <name> waehlen\n/stream -- Teilstuecke an/aus (/stream an, /stream aus)\n/suche -- im eigenen Netz nach Ollama-Servern suchen\n/frei -- Freigaben zeigen; /frei <werkzeug> oeffnet, /frei <werkzeug> aus schliesst\n/tailscale -- Tailnet zeigen; /tailscale an | aus";
 pub const ABGEWIESEN: &str = "Wir kennen uns nicht. Ich rede nur mit Eingetragenen.";
 
-/// Dauer aus einem Telegram-Argument: `30m`, `2h`, `3d`, `immer`, `aus`.
-/// Rein und ohne Uhr -- `jetzt` kommt herein, damit der Test nichts mit der
-/// Wanduhr zu tun hat. `Ok(Some(bis))` = offen bis, `Ok(None)` = zurueck auf
-/// die Positivliste, `Err` = verstaendliche Ablehnung.
-pub fn frei_auftrag(text: &str, jetzt: u64) -> Result<Auftrag, String> {
+/// Was der Nutzer mit `/frei <werkzeug> [an|aus]` verlangt. Rein und ohne
+/// Uhr -- die Freigabe laeuft seit 13.11.2026 **nicht mehr ab** (Entscheidung
+/// smilez), deshalb gibt es keine Dauer mehr. Eine Dauer wird nicht still
+/// umgedeutet, sondern abgelehnt: der Nutzer soll wissen, dass die Freigabe
+/// offen bleibt, bis er sie schliesst.
+pub fn frei_auftrag(text: &str) -> Result<Auftrag, String> {
     let t = text.trim().to_lowercase();
     match t.as_str() {
-        "aus" | "zu" | "positivliste" => return Ok(Auftrag::Aus),
-        "immer" | "unbefristet" | "inf" => return Ok(Auftrag::Immer),
+        "aus" | "zu" | "positivliste" | "schliessen" | "schließen" => return Ok(Auftrag::Aus),
+        "" | "an" | "offen" | "immer" | "unbefristet" | "inf" => return Ok(Auftrag::Immer),
         _ => {}
     }
-    let (zahl, einheit) = t.split_at(t.len().saturating_sub(1));
-    let n: u64 = zahl.parse().map_err(|_| {
-        format!("\"{text}\" verstehe ich nicht. Nimm 30m, 2h, 3d, immer oder aus.")
-    })?;
-    let sekunden = match einheit {
-        "m" => 60,
-        "h" => 3600,
-        "d" => 86400,
-        _ => return Err(format!("\"{text}\" verstehe ich nicht. Nimm 30m, 2h, 3d, immer oder aus.")),
-    };
-    if n == 0 || n > 365 {
-        return Err("Die Dauer muss zwischen 1 und 365 liegen.".into());
+    if let Some(letztes) = t.chars().last() {
+        let (ohne_einheit, _) = t.split_at(t.len() - letztes.len_utf8());
+        let einheit = letztes.to_string();
+        if ["m", "h", "d"].contains(&einheit.as_str()) && ohne_einheit.parse::<u64>().is_ok() {
+            return Err(format!(
+                "Eine Dauer gibt es nicht mehr: \"{text}\" -- Freigaben laufen nicht mehr ab. \"/frei <werkzeug>\" oeffnet, \"/frei <werkzeug> aus\" schliesst."
+            ));
+        }
     }
-    Ok(Auftrag::Bis(jetzt + n * sekunden))
+    Err(format!("\"{text}\" verstehe ich nicht. /frei <werkzeug> oeffnet, /frei <werkzeug> aus schliesst."))
 }
 
-/// Was der Nutzer mit `/frei <werkzeug> <dauer>` verlangt. Drei Faelle, weil
-/// "aus" und "fuer immer" beide keine Zahl sind -- und weil `bis: null` in
-/// der Datei genau "fuer immer" heisst (DESIGN).
+/// Was der Nutzer mit `/frei <werkzeug> [an|aus]` verlangt.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Auftrag {
     /// Zurueck auf die Positivliste.
     Aus,
-    /// Offen bis zu diesem Zeitpunkt.
-    Bis(u64),
-    /// Offen ohne Frist.
+    /// Offen, bis der Nutzer sie schliesst.
     Immer,
 }
 
-/// Restzeit lesbar: "in 42 min", "in 3 h", "in 2 Tagen", "ohne Frist".
-pub fn dauer_text(bis: u64, jetzt: u64) -> String {
-    if bis > jetzt.saturating_add(10 * 365 * 86400) {
-        return "ohne Frist".into();
-    }
-    let s = bis.saturating_sub(jetzt);
+/// Eine Spanne lesbar: "42 s", "5 min", "3 h", "2 Tagen".
+pub fn spanne_text(s: u64) -> String {
     if s < 90 {
         format!("{s} s")
     } else if s < 5400 {
@@ -386,10 +375,15 @@ pub fn frei_text(a: &Value, jetzt: u64) -> String {
     if let Some(obj) = w.as_object() {
         for (name, e) in obj {
             let offen = e["modus"].as_str() == Some("offen");
-            let bis = e["bis"].as_u64();
             let zeile = if offen {
-                let rest = bis.map(|b| dauer_text(b, jetzt)).unwrap_or_else(|| "ohne Frist".into());
-                format!("{name}: offen, {rest}")
+                // Kein Ablauf mehr: „seit wann" statt „bis wann" -- die Restzeit
+                // gibt es nicht mehr, weil es keine Frist mehr gibt.
+                let seit = match e["seit"].as_u64() {
+                    Some(s) if s <= jetzt => format!("seit {}", spanne_text(jetzt - s)),
+                    _ => "seit unbekannt (Altbestand)".to_string(),
+                };
+                let alle = e["erinnern_alle"].as_u64().unwrap_or(crate::freigaben::ERINNERN_VORGABE);
+                format!("{name}: offen, {seit}, erinnert alle {}", spanne_text(alle))
             } else {
                 let p = e["positiv"].as_array().map(|x| x.len()).unwrap_or(0);
                 format!("{name}: fragt einzeln ({p} erlaubte Ziele)")
@@ -398,7 +392,7 @@ pub fn frei_text(a: &Value, jetzt: u64) -> String {
             t.push_str(&format!("\u{2022} {zeile}{}\n", if neg > 0 { format!(", {neg} gesperrt") } else { String::new() }));
         }
     }
-    t.push_str("\nSetzen: /frei <werkzeug> 30m | 2h | 3d | immer | aus");
+    t.push_str("\nSetzen: /frei <werkzeug> (offen) | /frei <werkzeug> aus");
     t
 }
 
@@ -612,11 +606,9 @@ impl Tuer {
             antworten(&self.api, chat, &frei_text(&a, jetzt_s()));
             return;
         }
-        if dauer.is_empty() {
-            antworten(&self.api, chat, "Welche Dauer? /frei <werkzeug> 30m | 2h | 3d | immer | aus");
-            return;
-        }
-        let auftrag = match frei_auftrag(dauer, jetzt_s()) {
+        // Ohne Argument heisst oeffnen (`/frei ssh`), denn eine Dauer gibt es
+        // seit 13.11.2026 nicht mehr.
+        let auftrag = match frei_auftrag(dauer) {
             Ok(a) => a,
             Err(grund) => {
                 antworten(&self.api, chat, &grund);
@@ -625,16 +617,12 @@ impl Tuer {
         };
         let (wert, meldung) = match auftrag {
             Auftrag::Aus => (
-                json!({"modus": "positivliste", "bis": null}),
+                json!({"modus": "positivliste"}),
                 format!("{werkzeug} fragt wieder einzeln (Positivliste)."),
             ),
             Auftrag::Immer => (
-                json!({"modus": "offen", "bis": null}),
-                format!("{werkzeug} ist offen, ohne Frist. Negativliste gilt weiter."),
-            ),
-            Auftrag::Bis(bis) => (
-                json!({"modus": "offen", "bis": bis}),
-                format!("{werkzeug} ist offen bis {}. Negativliste gilt weiter.", dauer_text(bis, jetzt_s())),
+                json!({"modus": "offen"}),
+                format!("{werkzeug} ist offen, bis du sie schliesst (/frei {werkzeug} aus). Negativliste gilt weiter."),
             ),
         };
         let a = crate::dienst::antworten(&json!({"op": "freigabe_setzen", "werkzeug": werkzeug, "wert": wert}), &stand);
@@ -1029,31 +1017,42 @@ mod tests {
     }
 
     #[test]
-    fn dauer_wird_verstanden_oder_abgelehnt() {
-        let jetzt = 1_000_000u64;
-        assert_eq!(frei_auftrag("30m", jetzt), Ok(Auftrag::Bis(jetzt + 1800)));
-        assert_eq!(frei_auftrag("2H", jetzt), Ok(Auftrag::Bis(jetzt + 7200)));
-        assert_eq!(frei_auftrag("3d", jetzt), Ok(Auftrag::Bis(jetzt + 259200)));
-        assert_eq!(frei_auftrag("aus", jetzt), Ok(Auftrag::Aus));
-        assert_eq!(frei_auftrag("immer", jetzt), Ok(Auftrag::Immer));
-        // Was nicht geht, nennt die Form.
-        for schlecht in ["", "viel", "30", "30x", "0h", "999d", "-5m"] {
-            let e = frei_auftrag(schlecht, jetzt).unwrap_err();
-            assert!(e.contains("Nimm") || e.contains("zwischen 1 und 365"), "{schlecht}: {e}");
+    /// Kein Ablauf mehr: `/frei <werkzeug>` oeffnet, `/frei <werkzeug> aus`
+    /// schliesst. Eine Dauer wird abgelehnt, nicht still umgedeutet.
+    fn oeffnen_und_schliessen_ohne_dauer() {
+        assert_eq!(frei_auftrag(""), Ok(Auftrag::Immer));
+        assert_eq!(frei_auftrag("an"), Ok(Auftrag::Immer));
+        assert_eq!(frei_auftrag("immer"), Ok(Auftrag::Immer));
+        assert_eq!(frei_auftrag("aus"), Ok(Auftrag::Aus));
+        assert_eq!(frei_auftrag(" AUS "), Ok(Auftrag::Aus));
+        // Eine Dauer gibt es nicht mehr -- und das wird gesagt.
+        for dauer in ["30m", "2H", "3d", "0h", "999d"] {
+            let e = frei_auftrag(dauer).unwrap_err();
+            assert!(e.contains("nicht mehr"), "{dauer}: {e}");
+            assert!(e.contains("/frei <werkzeug>"), "{dauer}: {e}");
+        }
+        for schlecht in ["viel", "30", "30x", "-5m"] {
+            let e = frei_auftrag(schlecht).unwrap_err();
+            assert!(e.contains("verstehe ich nicht"), "{schlecht}: {e}");
         }
     }
 
     #[test]
-    fn der_freigabe_text_nennt_modus_und_restzeit() {
+    fn der_freigabe_text_nennt_modus_und_seit_wann() {
         let a = json!({"ok": true, "freigaben": {"werkzeuge": {
-            "web_abruf": {"modus": "offen", "bis": 1_000_600, "positiv": [], "negativ": ["bose.example"]},
-            "ssh": {"modus": "positivliste", "bis": null, "positiv": ["host.example"], "negativ": []}
+            "web_abruf": {"modus": "offen", "seit": 999_400, "erinnern_alle": 300, "positiv": [], "negativ": ["bose.example"]},
+            "ssh": {"modus": "positivliste", "bis": null, "seit": null, "positiv": ["host.example"], "negativ": []}
         }}});
         let t = frei_text(&a, 1_000_000);
-        assert!(t.contains("web_abruf: offen, 10 min"), "{t}");
+        assert!(t.contains("web_abruf: offen, seit 10 min, erinnert alle 5 min"), "{t}");
         assert!(t.contains("1 gesperrt"), "{t}");
         assert!(t.contains("ssh: fragt einzeln (1 erlaubte Ziele)"), "{t}");
         assert!(t.contains("/frei <werkzeug>"), "{t}");
+        // Ohne `seit` (Altbestand) trotzdem lesbar, ohne erfundene Zeit.
+        let alt = frei_text(&json!({"ok": true, "freigaben": {"werkzeuge": {
+            "ssh": {"modus": "offen", "bis": null, "positiv": [], "negativ": []}
+        }}}), 1_000_000);
+        assert!(alt.contains("ssh: offen, seit unbekannt"), "{alt}");
         // Ein Fehler wird genannt, nicht verschwiegen.
         let k = frei_text(&json!({"ok": false, "fehler": {"text": "Datei kaputt"}}), 1);
         assert!(k.contains("Datei kaputt"), "{k}");

@@ -3,7 +3,7 @@
 Warum es diesen Rahmen gibt: `freigaben.js` ist eine Web-Komponente. Bis
 13.11. war die Anzeige „läuft ab in …" nur von Hand im Browser geprüft — ein
 Autotest dafür fehlte (ROADMAP). Die Rechnung selbst ist reine Arithmetik,
-also prüfbar ohne Browser: `tests/js/freigaben_restzeit.mjs` lädt die **echte**
+also prüfbar ohne Browser: `tests/js/freigaben_anzeige.mjs` lädt die **echte**
 Datei in Node mit einem minimalen DOM-Ersatz und ruft `dauerText` auf.
 
 Dieser Python-Rahmen existiert nur, damit die vorhandene CI-Schleife
@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 HIER = Path(__file__).resolve().parent
-JS = HIER / "js" / "freigaben_restzeit.mjs"
+JS = HIER / "js" / "freigaben_anzeige.mjs"
 
 
 def main() -> int:

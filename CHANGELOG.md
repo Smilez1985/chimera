@@ -20,6 +20,21 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Der Ton erinnert an offene Freigaben** (13.11., Entscheidung smilez;
+  dritte Stufe von „kein Ablauf mehr“): `src/chimera/freigabe_erinnerung.py`
+  fragt über `op: freigaben_lesen` nach offenen Freigaben und spielt alle
+  `erinnern_alle` Sekunden (Vorgabe 300, mindestens 60) einen kurzen Ton —
+  **wiederholt, bis die Freigabe geschlossen ist**, auch wenn niemand da ist.
+  Erster Ton erst **nach** dem Abstand (wer gerade freigegeben hat, soll nicht
+  im selben Moment einen Ton bekommen); nach einer Pause klingelt es einmal,
+  nicht nachgeholt. Ein Ton für alle fälligen Werkzeuge, nicht je Werkzeug
+  einer. Kein `numpy` (Regel 5g): die Welle entsteht in `array`, gespielt
+  wird mit `aplay -q -D <gerät> <datei>` und fester `argv`; ein Fehler wird
+  gemeldet, nicht geworfen. Eingehängt in die bestehende Dienstschleife
+  (`__main__.dienst`, 30-s-Takt) statt in einen zweiten Faden.
+  `tests/test_freigabe_erinnerung.py` (38 Punkte, u. a. der Dienst ruft
+  `erinnere` wirklich im Takt — „gebaut ist erst, wenn verdrahtet ist“),
+  Gegenprobe `tests/gegenprobe_freigabe_erinnerung.py` (6 Mutationen).
 - **Tailnet-Zustand auf der Statusseite — gelesen, nicht gesteuert** (13.11.):
   `rust/crates/tor/src/tailscale.rs` liest die **LocalAPI** von `tailscaled`
   (`/var/run/tailscale/tailscaled.sock`, `GET /localapi/v0/status`) und macht
@@ -820,6 +835,22 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Freigaben laufen nicht mehr ab** (13.11., Entscheidung smilez; Stufen 1
+  und 2): `freigaben::Eintrag` führt `seit` und `erinnern_alle` statt `bis`;
+  `setzen` schreibt keine Frist mehr (ein mitgeschicktes `bis` wird **nicht**
+  gespeichert — eine Frist in der Datei wäre eine Lüge), öffnet beim ersten
+  Öffnen `seit` und lässt es beim Speichern der Listen stehen. `offen_bis`
+  heißt `ist_offen`: **`bis` gilt nur noch als Lese-Altbestand**, eine alte
+  Frist darf nicht rückwirkend aufgehen — ein Eintrag mit abgelaufenem `bis`
+  bleibt `positivliste` und die Prüfung sagt „abgelaufen (Altbestand mit
+  Frist)“. Die Web-Tür (`freigaben.js`) hat statt der Dauerwahl einen
+  Erinnerungsabstand und zeigt „offen — seit 10 min, erinnert alle 5 min“
+  statt „läuft ab in …“; Telegram: `/frei <werkzeug>` öffnet, `/frei
+  <werkzeug> aus` schließt, eine Dauer (`30m`) wird **abgelehnt** mit Grund
+  statt still umgedeutet. `rust/gegenprobe-freigaben.sh` auf 9 Mutationen
+  erweitert; der JS-Test heißt jetzt `tests/js/freigaben_anzeige.mjs`
+  (21 Punkte, Gegenprobe 5 Mutationen) — ein Name mit „Restzeit“ hätte
+  gelogen.
 - **Die Klammer läuft bei jedem echten Lauf — das Update-Gesicht ist damit
   immer zu sehen** (13.11., Vorgabe smilez). `klammer_noetig()` ist weg: Der
   Installer hält die Dienste nicht mehr nur an, wenn sich der Quellstand

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import os
+import tempfile
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -74,6 +75,11 @@ class Chimera:
     _gesten_takt: object = field(default=None, repr=False)
     _stop_paint: threading.Event = field(
         default_factory=threading.Event, repr=False)
+    # Der Ton erinnert an offene Freigaben (DESIGN, "Kein Ablauf mehr — der
+    # Ton erinnert"): seit 13.11. laufen Freigaben nicht mehr ab.
+    erinnerung: object = None
+    #: Eigens gehaltener Tonpfad, damit nicht jeder Aufruf neu rechnet.
+    ton_pfad: object = None
 
     # --- Auskunft ---------------------------------------------------------
 
@@ -294,6 +300,42 @@ class Chimera:
             except Exception as exc:                  # noqa: BLE001
                 log.debug("Panel schliessen ging nicht: %s", exc)
 
+    def erinnere(self, jetzt: int | None = None) -> list[str]:
+        """An offene Freigaben erinnern: fragen, entscheiden, einen Ton.
+
+        Fragt **das Gateway** (``op: freigaben_lesen``) -- die Datei gehoert
+        dem Gateway, der Dienst liest sie nicht selbst (Regel 10g). Ist das
+        Gateway nicht erreichbar, wird nicht erinnert und **nicht** geworfen:
+        Der Dienst soll weiterlaufen.
+
+        Rueckgabe: die Werkzeuge, die gerade erinnert haben (leer = nichts).
+        """
+        import time as _zeit
+
+        from .provider import gateway
+        from .provider.base import LLMError
+
+        if self.erinnerung is None:
+            return []
+        try:
+            a = gateway.anfragen({"op": "freigaben_lesen"}, warten=5.0)
+        except LLMError as exc:
+            log.debug("Freigaben nicht lesbar, keine Erinnerung: %s", exc)
+            return []
+        if a.get("ok") is not True:
+            log.debug("Freigaben nicht lesbar: %s", a.get("fehler"))
+            return []
+        jetzt = int(_zeit.time()) if jetzt is None else int(jetzt)
+        faellig = self.erinnerung.tick(a.get("freigaben") or {}, jetzt)
+        if faellig:
+            from . import freigabe_erinnerung as fe
+            if self.ton_pfad is None:
+                self.ton_pfad = Path(tempfile.gettempdir()) / "chimera-erinnerung.wav"
+                if not Path(self.ton_pfad).is_file():
+                    fe.ton_bauen(Path(self.ton_pfad))
+            fe.klingeln(faellig, pfad=Path(self.ton_pfad))
+        return faellig
+
     def paint_once(self) -> None:
         """Ein einzelnes Bild ausgeben.
 
@@ -336,10 +378,12 @@ def build(*, probe_network: bool = True, home: Path | None = None,
     agent.history = Verlauf(ablage, ablage.laden())
     session = Session(agent, ablage=ablage)
 
+    from .freigabe_erinnerung import Erinnerung
     chi = Chimera(home=root, session=session, registry=registry,
                   toolbox=toolbox, memory=memory, skills=skills,
                   face=face, renderer=renderer, panel=panel,
-                  statusline=statusline, led=led, notes=notes)
+                  statusline=statusline, led=led, notes=notes,
+                  erinnerung=Erinnerung())
     # Erst jetzt verdrahten: Der Agent meldet seinen Zustand ans Gesicht.
     agent.on_state = chi._on_state
     # Und die Anzeige ist ueber den Sitzungs-Socket erreichbar (Operation

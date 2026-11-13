@@ -3727,8 +3727,8 @@ Gateway schreibt, der Agent liest sie **nie** — er bekommt „erlaubt“ oder
   still gar nichts oder, schlimmer, alles.
 
 **Kein Ablauf mehr — der Ton erinnert** (Vorgabe smilez, 13.11.2026;
-*entschieden, noch nicht gebaut* — der Code lässt Freigaben bis dahin weiter
-ablaufen, siehe ROADMAP).
+*gebaut 13.11. in drei Stufen* — Rust-Zustand, beide Türen, Ton im Dienst;
+CHANGELOG).
 Die Fassung vom 12.11. ließ die Uhr entscheiden: Nach `bis` galt wieder
 `positivliste`, ohne dass jemand etwas tat. Das ist still — und im Alltag
 heißt es, dass eine Freigabe mitten in der Arbeit zumacht, ohne dass man es
@@ -3749,6 +3749,15 @@ der Ablauf.
   der Anzeige (Whisplay HAT: ALSA-Karte `whisplaysound`, `aplay` vorhanden);
   das Gateway hat kein Audio. Auslöser ist der Zeitgeber des Dienstes, die
   Wahrheit über „ist etwas offen" bleibt im Gateway (`op: freigaben_lesen`).
+  **Gebaut** in `src/chimera/freigabe_erinnerung.py`, eingehängt in die
+  bestehende Dienstschleife (30 s Takt, kein zweiter Faden): der erste Ton
+  kommt **nach** dem Abstand, nach einer Pause einmal statt nachgeholt, und
+  für alle fälligen Werkzeuge **ein** Ton. Fehlt `aplay`, wird das gemeldet —
+  nicht geworfen; der Dienst läuft weiter.
+- **Eine Dauer wird nicht still umgedeutet.** Web und Telegram bieten keine
+  mehr an; wer trotzdem `30m` schickt, bekommt eine Ablehnung mit Grund
+  („Freigaben laufen nicht mehr ab“) statt einer Freigabe, die heimlich
+  ewig offen ist. Ein mitgeschicktes `bis` wird nicht gespeichert.
 
 **Geprüft wird beim Ausführen, nicht vom Zeitgeber.** Der Zustand wird
 **beim Prüfen** gelesen, nicht von einem Timer gepflegt: ein ausgefallener oder

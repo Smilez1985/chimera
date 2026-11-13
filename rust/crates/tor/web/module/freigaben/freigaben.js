@@ -1,8 +1,11 @@
 "use strict";
 // Modul Freigaben (DESIGN, Regel "Freigabe je Werkzeug auf Zeit").
-// Je Werkzeug: Positivliste (einzeln fragen) oder offen fuer eine Zeitspanne.
-// Die Negativliste gilt immer. Der Agent kann hier nichts; nur der Nutzer
-// ueber diese Seite oder /frei in Telegram -- beide schreiben dieselbe Datei.
+// Je Werkzeug: Positivliste (einzeln fragen) oder offen. **Kein Ablauf mehr**
+// (Entscheidung smilez, 13.11.2026): eine Freigabe bleibt offen, bis der
+// Nutzer sie schliesst; statt still zuzumachen erinnert ein Ton alle
+// `erinnern_alle` Sekunden. Die Negativliste gilt immer. Der Agent kann hier
+// nichts; nur der Nutzer ueber diese Seite oder /frei in Telegram -- beide
+// schreiben dieselbe Datei.
 class ChimeraFreigaben extends HTMLElement {
   connectedCallback() {
     this.attachShadow({ mode: "open" });
@@ -24,7 +27,7 @@ class ChimeraFreigaben extends HTMLElement {
         ul { margin:.3rem 0 0; padding-left:1.1rem; font-size:.9rem; }
       </style>
       <h3>Freigaben</h3>
-      <p class="klein">Je Werkzeug: <strong>einzeln fragen</strong> (nur Ziele auf der Positivliste) oder <strong>offen</strong> für eine Zeitspanne — dann geht alles durch, was nicht auf der Negativliste steht. Die Negativliste gilt immer, auch bei „für immer“. Der Agent kann hier nichts ändern.</p>
+      <p class="klein">Je Werkzeug: <strong>einzeln fragen</strong> (nur Ziele auf der Positivliste) oder <strong>offen</strong> — dann geht alles durch, was nicht auf der Negativliste steht. Eine Freigabe <strong>läuft nicht mehr ab</strong>: sie bleibt offen, bis du sie schließt, und ein Ton erinnert dich daran. Die Negativliste gilt immer. Der Agent kann hier nichts ändern.</p>
       <div id="liste"></div>
       <p id="meldung" class="fehler"></p>`;
     this.$ = (id) => this.shadowRoot.getElementById(id);
@@ -42,14 +45,15 @@ class ChimeraFreigaben extends HTMLElement {
     return window.chimera.api(pfad, { method: "POST", body: JSON.stringify(body) });
   }
 
-  dauerText(bis, jetzt) {
-    if (!bis) return "unbefristet";
-    const s = bis - jetzt;
-    if (s <= 0) return "abgelaufen";
-    if (s < 90) return `läuft ab in ${s} s`;
-    if (s < 5400) return `läuft ab in ${Math.round(s / 60)} min`;
-    if (s < 172800) return `läuft ab in ${Math.round(s / 3600)} h`;
-    return `läuft ab in ${Math.round(s / 86400)} Tagen`;
+  // Wie lange steht die Freigabe schon offen? Kein "läuft ab in" mehr --
+  // eine Frist gibt es nicht.
+  seitText(seit, jetzt) {
+    if (!seit) return "seit unbekannt";
+    const s = Math.max(0, jetzt - seit);
+    if (s < 90) return `seit ${s} s`;
+    if (s < 5400) return `seit ${Math.round(s / 60)} min`;
+    if (s < 172800) return `seit ${Math.round(s / 3600)} h`;
+    return `seit ${Math.round(s / 86400)} Tagen`;
   }
 
   async laden() {
@@ -69,29 +73,31 @@ class ChimeraFreigaben extends HTMLElement {
   }
 
   karte(name, e, jetzt) {
+    // Offen ist offen: kein Ablauf mehr. Ein `bis` aus dem Altbestand zaehlt
+    // nur, solange es nicht vorbei ist (dieselbe Regel wie in Rust).
     const offen = e.modus === "offen" && (!e.bis || e.bis > jetzt);
     const k = this.el("div", undefined, "karte");
     const kopf = this.el("div", undefined, "kopf");
     kopf.append(
       this.el("strong", name),
-      this.el("span", offen ? "offen — " + this.dauerText(e.bis, jetzt) : "fragt einzeln (Positivliste)", offen ? "offen" : "zu")
+      this.el("span", offen ? "offen — " + this.seitText(e.seit, jetzt) : "fragt einzeln (Positivliste)", offen ? "offen" : "zu")
     );
     k.append(kopf);
 
     const positiv = (e.positiv || []).join(", ");
     const negativ = (e.negativ || []).join(", ");
 
-    // Freigeben mit Dauer
+    // Freigeben: keine Dauerwahl, dafür der Abstand der Erinnerung.
     const zeile = this.el("div");
     const auswahl = this.el("select");
-    for (const [wert, text] of [["900", "15 Minuten"], ["3600", "1 Stunde"], ["14400", "4 Stunden"], ["86400", "1 Tag"], ["604800", "7 Tage"], ["0", "für immer"]]) {
+    for (const [wert, text] of [["60", "jede Minute"], ["300", "alle 5 Minuten"], ["600", "alle 10 Minuten"], ["1800", "alle 30 Minuten"]]) {
       const o = this.el("option", text);
       o.value = wert;
       auswahl.appendChild(o);
     }
-    auswahl.value = "3600";
+    auswahl.value = String(e.erinnern_alle || 300);
     const frei = this.el("button", "Freigeben");
-    const zu = this.el("button", offen ? "Sofort beenden" : "Einzeln fragen", "stumm");
+    const zu = this.el("button", offen ? "Freigabe beenden" : "Einzeln fragen", "stumm");
     const aus = this.el("div", undefined, "klein");
     const schicken = async (wert) => {
       aus.className = "klein";
@@ -104,12 +110,11 @@ class ChimeraFreigaben extends HTMLElement {
       }
       this.laden();
     };
+    const listen = () => ({ positiv: e.positiv || [], negativ: e.negativ || [], notiz: e.notiz || "" });
     frei.onclick = () => {
-      const s = Number(auswahl.value);
-      const bis = s === 0 ? null : Math.round(Date.now() / 1000) + s;
-      schicken({ modus: "offen", bis, positiv: e.positiv || [], negativ: e.negativ || [], notiz: e.notiz || "" });
+      schicken({ modus: "offen", erinnern_alle: Number(auswahl.value), ...listen() });
     };
-    zu.onclick = () => schicken({ modus: "positivliste", bis: null, positiv: e.positiv || [], negativ: e.negativ || [], notiz: e.notiz || "" });
+    zu.onclick = () => schicken({ modus: "positivliste", ...listen() });
     zeile.append(auswahl, " ", frei, zu, aus);
     k.append(zeile);
 
@@ -125,13 +130,13 @@ class ChimeraFreigaben extends HTMLElement {
       const teile = (t) => t.split(",").map((x) => x.trim()).filter((x) => x.length);
       schicken({
         modus: e.modus === "offen" ? "offen" : "positivliste",
-        bis: e.bis || null,
+        erinnern_alle: e.erinnern_alle || 300,
         positiv: teile(lp.value),
         negativ: teile(ln.value),
         notiz: e.notiz || "",
       });
     };
-    k.append(this.el("label", "Positivliste (gilt auch nach Ablauf)", "klein"), lp);
+    k.append(this.el("label", "Positivliste (gilt immer für diese Ziele)", "klein"), lp);
     k.append(this.el("label", "Negativliste (gilt immer)", "klein"), ln);
     k.append(speichern);
     if (e.notiz) k.append(this.el("p", e.notiz, "klein"));

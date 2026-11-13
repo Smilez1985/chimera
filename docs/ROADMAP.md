@@ -33,33 +33,12 @@ zram wird nicht angefasst, wenn es läuft.
       ist damit keine Entscheidung mehr, sondern nur der Anlass: Tritt ein
       Bruch auf, wird die Grenze gesetzt und der Fall hier vermerkt.
 
-- [ ] **Freigaben laufen nicht mehr ab — der Ton erinnert** (entschieden
-      smilez, 13.11.; DESIGN-Absatz „Kein Ablauf mehr — der Ton erinnert“).
-      **Noch nicht gebaut.** Der Code lässt Freigaben weiterhin nach `bis`
-      ablaufen.
-      **Bauplan (in dieser Reihenfolge, jede Stufe für sich lauffähig):**
-      1. **Rust** (`freigaben.rs`): `Eintrag` bekommt `seit` und
-         `erinnern_alle` (Vorgabe 300 s, mindestens 60 s); `setzen` schreibt
-         kein `bis` mehr, sondern `seit` (beim Öffnen gesetzt, bleibt beim
-         Speichern der Listen stehen) und `erinnern_alle`; `laden` füllt beide
-         auf. `bis` bleibt **nur als Lese-Altbestand**: ein Eintrag mit `bis`
-         in der Vergangenheit gilt weiter als `positivliste`, sonst ginge eine
-         alte Frist rückwirkend auf. `offen_bis` heißt dann `ist_offen` und
-         fragt den Ablauf nur noch für Altbestand.
-      2. **Türen**: Web-Modul `freigaben.js` (Schalter „Freigeben“ ohne
-         Dauerwahl, dafür „Erinnern alle …“) und Telegram `/frei <werkzeug>`
-         ohne Dauer — sonst schreiben beide weiter eine Frist.
-      3. **Ton**: Der Python-Dienst (er hat den Lautsprecher, ALSA-Karte
-         `whisplaysound`, `aplay` vorhanden) fragt über `op: freigaben_lesen`,
-         ob etwas offen ist, und spielt alle `erinnern_alle` Sekunden einen
-         kurzen Ton. Wiederholen, bis die Freigabe geschlossen ist — auch wenn
-         niemand da ist (bewusste Entscheidung). Zeitgeber des Dienstes, kein
-         eigenes Timer-Unit.
-      **Tests je Stufe:** `freigaben::` in cargo (neu: offen bleibt offen,
-      Altbestand mit alter Frist bleibt zu, `erinnern_alle` zu klein wird
-      abgelehnt), Gegenprobe `rust/gegenprobe-freigaben.sh` erweitern, JS-Test
-      für den Schalter, Python-Test für „Ton nur, wenn offen, und im Abstand“.
-
+- [ ] **Freigabe-Erinnerung am Gerät belegen** (gebaut 13.11., CHANGELOG,
+      DESIGN „Kein Ablauf mehr — der Ton erinnert“). Offen ist nur die
+      **Messung auf dem Pi**: klingelt `aplay -q -D default` dort wirklich
+      über die ALSA-Karte `whisplaysound`, und wie laut ist die erzeugte
+      Datei? Bisher gemessen: cargo-Tests, JS-Test mit DOM-Ersatz, die
+      Dienstschleife mit Testdoppel und `aplay` gegen eine Attrappe.
 - [ ] **Hostschlüssel: `ssh-keyscan` im Gateway** (entschieden smilez, 13.11.):
       Das Gateway holt den Hostschlüssel selbst, statt dass der Nutzer die
       `ssh-keyscan`-Zeile eintippt. Es hat Netz und darf ein Programm starten;
@@ -730,15 +709,15 @@ Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
       `tests/test_ablagen_wirksam.py`. **Am Gerät belegt** (Stand `75012bc`,
       13 Module ohne Fehler): setzen → Datei und Protokoll entstehen, Prüfung
       erlaubt `gut.example` und lehnt `bose.example` über die Negativliste ab,
-      „aus“ führt zurück auf die Positivliste. **Die Restzeit-Anzeige hat seit
-      13.11. einen Autotest:** `tests/js/freigaben_restzeit.mjs` (in Node, mit
+      „aus“ führt zurück auf die Positivliste. **Die Anzeige hat seit 13.11.
+      einen Autotest:** `tests/js/freigaben_anzeige.mjs` (in Node, mit
       minimalem DOM-Ersatz, lädt die echte `freigaben.js`) prüft die Rechnung
-      *und* dass die Karte den Text wirklich zeigt — 23 Punkte, Rahmen
-      `tests/test_freigaben_restzeit.py`, Gegenprobe
-      `tests/gegenprobe_freigaben_restzeit.py` (4 Verfälschungen, alle rot).
-      **Dabei festgehalten:** Eine abgelaufene Freigabe zeigt wieder „fragt
-      einzeln“ — die Karte sagt *nicht*, dass etwas abgelaufen ist. Ob das
-      gemeldet werden soll, ist die offene Entscheidung weiter unten.
+      *und* dass die Karte den Text wirklich zeigt — 21 Punkte, Rahmen
+      `tests/test_freigaben_anzeige.py`, Gegenprobe
+      `tests/gegenprobe_freigaben_anzeige.py` (5 Verfälschungen, alle rot).
+      **Der Befund von damals** („eine abgelaufene Freigabe zeigt wieder
+      ‚fragt einzeln‘ und sagt nicht, dass sie abgelaufen ist“) **fällt mit
+      dem Ablauf weg** — es gibt keinen mehr.
 - [ ] **Stufe 2 — Prüfpunkt im Gateway: für `web_abruf` gebaut 12.11.**
       (CHANGELOG): `abruf::durchgang` fragt `freigaben::pruefen`, bevor es
       verbindet; Ablehnung nennt Werkzeug, Ziel und Grund. Offen: **jeder
@@ -778,12 +757,6 @@ Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
       Deskriptor weiter — der Ausführer bleibt ohne Netz (Phase
       Fernausführung). Im normalen Weg (`run_command`) bleibt `ssh`
       gesperrt.
-- [ ] **Entscheidung offen:** ob eine Freigabe beim Ablauf **automatisch
-      gemeldet** wird (Telegram/Anzeige) oder still auf `positivliste`
-      zurückfällt. Beides ist gebaut gleich teuer; die Meldung ist ehrlicher.
-- [ ] **Betrieb:** Dauer einer Freigabe in der Oberfläche sichtbar („läuft ab
-      in 42 min“) und „sofort beenden“ wie bei 10s.
-
 ## Phase Fernausführung — `ssh` durch das Gateway (DESIGN: Regel „Jedes Werkzeug bekommt nur seine Rechte")
 
 Entschieden (smilez, 12.11.): Alles, was Chimera ins Netz will, geht durch

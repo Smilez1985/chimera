@@ -2,14 +2,21 @@
 //! Zeit").
 //!
 //! Der Nutzer entscheidet **je Werkzeug**, ob weiter einzeln gefragt wird
-//! (`positivliste`) oder ob fuer eine Zeitspanne alles durchgeht, was nicht
-//! auf der Negativliste steht (`offen`). `bis: null` heisst "fuer immer".
+//! (`positivliste`) oder ob alles durchgeht, was nicht auf der Negativliste
+//! steht (`offen`).
+//!
+//! **Kein Ablauf mehr (Entscheidung smilez, 13.11.2026).** Eine Freigabe
+//! bleibt offen, bis der Nutzer sie schliesst; statt still zuzumachen
+//! erinnert ein Ton (`erinnern_alle` Sekunden, Vorgabe 300, mindestens 60).
+//! `bis` steht nur noch als **Lese-Altbestand** in der Datei: ein Eintrag von
+//! gestern mit einer Frist in der Vergangenheit gilt weiterhin als
+//! `positivliste` -- sonst ginge eine alte Frist rueckwirkend auf.
 //!
 //! Drei Regeln, die hier zusammenlaufen und deshalb nur hier stehen:
 //!
-//! * **`negativ` gilt immer** -- auch im offenen Modus, auch bei "fuer immer",
-//!   auch gegen einen Eintrag in `positiv`.
-//! * **Der Ablauf wird beim Pruefen ausgewertet**, nicht von einem Timer.
+//! * **`negativ` gilt immer** -- auch im offenen Modus, auch gegen einen
+//!   Eintrag in `positiv`.
+//! * **Der Altbestand wird beim Pruefen ausgewertet**, nicht von einem Timer.
 //!   Ein neu gestarteter Dienst darf eine Freigabe nicht verlaengern.
 //! * **Die Werkzeugliste ist geschlossen.** Ein unbekannter Name wird
 //!   abgelehnt, statt still durchzugehen -- ein Tippfehler soll nichts oeffnen.
@@ -28,6 +35,11 @@ pub const WERKZEUGE: &[&str] = &["web_suche", "web_abruf", "ssh", "run_command",
 
 /// Laenger als das Protokoll nicht, bevor es rotiert.
 const PROTOKOLL_MAX: u64 = 512 * 1024;
+
+/// Abstand der Erinnerung, wenn nichts anderes gesetzt ist (Sekunden).
+pub const ERINNERN_VORGABE: u64 = 300;
+/// Kuerzer als das waere kein Erinnern, sondern ein Dauerpiepen.
+pub const ERINNERN_MIN: u64 = 60;
 
 fn jetzt_s() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
@@ -51,15 +63,28 @@ fn protokoll_datei(p: &Pfade) -> std::path::PathBuf {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Eintrag {
     pub modus_offen: bool,
-    /// `None` = fuer immer.
+    /// **Nur Altbestand.** Wann die Freigabe (frueher) ablief. Neue Eintraege
+    /// schreiben kein `bis` mehr; gelesen wird es weiter, damit eine Frist von
+    /// gestern nicht rueckwirkend aufgeht.
     pub bis: Option<u64>,
+    /// Wann die Freigabe geoeffnet wurde. Bleibt beim Speichern der Listen stehen.
+    pub seit: Option<u64>,
+    /// Alle wie viele Sekunden der Ton erinnert.
+    pub erinnern_alle: u64,
     pub positiv: Vec<String>,
     pub negativ: Vec<String>,
 }
 
 impl Default for Eintrag {
     fn default() -> Self {
-        Eintrag { modus_offen: false, bis: None, positiv: Vec::new(), negativ: Vec::new() }
+        Eintrag {
+            modus_offen: false,
+            bis: None,
+            seit: None,
+            erinnern_alle: ERINNERN_VORGABE,
+            positiv: Vec::new(),
+            negativ: Vec::new(),
+        }
     }
 }
 
@@ -73,16 +98,25 @@ impl Eintrag {
                 .map(|a| a.iter().filter_map(Value::as_str).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
                 .unwrap_or_default()
         };
+        let erinnern_alle = v
+            .get("erinnern_alle")
+            .and_then(Value::as_u64)
+            .filter(|s| *s >= ERINNERN_MIN)
+            .unwrap_or(ERINNERN_VORGABE);
         Eintrag {
             modus_offen: v.get("modus").and_then(Value::as_str) == Some("offen"),
             bis: v.get("bis").and_then(Value::as_u64),
+            seit: v.get("seit").and_then(Value::as_u64),
+            erinnern_alle,
             positiv: texte("positiv"),
             negativ: texte("negativ"),
         }
     }
 
-    /// Steht die Freigabe noch? `None` bei "fuer immer".
-    pub fn offen_bis(&self, jetzt: u64) -> bool {
+    /// Steht die Freigabe offen? Ohne Frist (`bis` leer) heisst offen bis zum
+    /// Schluss. Ein `bis` aus dem Altbestand zaehlt nur, solange es nicht
+    /// vorbei ist -- eine alte Frist darf nicht rueckwirkend aufgehen.
+    pub fn ist_offen(&self, jetzt: u64) -> bool {
         self.modus_offen && self.bis.map(|b| b > jetzt).unwrap_or(true)
     }
 }
@@ -120,6 +154,8 @@ fn aufraeumen(roh: &Value, jetzt: u64) -> Value {
         if let Some(m) = e.as_object_mut() {
             m.insert("modus".into(), json!(if o.modus_offen { "offen" } else { "positivliste" }));
             m.entry("bis").or_insert(Value::Null);
+            m.entry("seit").or_insert(o.seit.map(Value::from).unwrap_or(Value::Null));
+            m.insert("erinnern_alle".into(), json!(o.erinnern_alle));
             m.entry("positiv").or_insert(json!(o.positiv));
             m.entry("negativ").or_insert(json!(o.negativ));
         }
@@ -158,14 +194,16 @@ pub fn pruefen(p: &Pfade, werkzeug: &str, ziel: Option<&str>, jetzt: u64) -> Val
         protokoll(p, jetzt, werkzeug, ziel, "erlaubt", "steht auf der Positivliste");
         return antwort(true, "steht auf der Positivliste".into(), e.bis);
     }
-    // 3. Zeitfreigabe: alles andere, solange sie laeuft.
-    if e.offen_bis(jetzt) {
-        protokoll(p, zeit_ok(jetzt, e.bis), werkzeug, ziel, "erlaubt", "Zeitfreigabe laeuft");
-        return antwort(true, "Zeitfreigabe laeuft".into(), e.bis);
+    // 3. Offene Freigabe: alles andere geht durch, solange sie offen ist.
+    if e.ist_offen(jetzt) {
+        protokoll(p, jetzt_s(), werkzeug, ziel, "erlaubt", "Freigabe ist offen");
+        return antwort(true, "Freigabe ist offen".into(), e.bis);
     }
     // 4. Sonst: fragen, also nicht erlaubt -- mit dem Grund.
     let grund = if e.modus_offen {
-        "Zeitfreigabe abgelaufen".to_string()
+        // Nur Altbestand kann hier landen: ein Eintrag mit `bis` in der
+        // Vergangenheit. Neue Eintraege laufen nicht mehr ab.
+        "Freigabe ist abgelaufen (Altbestand mit Frist)".to_string()
     } else if let Some(b) = e.bis {
         format!("keine Freigabe; die letzte lief bis {b} ab")
     } else {
@@ -175,19 +213,18 @@ pub fn pruefen(p: &Pfade, werkzeug: &str, ziel: Option<&str>, jetzt: u64) -> Val
     antwort(false, grund, e.bis)
 }
 
-/// Beim Pruefen ist die Uhr die Wahrheit; im Protokoll soll trotzdem die
-/// tatsaechliche Zeit stehen (auch in Tests, die eine feste Zeit vorgeben).
-fn zeit_ok(_jetzt: u64, _bis: Option<u64>) -> u64 {
-    jetzt_s()
-}
-
 fn antwort(erlaubt: bool, grund: String, bis: Option<u64>) -> Value {
     json!({"erlaubt": erlaubt, "grund": grund, "bis": bis})
 }
 
-/// Ein Eintrag wird gesetzt. `wert` ist `{modus, bis, positiv, negativ}`.
-/// Geprueft wird jeder Teil: ein unbekannter Modus, eine Dauer in der
-/// Vergangenheit oder ein leeres Ziel waeren sonst stille Fehler.
+/// Ein Eintrag wird gesetzt. `wert` ist `{modus, erinnern_alle, positiv, negativ}`.
+/// Geprueft wird jeder Teil: ein unbekannter Modus, ein zu kurzer
+/// Erinnerungsabstand oder ein leeres Ziel waeren sonst stille Fehler.
+///
+/// **Kein `bis` mehr:** Was ein Aufrufer dennoch mitschickt, wird nicht
+/// uebernommen -- eine Frist gaebe es nicht mehr, sie stillschweigend zu
+/// speichern waere eine Luege in der Datei. `bis` verschwindet dabei aus dem
+/// Eintrag (auch ein alter Altbestand wird damit abgeloest).
 pub fn setzen(p: &Pfade, werkzeug: &str, wert: &Value, jetzt: u64) -> Result<Value, (&'static str, String)> {
     if !WERKZEUGE.contains(&werkzeug) {
         return Err((
@@ -199,17 +236,17 @@ pub fn setzen(p: &Pfade, werkzeug: &str, wert: &Value, jetzt: u64) -> Result<Val
     if modus != "offen" && modus != "positivliste" {
         return Err(("wert_ungueltig", format!("Modus \"{modus}\" gibt es nicht (offen, positivliste).")));
     }
-    let bis = match wert.get("bis") {
+    let erinnern_alle = match wert.get("erinnern_alle") {
         None | Some(Value::Null) => None,
         Some(v) => match v.as_u64() {
-            Some(b) if b > jetzt => Some(b),
-            Some(b) => {
+            Some(s) if s >= ERINNERN_MIN => Some(s),
+            Some(s) => {
                 return Err((
                     "wert_ungueltig",
-                    format!("Der Zeitpunkt {b} liegt in der Vergangenheit; eine Freigabe, die schon abgelaufen ist, waere eine stille Luege."),
+                    format!("\"erinnern_alle\" braucht mindestens {ERINNERN_MIN} Sekunden (bekam {s}); darunter waere es kein Erinnern, sondern Dauerpiepen."),
                 ))
             }
-            None => return Err(("wert_ungueltig", format!("\"bis\" braucht eine Zahl (Sekunden) oder null, bekam {v}."))),
+            None => return Err(("wert_ungueltig", format!("\"erinnern_alle\" braucht eine Zahl (Sekunden), bekam {v}."))),
         },
     };
     let liste = |feld: &str| -> Result<Vec<String>, (&'static str, String)> {
@@ -233,9 +270,15 @@ pub fn setzen(p: &Pfade, werkzeug: &str, wert: &Value, jetzt: u64) -> Result<Val
         Ok(out)
     };
     // **Fehlt heisst behalten, nicht leeren.** Telegram und eine spaetere CLI
-    // schicken oft nur `modus`/`bis`; wuerden fehlende Listen geleert, loeschte
-    // ein Zeitknopf die gepflegten Ziele. Zum Leeren schickt man `[]`.
+    // schicken oft nur `modus`/`erinnern_alle`; wuerden fehlende Listen
+    // geleert, loeschte ein Zeitknopf die gepflegten Ziele. Zum Leeren
+    // schickt man `[]`.
     let alt = Eintrag::aus(&laden(p)["werkzeuge"][werkzeug]);
+    // `seit` gehoert dem Oeffnen: bleibt stehen, solange die Freigabe offen
+    // ist, und wird neu gesetzt, wenn sie (wieder) aufgeht.
+    let seit = if modus != "offen" || !alt.ist_offen(jetzt) { None } else { alt.seit };
+    let seit = if modus == "offen" && seit.is_none() { Some(jetzt) } else { seit };
+    let erinnern_alle = erinnern_alle.unwrap_or(alt.erinnern_alle);
     let positiv = if wert.get("positiv").is_some() { liste("positiv")? } else { alt.positiv.clone() };
     let negativ = if wert.get("negativ").is_some() { liste("negativ")? } else { alt.negativ.clone() };
     if let Some(doppelt) = positiv.iter().find(|x| negativ.iter().any(|n| n.eq_ignore_ascii_case(x))) {
@@ -248,7 +291,8 @@ pub fn setzen(p: &Pfade, werkzeug: &str, wert: &Value, jetzt: u64) -> Result<Val
     if notiz.chars().count() > 200 {
         return Err(("wert_ungueltig", "Die Notiz ist laenger als 200 Zeichen.".into()));
     }
-    let neu = json!({"modus": modus, "bis": bis, "positiv": positiv, "negativ": negativ, "notiz": notiz});
+    let neu = json!({"modus": modus, "bis": Value::Null, "seit": seit, "erinnern_alle": erinnern_alle,
+        "positiv": positiv, "negativ": negativ, "notiz": notiz});
     let mut ganz = laden(p);
     let Some(w) = ganz.get_mut("werkzeuge").and_then(|w| w.as_object_mut()) else {
         return Err(("wert_ungueltig", "Die Freigaben sind kein Objekt.".into()));
@@ -260,11 +304,12 @@ pub fn setzen(p: &Pfade, werkzeug: &str, wert: &Value, jetzt: u64) -> Result<Val
 }
 
 fn beschreibung(e: &Value) -> String {
-    let bis = match e["bis"].as_u64() {
-        Some(b) => format!("bis {b}"),
-        None => "unbefristet".into(),
+    let seit = match e["seit"].as_u64() {
+        Some(s) => format!("seit {s}"),
+        None => "nicht offen".into(),
     };
-    format!("{} ({}), positiv {}, negativ {}", e["modus"].as_str().unwrap_or("?"), bis,
+    let erinnern = e["erinnern_alle"].as_u64().unwrap_or(ERINNERN_VORGABE);
+    format!("{} ({}), erinnern alle {erinnern}s, positiv {}, negativ {}", e["modus"].as_str().unwrap_or("?"), seit,
         e["positiv"].as_array().map(|a| a.len()).unwrap_or(0),
         e["negativ"].as_array().map(|a| a.len()).unwrap_or(0))
 }
@@ -341,28 +386,84 @@ mod tests {
         assert_eq!(e.0, "werkzeug_unbekannt");
     }
 
+    /// Entscheidung smilez (13.11.2026): **kein Ablauf mehr**. Eine offene
+    /// Freigabe bleibt offen, auch wenn sehr viel Zeit vergeht.
     #[test]
-    fn zeitfreigabe_gilt_bis_zum_ablauf_dann_wieder_positivliste() {
-        let p = p("ablauf");
-        setzen(&p, "web_abruf", &json!({"modus": "offen", "bis": 2000}), 1000).expect("setzen");
+    fn offene_freigabe_laeuft_nicht_ab() {
+        let p = p("kein_ablauf");
+        setzen(&p, "web_abruf", &json!({"modus": "offen"}), 1000).expect("setzen");
         assert_eq!(pruefen(&p, "web_abruf", Some("example.com"), 1500)["erlaubt"], true);
+        let spaeter = pruefen(&p, "web_abruf", Some("example.com"), 90_000_000);
+        assert_eq!(spaeter["erlaubt"], true, "{spaeter}");
+        assert!(spaeter["grund"].as_str().unwrap().contains("offen"), "{spaeter}");
+    }
+
+    /// Ein `bis` von gestern ist **Altbestand**: es gilt weiterhin, solange
+    /// die Frist laeuft -- aber eine alte Frist darf nicht rueckwirkend
+    /// aufgehen. Geprueft wird die Datei, wie sie wirklich dastand.
+    #[test]
+    fn altbestand_mit_alter_frist_bleibt_zu() {
+        let p = p("altbestand");
+        schreiben(&p, &json!({"werkzeuge": {"web_abruf": {"modus": "offen", "bis": 2000}}})).expect("datei");
         let spaeter = pruefen(&p, "web_abruf", Some("example.com"), 2500);
-        assert_eq!(spaeter["erlaubt"], false);
-        assert!(spaeter["grund"].as_str().unwrap().contains("abgelaufen"), "{spaeter}");
+        assert_eq!(spaeter["erlaubt"], false, "{spaeter}");
+        assert!(spaeter["grund"].as_str().unwrap().contains("Altbestand"), "{spaeter}");
+        // Und davor: noch nicht vorbei, also offen.
+        assert_eq!(pruefen(&p, "web_abruf", Some("example.com"), 1500)["erlaubt"], true);
+    }
+
+    /// Was ein alter Aufrufer dennoch mitschickt, wird nicht gespeichert:
+    /// sonst stuende in der Datei eine Frist, die niemand beachtet.
+    #[test]
+    fn eine_mitgeschickte_frist_wird_nicht_gespeichert() {
+        let p = p("frist_ignoriert");
+        let neu = setzen(&p, "ssh", &json!({"modus": "offen", "bis": 2000}), 1000).expect("setzen");
+        assert!(neu["bis"].is_null(), "{neu}");
+        assert_eq!(Eintrag::aus(&roh(&p)["werkzeuge"]["ssh"]).bis, None);
+        assert_eq!(pruefen(&p, "ssh", Some("host.example"), 90_000_000)["erlaubt"], true);
+    }
+
+    /// `seit` gehoert dem Oeffnen: es steht, solange die Freigabe offen ist,
+    /// und wird neu gesetzt, wenn sie wieder aufgeht.
+    #[test]
+    fn seit_wird_beim_oeffnen_gesetzt_und_bleibt_stehen() {
+        let p = p("seit");
+        let a = setzen(&p, "run_command", &json!({"modus": "offen"}), 1000).expect("oeffnen");
+        assert_eq!(a["seit"], 1000, "{a}");
+        // Listen nachtragen (Teilauftrag) laesst `seit` stehen.
+        let b = setzen(&p, "run_command", &json!({"modus": "offen", "positiv": ["ls"]}), 1200).expect("listen");
+        assert_eq!(b["seit"], 1000, "{b}");
+        // Schliessen nimmt `seit` weg ...
+        let c = setzen(&p, "run_command", &json!({"modus": "positivliste"}), 1300).expect("zu");
+        assert!(c["seit"].is_null(), "{c}");
+        // ... und ein neues Oeffnen setzt die neue Zeit.
+        let d = setzen(&p, "run_command", &json!({"modus": "offen"}), 1400).expect("wieder");
+        assert_eq!(d["seit"], 1400, "{d}");
     }
 
     #[test]
-    fn fuer_immer_bleibt_offen() {
-        let p = p("immer");
-        setzen(&p, "ssh", &json!({"modus": "offen", "bis": null}), 1000).expect("setzen");
-        assert_eq!(pruefen(&p, "ssh", Some("host.example"), 9_999_999)["erlaubt"], true);
+    fn erinnern_alle_wird_gesetzt_und_zu_klein_abgelehnt() {
+        let p = p("erinnern");
+        let a = setzen(&p, "ssh", &json!({"modus": "offen", "erinnern_alle": 120}), 1000).expect("setzen");
+        assert_eq!(a["erinnern_alle"], 120, "{a}");
+        assert_eq!(Eintrag::aus(&roh(&p)["werkzeuge"]["ssh"]).erinnern_alle, 120);
+        // Fehlt der Wert, bleibt der gesetzte stehen (Teilauftrag).
+        let b = setzen(&p, "ssh", &json!({"modus": "offen"}), 1100).expect("setzen");
+        assert_eq!(b["erinnern_alle"], 120, "{b}");
+        // Unter der Grenze ist es kein Erinnern, sondern Dauerpiepen.
+        let e = setzen(&p, "ssh", &json!({"modus": "offen", "erinnern_alle": 10}), 1000).unwrap_err();
+        assert_eq!(e.0, "wert_ungueltig");
+        assert!(e.1.contains("mindestens"), "{}", e.1);
+        assert_eq!(setzen(&p, "ssh", &json!({"modus": "offen", "erinnern_alle": null}), 1000).unwrap()["erinnern_alle"], 120);
+        // In der Anzeige steht die Vorgabe, wenn nie etwas gesetzt wurde.
+        let leer = laden(&p);
+        assert_eq!(leer["werkzeuge"]["web_suche"]["erinnern_alle"], ERINNERN_VORGABE, "{leer}");
     }
 
     #[test]
     fn negativliste_gilt_auch_im_offenen_modus() {
         let p = p("negativ");
-        setzen(&p, "web_abruf", &json!({"modus": "offen", "bis": null, "negativ": ["bose.example"]}), 1000)
-            .expect("setzen");
+        setzen(&p, "web_abruf", &json!({"modus": "offen", "negativ": ["bose.example"]}), 1000).expect("setzen");
         assert_eq!(pruefen(&p, "web_abruf", Some("gut.example"), 1001)["erlaubt"], true);
         let b = pruefen(&p, "web_abruf", Some("bose.example"), 1001);
         assert_eq!(b["erlaubt"], false);
@@ -370,21 +471,13 @@ mod tests {
     }
 
     #[test]
-    fn positivliste_gilt_auch_nach_ablauf() {
+    fn positivliste_gilt_auch_wenn_die_freigabe_zu_ist() {
         let p = p("positiv");
-        setzen(&p, "web_abruf", &json!({"modus": "offen", "bis": 2000, "positiv": ["dauerhaft.example"]}), 1000)
+        setzen(&p, "web_abruf", &json!({"modus": "positivliste", "positiv": ["dauerhaft.example"]}), 1000)
             .expect("setzen");
         let a = pruefen(&p, "web_abruf", Some("dauerhaft.example"), 5000);
         assert_eq!(a["erlaubt"], true, "{a}");
         assert!(a["grund"].as_str().unwrap().contains("Positivliste"), "{a}");
-    }
-
-    #[test]
-    fn abgelaufener_zeitpunkt_ist_kein_gueltiger_auftrag() {
-        let p = p("vergangen");
-        let e = setzen(&p, "web_abruf", &json!({"modus": "offen", "bis": 500}), 1000).unwrap_err();
-        assert_eq!(e.0, "wert_ungueltig");
-        assert!(e.1.contains("Vergangenheit"), "{}", e.1);
     }
 
     #[test]
@@ -400,22 +493,21 @@ mod tests {
         assert!(!datei(&p).exists(), "nichts geschrieben");
     }
 
-    /// Ein Teil-Auftrag (nur `modus`/`bis`) darf die gepflegten Listen nicht
-    /// wegwerfen -- so schaltet Telegram die Dauer, ohne Ziele zu kennen.
+    /// Ein Teil-Auftrag (nur `modus`/`erinnern_alle`) darf die gepflegten
+    /// Listen nicht wegwerfen -- so schaltet Telegram die Freigabe, ohne
+    /// Ziele zu kennen.
     #[test]
     fn teilauftrag_behaelt_die_listen() {
         let p = p("teil");
         setzen(&p, "ssh", &json!({"modus": "positivliste", "positiv": ["host.example"], "negativ": ["bose.example"]}), 1000)
             .expect("listen");
-        setzen(&p, "ssh", &json!({"modus": "offen", "bis": 2000}), 1000).expect("dauer");
-        // Die rohe Sicht: `laden` zeigt fuer die Anzeige "abgelaufen", weil die
-        // echte Uhr 2026 steht und `bis` 2000 ist.
+        setzen(&p, "ssh", &json!({"modus": "offen", "erinnern_alle": 90}), 1000).expect("oeffnen");
         let e = Eintrag::aus(&roh(&p)["werkzeuge"]["ssh"]);
         assert_eq!(e.positiv, vec!["host.example"]);
         assert_eq!(e.negativ, vec!["bose.example"]);
-        assert!(e.offen_bis(1500));
+        assert!(e.ist_offen(1500));
         // Und ein ausdrueckliches Leeren geht weiter.
-        setzen(&p, "ssh", &json!({"modus": "offen", "bis": 2000, "negativ": []}), 1000).expect("leeren");
+        setzen(&p, "ssh", &json!({"modus": "offen", "negativ": []}), 1000).expect("leeren");
         assert!(Eintrag::aus(&roh(&p)["werkzeuge"]["ssh"]).negativ.is_empty());
     }
 

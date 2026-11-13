@@ -830,16 +830,21 @@ fn freigabe_setzen_wirkt_und_prueft_das_werkzeug() {
     let c = anmelden(&z);
     let jetzt = jetzt_s();
     let r = api(&z, &c, "POST", "/api/freigaben/setzen",
-        &format!(r#"{{"werkzeug":"web_abruf","wert":{{"modus":"offen","bis":{},"negativ":["bose.example"]}}}}"#, jetzt + 600));
+        &format!(r#"{{"werkzeug":"web_abruf","wert":{{"modus":"offen","erinnern_alle":120,"negativ":["bose.example"]}}}}"#));
     assert_eq!(r["_status"], 200, "{r}");
+    // Der Eintrag steht so, wie ihn der Nutzer geschickt hat: offen, mit
+    // Erinnerungsabstand, ohne Frist.
+    assert_eq!(r["freigabe"]["seit"], jetzt, "{r}");
+    assert_eq!(r["freigabe"]["erinnern_alle"], 120, "{r}");
+    assert!(r["freigabe"]["bis"].is_null(), "{r}");
     // Die Datei steht, und die Pruefung folgt ihr.
     let a = crate::freigaben::pruefen(&p, "web_abruf", Some("gut.example"), jetzt + 10);
     assert_eq!(a["erlaubt"], true);
     let b = crate::freigaben::pruefen(&p, "web_abruf", Some("bose.example"), jetzt + 10);
     assert_eq!(b["erlaubt"], false);
-    // Nach Ablauf gilt wieder die Positivliste.
+    // Kein Ablauf (Entscheidung 13.11.): auch spaeter gilt die Freigabe.
     let s = crate::freigaben::pruefen(&p, "web_abruf", Some("gut.example"), jetzt + 601);
-    assert_eq!(s["erlaubt"], false);
+    assert_eq!(s["erlaubt"], true, "{s}");
     // Unbekanntes Werkzeug: 400 mit Grund, nichts geschrieben.
     let r = api(&z, &c, "POST", "/api/freigaben/setzen", r#"{"werkzeug":"gibtesnicht","wert":{"modus":"offen"}}"#);
     assert_eq!(r["_status"], 400);

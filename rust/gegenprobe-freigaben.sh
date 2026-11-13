@@ -38,12 +38,16 @@ mut werkzeug-offen "$F" '    if !WERKZEUGE.contains(&werkzeug) {
         return antwort(false,' 'freigaben::'
 # 4. Ein Teil-Auftrag leert die Listen (Zeitknopf loescht Ziele).
 mut teilauftrag-leert "$F" '    let positiv = if wert.get("positiv").is_some() { liste("positiv")? } else { alt.positiv.clone() };' '    let positiv = liste("positiv")?;' 'freigaben::'
-# 5. Eine Dauer in der Vergangenheit wird angenommen.
-mut vergangenheit-erlaubt "$F" '            Some(b) if b > jetzt => Some(b),' '            Some(b) => Some(b),' 'freigaben::'
-# 6. "aus" setzt nicht zurueck, sondern laesst alles offen.
-mut aus-schaltet-nicht "$T" '"aus" | "zu" | "positivliste" => return Ok(Auftrag::Aus),' '"aus" | "zu" | "positivliste" => return Ok(Auftrag::Immer),' 'telegram::'
-# 7. Die Dauer wird nicht begrenzt (999d faellt durch).
-mut dauer-unbegrenzt "$T" '    if n == 0 || n > 365 {' '    if n == 0 {' 'telegram::'
+# 5. `seit` wird beim Oeffnen nicht gesetzt (die Erinnerung haette keinen Anfang).
+mut seit-fehlt "$F" '&& seit.is_none() { Some(jetzt) } else { seit }' '&& seit.is_none() { None } else { seit }' 'freigaben::'
+# 6. Eine mitgeschickte Frist wird gespeichert (Luege in der Datei).
+mut frist-gespeichert "$F" '"bis": Value::Null, "seit": seit,' '"bis": wert.get("bis").cloned().unwrap_or(Value::Null), "seit": seit,' 'freigaben::'
+# 7. Zu kurzer Erinnerungsabstand wird angenommen.
+mut erinnern-zu-kurz "$F" '            Some(s) if s >= ERINNERN_MIN => Some(s),' '            Some(s) => Some(s),' 'freigaben::'
+# 8. "aus" setzt nicht zurueck, sondern laesst alles offen.
+mut aus-schaltet-nicht "$T" '"aus" | "zu" | "positivliste" | "schliessen" | "schließen" => return Ok(Auftrag::Aus),' '"aus" | "zu" | "positivliste" | "schliessen" | "schließen" => return Ok(Auftrag::Immer),' 'telegram::'
+# 9. Eine Dauer wird still angenommen (der Nutzer glaubt an eine Frist, die es nicht gibt).
+mut dauer-angenommen "$T" '        if ["m", "h", "d"].contains(&einheit.as_str()) && ohne_einheit.parse::<u64>().is_ok() {' '        if false {' 'telegram::'
 
 zurueck
 echo "== $gruen gruen =="

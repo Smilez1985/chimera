@@ -198,12 +198,20 @@ def dienst(chi, stop: threading.Event | None = None, env=None) -> int:
     # (Quelle anbieter_weg). Hier und nicht im Renderer: Die Pruefung kann ins
     # Netz gehen. Ein Geraet ohne anbieter_melden (Testdoppel) wartet nur.
     melden = getattr(chi, "anbieter_melden", None)
+    # Der Ton erinnert an offene Freigaben (DESIGN, "Kein Ablauf mehr — der Ton
+    # erinnert"). Im selben Takt wie die Anbieterpruefung: 30 s ist fein genug
+    # fuer den kleinsten Abstand (60 s), und es braucht keinen zweiten Faden.
+    erinnern = getattr(chi, "erinnere", None)
     try:
         if melden is not None:
             melden()
+        if erinnern is not None:
+            erinnern()
         while not stop.wait(ANBIETER_TAKT_S):
             if melden is not None:
                 melden()
+            if erinnern is not None:
+                erinnern()
     finally:
         if bot is not None:
             bot.stop()

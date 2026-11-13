@@ -1,12 +1,12 @@
-"""Gegenprobe zu `tests/js/freigaben_restzeit.mjs` (Regel 9).
+"""Gegenprobe zu `tests/js/freigaben_anzeige.mjs` (Regel 9).
 
-Drei Zusagen der Restzeit-Anzeige werden in einer Kopie des Moduls
+Fuenf Zusagen der Anzeige werden in einer Kopie des Moduls
 verfaelscht; der JS-Test muss an der erwarteten Stelle rot werden. Die echte
 Datei bleibt unberuehrt (CHIMERA_FREIGABEN_JS zeigt auf die Kopie).
 
 Ohne `node` ist die Gegenprobe **uebersprungen**, nicht gruen.
 
-Aufruf: python3 tests/gegenprobe_freigaben_restzeit.py
+Aufruf: python3 tests/gegenprobe_freigaben_anzeige.py
 """
 
 from __future__ import annotations
@@ -20,36 +20,41 @@ from pathlib import Path
 
 HIER = Path(__file__).resolve().parent
 JS_MODUL = HIER.parent / "rust" / "crates" / "tor" / "web" / "module" / "freigaben" / "freigaben.js"
-HARNESS = HIER / "js" / "freigaben_restzeit.mjs"
+HARNESS = HIER / "js" / "freigaben_anzeige.mjs"
 
 # Je Mutation: Name, Muster, Ersatz, Pruefpunkt im JS-Test.
 MUTATIONEN = [
     (
         "sekunden-schwelle-verschoben",
-        "if (s < 90) return `läuft ab in ${s} s`;",
-        "if (s < 30) return `läuft ab in ${s} s`;",
-        "89 s übrig",
+        "if (s < 90) return `seit ${s} s`;",
+        "if (s < 30) return `seit ${s} s`;",
+        "89 s offen",
     ),
     (
-        "abgelaufen-ignoriert",
-        "if (s <= 0) return \"abgelaufen\";",
-        "if (s <= 0) return `läuft ab in ${-s} s`;",
-        "genau jetzt",
+        "zukunft-wird-negative-zeit",
+        "const s = Math.max(0, jetzt - seit);",
+        "const s = jetzt - seit;",
+        "seit liegt in der Zukunft",
     ),
     (
-        "unbefristet-als-abgelaufen",
-        "if (!bis) return \"unbefristet\";",
-        "if (!bis) return \"abgelaufen\";",
-        "ohne Ende",
+        "unbekannt-als-null",
+        'if (!seit) return "seit unbekannt";',
+        'if (!seit) return "seit 0 s";',
+        "ohne seit",
     ),
     (
-        "restzeit-nicht-angezeigt",
-        '"offen \u2014 " + this.dauerText(e.bis, jetzt)',
+        "dauer-nicht-angezeigt",
+        '"offen \u2014 " + this.seitText(e.seit, jetzt)',
         '"offen"',
-        "Karte zeigt die Restzeit",
+        "Karte zeigt seit wann",
+    ),
+    (
+        "altbestand-frist-ignoriert",
+        'const offen = e.modus === "offen" && (!e.bis || e.bis > jetzt);',
+        'const offen = e.modus === "offen";',
+        "Altbestand mit alter Frist fragt einzeln",
     ),
 ]
-
 
 def lauf(quelle: Path | None) -> subprocess.CompletedProcess:
     env = dict(os.environ)
