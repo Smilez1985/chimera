@@ -130,6 +130,14 @@ hat "Systemnutzer ohne Home angelegt" "$F/spur" "useradd --system --user-group -
 hat "Nutzer im Manifest als neu" "$R/opt/chimera/state/manifest.tsv" "nutzer	chimera-tor	neu"
 hat "Socket-Aktivierung eingeschaltet" "$F/spur" "systemctl enable --now chimera-tor.socket"
 hat "Socket im Manifest" "$R/opt/chimera/state/manifest.tsv" "dienst	chimera-tor.socket	aktiviert"
+# Das Passwort-Skript muss beim Kunden ankommen -- sonst gibt es keinen Weg
+# zu einem neuen Web-Passwort (Hash ist nicht rueckrechenbar).
+if [ -x "$R/opt/chimera/bin/web-passwort" ]; then
+	ok "web-passwort abgelegt und ausfuehrbar"
+else
+	bad "web-passwort fehlt in /opt/chimera/bin"
+fi
+hat "web-passwort im Manifest" "$R/opt/chimera/state/manifest.tsv" "datei	/opt/chimera/bin/web-passwort"
 
 # --- 1b. Ablagen (Regel 5t) ------------------------------------------------
 for _d in config/anbieter config/geheim config/wahl config/freigaben state/katalog state/log; do

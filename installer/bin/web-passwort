@@ -1,0 +1,78 @@
+#!/bin/sh
+# Web-Passwort der Oberflaeche neu setzen (DESIGN Regel 5j/5m).
+#
+# Warum es das gibt: Der Installer setzt das Passwort **einmal** aus
+# CHIMERA_WEB_PASSWORT und laesst den Hash danach unangetastet
+# (`gateway_web_passwort`). Wer das Passwort nicht mehr weiss -- oder nie
+# eines gesetzt hat, weil es eine fruehere Sitzung tat --, hat sonst keinen
+# Weg hinein. Der Hash laesst sich nicht zurueckrechnen, also wird ein
+# neuer gesetzt; der alte wird ersetzt.
+#
+# Aufruf (als root):   sudo /opt/chimera/bin/web-passwort
+#
+# Gelesen wird ohne Echo (stty), der Wert steht nie in der Prozessliste und
+# nie im Verlauf. Geschrieben wird atomar (NebenDatei + mv), Rechte und
+# Besitzer bleiben wie bei der .env. Uebersteuerbar fuer Tests:
+#   CHIMERA_WEB_ENV      Pfad der .env
+#   CHIMERA_WEB_PROG     Programm mit --passwort-hash
+#   CHIMERA_WEB_RESTART  0 = nicht neu starten
+set -eu
+
+ENV="${CHIMERA_WEB_ENV:-/opt/chimera/config/.env}"
+PROG="${CHIMERA_WEB_PROG:-/opt/chimera/bin/chimera-tor}"
+NEU_START="${CHIMERA_WEB_RESTART:-1}"
+
+[ "$(id -u)" = 0 ] || { printf 'Bitte als root: sudo %s\n' "$0" >&2; exit 2; }
+[ -f "$ENV" ] || { printf 'Keine %s -- ist Chimera installiert?\n' "$ENV" >&2; exit 2; }
+[ -x "$PROG" ] || { printf '%s fehlt oder ist nicht ausfuehrbar.\n' "$PROG" >&2; exit 2; }
+
+lesen() { # $1 = Aufforderung
+	printf '%s' "$1"
+	stty -echo 2>/dev/null || true
+	read -r _wert || _wert=""
+	stty echo 2>/dev/null || true
+	printf '\n'
+}
+
+lesen 'Neues Web-Passwort (mindestens 8 Zeichen): '
+P="$_wert"
+if [ "${#P}" -lt 8 ]; then
+	printf 'Zu kurz -- das Passwort braucht mindestens 8 Zeichen. Nichts geaendert.\n' >&2
+	exit 1
+fi
+lesen 'Wiederholen: '
+if [ "$_wert" != "$P" ]; then
+	printf 'Die Eingaben sind nicht gleich. Nichts geaendert.\n' >&2
+	exit 1
+fi
+
+H="$(printf '%s\n' "$P" | "$PROG" --passwort-hash 2>/dev/null)" || H=""
+unset P _wert
+case "$H" in
+	pbkdf2-sha256\$*\$*\$*) : ;;
+	*) printf 'Kein gueltiger Hash erhalten. Nichts geaendert.\n' >&2; exit 1 ;;
+esac
+
+T="$ENV.neu"
+H="$H" awk '
+	/^CHIMERA_WEB_PASSWORT_HASH=/ { print "CHIMERA_WEB_PASSWORT_HASH=" ENVIRON["H"]; gesetzt=1; next }
+	{ print }
+	END { if (!gesetzt) print "CHIMERA_WEB_PASSWORT_HASH=" ENVIRON["H"] }
+' "$ENV" >"$T" || { rm -f "$T"; printf 'NebenDatei nicht schreibbar.\n' >&2; exit 1; }
+chmod --reference="$ENV" "$T" 2>/dev/null || chmod 640 "$T"
+chown --reference="$ENV" "$T" 2>/dev/null || true
+# Ergebnis pruefen, nicht den Exitcode (stiller Erfolg waere der schlimmste).
+if ! grep -qxF "CHIMERA_WEB_PASSWORT_HASH=$H" "$T"; then
+	rm -f "$T"
+	printf 'Eintrag nicht geschrieben. Nichts geaendert.\n' >&2
+	exit 1
+fi
+mv "$T" "$ENV"
+
+if [ "$NEU_START" != "0" ]; then
+	systemctl restart chimera-tor.service 2>/dev/null || true
+	sleep 2
+fi
+
+ADR="$(hostname -I 2>/dev/null | awk '{print $1}')"
+printf 'Passwort gesetzt. Neu anmelden unter http://%s:8080\n' "${ADR:-<adresse>}"

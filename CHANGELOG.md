@@ -1385,6 +1385,11 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Web-Passwort ließ sich nicht neu setzen.** Der Installer setzt den Hash
+  nur einmal (aus `CHIMERA_WEB_PASSWORT`) und rührt ihn danach nicht an —
+  nach einem vergessenen Passwort war die Oberfläche nicht mehr erreichbar.
+  Neu: `installer/bin/web-passwort` (= `/opt/chimera/bin/web-passwort`),
+  liest ohne Echo, schreibt atomar, startet das Gateway neu.
 - **Die Erinnerung fragte die falsche Op** (13.11., am Gerät gefunden,
   behoben): Der Dienst schickte `freigaben_lesen`, das Gateway kennt nur
   `freigabe_lesen` — die Erinnerung hätte auf dem Pi **nie** geklingelt. Der

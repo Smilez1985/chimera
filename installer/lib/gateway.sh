@@ -251,6 +251,43 @@ gateway_web_passwort() {
 }
 
 # Der ganze Ablauf. rc 0 Gateway antwortet nachweislich, 1 Befund, 2 Abbruch.
+# Das Skript, mit dem ein neues Web-Passwort gesetzt wird (14.11.2026).
+#
+# Anlass war kein Wunsch, sondern ein Loch: Der Installer setzt den Hash
+# **einmal** aus CHIMERA_WEB_PASSWORT und ruehrt ihn danach nicht mehr an.
+# Wer das Passwort nicht mehr weiss -- oder nie eines gesetzt hat, weil es
+# eine fruehere Sitzung tat --, kommt sonst gar nicht hinein: der Hash ist
+# nicht rueckrechenbar. Das Skript liest ohne Echo, schreibt atomar und
+# startet das Gateway neu.
+# Wo das Skript im Quellbaum liegt. Zwei Orte, weil der Installer sowohl aus
+# /opt/chimera/productive/code als auch aus einem entpackten Startbaum laeuft;
+# neben dem aufrufenden Schritt liegt es in beiden Faellen.
+gateway_web_quelle() {
+	for _gq in "$CHIMERA_CODE/installer/bin/web-passwort" \
+	           "$(dirname "$0")/../bin/web-passwort"; do
+		[ -f "$_gq" ] && { printf '%s' "$_gq"; return 0; }
+	done
+	return 1
+}
+
+gateway_web_hilfe() {
+	_wh_quelle="$(gateway_web_quelle)" || _wh_quelle=""
+	_wh_ziel="$(rootpath "$CHIMERA_OPT/bin/web-passwort")"
+	if is_dry_run; then
+		info "[wuerde] $CHIMERA_OPT/bin/web-passwort ablegen"
+		return 0
+	fi
+	[ -n "$_wh_quelle" ] || { err "web-passwort fehlt im Quellbaum."; return 2; }
+	mkdir -p "$(dirname "$_wh_ziel")" || { err "bin/ nicht anlegbar."; return 2; }
+	install -m 0755 "$_wh_quelle" "$_wh_ziel" || { err "web-passwort nicht ablegbar."; return 2; }
+	# Ergebnis pruefen, nicht den Exitcode.
+	[ -x "$_wh_ziel" ] || { err "web-passwort nicht ausfuehrbar abgelegt."; return 2; }
+	manifest_has datei "$CHIMERA_OPT/bin/web-passwort" || \
+		manifest_record datei "$CHIMERA_OPT/bin/web-passwort" "$(sha256sum "$_wh_ziel" | cut -d' ' -f1)"
+	info "Web-Passwort neu setzen: sudo $CHIMERA_OPT/bin/web-passwort"
+	return 0
+}
+
 gateway_einrichten() {
 	_ge_prog="$(rootpath "$(gateway_programm)")"
 	_ge_dir="$(dirname "$(service_unit_pfad)")"
@@ -277,6 +314,10 @@ gateway_einrichten() {
 
 	log "Web-Oberflaeche"
 	gateway_web_passwort || return 2
+	log ""
+
+	log "Web-Passwort aendern"
+	gateway_web_hilfe || return 2
 	log ""
 
 	log "Units"
