@@ -38,8 +38,11 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   `DEEPSEEK_API_KEY`; fehlt er, `nicht_eingerichtet` mit Klartext, bevor
   etwas geschickt wird. Tests: cargo 422 (24 neue), `dienst`-Verdrahtung
   (Chat, Modelle, ausgeschalteter Anbieter, fremder Typ), Gegenprobe
-  `rust/gegenprobe-deepseek.sh` mit 10 Mutationen (alle rot). Der Agent fragt
-  selbst noch `ollama` — die Auswahl dort steht in der ROADMAP.
+  `rust/gegenprobe-deepseek.sh` mit 11 Mutationen (alle rot). Am Gerät
+  gemessen (`docs/messungen/2026-11-13-deepseek.md`): 401 wird als
+  `schluessel_falsch` gemeldet, der Ollama-Weg bleibt unverändert; der
+  Erfolgsfall fehlt noch (kein echter Schlüssel). Der Agent fragt selbst
+  noch `ollama` — die Auswahl dort steht in der ROADMAP.
 - **Das Gateway holt den Hostschluessel selbst** (`ssh_schluessel_lesen`,
   13.11., Entscheidung smilez): statt die Zeile aus `ssh-keyscan` einzutippen,
   startet das Gateway das Programm als **Kindprozess mit fester `argv`**
