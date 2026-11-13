@@ -689,10 +689,27 @@ Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
       verbindet; Ablehnung nennt Werkzeug, Ziel und Grund. Offen: **jeder
       weitere** ausgehende Weg braucht denselben Prüfpunkt — heute hat ihn
       nur `web_abruf`.
-- [ ] **Befund 12.11.:** `op: chat` am Gerät endet mit „Ollama lieferte eine
-      leere Antwort“, auch bei `list_dir` (also unabhängig vom Werkzeug) —
-      der Agenten-Weg für Werkzeuge ist damit **nicht** belegt. Erst hier
-      nachsehen, bevor `web_abruf` über den Chat geprüft wird.
+- [ ] **Befund 12.11., am 13.11. nachgesehen:** `op: chat` am Gerät endet
+      im Agenten-Weg ohne Werkzeugaufruf. Gemessen am laufenden Gateway
+      (chimera-pi, der eingetragene Modellserver aus `config/anbieter/`):
+      · einfacher Chat ohne Werkzeuge → `ok`, Text „bereit“ (Wahl
+        `qwen2.5:14b`);
+      · **mit Werkzeugen und `stream: true`** (die Einstellung des Gateways,
+        `wahl.json` trägt `stream: true`) antworten `qwen2.5:14b` **und**
+        `qwen3.6:27b` mit **Text statt Werkzeugaufruf**;
+      · `qwen3.6:27b` **ohne** `stream` ruft dasselbe Werkzeug sauber auf
+        (`tool_calls`, `arguments` als Objekt) — der Parser im Gateway
+        versteht beide Formen (Test
+        `ollama::tests::der_strom_wird_zu_einer_antwort_mit_text_und_aufrufen`).
+      Es liegt also **nicht** am Parser und nicht am Werkzeug, sondern an
+      der Kombination *Streaming + Werkzeuge* beim Modellserver. „Leere
+      Antwort“ selbst ist dabei **nicht** reproduziert; auffällig ist nur,
+      dass `message.thinking` (Denkmodelle) nirgends gelesen wird — ein
+      Modell, das **nur** denkt, meldet damit „leer“, obwohl es gedacht hat.
+      **Entscheidung nötig:** Werkzeug-Runden ohne `stream` fahren (dann
+      streamt nur der reine Text-Chat), oder ein Modell wählen, das
+      Werkzeuge auch streamend aufruft.
+      Erst danach `web_abruf` über den Chat prüfen.
 - [ ] **Stufe 3 — Prüfpunkt im Ausführer: für `run_command` gebaut und am
       Gerät belegt** (12.11., `02fb472`; entschieden: „Gateway fragen",
       CHANGELOG). **`ssh` hat diesen Weg jetzt bekommen** (12.11., `bbb8e1d`):
