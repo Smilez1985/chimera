@@ -4174,17 +4174,37 @@ ein Hostschlüssel mit gerechnetem Fingerabdruck (`SHA256:…`). Ein Vorschlag
 ist nie brauchbar, auch wenn jemand von Hand einen Schlüssel nachträgt — die
 Herkunft entscheidet, nicht der Inhalt.
 
-Eine Abweichung vom Entwurf, bewusst und benannt: **der Blob des
-Hostschlüssels kommt heute vom Nutzer** (Zeile aus `ssh-keyscan -t ed25519
-<adresse>`), nicht vom Gateway. Den **Fingerabdruck** rechnet trotzdem das
-Gateway aus dem Blob (`SHA256:`, base64 ohne Füllzeichen) — der Nutzer
-bestätigt also die Zeile, die in `known_hosts` landet, und keine getippte
-Prüfsumme. Grund: den Schlüssel selbst zu lesen, hieße im Gateway einen
-SSH-Schlüsselaustausch zu sprechen (Banner, KEXINIT, curve25519, Entpacken
-der Hostschlüssel-Nachricht) — genau die Protokollfläche, die dieser
-Abschnitt aus dem Gateway heraushalten will. Der Schlüsselaustausch gehört
-deshalb zu `op: ssh` (ROADMAP): dort steht der Netzweg ohnehin, und danach
-kann `ssh_schluessel_lesen` denselben Code benutzen.
+**Der Hostschlüssel wird geholt, nicht getippt** (gebaut 13.11., Entscheidung
+smilez): Das Gateway rief bis dahin `ssh-keyscan` **nicht** selbst auf, der
+Nutzer tippte die Zeile ein — eine Zeile, in der ein falsches Zeichen niemandem
+auffällt. Jetzt startet das Gateway `ssh-keyscan` als **Kindprozess mit fester
+`argv`** (`-T 5 -p <port> -t ssh-ed25519,ecdsa-sha2-nistp256,ssh-rsa
+<adresse>`, keine Shell) und bricht hart nach 15 s ab. Es spricht damit
+weiterhin **kein eigenes SSH**: Schlüsselaustausch und Signatur erledigt die
+geprüfte OpenSSH-Implementierung. Den **Fingerabdruck** rechnet das Gateway
+aus dem Blob (`SHA256:`, base64 ohne Füllzeichen) — der Nutzer bestätigt die
+Zeile, die in `known_hosts` landet, und keine getippte Prüfsumme.
+
+Drei Zusagen, die den Abruf zu etwas anderem machen als „Schlüssel holen":
+
+- **Der Abruf schreibt nichts.** Er liefert Typ, Blob, Fingerabdruck und
+  einen Befund; in die Tabelle kommt der Schlüssel erst durch `setzen`, und
+  das ist der Nutzer. So bleibt „ein Vorschlag wirkt nie" wahr, auch wenn das
+  Gateway selbst liest.
+- **Ein geänderter Schlüssel wird gemeldet, nicht übernommen**
+  (`befund: "geaendert"` mit beiden Fingerabdrücken und dem Hinweis, dass
+  eine Neuinstallation *oder* ein Angriff dahintersteckt). Ein neuer
+  Schlüssel auf einer alten Verbindung ist der klassische
+  Man-in-the-Middle-Fall — der gehört vor den Menschen, nicht in einen
+  Automatismus.
+- **Jede Antwort wird gegen das Ziel geprüft.** `ssh-keyscan` schreibt das
+  Ziel mit; antwortet es für einen anderen Namen (`[adresse]:port` bei Port
+  ≠ 22), ist das ein Abbruch mit Grund. Und je Abruf steht eine Zeile in
+  `state/log/ssh.log` — auch beim Erfolg (Regel 9).
+
+Fehlt `ssh-keyscan` auf dem Gerät, sagt die Antwort das (Paket
+`openssh-client`) und der Abruf scheitert benannt; das Feld für die Zeile von
+Hand bleibt als Rückweg.
 `known_hosts`-Zeilen entstehen aus der Tabelle (`adresse typ blob`, bei
 Port ≠ 22 als `[adresse]:port`) — eine Form, kein zweiter Ort.
 

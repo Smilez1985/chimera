@@ -20,6 +20,25 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Das Gateway holt den Hostschluessel selbst** (`ssh_schluessel_lesen`,
+  13.11., Entscheidung smilez): statt die Zeile aus `ssh-keyscan` einzutippen,
+  startet das Gateway das Programm als **Kindprozess mit fester `argv`**
+  (`-T 5 -p <port> -t ssh-ed25519,ecdsa-sha2-nistp256,ssh-rsa <adresse>`,
+  keine Shell) und bricht nach 15 s hart ab — kein eigener SSH-Code, KEX und
+  Signatur macht die geprueftes OpenSSH-Implementierung. Der Abruf
+  **schreibt nichts**: er liefert Typ, Blob, gerechneten Fingerabdruck und
+  einen Befund (`neu` / `unveraendert` / `geaendert`); in die Tabelle kommt
+  der Schluessel erst durch `setzen`, also durch den Nutzer. Ein **geaenderter**
+  Schluessel wird mit beiden Fingerabdruecken gemeldet und nicht uebernommen;
+  eine Antwort fuer ein anderes Ziel (`[adresse]:port` bei Port != 22) bricht
+  mit Grund ab; je Abruf eine Zeile in `state/log/ssh.log`, auch beim Erfolg.
+  Im Modul „Fernzugriff" ein Knopf **Hostschluessel holen** mit Bestaetigung
+  (bei „geaendert" rot: „Trotzdem uebernehmen"), die Zeile von Hand bleibt als
+  Rueckweg. Op im Verteiler, Route `/api/ssh/schluessel`. Tests: cargo 394
+  (7 neue: feste argv, Deutung mit Kommentaren, ed25519-Vorliebe, fremdes
+  Ziel, leer ist ein Befund, drei Vergleichsfaelle, nichts geschrieben) und
+  ein Web-Test fuer die Route; `rust/gegenprobe-ssh.sh` auf **27 Mutationen**
+  erweitert (4 neue, alle rot).
 - **Die Erinnerung klingelt am Gerät** (13.11., gemessen am `chimera-pi`,
   Stand `3259b5b`): Freigabe `ssh` über den Socket geöffnet
   (`erinnern_alle: 60`) → drei Töne im Abstand von 61 s im Journal

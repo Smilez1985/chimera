@@ -206,6 +206,25 @@ mut3 steuerzeichen-durch \
 
 zurueck3
 
+# --- Hostschluessel mit ssh-keyscan (13.11.2026) --------------------------
+zurueck
+# 24. Die Antwort eines anderen Ziels wird mitgenommen.
+mut keyscan-fremdes-ziel \
+	'        if ziel != erwartet && ziel != adresse {' \
+	'        if false {'
+# 25. Ein geaenderter Schluessel gilt als unveraendert.
+mut keyscan-aenderung-uebersehen \
+	'    ("geaendert", Some(h.clone()))' \
+	'    ("unveraendert", None)'
+# 26. Ohne Schluessel ist der Abruf trotzdem ein Erfolg.
+mut keyscan-leer-ist-erfolg \
+	'    gefunden.ok_or_else(|| "ssh-keyscan hat keinen brauchbaren Hostschluessel geliefert.".to_string())' \
+	'    Ok(gefunden.unwrap_or_else(|| json!({"typ":"ssh-ed25519","schluessel":"AAAA"})))'
+# 27. rsa gewinnt vor ed25519 (die Reihenfolge ist nicht zugesagt).
+mut keyscan-rsa-zuerst \
+	'            "ssh-ed25519" => 0,' \
+	'            "ssh-ed25519" => 9,'
+
 zurueck
 echo "---"
 echo "$gruen gruen (0 ist gut)"

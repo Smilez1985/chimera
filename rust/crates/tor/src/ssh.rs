@@ -627,6 +627,244 @@ fn an_ausfuehrer_schicken(e: &Value, host: &str, befehl: &str, tcp: &std::net::T
         .map_err(|e| format!("keine Antwort vom Ausführer ({e})"))
 }
 
+// ---------------------------------------------------------------------------
+// Hostschluessel mit `ssh-keyscan` lesen (entschieden smilez, 13.11.2026)
+// ---------------------------------------------------------------------------
+//
+// Bis 13.11. tippte der Nutzer die Ausgabe von `ssh-keyscan` von Hand in das
+// Feld -- eine Zeile, in der ein falsches Zeichen niemandem auffaellt. Das
+// Gateway hat Netz und darf ein Programm starten; die Schluesselaushandlung
+// und die Signaturpruefung erledigt die **gepruefte OpenSSH-Implementierung**.
+// Eigener SSH-Code waere hier der Anfang eines zweiten, schlechteren ssh.
+
+/// Zeitgrenze fuer `ssh-keyscan` selbst (`-T`). OpenSSH rechnet in Sekunden.
+const SCAN_T: &str = "5";
+/// Harte Grenze des ganzen Aufrufs: ein haengender Namensdienst oder ein
+/// Gegenueber, das nicht antwortet, darf den Dienst nicht halten.
+const SCAN_FRIST: std::time::Duration = std::time::Duration::from_secs(15);
+/// Typen, die wir annehmen. Reihenfolge = Vorliebe; ed25519 zuerst.
+const SCAN_TYPEN: &str = "ssh-ed25519,ecdsa-sha2-nistp256,ssh-rsa";
+
+/// Die feste `argv` fuer `ssh-keyscan`. **Keine Shell**, kein zusammengebauter
+/// Text: Adresse und Port sind Argumente, kein Kommando.
+pub fn befehl(adresse: &str, port: u64) -> Vec<String> {
+    [
+        "ssh-keyscan".to_string(),
+        "-T".to_string(),
+        SCAN_T.to_string(),
+        "-p".to_string(),
+        port.to_string(),
+        "-t".to_string(),
+        SCAN_TYPEN.to_string(),
+        adresse.to_string(),
+    ]
+    .to_vec()
+}
+
+/// Die Ausgabe von `ssh-keyscan` deuten: `{"typ","schluessel"}`.
+///
+/// Gelesen wird nur, was wirklich dasteht. Kommentarzeilen (`# ...`) sind
+/// kein Befund; eine Zeile, die zu einem **anderen** Ziel gehoert, wird
+/// abgelehnt -- `ssh-keyscan` schreibt das Ziel mit, und ein Name, der beim
+/// Aufloesen anders lautet, ist ein Grund zur Vorsicht, nicht zum Mitnehmen.
+pub fn ausgabe_deuten(text: &str, adresse: &str, port: u64) -> Result<Value, String> {
+    let erwartet = if port == 22 { adresse.to_string() } else { format!("[{adresse}]:{port}") };
+    let mut gefunden: Option<Value> = None;
+    for zeile in text.lines() {
+        let zeile = zeile.trim();
+        if zeile.is_empty() || zeile.starts_with('#') {
+            continue;
+        }
+        let teile: Vec<&str> = zeile.split_whitespace().collect();
+        if teile.len() < 3 {
+            continue;
+        }
+        let (ziel, typ, blob) = (teile[0], teile[1], teile[2]);
+        if ziel != erwartet && ziel != adresse {
+            return Err(format!(
+                "ssh-keyscan antwortete fuer \"{ziel}\" statt \"{erwartet}\" -- der Name loest anders auf."
+            ));
+        }
+        if !typ_ok(typ) || b64_lesen(blob).is_err() {
+            continue;
+        }
+        // Vorliebe: ed25519, dann ecdsa, dann rsa -- die Reihenfolge der
+        // Ausgabe von ssh-keyscan ist nicht zugesagt.
+        let rang = match typ {
+            "ssh-ed25519" => 0,
+            t if t.starts_with("ecdsa-") => 1,
+            _ => 2,
+        };
+        let besser = match &gefunden {
+            None => true,
+            Some(g) => {
+                let alt = match g["typ"].as_str().unwrap_or("") {
+                    "ssh-ed25519" => 0,
+                    t if t.starts_with("ecdsa-") => 1,
+                    _ => 2,
+                };
+                rang < alt
+            }
+        };
+        if besser {
+            gefunden = Some(json!({"typ": typ, "schluessel": blob}));
+        }
+    }
+    gefunden.ok_or_else(|| "ssh-keyscan hat keinen brauchbaren Hostschluessel geliefert.".to_string())
+}
+
+/// `ssh-keyscan` wirklich starten. Getrennt von der Deutung, damit der Test
+/// die Deutung pruefen kann, ohne im Netz zu haengen.
+pub fn scan(adresse: &str, port: u64) -> Result<Value, String> {
+    use std::process::{Command, Stdio};
+
+    let argv = befehl(adresse, port);
+    let mut kind = Command::new(&argv[0])
+        .args(&argv[1..])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("ssh-keyscan nicht startbar ({e}) -- ist das Paket openssh-client installiert?"))?;
+    let ende = std::time::Instant::now() + SCAN_FRIST;
+    loop {
+        match kind.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => {}
+            Err(e) => return Err(format!("ssh-keyscan nicht abwartbar: {e}")),
+        }
+        if std::time::Instant::now() >= ende {
+            let _ = kind.kill();
+            let _ = kind.wait();
+            return Err(format!(
+                "ssh-keyscan hat nach {} s nicht geantwortet -- abgebrochen.",
+                SCAN_FRIST.as_secs()
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let aus = kind
+        .wait_with_output()
+        .map_err(|e| format!("Ausgabe von ssh-keyscan nicht lesbar: {e}"))?;
+    let text = String::from_utf8_lossy(&aus.stdout).into_owned();
+    // Ein Rueckgabewert 1 mit leerer Ausgabe heisst "keine Antwort"; das ist
+    // ein Befund, kein stiller Erfolg.
+    ausgabe_deuten(&text, adresse, port).map_err(|e| {
+        let stderr = String::from_utf8_lossy(&aus.stderr);
+        let stumm = stderr.trim();
+        if stumm.is_empty() { e } else { format!("{e} ({})", stumm.lines().last().unwrap_or("")) }
+    })
+}
+
+/// Was hat der Abruf ergeben, gemessen am Eintrag? Rein -- damit die drei
+/// Faelle (neu, unveraendert, geaendert) ohne Netz pruefbar sind.
+pub fn vergleichen(alt: Option<&Value>, neu: &Value) -> (&'static str, Option<Value>) {
+    let Some(h) = alt else {
+        return ("neu", None);
+    };
+    let alt_blob = h.get("schluessel").and_then(Value::as_str).unwrap_or("");
+    let neu_blob = neu.get("schluessel").and_then(Value::as_str).unwrap_or("");
+    if alt_blob.is_empty() {
+        return ("neu", None);
+    }
+    if alt_blob == neu_blob {
+        return ("unveraendert", None);
+    }
+    ("geaendert", Some(h.clone()))
+}
+
+/// Eine Zeile je Abruf -- auch der Erfolg wird protokolliert (Regel 9).
+fn protokoll(p: &Pfade, host: &str, was: &str, text: &str) {
+    let datei = p.state.join("log").join("ssh.log");
+    if let Some(dir) = datei.parent() {
+        if let Err(e) = std::fs::create_dir_all(dir) {
+            eprintln!("ssh: Protokollordner {} nicht anlegbar: {e}", dir.display());
+        }
+    }
+    let zeit = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let zeile = format!("{zeit}\t{was}\t{host}\t{text}\n");
+    use std::io::Write;
+    match std::fs::OpenOptions::new().create(true).append(true).open(&datei) {
+        Ok(mut f) => {
+            if let Err(e) = f.write_all(zeile.as_bytes()) {
+                eprintln!("ssh: Protokollzeile nicht geschrieben: {e}");
+            }
+        }
+        Err(e) => eprintln!("ssh: Protokoll {} nicht schreibbar: {e}", datei.display()),
+    }
+}
+
+/// Der Abruf mit eingesetztem Leser -- so kann der Test alle drei Faelle
+/// durchspielen, ohne einen sshd zu brauchen.
+pub fn schluessel_lesen_mit(
+    p: &Pfade,
+    host: &str,
+    leser: &dyn Fn(&str, u64) -> Result<Value, String>,
+) -> Result<Value, (&'static str, String)> {
+    let e = holen_fuer_aufnahme(p, host)?;
+    let adresse = e.get("adresse").and_then(Value::as_str).unwrap_or("");
+    let port = e.get("port").and_then(Value::as_u64).unwrap_or(22);
+    let neu = leser(adresse, port).map_err(|text| ("schluessel_nicht_gelesen", text))?;
+    let typ = neu["typ"].as_str().unwrap_or("");
+    let blob = neu["schluessel"].as_str().unwrap_or("");
+    let fp = fingerabdruck(blob).map_err(|text| ("wert_ungueltig", text))?;
+    let schluessel = json!({"typ": typ, "schluessel": blob, "fingerabdruck": fp});
+    let (befund, alt) = vergleichen(e.get("hostschluessel"), &schluessel);
+    // Der Abruf schreibt **nichts**. Auch ein unveraenderter Schluessel wird
+    // nicht bestaetigt -- bestaetigen tut der Nutzer, und nur er.
+    let meldung = match befund {
+        "neu" => "Neuer Hostschluessel gelesen. Er wirkt erst, wenn du ihn im Modul \
+                  \"Fernzugriff\" bestaetigst.".to_string(),
+        "unveraendert" => "Der Hostschluessel ist unveraendert.".to_string(),
+        _ => {
+            let altfp = alt
+                .as_ref()
+                .and_then(|a| a.get("fingerabdruck"))
+                .and_then(Value::as_str)
+                .unwrap_or("unbekannt")
+                .to_string();
+            format!(
+                "Der Hostschluessel hat sich GEaENDERT (alt {altfp}, neu {fp}). Nichts wurde \
+                 uebernommen: Ein geaenderter Schluessel ist entweder eine Neuinstallation oder \
+                 ein Angriff -- pruefe den Fingerabdruck am Geraet, bevor du bestaetigst."
+            )
+        }
+    };
+    Ok(json!({
+        "host": host,
+        "adresse": adresse,
+        "port": port,
+        "befund": befund,
+        "hostschluessel": schluessel,
+        "alt": alt,
+        "meldung": meldung,
+    }))
+}
+
+/// `op: ssh_schluessel_lesen` -- der Weg der Oberflaeche.
+pub fn op_ssh_schluessel_lesen(p: &Pfade, host: &str) -> Value {
+    match schluessel_lesen_mit(p, host, &|adresse, port| scan(adresse, port)) {
+        Ok(v) => {
+            protokoll(
+                p,
+                host,
+                v["befund"].as_str().unwrap_or("?"),
+                v["hostschluessel"]["fingerabdruck"].as_str().unwrap_or("-"),
+            );
+            let mut out = v;
+            out["ok"] = json!(true);
+            out
+        }
+        Err((code, text)) => {
+            protokoll(p, host, "fehler", &text);
+            json!({"ok": false, "fehler": {"code": code, "text": text}})
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -977,5 +1215,119 @@ mod tests {
         let blob = b64_schreiben(&[7u8; 51]);
         let erwartet = b64_schreiben(ring::digest::digest(&ring::digest::SHA256, &[7u8; 51]).as_ref());
         assert_eq!(fingerabdruck(&blob).unwrap(), format!("SHA256:{}", erwartet.trim_end_matches('=')));
+    }
+
+    // --- Hostschluessel lesen (ssh-keyscan im Gateway) -------------------
+
+    /// Die `argv` ist fest: Programm, Grenze, Port, Typen, Adresse -- und
+    /// nichts, was aus einer Zeichenkette zusammengebaut wird.
+    #[test]
+    fn der_scan_befehl_hat_eine_feste_argv() {
+        let a = adr(&["box", "example"]);
+        assert_eq!(
+            befehl(&a, 22),
+            vec!["ssh-keyscan", "-T", "5", "-p", "22", "-t", "ssh-ed25519,ecdsa-sha2-nistp256,ssh-rsa", a.as_str()]
+                .into_iter()
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(befehl(&a, 2222)[4], "2222");
+        // Eine Adresse mit Leerzeichen bleibt EIN Argument, kein zweites Wort.
+        let sonderbar = "host mit leerzeichen.example";
+        assert_eq!(befehl(sonderbar, 22).len(), 8);
+        assert_eq!(befehl(sonderbar, 22)[7], sonderbar);
+    }
+
+    #[test]
+    fn die_ausgabe_wird_gedeutet_und_kommentare_ignoriert() {
+        let a = adr(&["box", "example"]);
+        let ed = blob();
+        let text = format!(
+            "# box.example:22 SSH-2.0-OpenSSH_9.9\n# box.example:22 SSH-2.0-OpenSSH_9.9\n\
+             {a} ssh-ed25519 {ed}\n{a} ssh-rsa {rsa}\n"
+        , rsa = blob());
+        let v = ausgabe_deuten(&text, &a, 22).expect("gedeutet");
+        assert_eq!(v["typ"], "ssh-ed25519");
+        assert_eq!(v["schluessel"], ed.as_str());
+    }
+
+    #[test]
+    fn ed25519_gewinnt_auch_wenn_rsa_zuerst_kommt() {
+        let a = adr(&["box", "example"]);
+        let text = format!("{a} ssh-rsa {r}\n{a} ssh-ed25519 {e}\n", r = blob(), e = blob());
+        let v = ausgabe_deuten(&text, &a, 22).expect("gedeutet");
+        assert_eq!(v["typ"], "ssh-ed25519");
+    }
+
+    #[test]
+    fn eine_antwort_fuer_ein_anderes_ziel_wird_abgelehnt() {
+        let a = adr(&["box", "example"]);
+        let text = format!("{} ssh-ed25519 {}\n", adr(&["boese", "example"]), blob());
+        let e = ausgabe_deuten(&text, &a, 22).unwrap_err();
+        assert!(e.contains("statt"), "{e}");
+    }
+
+    #[test]
+    fn ohne_schluessel_ist_das_ein_befund_kein_erfolg() {
+        let a = adr(&["box", "example"]);
+        assert!(ausgabe_deuten("# nichts\n", &a, 22).unwrap_err().contains("keinen brauchbaren"));
+        // Ein Blob, der kein base64 ist, zaehlt nicht.
+        assert!(ausgabe_deuten(&format!("{a} ssh-ed25519 !!!\n"), &a, 22).is_err());
+    }
+
+    /// Die drei Faelle ohne Netz: neu, unveraendert, geaendert.
+    #[test]
+    fn der_abruf_vergleicht_mit_dem_eintrag() {
+        let neu = json!({"typ": "ssh-ed25519", "schluessel": blob()});
+        assert_eq!(vergleichen(None, &neu).0, "neu");
+        let gleich = json!({"typ": "ssh-ed25519", "schluessel": blob(), "fingerabdruck": "SHA256:x"});
+        assert_eq!(vergleichen(Some(&gleich), &neu).0, "unveraendert");
+        let anders = json!({"typ": "ssh-ed25519", "schluessel": b64_schreiben(&[9u8; 32]), "fingerabdruck": "SHA256:y"});
+        let (befund, alt) = vergleichen(Some(&anders), &neu);
+        assert_eq!(befund, "geaendert");
+        assert_eq!(alt.unwrap()["fingerabdruck"], "SHA256:y");
+    }
+
+    /// Ein **geaenderter** Schluessel wird nicht still uebernommen, und der
+    /// Abruf schreibt ueberhaupt nichts in die Tabelle.
+    #[test]
+    fn ein_geaenderter_schluessel_wird_gemeldet_nicht_uebernommen() {
+        let p = p("schluessel-geaendert");
+        let a = adr(&["box", "example"]);
+        setzen(&p, "radxa", &eintrag(&a)).expect("anlegen");
+        let vorher = std::fs::read_to_string(datei(&p)).expect("datei");
+        let neuer_blob = b64_schreiben(&[3u8; 32]);
+        let r = schluessel_lesen_mit(&p, "radxa", &|_a, _p| {
+            Ok(json!({"typ": "ssh-ed25519", "schluessel": neuer_blob.clone()}))
+        })
+        .expect("abruf");
+        assert_eq!(r["befund"], "geaendert");
+        assert!(r["meldung"].as_str().unwrap().contains("GEaENDERT"), "{r}");
+        assert_eq!(r["alt"]["schluessel"], blob());
+        // Nichts geschrieben: die Tabelle steht wie vorher.
+        assert_eq!(std::fs::read_to_string(datei(&p)).unwrap(), vorher);
+    }
+
+    #[test]
+    fn der_abruf_kennt_nur_bestaetigte_hosts() {
+        let p = p("schluessel-vorschlag");
+        vorschlag(&p, "radxa", &adr(&["box", "example"]), "dietpi", Some(22), "").expect("vorschlag");
+        let e = schluessel_lesen_mit(&p, "radxa", &|_a, _p| Ok(json!({"typ": "ssh-ed25519", "schluessel": blob()})))
+            .unwrap_err();
+        assert_eq!(e.0, "host_unbestaetigt");
+        let e = schluessel_lesen_mit(&p, "gibtesnicht", &|_a, _p| Ok(json!({"typ": "ssh-ed25519", "schluessel": blob()})))
+            .unwrap_err();
+        assert_eq!(e.0, "host_unbekannt");
+    }
+
+    /// Ein Fehler des Lesers wird benannt, nicht verschluckt.
+    #[test]
+    fn ein_fehler_beim_lesen_wird_benannt() {
+        let p = p("schluessel-fehler");
+        let a = adr(&["box", "example"]);
+        setzen(&p, "radxa", &eintrag(&a)).expect("anlegen");
+        let e = schluessel_lesen_mit(&p, "radxa", &|_a, _p| Err("keine Antwort".into())).unwrap_err();
+        assert_eq!(e.0, "schluessel_nicht_gelesen");
+        assert!(e.1.contains("keine Antwort"), "{}", e.1);
     }
 }

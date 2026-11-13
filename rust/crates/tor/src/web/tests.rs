@@ -851,6 +851,22 @@ fn freigabe_setzen_wirkt_und_prueft_das_werkzeug() {
     assert!(r["fehler"].as_str().unwrap_or("").contains("nicht freigeben"), "{r}");
 }
 
+/// Der Weg der Oberflaeche zum Hostschluessel ist verdrahtet (Op im
+/// Verteiler, Route im Modul). Ohne Netz geprueft: ein unbekannter Host wird
+/// benannt abgelehnt, und ein fehlendes Feld ist ein 400. Dass ein Vorschlag
+/// nicht abrufbar ist, steht in `ssh::tests::der_abruf_kennt_nur_bestaetigte_hosts`.
+#[test]
+fn hostschluessel_abrufen_ist_verdrahtet() {
+    let (z, _p) = anbieter_zustand("schluessel-route");
+    let c = anmelden(&z);
+    let r = api(&z, &c, "POST", "/api/ssh/schluessel", r#"{"host":"gibtesnicht"}"#);
+    assert_eq!(r["_status"], 400, "{r}");
+    assert!(format!("{r}").contains("steht nicht in der Host-Tabelle"), "{r}");
+    // Ohne Host-Feld: 400, nicht "irgendwas".
+    let r = api(&z, &c, "POST", "/api/ssh/schluessel", "{}");
+    assert_eq!(r["_status"], 400, "{r}");
+}
+
 #[test]
 fn das_passwort_wird_abgelegt_aber_nie_zurueckgegeben() {
     let (z, p) = anbieter_zustand("geheim");

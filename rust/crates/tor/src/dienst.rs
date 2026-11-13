@@ -201,6 +201,17 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
             let host = anfrage.get("host").and_then(Value::as_str).unwrap_or("");
             crate::ssh::op_ssh_aufnahme(&stand.daten, host, jetzt_s())
         }
+        // Den Hostschluessel holt **das Gateway** selbst (entschieden smilez,
+        // 13.11.): `ssh-keyscan` als Kindprozess mit fester argv, kein eigener
+        // SSH-Code. Der Abruf schreibt nichts -- bestaetigt wird im Modul.
+        "ssh_schluessel_lesen" => {
+            let host = anfrage.get("host").and_then(Value::as_str).unwrap_or("");
+            if host.is_empty() {
+                zeile::fehlerantwort("wert_ungueltig", "Feld \"host\" fehlt.")
+            } else {
+                crate::ssh::op_ssh_schluessel_lesen(&stand.daten, host)
+            }
+        }
         "ssh" => {
             let host = anfrage.get("host").and_then(Value::as_str).unwrap_or("");
             let befehl = anfrage.get("befehl").and_then(Value::as_str).unwrap_or("");

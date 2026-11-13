@@ -33,15 +33,16 @@ zram wird nicht angefasst, wenn es läuft.
       ist damit keine Entscheidung mehr, sondern nur der Anlass: Tritt ein
       Bruch auf, wird die Grenze gesetzt und der Fall hier vermerkt.
 
-- [ ] **Hostschlüssel: `ssh-keyscan` im Gateway** (entschieden smilez, 13.11.):
-      Das Gateway holt den Hostschlüssel selbst, statt dass der Nutzer die
-      `ssh-keyscan`-Zeile eintippt. Es hat Netz und darf ein Programm starten;
-      die geprüfte OpenSSH-Implementierung erledigt KEX und Signatur — kein
-      eigener SSH-Code. Offen im Zuschnitt: (a) Aufruf als Kindprozess mit
-      fester `argv` und Zeitgrenze, (b) Ergebnis gegen die Tabelle prüfen
-      (Adresse + Port), (c) ein **geänderter** Schlüssel wird nicht still
-      übernommen, sondern als Befund gemeldet (`brauchbar: false` mit Grund),
-      (d) Protokollzeile je Abruf. Baut auf `ssh.rs` auf (`op_ssh_aufnahme`).
+- [ ] **`ssh-keyscan` am Gerät belegen** (gebaut 13.11., CHANGELOG, DESIGN
+      „Der Hostschlüssel wird geholt, nicht getippt"). Alle vier Zuschnitte
+      stehen: (a) Kindprozess mit fester `argv`, `-T 5`, harte Grenze 15 s,
+      (b) Antwort gegen das Ziel geprüft (`[adresse]:port` bei Port ≠ 22),
+      (c) ein geänderter Schlüssel wird als Befund gemeldet und **nicht**
+      übernommen, (d) eine Protokollzeile je Abruf in `state/log/ssh.log`.
+      **Offen ist die Messung auf dem Pi**: ist `ssh-keyscan` dort vorhanden
+      (Paket `openssh-client`), holt der Aufruf den Schlüssel eines echten
+      Hosts, und meldet das Modul „geändert" richtig? Im Sandkasten geprüft
+      gegen eine Antwort-Attrappe; ein echter sshd-Lauf steht aus.
 
 - [ ] **Die CI fährt keine Gegenproben.** Gemessen 13.11.: Die Python-Jobs
       rufen nur `tests/test_*.py`, die Installer-Jobs nur
@@ -770,10 +771,6 @@ das Gateway — auch `ssh`. Der Ausführer bleibt ohne Netz. **Gebaut 12.11.
 abends** (CHANGELOG: Host-Tabelle, `op: ssh`, Deskriptor-Übergabe, feste
 `argv`, Agenten-Werkzeuge `ssh` und `ssh_vorschlag`). Offen bleibt:
 
-- [ ] **Hostschlüssel im Gateway lesen** (`ssh_schluessel_lesen`): heute
-      tippt der Nutzer die Zeile aus `ssh-keyscan` ein, den Fingerabdruck
-      rechnet das Gateway. Selbst lesen heißt SSH-Schlüsselaustausch —
-      gehört hierher, weil der Netzweg jetzt existiert.
 - [ ] **Tailscale auf dem Gerät einrichten** (Entscheidung 13.11. smilez:
       **soll auf den Pi, opt-in** — keine Voraussetzung). Gebaut ist die
       **Anzeige**: `tailscale.rs` liest die LocalAPI (nur `GET`) und legt eine

@@ -56,8 +56,9 @@ class ChimeraSsh extends HTMLElement {
         </div>
         <label class="klein"><input type="checkbox" id="aufnahme" style="width:auto;margin-right:.4rem">
           zur Aufnahme anlegen — der Hostschlüssel wird beim ersten Verbinden geholt und hier bestätigt</label>
-        <label class="klein">Hostschlüssel — Zeile aus <code>ssh-keyscan -t ed25519 &lt;adresse&gt;</code>
-          (nur beim ersten Mal oder wenn Adresse/Port sich ändern; bei „zur Aufnahme" leer lassen)</label>
+        <label class="klein">Hostschlüssel — normalerweise leer lassen und am Host „Hostschlüssel holen"
+          drücken (das Gateway ruft <code>ssh-keyscan</code> selbst auf). Nur wenn das Gerät das Programm
+          nicht hat: Zeile aus <code>ssh-keyscan -t ed25519 &lt;adresse&gt;</code> einfügen.</label>
         <textarea id="hostschluessel" placeholder="host.example ssh-ed25519 AAAAC3NzaC1lZDI1NTE5..."></textarea>
         <label class="klein">Notiz</label><input id="notiz" placeholder="optional">
         <button id="speichern">Speichern</button>
@@ -164,6 +165,55 @@ class ChimeraSsh extends HTMLElement {
     };
     zeige(!!e.geheim);
     k.append(pwZeile);
+
+    // Den Hostschluessel holt **das Gateway** selbst (`ssh-keyscan`, Entscheidung
+    // smilez 13.11.): kein Abtippen, keine Zeile, in der ein Zeichen fehlt.
+    // Der Abruf schreibt nichts -- bestaetigt wird hier, und ein geaenderter
+    // Schluessel wird als Befund gezeigt, nicht still uebernommen.
+    if (e.herkunft === "nutzer") {
+      const hol = this.el("button", "Hostschlüssel holen", "stumm");
+      const holErg = this.el("div", undefined, "klein");
+      hol.onclick = async () => {
+        hol.disabled = true;
+        holErg.className = "klein";
+        holErg.textContent = `fragt ${e.adresse}:${e.port} …`;
+        const r = await this.post("/api/ssh/schluessel", { host: name });
+        hol.disabled = false;
+        holErg.replaceChildren();
+        holErg.className = "klein";
+        if (!r.ok) {
+          holErg.className = "fehler";
+          holErg.textContent = (r.fehler && r.fehler.text) || r.fehler || "Fehler";
+          return;
+        }
+        const hs = r.hostschluessel || {};
+        holErg.append(
+          this.el("p", `Hostschlüssel ${hs.typ} ${hs.fingerabdruck}`,
+                  r.befund === "geaendert" ? "fehler" : "offen"),
+          this.el("p", r.meldung || "", "klein")
+        );
+        if (r.befund === "unveraendert") return;
+        const geaendert = r.befund === "geaendert";
+        const ja = this.el("button", geaendert ? "Trotzdem übernehmen" : "Eintrag bestätigen",
+                           geaendert ? "gefahr" : "");
+        ja.onclick = async () => {
+          const w = { adresse: e.adresse, nutzer: e.nutzer, port: e.port, schluessel: e.schluessel,
+                      rechte: e.rechte, hostschluessel: hs };
+          if (e.zaun) w.zaun = e.zaun;
+          const b = await this.post("/api/ssh/setzen", { host: name, wert: w });
+          if (!b.ok) {
+            holErg.className = "fehler";
+            holErg.textContent = (b.fehler && b.fehler.text) || "Fehler";
+            return;
+          }
+          holErg.className = "klein";
+          holErg.textContent = "Bestätigt.";
+          this.laden();
+        };
+        holErg.append(ja);
+      };
+      k.append(hol, holErg);
+    }
 
     // Die Aufnahme: Passwort-Anmeldung, Schluessel erzeugen, **eine** Zeile
     // aufs Ziel. Danach steht der Eintrag noch nicht -- der Fingerabdruck
