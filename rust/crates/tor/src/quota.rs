@@ -213,7 +213,7 @@ pub fn eintrag(
     let mut grund_kein_abruf: Option<String> = None;
     if faellig && durch_retry_gesperrt {
         grund_kein_abruf = Some(format!(
-            "Der Anbieter bittet um Ruhe: naechster Abruf in {} s (Retry-After).",
+            "Naechster Abruf erst in {} s (Retry-After des Anbieters oder Abstand nach einem Fehler).",
             gesperrt_bis - jetzt
         ));
     }
@@ -251,10 +251,14 @@ pub fn eintrag(
                 Err(f) => {
                     e["zustand"] = json!("abruf_gescheitert");
                     e["fehler"] = f["fehler"].clone();
-                    if let Some(s) = f["fehler"]["retry_after"].as_u64() {
-                        let stand = json!({"geholt": geholt, "roh": alt["roh"], "gesperrt_bis": jetzt + s});
-                        let _ = schreiben(p, id, &stand);
-                    }
+                    // Auch ein Fehler wird festgehalten: `Retry-After` des
+                    // Anbieters, sonst der Mindestabstand. Ohne das fragte
+                    // jeder Aufruf der Oberflaeche den Anbieter erneut --
+                    // bei 401 wie bei 500.
+                    let sperre = f["fehler"]["retry_after"].as_u64().unwrap_or(FEHLER_ABSTAND_S);
+                    let stand = json!({"geholt": geholt, "roh": alt["roh"], "gesperrt_bis": jetzt + sperre});
+                    let _ = schreiben(p, id, &stand);
+                    e["gesperrt_bis"] = json!(jetzt + sperre);
                     // Ist ein alter Stand da, wird er gezeigt -- als alter.
                     if let Some(roh) = alt.get("roh").filter(|r| !r.is_null()) {
                         e["pools"] = Value::Array(pools_deepseek(roh));
@@ -562,6 +566,24 @@ mod tests {
         assert_eq!(gespeichert(&pf, "ds")["gesperrt_bis"], 1120);
         let e2 = eintrag_von(&pf, "ds", 1050, true);
         assert!(e2["hinweis"].as_str().unwrap().contains("Retry-After"), "{e2}");
+    }
+
+    #[test]
+    fn ein_fehler_bremst_den_naechsten_abruf() {
+        let (b, h) = crate::ollama::tests::server(vec![(
+            401,
+            r#"{"error":{"message":"bad key"}}"#.into(),
+        )]);
+        let pf = p("fehler-bremst");
+        deepseek(&pf, &b);
+        let e = eintrag_von(&pf, "ds", 1000, false);
+        assert_eq!(e["zustand"], "abruf_gescheitert", "{e}");
+        assert_eq!(e["gesperrt_bis"], 1000 + FEHLER_ABSTAND_S);
+        h.join().unwrap();
+        // Ein erzwungener Abruf direkt danach geht nicht raus (der Server
+        // hat keine zweite Antwort mehr).
+        let e2 = eintrag_von(&pf, "ds", 1010, true);
+        assert!(e2["hinweis"].as_str().unwrap().contains("Naechster Abruf"), "{e2}");
     }
 
     #[test]

@@ -93,6 +93,12 @@ mut id-ungeprueft \
             return fehlerantwort("id_ungueltig", "x");
         }'
 
+# 11. Ein Fehler bremst den naechsten Abruf nicht -- jede Anzeige-Aktualisierung
+#     fragte den Anbieter erneut (401 wie 500).
+mut fehler-bremst-nicht \
+	'let sperre = f["fehler"]["retry_after"].as_u64().unwrap_or(FEHLER_ABSTAND_S);' \
+	'let sperre = 0;'
+
 zurueck
 echo "---"
 if [ "$gruen" -eq 0 ]; then
