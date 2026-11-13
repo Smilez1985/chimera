@@ -99,6 +99,11 @@ StartLimitBurst=5
 Type=simple
 User=$CHIMERA_TOR_NUTZER
 Group=$CHIMERA_TOR_NUTZER
+# Der Ausfuehrer-Socket gehoert chimera-sohelper:chimera (0660). Ohne diese
+# Gruppe kommt das Gateway nicht an ihn -- am Geraet aufgefallen (13.11.),
+# als op: ssh zum ersten Mal lief: "Permission denied". Dieselbe Gruppe, ueber
+# die der Ausfuehrer den Gateway-Socket erreicht, nur in die andere Richtung.
+SupplementaryGroups=$CHIMERA_DIENSTNUTZER
 # Die .env liest systemd als root; der Prozess bekommt nur die Werte.
 # So braucht chimera-tor kein Leserecht auf die Datei (Regel 5l).
 EnvironmentFile=-$CHIMERA_CONFIG/.env

@@ -163,6 +163,7 @@ hat "Socket: Datei verschwindet beim Stoppen" "$S" "RemoveOnStop=yes"
 # --- 3. Dienst-Unit -------------------------------------------------------
 D="$R/$DIENST"
 hat "Dienst: eigener Nutzer" "$D" "User=chimera-tor"
+hat "Dienst: Gruppe fuer den Ausfuehrer-Socket" "$D" "SupplementaryGroups=chimera"
 hat "Dienst: Programm mit --dienst" "$D" "ExecStart=/opt/chimera/bin/chimera-tor --dienst"
 hat "Dienst: Umgebung aus der .env (Anbieteradressen)" "$D" "EnvironmentFile=-/opt/chimera/config/.env"
 hat "Dienst: kennt den Sitzungs-Socket (Telegram-Tuer, Regel 5s)" "$D" "Environment=CHIMERA_SITZUNG_SOCKET=/run/chimera/sitzung.sock"
