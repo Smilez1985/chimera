@@ -99,6 +99,12 @@ mut fehler-bremst-nicht \
 	'let sperre = f["fehler"]["retry_after"].as_u64().unwrap_or(FEHLER_ABSTAND_S);' \
 	'let sperre = 0;'
 
+# 12. Die Ursache eines Fehlers wird nicht abgelegt -- waehrend der Sperre
+#     stuende nur "wartet noch", ohne den Grund (falscher Schluessel, 402).
+mut ursache-vergessen \
+	'"gesperrt_bis": jetzt + sperre, "letzter_fehler": f["fehler"]});' \
+	'"gesperrt_bis": jetzt + sperre});'
+
 zurueck
 echo "---"
 if [ "$gruen" -eq 0 ]; then

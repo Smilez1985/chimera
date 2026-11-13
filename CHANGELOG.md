@@ -38,7 +38,10 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Stand vor 2 Stunden", ohne Zahl den **Grund** statt `0`. Damit ist die
   Frage auch über PTT/TTS beantwortbar. Tests: cargo 439 (14 neue),
   `test_agent` 122 (19 neue), `rust/gegenprobe-quota.sh` 10 Mutationen,
-  `tests/gegenprobe_guthaben.py` 5 Mutationen (alle rot).
+  `tests/gegenprobe_guthaben.py` 5 Mutationen (alle rot). Auch ein
+  **Fehler** bremst: `Retry-After`, sonst 60 s Abstand — sonst fragte jede
+  Aktualisierung den Anbieter erneut; die Ursache bleibt dabei sichtbar
+  (`letzter_fehler` in der Ablage).
 - **DeepSeek als Anbieter** (Auftrag smilez 13.11.): neues Gateway-Modul
   `deepseek.rs` (OpenAI-kompatible API, `POST /chat/completions`, `GET /models`).
   `dienst::anbieter_finden` liefert `(typ, adresse)` und verteilt Chat und

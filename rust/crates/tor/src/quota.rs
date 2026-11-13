@@ -256,7 +256,11 @@ pub fn eintrag(
                     // jeder Aufruf der Oberflaeche den Anbieter erneut --
                     // bei 401 wie bei 500.
                     let sperre = f["fehler"]["retry_after"].as_u64().unwrap_or(FEHLER_ABSTAND_S);
-                    let stand = json!({"geholt": geholt, "roh": alt["roh"], "gesperrt_bis": jetzt + sperre});
+                    // Die Ursache wird mit abgelegt: sonst stuende waehrend der
+                    // Sperre nur "wartet noch" da, und der Grund (falscher
+                    // Schluessel, kein Guthaben) waere unsichtbar.
+                    let stand = json!({"geholt": geholt, "roh": alt["roh"],
+                                       "gesperrt_bis": jetzt + sperre, "letzter_fehler": f["fehler"]});
                     let _ = schreiben(p, id, &stand);
                     e["gesperrt_bis"] = json!(jetzt + sperre);
                     // Ist ein alter Stand da, wird er gezeigt -- als alter.
@@ -287,6 +291,14 @@ pub fn eintrag(
     }
     if let Some(g) = grund_kein_abruf {
         e["hinweis"] = json!(g);
+    }
+    // Waehrend der Sperre bleibt die letzte Ursache sichtbar.
+    if e["fehler"].is_null() {
+        if let Some(f) = alt.get("letzter_fehler").filter(|f| f.is_object()) {
+            if e["pools"].as_array().map(|a| a.is_empty()).unwrap_or(true) {
+                e["fehler"] = f.clone();
+            }
+        }
     }
     if e["pools"].as_array().map(|a| a.is_empty()).unwrap_or(true) && e["zustand"] == "gut" {
         e["zustand"] = json!("unbekannt");
@@ -581,9 +593,10 @@ mod tests {
         assert_eq!(e["gesperrt_bis"], 1000 + FEHLER_ABSTAND_S);
         h.join().unwrap();
         // Ein erzwungener Abruf direkt danach geht nicht raus (der Server
-        // hat keine zweite Antwort mehr).
+        // hat keine zweite Antwort mehr) -- und der Grund bleibt sichtbar.
         let e2 = eintrag_von(&pf, "ds", 1010, true);
         assert!(e2["hinweis"].as_str().unwrap().contains("Naechster Abruf"), "{e2}");
+        assert_eq!(e2["fehler"]["code"], "schluessel_falsch", "Grund fehlt: {e2}");
     }
 
     #[test]
