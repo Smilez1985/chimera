@@ -689,27 +689,26 @@ Telegram**; die Freigabe hängt am **Werkzeug**, Ziele sind die Ausnahmen
       verbindet; Ablehnung nennt Werkzeug, Ziel und Grund. Offen: **jeder
       weitere** ausgehende Weg braucht denselben Prüfpunkt — heute hat ihn
       nur `web_abruf`.
-- [ ] **Befund 12.11., am 13.11. nachgesehen:** `op: chat` am Gerät endet
-      im Agenten-Weg ohne Werkzeugaufruf. Gemessen am laufenden Gateway
-      (chimera-pi, der eingetragene Modellserver aus `config/anbieter/`):
-      · einfacher Chat ohne Werkzeuge → `ok`, Text „bereit“ (Wahl
-        `qwen2.5:14b`);
-      · **mit Werkzeugen und `stream: true`** (die Einstellung des Gateways,
-        `wahl.json` trägt `stream: true`) antworten `qwen2.5:14b` **und**
-        `qwen3.6:27b` mit **Text statt Werkzeugaufruf**;
-      · `qwen3.6:27b` **ohne** `stream` ruft dasselbe Werkzeug sauber auf
-        (`tool_calls`, `arguments` als Objekt) — der Parser im Gateway
-        versteht beide Formen (Test
-        `ollama::tests::der_strom_wird_zu_einer_antwort_mit_text_und_aufrufen`).
-      Es liegt also **nicht** am Parser und nicht am Werkzeug, sondern an
-      der Kombination *Streaming + Werkzeuge* beim Modellserver. „Leere
-      Antwort“ selbst ist dabei **nicht** reproduziert; auffällig ist nur,
-      dass `message.thinking` (Denkmodelle) nirgends gelesen wird — ein
-      Modell, das **nur** denkt, meldet damit „leer“, obwohl es gedacht hat.
-      **Entscheidung nötig:** Werkzeug-Runden ohne `stream` fahren (dann
-      streamt nur der reine Text-Chat), oder ein Modell wählen, das
-      Werkzeuge auch streamend aufruft.
-      Erst danach `web_abruf` über den Chat prüfen.
+- [ ] **Befund 12.11. — Ursache gefunden und behoben (13.11., `Werkzeug-Formen`):**
+      `op: chat` am Gerät blieb ohne Werkzeugaufruf. Ursache war **nicht** das
+      Streaming und nicht das Modell: das Gateway nahm nur die eigene
+      Werkzeug-Form (`{name, description, parameters}`) und **verwarf jede
+      andere still** — ein Aufrufer mit der OpenAI-Form
+      (`{type:function, function:{…}}`) schickte also ohne Werkzeuge, das
+      Modell antwortete mit Text. Gemessen am laufenden Gateway: mit der
+      eigenen Form und `stream: true` (Gateway-Vorgabe) kommt der Aufruf
+      sauber zurück (`list_dir`, `{"pfad": "/tmp"}`); direkt am Modellserver
+      liefert der Strom genau **einen** Block mit `tool_calls` und 127
+      Zeichen `thinking`. Jetzt werden **beide** Formen angenommen, und ein
+      Werkzeug-Satz, der komplett durchfällt, ist ein Fehler
+      (`werkzeuge_ungueltig`) statt eines stillen Verzichts. Tests
+      `ollama::tests::werkzeuge_kommen_in_beiden_formen_an` und
+      `…::werkzeuge_ohne_namen_sind_ein_fehler_kein_stiller_verzicht`
+      (Gegenproben von Hand, beide rot).
+      **Offen bleibt:** die Meldung „Ollama lieferte eine leere Antwort" ist
+      **nicht reproduziert**; `message.thinking` wird nirgends gelesen — ein
+      Modell, das nur denkt und weder Text noch Aufruf liefert, meldet
+      „leer". Ob das je vorkam, ist ungeklärt.
 - [ ] **Stufe 3 — Prüfpunkt im Ausführer: für `run_command` gebaut und am
       Gerät belegt** (12.11., `02fb472`; entschieden: „Gateway fragen",
       CHANGELOG). **`ssh` hat diesen Weg jetzt bekommen** (12.11., `bbb8e1d`):

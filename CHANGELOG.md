@@ -1196,6 +1196,19 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Werkzeuge fielen still durch, wenn ein Aufrufer die OpenAI-Form schickte**
+  (13.11., am laufenden Gateway gefunden): `werkzeuge_nach_ollama` nahm nur die
+  eigene Form `{name, description, parameters}` und warf alles andere **ohne
+  Fehler** weg — das Modell bekam keine Werkzeuge, antwortete mit Text, und der
+  Aufrufer hielt es für „das Modell kann keine Werkzeuge". Jetzt werden
+  **beide** Formen angenommen (auch `{type:function, function:{…}}`), und ein
+  Werkzeug-Satz, der komplett durchfällt, endet mit `werkzeuge_ungueltig`
+  statt in einem stillen Verzicht. Belegt: mit der richtigen Form und
+  `stream: true` kommt der Aufruf sauber zurück (`list_dir`,
+  `{"pfad": "/tmp"}`) — Streaming ist also **nicht** die Ursache der
+  Werkzeug-Misere. Tests `ollama::tests::werkzeuge_kommen_in_beiden_formen_an`
+  und `…::werkzeuge_ohne_namen_sind_ein_fehler_kein_stiller_verzicht`;
+  Gegenproben von Hand, beide rot.
 - **Ein als root abgelegtes Passwort erreichte das Gateway nicht** (13.11., am
   Pi gefunden): `sudo chimera-tor --geheim-ssh <host>` schrieb
   `config/geheim/ssh/<host>` als `root:root 0600`; das Gateway läuft als

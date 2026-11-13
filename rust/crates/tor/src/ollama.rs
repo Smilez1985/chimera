@@ -66,13 +66,25 @@ pub fn werkzeuge_nach_ollama(neutral: &Value) -> Value {
         .as_array()
         .map(|l| {
             l.iter()
-                .filter(|w| w.get("name").and_then(Value::as_str).is_some_and(|n| !n.is_empty()))
-                .map(|w| {
-                    json!({"type": "function", "function": {
-                        "name": w["name"],
-                        "description": w["description"],
-                        "parameters": w["parameters"],
-                    }})
+                .filter_map(|w| {
+                    // Zwei Formen annehmen: die eigene (`{name, description,
+                    // parameters}`) und die von OpenAI geerbte
+                    // (`{type: "function", function: {...}}`). Frueher wurde
+                    // nur die eigene genommen und alles andere **still**
+                    // weggeworfen -- dann gingen Werkzeuge ohne Fehler nicht
+                    // mit, das Modell antwortete mit Text, und der Aufrufer
+                    // hielt es fuer "das Modell kann keine Werkzeuge"
+                    // (am 13.11. genau so passiert).
+                    let f = w.get("function").filter(|f| f.is_object()).unwrap_or(w);
+                    let name = f.get("name").and_then(Value::as_str).unwrap_or("").trim();
+                    if name.is_empty() {
+                        return None;
+                    }
+                    Some(json!({"type": "function", "function": {
+                        "name": name,
+                        "description": f.get("description").cloned().unwrap_or(Value::Null),
+                        "parameters": f.get("parameters").cloned().unwrap_or(Value::Null),
+                    }}))
                 })
                 .collect()
         })
@@ -471,6 +483,17 @@ pub fn op_chat(basis: Option<&str>, anfrage: &Value, katalog: &Value, bevorzugt:
         abgeschaltet = Some("Das Modell ist gemessen ohne Werkzeuge -- keine Schemas mitgeschickt.");
     }
     let koerper = chat_koerper(&modell, &anfrage);
+    // Werkzeuge, die mitgegeben wurden, aber nicht durchkommen, sind ein
+    // Fehler und kein stiller Verzicht: sonst antwortet das Modell mit Text,
+    // und der Aufrufer haelt es fuer "kann keine Werkzeuge".
+    let gewollt = anfrage.get("werkzeuge").and_then(Value::as_array).is_some_and(|a| !a.is_empty());
+    if gewollt && abgeschaltet.is_none() && koerper.get("tools").is_none() {
+        return fehlerantwort(
+            "werkzeuge_ungueltig",
+            "Kein Werkzeug kam durch: jedes braucht einen Namen (\"name\"), wahlweise in der \
+             OpenAI-Form {type:function, function:{...}}.",
+        );
+    }
     let url = format!("{b}/api/chat");
     let mut r = match agent(AUFRUF).post(&url).send_json(&koerper) {
         Ok(r) => r,
@@ -950,4 +973,42 @@ pub(crate) mod tests {
         let f = katalog_von("http://127.0.0.1:1", Duration::from_secs(1)).unwrap_err();
         assert_eq!(f["fehler"]["code"], "nicht_erreichbar");
     }
+    #[test]
+    fn werkzeuge_kommen_in_beiden_formen_an() {
+        // Eigene Form. Am 13.11. scheiterte der Nachweis daran, dass ein
+        // Aufrufer die OpenAI-Form schickte und die Werkzeuge **still**
+        // weggeworfen wurden ("das Modell kann keine Werkzeuge").
+        let eigen = json!([{"name": "list_dir", "description": "d",
+                            "parameters": {"type": "object"}}]);
+        let k = werkzeuge_nach_ollama(&eigen);
+        assert_eq!(k[0]["function"]["name"], "list_dir", "{k}");
+        assert_eq!(k[0]["type"], "function");
+
+        // OpenAI-Form, wie sie von aussen kommt.
+        let offen = json!([{"type": "function", "function": {
+            "name": "read_file", "description": "r", "parameters": {"type": "object"}}}]);
+        let k = werkzeuge_nach_ollama(&offen);
+        assert_eq!(k[0]["function"]["name"], "read_file", "{k}");
+        assert_eq!(k[0]["function"]["description"], "r", "{k}");
+
+        // Ohne Namen kommt nichts durch -- und der Aufruf sagt das jetzt.
+        let ohne = json!([{"description": "kein Name"}]);
+        assert_eq!(werkzeuge_nach_ollama(&ohne), json!([]));
+    }
+
+    #[test]
+    fn werkzeuge_ohne_namen_sind_ein_fehler_kein_stiller_verzicht() {
+        // Die Pruefung sitzt **vor** dem Netzzugriff: eine tote Adresse
+        // genuegt, um das zu zeigen (kommt es zum Aufruf, waere die Antwort
+        // ein Netzfehler und nicht dieser Code).
+        let a = json!({"prompt": "x", "modell": "m",
+                       "werkzeuge": [{"description": "kein Name"}]});
+        let r = op_chat(Some("http://127.0.0.1:1"), &a, &json!({}), &[]);
+        assert_eq!(r["fehler"]["code"], "werkzeuge_ungueltig", "{r}");
+        // Mit Namen kommt es gar nicht so weit -- dann entscheidet das Netz.
+        let b = json!({"prompt": "x", "modell": "m", "werkzeuge": [{"name": "list_dir"}]});
+        let r = op_chat(Some("http://127.0.0.1:1"), &b, &json!({}), &[]);
+        assert_ne!(r["fehler"]["code"], "werkzeuge_ungueltig", "{r}");
+    }
+
 }
