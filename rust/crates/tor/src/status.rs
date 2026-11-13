@@ -282,6 +282,8 @@ pub fn sonden() -> Vec<Box<dyn Sonde>> {
         Box::new(Platte),
         Box::new(Laufzeit),
         Box::new(Dienste { namen: DIENSTE }),
+        // Opt-in: liefert ohne tailscaled eine Zeile mit "nicht eingerichtet".
+        Box::new(crate::tailscale::Tailnet::neu(crate::tailscale::SOCKET)),
     ]
 }
 

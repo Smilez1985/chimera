@@ -20,6 +20,19 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Tailnet-Zustand auf der Statusseite — gelesen, nicht gesteuert** (13.11.):
+  `rust/crates/tor/src/tailscale.rs` liest die **LocalAPI** von `tailscaled`
+  (`/var/run/tailscale/tailscaled.sock`, `GET /localapi/v0/status`) und macht
+  daraus eine Zeile in der Gruppe „Netz“: Zustand, eigener Name, erste eigene
+  Adresse, „x/y Peers online“. Ausschließlich `GET` — die LocalAPI kann auch
+  ändern, das Gateway nicht. **Opt-in:** fehlt der Socket, steht dort
+  „nicht eingerichtet (tailscaled läuft hier nicht)“ und nichts bricht; der
+  Pfad ist über `CHIMERA_TAILSCALE_SOCKET` überschreibbar. Dazu die Op
+  `tailscale` am Gateway (dieselben Felder als JSON) und die DESIGN-Regel
+  „Tailscale — gelesen, nicht gesteuert“. Vier Tests, darunter ein
+  `Transfer-Encoding: chunked`-Fall (die LocalAPI liefert so) und der
+  Opt-out-Fall; durchgespielt gegen eine LocalAPI-Attrappe im Sandkasten
+  (`eingerichtet: true`, 2 von 3 Peers online).
 - **„Eintrag bestätigen" über die Oberfläche belegt** (13.11.): Der ganze
   Aufnahme-Weg ist in der Sandbox gegen einen echten `sshd` und den echten
   Ausführer gefahren — Formular „zur Aufnahme anlegen", Passwortfeld, „Jetzt

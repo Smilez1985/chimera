@@ -17,6 +17,7 @@ mod sitzung;
 mod ssh;
 mod status;
 mod suche;
+mod tailscale;
 mod telegram;
 mod wahl;
 mod web;

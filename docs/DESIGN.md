@@ -5200,6 +5200,34 @@ einen Verweis liest, soll verstehen, **worum es geht**, ohne nachzuschlagen.
    (DESIGN, ROADMAP, CHANGELOG, Quelltext, Tests); ein Verweis auf einen Namen,
    den es nicht mehr gibt, ist ein Fehler.
 
+### Regel „Tailscale“ — gelesen, nicht gesteuert
+
+Entschieden 13.11. (smilez): **Tailscale gehört auf das Gerät, aber als
+Zutat, die der Nutzer dazunimmt** — keine Voraussetzung, keine stille
+Abhängigkeit.
+
+1. **`tailscaled` läuft auf Betriebssystem-Ebene**, nicht im Gateway: Es
+   braucht TUN und root. Chimera startet, konfiguriert und steuert es nicht.
+2. **Chimera spricht das Tailscale-Protokoll nicht selbst.** Ein eigenes
+   tsnet wäre WireGuard plus Steuerkanal, also genau der Netzweg, den die
+   Fernausführung gerade aus dem Gateway herausgehalten hat.
+3. **Gelesen wird nur die LocalAPI** über den Unix-Socket
+   (`/var/run/tailscale/tailscaled.sock`, `GET /localapi/v0/status`), und nur
+   so viel, wie eine Statuszeile braucht: Zustand, eigener Name, eigene
+   Adressen, Zahl der Peers online. Die LocalAPI kann auch **ändern** (POST) —
+   das Gateway benutzt ausschließlich `GET`; die Anfrage steht als eine Zeile
+   in `rust/crates/tor/src/tailscale.rs`.
+4. **Fehlt der Socket, ist das kein Fehler.** Die Zeile sagt „nicht
+   eingerichtet (tailscaled läuft hier nicht)“ — opt-out im Klartext statt
+   „unbekannt“. Der Socket-Pfad ist über `CHIMERA_TAILSCALE_SOCKET`
+   überschreibbar (Tests, andere Geräte).
+5. **`100.64.0.0/10` (CGNAT = Tailnet) gilt als eigene Adresse** (`abruf`):
+   Ein Abruf dorthin braucht wie jeder andere einen ausdrücklichen
+   Positiv-Eintrag in der Freigabe (seit `3d9ed82`).
+6. **Die Anmeldung am Koordinator (Headscale) macht der Nutzer**, nicht
+   Chimera: `tailscale up --login-server … --authkey …` ist ein Vorgang mit
+   einem Geheimnis, und Geheimnisse gehören nicht in einen Agentenlauf.
+
 ## Verzeichnis der Architekturregeln
 
 - **1** — Die GPL-Grenze ist hart

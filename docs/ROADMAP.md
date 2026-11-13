@@ -733,18 +733,20 @@ abends** (CHANGELOG: Host-Tabelle, `op: ssh`, Deskriptor-Übergabe, feste
       tippt der Nutzer die Zeile aus `ssh-keyscan` ein, den Fingerabdruck
       rechnet das Gateway. Selbst lesen heißt SSH-Schlüsselaustausch —
       gehört hierher, weil der Netzweg jetzt existiert.
-- [ ] **Tailscale/Headscale anbinden** (Idee smilez 13.11.): auf dem Pi-hole
-      läuft ein **Headscale**-Server. Entscheidung steht noch aus; meine
-      Lesart: `tailscaled` läuft **auf Betriebssystem-Ebene** (es braucht
-      TUN und root), Chimera spricht es **nicht** selbst — ein
-      Tailscale-Protokoll im Gateway wäre dieselbe Fläche, die wir bei `ssh`
-      gerade herausgehalten haben. Das Gateway würde nur die
-      **LocalAPI** (`/var/run/tailscale/tailscaled.sock`) lesen
-      (Adresse, Peers, ob der Netzzugang steht) und im Modul anzeigen;
-      Datenverkehr geht normal über den Kernel. Dazu gehören zwei
-      Sicherheitsfragen: `100.64.0.0/10` (CGNAT, Tailnet) muss in
-      `web_abruf` als **eigene Adresse** gelten und braucht wie jede andere
-      einen ausdrücklichen Positiv-Eintrag.
+- [ ] **Tailscale auf dem Gerät einrichten** (Entscheidung 13.11. smilez:
+      **soll auf den Pi, opt-in** — keine Voraussetzung). Gebaut ist die
+      **Anzeige**: `tailscale.rs` liest die LocalAPI (nur `GET`) und legt eine
+      Zeile „Netz/Tailnet" auf die Statusseite; ohne `tailscaled` steht dort
+      „nicht eingerichtet". **Offen ist die Einrichtung selbst** und die
+      braucht den Nutzer:
+      (1) Paket installieren (`apt install tailscale`), Dienst starten;
+      (2) Anmeldung am Headscale mit einem **Preauth-Key**:
+          `tailscale up --login-server https://<headscale> --authkey <key>` —
+          ein Geheimnis, das nicht durch einen Agentenlauf gehen soll;
+      (3) danach zeigt die Statusseite Zustand und Peers ohne weiteres Zutun.
+      Sobald `tailscaled` läuft, ist außerdem zu prüfen: erreicht `web_abruf`
+      ein Ziel im Tailnet **nur** mit Positiv-Eintrag (100.64.0.0/10 gilt seit
+      `3d9ed82` als eigene Adresse).
 
 ## Phase 6 — Agent-Härtung
 

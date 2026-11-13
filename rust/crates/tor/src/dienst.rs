@@ -148,6 +148,24 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
         // vorschlagen: `ssh_vorschlag` legt an und aendert nie. Lesen, Setzen
         // und Loeschen gehoeren dem Nutzer (Web-Modul).
         "ssh_hosts" => json!({"ok": true, "hosts": crate::ssh::laden(&stand.daten)["hosts"]}),
+        // Tailscale: **nur lesen** (LocalAPI, GET). Fehlt der Socket, ist das
+        // kein Fehler -- Tailscale ist opt-in (DESIGN, "Tailscale/Headscale").
+        "tailscale" => {
+            let pfad = std::env::var("CHIMERA_TAILSCALE_SOCKET")
+                .unwrap_or_else(|_| crate::tailscale::SOCKET.to_string());
+            if !std::path::Path::new(&pfad).exists() {
+                json!({"ok": true, "eingerichtet": false,
+                       "socket": pfad,
+                       "hinweis": "tailscaled laeuft auf diesem Geraet nicht. Tailscale ist eine Zutat, die der Nutzer dazunimmt."})
+            } else {
+                match crate::tailscale::holen(&pfad) {
+                    Ok(z) => json!({"ok": true, "eingerichtet": true, "socket": pfad,
+                        "zustand": z.backend, "hostname": z.hostname, "adressen": z.adressen,
+                        "peers_gesamt": z.peers_gesamt, "peers_online": z.peers_online}),
+                    Err(e) => zeile::fehlerantwort("nicht_lesbar", &format!("Die Tailscale-LocalAPI antwortet nicht: {e}")),
+                }
+            }
+        }
         "ssh_host_setzen" => {
             let name = anfrage.get("host").and_then(Value::as_str).unwrap_or("");
             let wert = anfrage.get("wert").cloned().unwrap_or(Value::Null);
