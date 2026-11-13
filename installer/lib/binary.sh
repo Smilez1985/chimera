@@ -74,6 +74,63 @@ binary_art_lokal_var() {
 	esac
 }
 
+# Welcher laufende Dienst gehoert zu dieser Art? Ein ersetztes Programm muss
+# neu starten -- sonst laeuft der alte Prozess weiter und niemand sieht es.
+# Genau das war am 13.11. auf dem Pi der Fall: der Ausfuehrer lief seit dem
+# 12.11. 18:48 mit einem Binary, das als "(deleted)" im /proc stand, und
+# antwortete auf neue Operationen mit "Unbekannte Operation".
+binary_art_dienst() {
+	case "$1" in
+		tor)      printf '%s\n' chimera-tor.service ;;
+		sohelper) printf '%s\n' chimera-sohelper.service ;;
+		fdpass)   printf '%s\n' "" ;;
+		*) return 1 ;;
+	esac
+}
+
+# Startet den Dienst neu, wenn die abgelegte Datei sich geaendert hat.
+# Ergebnis wird benannt, nicht angenommen.
+binary_dienst_neustart() { # art
+	_bd_unit="$(binary_art_dienst "$1")" || return 0
+	[ -n "$_bd_unit" ] || return 0
+	is_dry_run && return 0
+	have_cmd systemctl || return 0
+	if ! systemctl is-active --quiet "$_bd_unit" 2>/dev/null; then
+		info "Dienst $_bd_unit laeuft nicht -- kein Neustart noetig."
+		return 0
+	fi
+	if systemctl restart "$_bd_unit" >/dev/null 2>&1; then
+		info "Dienst neu gestartet: $_bd_unit (Binary war ersetzt)"
+	else
+		warn "Dienst $_bd_unit liess sich nicht neu starten -- er laeuft alte Fassung weiter."
+	fi
+	return 0
+}
+
+# Laeuft der Dienst wirklich die Datei, die auf der Platte liegt? Nein ->
+# neu starten. Grund (Pi, 13.11.): Nach dem Ersetzen des Binaries bediente der
+# alte Prozess weiter den Socket; /proc/<pid>/exe zeigte auf "(deleted)".
+binary_dienst_laeuft_aktuell() { # art, pfad
+	_bp_unit="$(binary_art_dienst "$1")" || return 0
+	[ -n "$_bp_unit" ] || return 0
+	is_dry_run && return 0
+	have_cmd systemctl || return 0
+	_bp_pid="$(systemctl show -p MainPID --value "$_bp_unit" 2>/dev/null || echo 0)"
+	[ "${_bp_pid:-0}" != 0 ] || return 0
+	_bp_laufend="$(network_checksum "/proc/$_bp_pid/exe" 2>/dev/null || true)"
+	[ -n "$_bp_laufend" ] || return 0
+	_bp_soll="$(network_checksum "$2" 2>/dev/null || true)"
+	if [ "$_bp_laufend" != "$_bp_soll" ]; then
+		warn "$_bp_unit laeuft noch eine alte Fassung (PID $_bp_pid) -- wird neu gestartet."
+		if systemctl restart "$_bp_unit" >/dev/null 2>&1; then
+			info "Dienst neu gestartet: $_bp_unit"
+		else
+			warn "Neustart von $_bp_unit schlug fehl -- der Dienst laeuft die alte Fassung weiter."
+		fi
+	fi
+	return 0
+}
+
 binary_aus_baum() {
 	_ba_art="$1"
 	_ba_modul="$2"
@@ -214,6 +271,10 @@ binary_aus_baum() {
 	if [ -n "$_ba_eigen" ] && [ "$_ba_eigen" = "$_ba_summe" ] && \
 		[ "$(network_checksum "$_ba_bin")" = "$_ba_summe" ]; then
 		info "Schon vorhanden und geprueft: $_ba_bin"
+		# Aber laeuft der Dienst auch diese Fassung? Ein ersetztes Binary,
+		# das im /proc als "(deleted)" steht, bedient weiter die alten
+		# Operationen (Pi, 13.11.). Der Vergleich ist billig.
+		binary_dienst_laeuft_aktuell "$_ba_art" "$_ba_bin"
 		if [ -n "$_ba_stand" ]; then
 			rust_stand_schreiben "$_ba_standdatei" || \
 				warn "state/rust-stand nicht schreibbar -- die naechste Meldung faellt aus."
@@ -284,5 +345,6 @@ binary_aus_baum() {
 	fi
 
 	info "Abgelegt: $_ba_bin (${_ba_lokal:+lokale Datei}${_ba_lokal:-$_ba_ordner/$_ba_asset}, $(printf '%.12s' "$_ba_summe"))"
+	binary_dienst_neustart "$_ba_art"
 	return 0
 }

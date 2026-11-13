@@ -1157,6 +1157,21 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Ein ersetztes Binary startet seinen Dienst neu** (13.11., am Pi
+  gefunden): Der Installer legte das neue Programm ab, aber
+  `systemctl enable --now` startet einen **laufenden** Dienst nicht neu. Auf
+  dem Pi lief der Ausführer seit dem 12.11. 18:48 mit dem alten Binary
+  (`/proc/<pid>/exe` stand auf `(deleted)`) und antwortete auf die neue
+  Operation `ssh_aufnahme` mit „Unbekannte Operation" — der Test am Gerät
+  schien zu beweisen, dass der Code fehlt. Jetzt: nach jedem Ablegen ein
+  Neustart des zugehörigen Dienstes, und beim „schon vorhanden"-Weg ein
+  Vergleich der **laufenden** Fassung (`/proc/<pid>/exe`) mit der Datei.
+- **Das Gateway kommt jetzt an den Ausführer-Socket** (13.11.): `0610`-Rechte
+  hin oder her — `sohelper.sock` gehört `chimera-sohelper:chimera` (0660),
+  und `chimera-tor` lief ohne Zusatzgruppen. Erster echter `op: ssh`-Aufruf
+  am Gerät endete mit „Permission denied". Die Unit hat jetzt
+  `SupplementaryGroups=chimera` — dieselbe Gruppe, über die der Ausführer
+  den Gateway-Socket erreicht, nur in die andere Richtung.
 - **Die Freigabe ließ sich am Gerät nicht speichern** (gefunden 12.11. beim
   Einspielen, Pi): `freigaben::datei` zeigte auf `config/freigaben.json`, die
   Gateway-Unit erlaubt dem Prozess aber nur die Ablagen aus Regel 5t —
