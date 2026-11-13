@@ -1584,6 +1584,15 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   nicht gemessen.
 
 ### Geprüft
+- **Tailnet auf dem Pi: eingerichtet, gelesen und geschaltet** (13.11.,
+  chimera-pi, Stand `00ca63e`): `tailscaled` 1.104.7 aus dem Tailscale-Repo
+  installiert, Anmeldung am Headscale mit einem Preauth-Key über stdin (nie in
+  der Prozessliste, danach gelöscht). Der Pi ist **`chimera-pi` = 100.64.0.5**.
+  Gemessen am laufenden Gateway: `{"op":"tailscale"}` → `Running`, 4 Peers,
+  1 online; mit befristeter Freigabe `{"op":"tailscale_steuern","aktion":"aus"}`
+  → „Tailnet ausgeschaltet", Zustand danach `Stopped`; `"an"` → wieder
+  `Running`. Freigabe danach zurückgenommen: derselbe Aufruf antwortet
+  `tailscale_gesperrt`. Alle drei Dienste danach aktiv.
 - **Die Fernausführung am Gerät geprüft — die vier Zusagen der Phase**
   (13.11., chimera-pi, Stand `585bb03`): zwei temporäre Nutzer `probe1`/
   `probe2` auf dem Gerät, zwei Hosts `p1`/`p2` auf `127.0.0.1:22`, beide über
