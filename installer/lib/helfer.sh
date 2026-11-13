@@ -245,32 +245,6 @@ _klammer_datei() {
 	printf '/tmp/klammer-lief'
 }
 
-# Aendert dieser Lauf ueberhaupt etwas? Nur dann werden Dienste angehalten
-# (Vorgabe smilez, 2.11.: "wenn es schon da ist und sich nichts aendert, lass
-# die Finger weg"). Geprueft wird, was einen Neustart erzwingt:
-#   * anderer Stand der Quelle (Code, Units, Installer selbst)
-#   * fehlende oder zu alte Python-Pakete
-# Alles andere schreibt seine Dateien ohnehin nur, wenn der Inhalt abweicht.
-# rc 0 = ja, etwas aendert sich. rc 1 = nein, nichts anzufassen.
-klammer_noetig() {
-	# 1. Quellstand: der Kandidat gegen das, was in source/ liegt.
-	_kn_neu="$(source_hash "$CHIMERA_STARTBAUM" 2>/dev/null || true)"
-	_kn_alt="$(source_hash "$CHIMERA_SOURCE" 2>/dev/null || true)"
-	if [ -n "$_kn_neu" ] && [ "$_kn_neu" != "$_kn_alt" ]; then
-		info "neuer Quellstand ($_kn_alt -> $_kn_neu): Dienste werden angehalten"
-		return 0
-	fi
-	# 2. Python-Pakete: fehlt eines oder ist eines zu alt, aendert sich etwas.
-	if [ -x "$CHIMERA_VENV/bin/python" ] && [ -f "$CHIMERA_STARTBAUM/requirements.txt" ]; then
-		# shellcheck disable=SC2046
-		if ! pydep_fehlend "$CHIMERA_VENV/bin/python" $(pydep_liste "$CHIMERA_STARTBAUM/requirements.txt") >/dev/null 2>&1; then
-			info "Python-Abhaengigkeiten nicht erfuellt: Dienste werden angehalten"
-			return 0
-		fi
-	fi
-	return 1
-}
-
 klammer_an() {
 	# Die Klammer prueft jeden Schritt selbst und meldet ehrlich. Ein einzelner
 	# fehlschlagender Befehl darf sie nicht mitten im Anhalten abbrechen --

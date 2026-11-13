@@ -4772,11 +4772,32 @@ selbst**, nicht in einem Aufrufparameter — damit sie bei jedem Lauf gilt.
 3. **Nie unter einem fremden Dienst.** Auch `chimera-hardware.service` ruft den
    Installer nur **über den Helfer** auf; die Unit wartet auf das Ergebnis,
    führt die Arbeit aber nicht selbst aus. Damit gibt es keinen Deadlock mehr.
-4. **Klammer nur bei echter Änderung** (Vorgabe smilez, 2.11.: „wenn es schon da
-   ist und sich nichts ändert, lass die Finger weg“). Sind Quellstand und
-   Abhängigkeiten unverändert, wird **nichts** angehalten und **nichts**
-   geschrieben. Erst wenn etwas fehlt oder eine neue Version es verlangt, greift
-   die Klammer: **erst anhalten, dann schreiben, dann starten.**
+4. **Klammer bei jedem echten Lauf** (Vorgabe smilez, 13.11.; ersetzt die
+   Fassung vom 2.11. „wenn es schon da ist und sich nichts ändert, lass die
+   Finger weg“). Wer den Installer startet, will **sehen**, was passiert: Der
+   Lauf hält die Dienste an, zeigt das Update-Gesicht und den Fortschritt, und
+   erst dann wird geschrieben — **erst anhalten, dann schreiben, dann starten.**
+   Angehalten wird nicht mehr davon abhängig gemacht, ob sich der Quellstand
+   geändert hat.
+   - **Der Grund (am 13.11. gefunden, „`klammer_noetig`“ war der Fehler):** Lag
+     der Startbaum schon in `source/` (Quelle per rsync dorthin geschoben und
+     von dort installiert), so waren Startbaum und Ziel gleich. Der Lauf galt
+     als „Kein neuer Stand … nichts wird angefasst“, die Klammer blieb aus —
+     **kein Update-Gesicht, keine angehaltenen Dienste** — und Schritt 55
+     ersetzte das Binary trotzdem und startete `chimera-tor` neu. Also genau
+     der Tausch unter einem laufenden Dienst, den die Klammer verhindern soll,
+     ohne dass der Nutzer am Gerät etwas sah.
+   - **Ein Lauf ohne Anhalten gibt es nur noch, wo er nichts ändern kann:**
+     `--dry-run`, `--check`, `--list` und **nicht** bei `--hardware` (beim Boot
+     läuft noch nichts, und der Dienst startet danach; ein Anhalten würde den
+     Dienst treffen, der auf den Lauf wartet).
+   - **Die übernommene Klammer hat Vorrang vor einem neuen Anhalten** (Fehler
+     am 13.11., gefunden durch `test-klammer-lauf.sh`): Nach dem Selbstneustart
+     aus `source/` läuft der neue Prozess unter einer offenen Klammer. Rief er
+     `klammer_an` erneut auf, traf er alles „inactive“, schrieb „Es lief
+     nichts“ und **leerte dabei die Merkerdatei** — nach dem Lauf blieben die
+     Dienste aus. Die Reihenfolge ist deshalb: erst `CHIMERA_KLAMMER` prüfen,
+     dann (nur ohne offene Klammer) anhalten.
    nach dem letzten Schritt hält er an, was noch läuft, und startet in der
    richtigen Reihenfolge. **Gemessene Reihenfolge** (der Fehler vom 31.10.):
    Sockets **vor** den Diensten starten, sonst verweigert systemd den Socket
@@ -4813,8 +4834,6 @@ selbst**, nicht in einem Aufrufparameter — damit sie bei jedem Lauf gilt.
      sah dadurch wie „Helfer startete nicht“ aus (am Pi gemessen).
    - **Schritte starten während der Klammer keine Dienste** (`CHIMERA_KLAMMER=1`);
      auch der Nachweis „Dienst läuft“ gehört ans Ende, nicht in den Schritt.
-   - Kein Anhalten bei `--dry-run`, `--check`, `--list` und **nicht** bei
-     `--hardware` (beim Boot läuft noch nichts, und der Dienst startet danach).
 5. **SSH ist eine eigene, geschützte Sache.** Der Installer fasst weder Netz noch
    SSH an (Regel „Was nicht im Manifest steht, gehört nicht uns“), und er läuft
    nie in der cgroup der SSH-Sitzung, weil die Arbeit im Helfer läuft.

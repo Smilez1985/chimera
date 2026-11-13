@@ -171,21 +171,29 @@ NEUSTART=0
 # (also in einem echten, abgekoppelten Lauf) und nicht beim Boot-Abgleich: Der
 # laeuft, bevor die Dienste starten, und darf den Dienst nicht anhalten, der
 # auf ihn wartet (gemessen: Job canceled).
+#
+# **Immer, nicht nur bei neuem Stand** (Vorgabe smilez, 13.11.). Vorher
+# entschied `klammer_noetig`: Lief der Installer aus `source/` heraus, waren
+# Startbaum und Ziel gleich, der Lauf galt als "nichts zu tun" -- die Klammer
+# blieb aus, das Update-Gesicht erschien nie, und Schritt 55 ersetzte das
+# Binary trotzdem unter dem laufenden Dienst. Wer den Installer startet, will
+# sehen, was passiert, und er will nicht, dass Dateien unter einem laufenden
+# Dienst getauscht werden.
 _KLAMMER=0
-if helfer_laeuft && [ "$MODE" = run ] && [ "$HARDWARE" != 1 ]; then
-	if klammer_noetig; then
-		klammer_an || { log_close 2; exit 2; }
-		_KLAMMER=1
-	else
-		info "Kein neuer Stand und alle Abhaengigkeiten erfuellt -- Dienste laufen weiter, nichts wird angefasst."
-	fi
-fi
-
-# Der Neustart per exec hat eine offene Klammer hinterlassen: Der neue Prozess
-# schliesst sie am Ende, statt sie zu vergessen (Merker liegt im Laufverzeichnis).
+#
+# **Der Neustart hat Vorrang.** Nach dem Selbstneustart (Schritt 00) laeuft der
+# neue Prozess unter einer bereits offenen Klammer: Die Dienste sind angehalten,
+# und die Liste, was wieder zu starten ist, steht in der Merkerdatei. Wuerde er
+# `klammer_an` erneut aufrufen, traefe er alles "inactive", schriebe "Es lief
+# nichts" und **leerte dabei die Merkerdatei** -- die Dienste blieben nach dem
+# Lauf aus. Genau das hat der Test `test-klammer-lauf.sh` am 13.11. gefunden
+# (vorher stand hier der Klammeraufruf vor der Uebernahme).
 if [ "${CHIMERA_KLAMMER:-0}" = 1 ] && [ -f "$(_klammer_datei)" ]; then
 	_KLAMMER=1
 	info "Offene Klammer aus dem Neustart uebernommen -- Dienste werden am Ende wieder gestartet."
+elif helfer_laeuft && [ "$MODE" = run ] && [ "$HARDWARE" != 1 ]; then
+	klammer_an || { log_close 2; exit 2; }
+	_KLAMMER=1
 fi
 
 # Fortschrittsanzeige: Jede Stufe zaehlt gleich viel (Vorgabe smilez, 2.11.).

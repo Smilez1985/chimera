@@ -240,30 +240,6 @@ lauf klammer_aus
 check "Klammer aus: stummer Start -> rc 1" "$(cat "$F/rc-aus")" 1
 hat "Klammer aus: Nachweis faengt stummen Start" "$F/aus" "laeuft nach dem Lauf nicht"
 
-# --- 7b. Klammer nur, wenn sich etwas aendert (Idempotenz) ---------------
-feld noetig
-(
-	set +e
-	. "$HERE/lib/common.sh"
-	. "$LIB"
-	CHIMERA_STARTBAUM="$F/start"; CHIMERA_SOURCE="$F/source"
-	CHIMERA_VENV="$F/venv"
-	# Zwei Staende: der Kandidat (Pfad enthaelt "start") und source/.
-	source_hash() {
-		case "$1" in *start) cat "$F/hs" 2>/dev/null ;; *) cat "$F/hq" 2>/dev/null ;; esac
-	}
-	pydep_liste() { echo paket; }
-	pydep_fehlend() { return "${PYDEP_RC:-0}"; }
-	printf 'gleich\n' >"$F/hs"; printf 'gleich\n' >"$F/hq"
-	klammer_noetig; echo "rc_nichts=$?" >>"$F/ergebnis"
-	printf 'neu\n' >"$F/hs"
-	klammer_noetig; echo "rc_neu=$?" >>"$F/ergebnis"
-	PYDEP_RC=1 klammer_noetig; echo "rc_paket=$?" >>"$F/ergebnis"
-) >/dev/null 2>&1
-hat "Klammer noetig: nichts geaendert -> 1" "$F/ergebnis" "rc_nichts=1"
-hat "Klammer noetig: neuer Quellstand -> 0" "$F/ergebnis" "rc_neu=0"
-hat "Klammer noetig: fehlendes Paket -> 0" "$F/ergebnis" "rc_paket=0"
-
 # --- 7. Helfer: belegter Unit-Name -> ein Wiederholungsversuch -----------
 feld wiederholung
 : >"$F/sr-fehler-erstes"

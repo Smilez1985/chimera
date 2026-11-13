@@ -820,6 +820,21 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Die Klammer läuft bei jedem echten Lauf — das Update-Gesicht ist damit
+  immer zu sehen** (13.11., Vorgabe smilez). `klammer_noetig()` ist weg: Der
+  Installer hält die Dienste nicht mehr nur an, wenn sich der Quellstand
+  geändert hat, sondern **immer** (Ausnahme bleiben `--dry-run`, `--check`,
+  `--list` und `--hardware`, wo ein Anhalten nichts ändern kann oder den
+  wartenden Dienst träfe). Damit erscheint das Update-Gesicht und der
+  Fortschrittsbalken bei jedem Lauf, und keine Datei wird mehr unter einem
+  laufenden Dienst ersetzt. Anlass war ein Gerätelauf, bei dem der Installer
+  **aus `source/` heraus** gestartet wurde (Startbaum == Ziel): Der Lauf galt
+  als „Kein neuer Stand, nichts wird angefasst“, zeigte kein Gesicht, hielt
+  nichts an — und Schritt 55 ersetzte das Binary trotzdem, mit Neustart des
+  laufenden Gateways. Neuer Test `installer/tests/test-klammer-lauf.sh` (14
+  Prüfpunkte, eigenes systemctl mit Zustand, echter Sitzungs-Socket, der das
+  Gesicht mitprotokolliert) und `counter-check-klammer.sh` mit drei
+  Verfälschungen (6 Prüfpunkte, alle rot an der erwarteten Stelle).
 - **Das Tailnet hat jetzt eine Oberfläche und einen Telegram-Befehl** (13.11.):
   neues Modul **„Netz“** (`netz.js`, Rechte `netz-lesen`/`netz-schreiben`) mit
   Zustand, Peer-Zahl und einem Schalter „Tailnet ein-/ausschalten“; dazu
@@ -1231,6 +1246,15 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Nach dem Selbstneustart blieben die Dienste aus** (13.11., vom neuen Test
+  `test-klammer-lauf.sh` gefunden): Nachdem Schritt 00 `source/` erneuert und
+  der Installer sich per `exec` neu gestartet hatte, rief der neue Prozess
+  `klammer_an` **erneut** auf. Er traf alle Einheiten „inactive“, meldete „Es
+  lief nichts“ und **leerte dabei die Merkerdatei** — am Ende stand „Start nach
+  dem Lauf (vorher lief: )“ und nichts wurde gestartet. Jetzt hat die
+  übernommene Klammer (`CHIMERA_KLAMMER=1`) **Vorrang**: Sie wird vor jedem
+  neuen Anhalten geprüft. Der Fehler betraf jeden Lauf mit neuem Quellstand,
+  also genau den üblichen Weg über einen Startbaum außerhalb von `source/`.
 - **Werkzeuge fielen still durch, wenn ein Aufrufer die OpenAI-Form schickte**
   (13.11., am laufenden Gateway gefunden): `werkzeuge_nach_ollama` nahm nur die
   eigene Form `{name, description, parameters}` und warf alles andere **ohne
