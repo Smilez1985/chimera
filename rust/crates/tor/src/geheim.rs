@@ -61,7 +61,26 @@ pub fn setzen(p: &Pfade, host: &str, passwort: &str) -> Result<(), (&'static str
             "Das Passwort enthält Steuerzeichen (Zeilenumbruch?) — es wird als eine Zeile abgelegt.".into(),
         ));
     }
-    atomar_schreiben(&ziel, passwort.as_bytes(), 0o600).map_err(|e| ("nicht_gespeichert", e))
+    atomar_schreiben(&ziel, passwort.as_bytes(), 0o600).map_err(|e| ("nicht_gespeichert", e))?;
+    // **Der Eigentümer folgt dem Ordner, nicht dem Aufrufer.** Wird das
+    // Geheimnis als root abgelegt (`sudo chimera-tor --geheim-ssh …`, der
+    // übliche Weg für ein Systemwerkzeug), steht die Datei sonst als
+    // `root:root 0600` da — und das Gateway, das sie lesen muss, sieht
+    // nichts: „Für den Host liegt kein Passwort in der Ablage." Genau das
+    // ist am 13.11. auf dem Pi passiert. Der Ordner gehört `chimera-tor`,
+    // also gehört die Datei ihm auch (DESIGN, „Aufnahme eines Hosts").
+    eigentuemer_des_ordners_uebernehmen(&ziel);
+    Ok(())
+}
+
+/// Die Datei dem Eigentümer ihres Ordners geben. Scheitert das (kein root),
+/// bleibt der Aufrufer Eigentümer — dann hat er sie ohnehin selbst lesbar
+/// angelegt, und es gibt nichts zu heilen.
+fn eigentuemer_des_ordners_uebernehmen(ziel: &std::path::Path) {
+    use std::os::unix::fs::MetadataExt;
+    let Some(ordner) = ziel.parent() else { return };
+    let Ok(m) = std::fs::metadata(ordner) else { return };
+    let _ = std::os::unix::fs::chown(ziel, Some(m.uid()), Some(m.gid()));
 }
 
 /// Das Geheimnis lesen. `None`, wenn keines abgelegt ist.
@@ -127,6 +146,34 @@ mod tests {
         assert_eq!(setzen(&p, "box", "zwei\nzeilen").unwrap_err().0, "passwort_ungueltig");
         // Ein einzelner Umbruch am Ende ist der Normalfall (Shell) und fliegt raus.
         setzen(&p, "box", "Geheim123\n").unwrap();
+        assert_eq!(lesen(&p, "box").as_deref(), Some("Geheim123"));
+    }
+
+    #[test]
+    fn ein_als_root_abgelegtes_geheimnis_gehoert_dem_ordner() {
+        // Am Pi gefunden (13.11.): `sudo chimera-tor --geheim-ssh p1` legte die
+        // Datei als root:root an, das Gateway sah sie nicht ("kein Passwort in
+        // der Ablage"). Die Datei muss dem gehoeren, dem der Ordner gehoert.
+        use std::os::unix::fs::MetadataExt;
+        let p = p("eigentuemer");
+        std::fs::create_dir_all(ordner(&p)).unwrap();
+        // Ein Ordner mit fremdem Eigentuemer: nur als root umstellbar.
+        if std::os::unix::fs::chown(ordner(&p), Some(4242), Some(4343)).is_err() {
+            eprintln!("uebersprungen: ohne root laesst sich der Ordner nicht umschreiben");
+            return;
+        }
+        // In der Sandbox (PRoot) ist chown eine Attrappe: der Aufruf gelingt,
+        // der Eigentuemer bleibt. Dann misst der Test nichts und sagt das --
+        // ein stiller Erfolg waere hier die schlechtere Antwort (Regel 8a).
+        if std::fs::metadata(ordner(&p)).unwrap().uid() != 4242 {
+            eprintln!("uebersprungen: chown wirkt in dieser Umgebung nicht (PRoot) -- am Geraet pruefen");
+            return;
+        }
+        setzen(&p, "box", "Geheim123").unwrap();
+        let m = std::fs::metadata(datei(&p, "box").unwrap()).unwrap();
+        assert_eq!((m.uid(), m.gid()), (4242, 4343));
+        assert_eq!(m.permissions().mode() & 0o777, 0o600);
+        // Lesen geht weiter (der Test laeuft als root).
         assert_eq!(lesen(&p, "box").as_deref(), Some("Geheim123"));
     }
 

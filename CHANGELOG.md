@@ -1196,6 +1196,16 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Ein als root abgelegtes Passwort erreichte das Gateway nicht** (13.11., am
+  Pi gefunden): `sudo chimera-tor --geheim-ssh <host>` schrieb
+  `config/geheim/ssh/<host>` als `root:root 0600`; das Gateway läuft als
+  `chimera-tor` und sah die Datei nicht — die Aufnahme antwortete
+  „Für den Host liegt kein Passwort in der Ablage", obwohl das Ablegen
+  „abgelegt" gemeldet hatte. Jetzt übernimmt die Datei den **Eigentümer ihres
+  Ordners** (der gehört `chimera-tor`), nicht den des Aufrufers. Test
+  `geheim::tests::ein_als_root_abgelegtes_geheimnis_gehoert_dem_ordner`
+  (überspringt sich in der Sandbox, weil PRoot `chown` nur vortäuscht — der
+  Nachweis gehört aufs Gerät).
 - **`force` war im Modul wählbar, aber nie erfüllbar** (13.11.): Die Stufe
   verlangt den Pfad des Zauns auf dem Ziel; ein Feld dafür gab es weder in
   der Tabelle noch im Modul — jede Aufnahme mit `force` endete in
