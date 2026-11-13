@@ -33,17 +33,6 @@ zram wird nicht angefasst, wenn es läuft.
       ist damit keine Entscheidung mehr, sondern nur der Anlass: Tritt ein
       Bruch auf, wird die Grenze gesetzt und der Fall hier vermerkt.
 
-- [ ] **`ssh-keyscan` am Gerät belegen** (gebaut 13.11., CHANGELOG, DESIGN
-      „Der Hostschlüssel wird geholt, nicht getippt"). Alle vier Zuschnitte
-      stehen: (a) Kindprozess mit fester `argv`, `-T 5`, harte Grenze 15 s,
-      (b) Antwort gegen das Ziel geprüft (`[adresse]:port` bei Port ≠ 22),
-      (c) ein geänderter Schlüssel wird als Befund gemeldet und **nicht**
-      übernommen, (d) eine Protokollzeile je Abruf in `state/log/ssh.log`.
-      **Offen ist die Messung auf dem Pi**: ist `ssh-keyscan` dort vorhanden
-      (Paket `openssh-client`), holt der Aufruf den Schlüssel eines echten
-      Hosts, und meldet das Modul „geändert" richtig? Im Sandkasten geprüft
-      gegen eine Antwort-Attrappe; ein echter sshd-Lauf steht aus.
-
 - [ ] **Die CI fährt keine Gegenproben.** Gemessen 13.11.: Die Python-Jobs
       rufen nur `tests/test_*.py`, die Installer-Jobs nur
       `installer/tests/test-*.sh` — die 13 `tests/gegenprobe_*.py` und die

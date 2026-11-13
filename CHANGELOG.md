@@ -39,6 +39,14 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Ziel, leer ist ein Befund, drei Vergleichsfaelle, nichts geschrieben) und
   ein Web-Test fuer die Route; `rust/gegenprobe-ssh.sh` auf **27 Mutationen**
   erweitert (4 neue, alle rot).
+  **Am Gerät belegt** (`chimera-pi`, Stand `da78746`): `ssh-keyscan` ist da
+  (`openssh-client 1:10.0p1`), der Abruf eines echten Hosts (die eigene
+  `localhost`) lieferte Typ, Blob und gerechneten Fingerabdruck, nach dem
+  Bestätigen meldete derselbe Abruf „unveraendert“. Fuer den dritten Fall
+  stand in der Tabelle bewusst der ECDSA-Schluessel: der Abruf meldete
+  **„geaendert“** mit beiden Fingerabdruecken und die Datei blieb
+  unberuehrt (md5 vorher = nachher). Protokoll: zwei Zeilen in
+  `state/log/ssh.log`, eine je Abruf.
 - **Die Erinnerung klingelt am Gerät** (13.11., gemessen am `chimera-pi`,
   Stand `3259b5b`): Freigabe `ssh` über den Socket geöffnet
   (`erinnern_alle: 60`) → drei Töne im Abstand von 61 s im Journal
@@ -875,7 +883,10 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Ton"), Python 48 („0 heisst aus"); Gegenproben um je eine Mutation
   erweitert (`ton-wird-aufgedraengt`, `aus-wird-trotzdem-gespielt`).
   Der Ton bei **offenen Rückfragen** ist damit noch nicht gebaut — er steht
-  als eigener Punkt in der ROADMAP.
+  als eigener Punkt in der ROADMAP. **Am Gerät belegt** (Stand `da78746`):
+  eine Freigabe ohne `erinnern_alle` bekommt `0`, und in 2 Minuten Journal
+  steht keine einzige Erinnerung; mit `erinnern_alle: 60` klingelte es
+  (Messtext im Eintrag „Die Erinnerung klingelt am Gerät“).
 - **Freigaben laufen nicht mehr ab** (13.11., Entscheidung smilez; Stufen 1
   und 2): `freigaben::Eintrag` führt `seit` und `erinnern_alle` statt `bis`;
   `setzen` schreibt keine Frist mehr (ein mitgeschicktes `bis` wird **nicht**
