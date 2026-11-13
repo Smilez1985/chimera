@@ -1,0 +1,9 @@
+{
+  "name": "anbieter",
+  "titel": {"de": "Anbieter", "en": "Providers"},
+  "symbol": "🔌",
+  "reihenfolge": 35,
+  "einstieg": "anbieter.js",
+  "element": "chimera-anbieter",
+  "rechte": ["anbieter-lesen", "anbieter-schreiben"]
+}

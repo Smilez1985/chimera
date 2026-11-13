@@ -56,6 +56,11 @@ const EINGEBAUT: &[Eingebaut] = &[
         dateien: &[("status.js", "text/javascript; charset=utf-8", include_str!("../web/module/status/status.js"))],
     },
     Eingebaut {
+        name: "anbieter",
+        manifest: include_str!("../web/module/anbieter/manifest.json"),
+        dateien: &[("anbieter.js", "text/javascript; charset=utf-8", include_str!("../web/module/anbieter/anbieter.js"))],
+    },
+    Eingebaut {
         name: "ollama",
         manifest: include_str!("../web/module/ollama/manifest.json"),
         dateien: &[("ollama.js", "text/javascript; charset=utf-8", include_str!("../web/module/ollama/ollama.js"))],

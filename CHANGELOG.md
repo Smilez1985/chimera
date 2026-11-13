@@ -20,6 +20,17 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Web-Modul „Anbieter"** (14.11., aus der Frage „wo trage ich den
+  DeepSeek-Schlüssel ein?"): Liste aller Anbieter mit Typ, Adresse und ob ein
+  Schlüssel hinterlegt ist; Formular zum Anlegen und Ändern (Typ `deepseek` /
+  `ollama` / `anthropic`), Feld **Schlüssel** (Passwortfeld) mit Knopf
+  „Schlüssel setzen", Entfernen mit Rückfrage. Der Wert geht über
+  `/api/anbieter/schluessel` an das Gateway, landet als 0600 in
+  `config/geheim/<id>` und kommt in keiner Antwort zurück — das Feld wird
+  nach dem Setzen geleert. Am laufenden Gateway im Browser durchgespielt:
+  Anbieter angelegt, Schlüssel gesetzt, Datei 0600, Modellabfrage nutzt ihn
+  sofort (401 bei Attrappe), ohne Neustart. Damit ist die Frage
+  „Copy&Paste in der Oberfläche?" mit Ja beantwortet.
 - **Guthaben je Anbieter** (Auftrag smilez 13.11., zweiter Punkt der
   Reihenfolge): neues Gateway-Modul `quota.rs`. Ein Adapter je Typ
   (`deepseek` → `GET /user/balance`, `ollama` → kein Guthaben nötig, alles
