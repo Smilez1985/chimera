@@ -2420,6 +2420,56 @@ Leitungen des laufenden Dienstes). Der Dienst selbst erkennt nicht: Er
 blind — mit benanntem Grund in der Statuszeile („keine eingestellt" ist
 etwas anderes als „eingestellte nicht zu öffnen", Regel 8a).
 
+### Regel „Anzeigefelder" — Der Statusbereich ist eine Liste von Feldern, keine Zeile
+
+Bisher zeichnete die Statuszeile **einen** Gewinner des Verwalters (7c): eine
+Textzeile, 40 Zeilen hoch, zentriert, ohne Umbruch. Auf dem 240×280-Panel
+hieß das: lange Antworten wurden am Rand abgeschnitten („gequetscht"), und
+was sonst noch in den Bereich gehört — Ausdrucksname, Akku, das Modell, das
+gerade antwortet — hatte keinen Platz. DESIGN §5.1 nennt den Inhalt seit
+jeher: „Statuszeile: Mood-Name, Akku, Agent-Zustand."
+
+**Der Bereich wird geteilt, nicht vollgeschrieben.** Er besteht aus
+**Feldern**; jedes Feld bekommt ein **Band** (oben, Höhe) und zeichnet nur
+innerhalb seines Bandes. Damit ist Überlagerung nicht „unwahrscheinlich",
+sondern **nicht darstellbar**: Die Bänder werden einmal berechnet, ein Feld
+bekommt keinen Zugriff auf fremde Zeilen.
+
+Wie das aussieht:
+
+- **Ein Feld ist ein Modul** — `src/chimera/display/felder/<name>.py`, das
+  ein `FELD` (Name, Titel, Wunschhöhe, Mindesthöhe, Priorität, Zeichnen)
+  anbietet. Die Liste der Felder wird **aus dem Verzeichnis gelesen**
+  (dasselbe Auffindemuster wie `agent/skills.py`): ein neues Feld ist eine
+  neue Datei. Kein Katalog, den jemand nachpflegen muss, keine Änderung an
+  `statusline.py`.
+- **Höhe wird vorrangig verteilt (7c bleibt zuständig):** Jedes Feld nennt
+  Wunsch- und Mindesthöhe. Reicht der Platz nicht, wird in der Reihenfolge
+  der Priorität gekürzt, bis auf die Mindesthöhe; was dann noch fehlt,
+  fällt **ganz** weg und wird **benannt** („kein Platz für <Feld>"), nicht
+  halb gezeichnet. Der Bereich selbst skaliert mit dem Panel:
+  `StatusLine(hoehe=…)` bleibt die einzige Stelle, an der die Gesamthöhe
+  steht.
+- **Text wird angepasst, nicht beschnitten:** Die Schriftgröße folgt der
+  Bandhöhe; passt der Text bei der kleinsten zulässigen Größe nicht in die
+  Breite, wird er mit „…" gekürzt, bei Feldern mit Umbruch auf zwei Zeilen
+  verteilt. Abgeschnittenes mitten im Buchstaben gibt es nicht mehr — das
+  war der Zustand, den smilez am 14.11. „gequetscht" genannt hat.
+- **Was ein Feld zeigt, entscheidet das Feld.** `meldung` liest den
+  Gewinner des Verwalters (7c unverändert: eine Quelle, ein Platz, drei
+  Stufen), `kennwerte` zeigt Ausdruck · Modell · Akku aus einem
+  Schlüssel-Wert-Speicher, den der Aufrufer je Bild füllt. Die
+  Reihenfolge der Bänder ist die Priorität der Felder, nicht ihre
+  Dateinamen-Reihenfolge.
+- **Geprüft ohne Panel:** Die Verteilung ist eine reine Funktion
+  (`display/layout.py`, Eingabe Höhe + Felder, Ausgabe Bänder) und wird
+  ohne Pillow getestet; das Zeichnen eines Feldes wird mit einem
+  Bildattrappen geprüft, der Textanpassung mit echter Schrift.
+
+**Nicht Teil dieser Regel:** die Teilübertragung (nur die unteren Zeilen
+per SPI schicken). Sie bleibt offen (ROADMAP) — hier geht es nur darum, was
+in den Zeilen steht.
+
 ### Architekturregel 7c — Konkurrierende Anzeigequellen werden zentral aufgelöst
 
 Mehrere Stellen wollen dasselbe Ausgabegerät bespielen: die Statuszeile
@@ -5675,6 +5725,7 @@ Abhängigkeit.
 - **7b** — Wer etwas anzeigt, bekommt die Anzeige übergeben
 - **7c** — Konkurrierende Anzeigequellen werden zentral aufgelöst
 - **7d** — Wer anzeigt, besitzt die Zeit
+- **Anzeigefelder** — Der Statusbereich ist eine Liste von Feldern, keine Zeile (Regel 7c bleibt für den Wettstreit zuständig)
 - **8** — Die Mood-Steuerung ist ein Skill, kein Sonderweg
 - **8b** — Ein Gesicht ist ein Paket, das das Modell anlegen darf
 - **8c** — Das Gedächtnis verdichtet sich nach oben, und nichts fällt dabei heraus

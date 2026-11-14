@@ -960,6 +960,24 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Statusbereich ist jetzt eine Liste von Feldern** (Regel „Anzeigefelder",
+  14.11.): Statt einer Zeile zeichnet `display/statusline.py` Felder aus
+  `display/felder/<name>.py` — ein neues Feld ist eine neue Datei, kein
+  Katalog (`importlib`-Auffindung wie bei den Skills, mit gemeldeten
+  Ladeproblemen). `display/layout.py` verteilt die Höhe als reine Funktion:
+  Bänder ohne Lücke und ohne Überschneidung, bei Platzmangel fällt das
+  unwichtigste Feld **ganz** weg statt auf unlesbare Höhe zu schrumpfen, der
+  freie Platz geht an das wichtigste; passen nicht einmal die Mindesthöhen,
+  ist das ein `Platzfehler` statt eines halben Bildes. `display/feld.py`
+  kürzt Text mit „…" und bricht auf zwei Zeilen um — abgeschnitten wird
+  nichts mehr, und Glyphen werden an der Bandkante geklemmt (vorher stand
+  die letzte Zeile am Gerät über dem Bildrand). Felder: `meldung` (Gewinner
+  des Verwalters bzw. Ausdrucksname, groß) und `kennwerte` (Modell ·
+  Anbieter · Akku, klein, links). Der Dienst füllt die Kennwerte aus dem
+  letzten Umlauf (`app._status_kontext`), nicht aus einer zweiten Quelle.
+  Tests: `tests/test_anzeigefelder.py` 28 ok, Gegenprobe 4/4 rot,
+  `test_statusline.py` 25 und `test_statuszeile_inhalt.py` 33 unverändert
+  grün.
 - **`access`/`cost` je Anbieter** (ROADMAP-Punkt, 14.11.): Zugang und
   Kostenklasse gehören jetzt zum Anbieter-**Typ**, nicht zur Connector-Zeile
   (`provider/gateway.py`, `TYP_KLASSEN`): Ollama `lokal`/`free`, DeepSeek

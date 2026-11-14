@@ -176,6 +176,19 @@ class Chimera:
             log.warning("Gesicht %r gibt es nicht", name)
             return False
 
+    def _status_kontext(self) -> dict:
+        """Was die Kennwerte im Statusbereich zeigen: Modell und Anbieter.
+
+        Gelesen wird der **letzte** Umlauf der Sitzung -- das ist die Wahrheit
+        über das, was gerade geantwortet hat. Vor dem ersten Umlauf steht
+        nichts, dann zeigt das Feld nur den Ausdruck (Regel „Anzeigefelder").
+        """
+        turns = getattr(self.session, "turns", None)
+        letzter = (turns(limit=1) or [None])[0] if callable(turns) else None
+        modell = getattr(letzter, "model", "") if letzter is not None else ""
+        anbieter = getattr(letzter, "provider", "") if letzter is not None else ""
+        return {"modell": modell or "", "anbieter": anbieter or ""}
+
     def _on_state(self, what: str) -> None:
         """Den Zustand ans Gesicht melden.
 
@@ -394,6 +407,10 @@ def build(*, probe_network: bool = True, home: Path | None = None,
                   erinnerung=Erinnerung())
     # Erst jetzt verdrahten: Der Agent meldet seinen Zustand ans Gesicht.
     agent.on_state = chi._on_state
+    # Die Kennwerte des Statusbereichs (Modell, Anbieter) kommen aus der
+    # laufenden Sitzung -- nicht aus einer zweiten Quelle, die altert.
+    if chi.statusline is not None:
+        chi.statusline.kontext_quelle = chi._status_kontext
     # Und die Anzeige ist ueber den Sitzungs-Socket erreichbar (Operation
     # "gesicht"): Damit setzt der Installer das Update-Gesicht, bevor er die
     # Dienste anhaelt.
