@@ -412,8 +412,8 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
   (`--anbieter`, `--modell`, `--denken`), **Voice** danach. Ebenfalls offen:
   **`access` und `cost` trennen** — `GatewayAnbieter` meldet heute `LOCAL`/
   `FREE`, auch für den bezahlten DeepSeek-Schlüssel; Modell und Anbieter in
-  der **Statuszeile**; und der **Browser-Test der drei Auswahlfelder** (bis
-  jetzt nur `node --check`, keine Klicks).
+  der **Statuszeile**. Der Browser-Test der drei Auswahlfelder ist
+  durchgespielt (`docs/messungen/2026-11-14-chat-wahl.md`).
   Am Gate steht die Wahl schon: `op: modelle_auswahl` und
   `/api/chat/auswahl` nennen je Modell die **belegten** Denkstufen.
 

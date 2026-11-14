@@ -20,6 +20,14 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Attrappen für Browser-Tests** (`tests/attrappen/`): `sitzung_stub.py`
+  spricht das Sitzungsprotokoll (`anmelden`/`frage`/`sitzungen`/`lesen`) auf
+  einem Unix-Socket, protokolliert jede Frage als JSON-Zeile und antwortet im
+  Strom; `ollama_stub.py` liefert `/api/tags` und `/api/show` mit zwei
+  Chat-Modellen, einem Vision- und einem schweigenden Modell. Damit lässt
+  sich die Oberfläche ohne Gerät und ohne echten Anbieter durchklicken —
+  erstmals für die drei Auswahlfelder genutzt
+  (`docs/messungen/2026-11-14-chat-wahl.md`).
 - **Erstes Passwort beim Anmelden** (Entscheidung smilez 14.11.): Ist kein
   Passwort gesetzt, startet die Oberfläche und zeigt **nur** die Seite zum
   Anlegen (mindestens 8 Zeichen, zweimal) — alles andere antwortet `409`.
