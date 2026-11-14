@@ -3044,12 +3044,32 @@ data/gedaechtnis/
 
 
 **Umsetzung (Stand):** Die Ablage läuft vorläufig als Python-Modul
-`chimera.ablage` (Schnittstelle `anhaengen`, `laden`, `lesen`, `wechseln`,
-`aufraeumen`), damit sie vor dem Umzug nach Rust (Regel 14) belegt ist. Das
+`chimera.ablage` (Schnittstelle `anhaengen`, `laden`, `lesen`,
+`lesen_seite`, `anzahl`, `wechseln`, `aufraeumen`), damit sie vor dem Umzug
+nach Rust (Regel 14) belegt ist. Das
 Protokoll ist nur-anhängend; Verdichten und Leeren sind Einträge, das Fenster
 entsteht durch Abspielen. Der Wechsel schreibt erst die neue Sitzung, dann den
 Zeiger (atomar), dann räumt er die alte auf. Ein Auslöser (Wächter, Schwelle)
 fehlt noch: Gewechselt wird bisher nur auf Anforderung (`wechseln`).
+
+**Seiten statt allem** (14.11.2026, gegen den Speicher gebaut). Die
+Oberfläche holt Seiten („die letzten 50", dann 50 davor). Bis dahin las
+`lesen()` dafür die **ganze** `verlauf.jsonl` und parste jede Zeile, nur um
+danach zu schneiden. Jetzt liest `lesen_seite(sid, max, vor)` **rückwärts** in
+64-KiB-Blöcken und parst nur, was auf die Seite kommt; `anzahl(sid)` zählt
+Zeilen, ohne ein Dict zu bauen. Gemessen (20 000 Einträge): Spitze 24 KiB
+gegen 13 MiB — und dieselbe Seite wie vorher, geprüft gegen
+`sitzung_socket.seite()` über neun Wertepaare und mit absichtlich kleiner
+Blockgröße, damit die Blockgrenzen mitten in Zeilen liegen.
+**Das ist ein Zwischenschritt mit Ablaufdatum:** Die Ablage zieht nach Rust
+(`chimera-sitzung`, ROADMAP). Der Test ist deshalb zugleich das
+**Abnahmekriterium** für die Rust-Fassung — gleiche Seite, gleicher
+Speichervorteil, sonst misst er nur die Zwischenlösung.
+Eine halb geschriebene letzte Zeile (Absturz beim Anhängen) verschiebt die
+Seite nicht; sie wird beim Lesen übersprungen und **gemeldet**. `anzahl`
+zählt die Zeilen der Datei, nicht die lesbaren Einträge — bei einer kaputten
+Zeile liegt sie also um eins höher, damit die Oberfläche einmal zu viel fragt
+statt einmal zu wenig (die Alternative wäre, den ganzen Verlauf zu parsen).
 
 ### Architekturregel 8e — Persönlichkeit ist eine Datei, kein Code, und jede Schicht hat einen Besitzer
 

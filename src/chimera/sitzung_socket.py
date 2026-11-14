@@ -279,9 +279,14 @@ class SitzungsServer:
                 elif op == "lesen":
                     sid = str(q.get("sitzung") or "")
                     try:
-                        alle = self.session.ablage.lesen(sid)
-                        stueck = seite(alle, q.get("max"), q.get("vor"))
-                        antwort({"ok": True, "gesamt": len(alle),
+                        # Nur das Stück, nicht der ganze Verlauf (14.11.):
+                        # rückwärts lesen und zählen, ohne alle Einträge zu
+                        # bauen. Gleiche Auswahl wie ``seite`` (dort steht sie
+                        # als Vertrag, hier ist sie die Umsetzung).
+                        stueck = self.session.ablage.lesen_seite(
+                            sid, q.get("max"), q.get("vor"))
+                        gesamt = self.session.ablage.anzahl(sid)
+                        antwort({"ok": True, "gesamt": gesamt,
                                  "eintraege": stueck})
                     except Exception as exc:              # noqa: BLE001
                         antwort({"ok": False, "fehler": str(exc)})

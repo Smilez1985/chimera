@@ -39,6 +39,10 @@ log = logging.getLogger(__name__)
 
 #: Archive werden nach so vielen Sekunden gelöscht (3 Tage).
 ARCHIV_TTL = 3 * 24 * 3600
+#: Blockgröße beim Rückwärtslesen der ``verlauf.jsonl``. Klein genug, dass
+#: eine Seite selten mehr als einen Block liest, groß genug, dass ein langer
+#: Verlauf nicht in 1000 Aufrufen gelesen wird.
+LESE_BLOCK = 64 * 1024
 _ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 MARKE = "[Bisheriges Gespräch]"
 
@@ -142,6 +146,116 @@ class Ablage:
                     return self._zeilen(m.read().decode("utf-8").splitlines()) if m else []
             return []
         return self._zeilen(pfad.read_text(encoding="utf-8").splitlines())
+
+    # --- Ein Stück statt allem (14.11.2026) --------------------------------
+    #
+    # Die Oberfläche holt Seiten: ``vor=0`` sind die letzten ``max``
+    # Einträge, ``vor=50`` die 50 davor. Bis heute las ``lesen()`` dafür die
+    # **ganze** ``verlauf.jsonl`` und parste jede Zeile, nur um danach zu
+    # schneiden (``sitzung_socket.seite``). Auf einem Gerät mit 462 MB ist
+    # das je Abruf ein vollständiger Verlauf im Speicher — bei einem langen
+    # Verlauf der größte Einzelposten des Dienstes.
+    #
+    # Deshalb zwei Zugänge, beide ohne Liste aller Einträge:
+    # ``lesen_seite`` liest **rückwärts** in Blöcken und parst nur, was auf
+    # die Seite kommt; ``anzahl`` zählt Zeilen, ohne ein einziges Dict zu
+    # bauen. ``lesen()`` bleibt für die Fälle, die wirklich alles brauchen
+    # (Export, Übergabe, Abspielen des Fensters).
+
+    def _quelle(self, sid: str) -> tuple[Path | None, Path | None]:
+        """(Verlaufsdatei, Archiv) — die Datei hat Vorrang."""
+        d = self._dir(sid)
+        pfad = d / "verlauf.jsonl"
+        if pfad.exists():
+            return pfad, None
+        arch = self.wurzel / "archiv" / f"{sid}.tar.gz"
+        return None, (arch if arch.exists() else None)
+
+    @staticmethod
+    def _eine(zeile: bytes) -> dict | None:
+        """Eine Zeile zu einem Eintrag. Halbe Zeile nach Absturz: melden."""
+        try:
+            return json.loads(zeile.decode("utf-8"))
+        except ValueError:
+            log.warning("Verlaufszeile unlesbar, übersprungen")
+            return None
+
+    def anzahl(self, sid: str) -> int:
+        """Wie viele Einträge im Protokoll stehen — ohne sie zu erzeugen."""
+        pfad, arch = self._quelle(sid)
+        if pfad is None:
+            if arch is None:
+                return 0
+            with tarfile.open(arch) as t:
+                m = t.extractfile(f"{sid}/verlauf.jsonl")
+                if m is None:
+                    return 0
+                return sum(1 for z in m if z.strip())
+        n = 0
+        with open(pfad, "rb") as f:
+            for zeile in f:
+                if zeile.strip():
+                    n += 1
+        return n
+
+    def lesen_seite(self, sid: str, max_n=200, vor=0) -> list[dict]:
+        """Ein Stück des Protokolls, von hinten gelesen.
+
+        Gleiche Auswahl wie ``sitzung_socket.seite``: ``vor`` ist der Abstand
+        vom **Ende**. Ungültige Werte werden zu Vorgaben, nicht zu Fehlern
+        (dieselbe Regel wie dort: ``max`` fällt auf 200, mindestens 1).
+        """
+        try:
+            max_n = max(1, int(max_n if max_n is not None else 200))
+        except (TypeError, ValueError):
+            max_n = 200
+        try:
+            vor = max(0, int(vor if vor is not None else 0))
+        except (TypeError, ValueError):
+            vor = 0
+
+        pfad, arch = self._quelle(sid)
+        if pfad is None:
+            if arch is None:
+                return []
+            # Ein Archiv ist eine alte, abgelegte Sitzung: selten und klein.
+            with tarfile.open(arch) as t:
+                m = t.extractfile(f"{sid}/verlauf.jsonl")
+                alle = self._zeilen(m.read().decode("utf-8").splitlines()) if m else []
+            return alle[max(0, len(alle) - vor - max_n):max(0, len(alle) - vor)]
+
+        noetig = max_n + vor
+        gefunden: list[dict] = []
+        with open(pfad, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            pos = f.tell()
+            rest = b""
+            while pos > 0 and len(gefunden) < noetig:
+                n = min(LESE_BLOCK, pos)
+                pos -= n
+                f.seek(pos)
+                stueck = f.read(n) + rest
+                zeilen = stueck.split(b"\n")
+                # Die erste Zeile eines Blocks kann vorne angeschnitten sein;
+                # sie gehört in den nächsten (früheren) Block.
+                rest = zeilen.pop(0)
+                for z in reversed(zeilen):
+                    if not z.strip():
+                        continue
+                    e = self._eine(z)
+                    if e is not None:
+                        gefunden.append(e)
+                    if len(gefunden) >= noetig:
+                        break
+            # Die allererste Zeile der Datei hat keinen Block mehr vor sich.
+            if len(gefunden) < noetig and rest.strip():
+                e = self._eine(rest)
+                if e is not None:
+                    gefunden.append(e)
+        gefunden.reverse()
+        ende = max(0, len(gefunden) - vor)
+        anfang = max(0, ende - max_n)
+        return gefunden[anfang:ende]
 
     @staticmethod
     def _zeilen(zeilen: list[str]) -> list[dict]:

@@ -26,8 +26,12 @@ def ok(m):
     global PASS; PASS += 1; print(f"  ok    {m}")
 def bad(m):
     global FAIL; FAIL += 1; print(f"  FAIL  {m}")
+def _kurz(x, n=160):
+    r = repr(x)
+    return r if len(r) <= n else r[:n] + f" … ({len(r)} Zeichen)"
+
 def check(m, got, want):
-    ok(m) if got == want else bad(f"{m} — erwartet {want!r}, bekam {got!r}")
+    ok(m) if got == want else bad(f"{m} — erwartet {_kurz(want)}, bekam {_kurz(got)}")
 
 if GEGENPROBE:
     _w = ab.Ablage.wechseln
@@ -42,6 +46,48 @@ if GEGENPROBE:
         self._wo = self.aktiv()
         return kaputt(self, u)
     ab.Ablage.wechseln = wechseln_gp
+
+# Die Verfälschungen der Leseseite stehen einzeln, damit jede für sich
+# laufen kann: ``python3 tests/test_ablage.py --gegenprobe=grenze``.
+# Eine Mutation, die nur zufällig mit einer anderen zusammen rot wird,
+# misst nicht die Zusage, die sie behauptet.
+MUTATION = ""
+for _a in sys.argv[1:]:
+    if _a == "--gegenprobe":
+        MUTATION = "wechsel"
+    elif _a.startswith("--gegenprobe="):
+        MUTATION = _a.split("=", 1)[1]
+if MUTATION and MUTATION != "wechsel":
+    GEGENPROBE = False            # die Wechsel-Verfälschung aus lassen
+    _ls = ab.Ablage.lesen_seite
+    _anz = ab.Ablage.anzahl
+    if MUTATION == "grenze":
+        # Die angeschnittene erste Zeile eines Blocks wird verworfen.
+        def grenze(self, sid, max_n=200, vor=0):
+            _echt = ab.LESE_BLOCK
+            ab.LESE_BLOCK = _echt
+            got = _ls(self, sid, max_n, vor)
+            return got[1:] if len(got) > 1 else got
+        ab.Ablage.lesen_seite = grenze
+    elif MUTATION == "vor":
+        # ``vor`` wird ignoriert: immer die letzten Einträge.
+        def ohne_vor(self, sid, max_n=200, vor=0):
+            return _ls(self, sid, max_n, 0)
+        ab.Ablage.lesen_seite = ohne_vor
+    elif MUTATION == "zaehlen":
+        # Leere Zeilen werden mitgezählt.
+        def zaehlen(self, sid):
+            return _anz(self, sid) + 1
+        ab.Ablage.anzahl = zaehlen
+    elif MUTATION == "alles":
+        # Die Seite wird gebaut, indem alles gelesen wird (der alte Weg).
+        def alles(self, sid, max_n=200, vor=0):
+            alle_ = self.lesen(sid)
+            return sitzung_socket.seite(alle_, max_n, vor)
+        ab.Ablage.lesen_seite = alles
+    else:
+        raise SystemExit(f"unbekannte Mutation {MUTATION!r} "
+                         "(wechsel, grenze, vor, zaehlen, alles)")
 
 class R:
     def __init__(self, t): self.text = t; self.provider = "p"; self.model = "m"
@@ -156,6 +202,69 @@ for bose in ("../x", "a/b", ""):
         a1.lesen(bose); bad(f"{bose!r} abgelehnt")
     except ab.AblageFehler:
         ok(f"{bose!r} abgelehnt")
+
+print("== Seite statt allem: lesen_seite/anzahl (14.11.) ==")
+# Ein eigener Baum mit einem langen Verlauf. Geschrieben wird direkt, nicht
+# über anhaengen: 20 000 fsync wären Minuten für eine Eigenschaft, die hier
+# nicht geprüft wird (anhaengen hat seine eigenen Tests).
+lang = ab.Ablage(tempfile.mkdtemp())
+sid = lang.aktiv()
+pfad = Path(lang.wurzel) / "sitzungen" / sid / "verlauf.jsonl"
+zeilen = []
+for i in range(20000):
+    # Unterschiedlich lange Zeilen: sonst lägen die Blockgrenzen zufällig
+    # immer auf einer Zeilengrenze und die Zerlegung wäre nicht geprüft.
+    inhalt = "zeile-%05d-" % i + ("x" * (i % 97))
+    zeilen.append(json.dumps({"art": "nachricht", "rolle": "user",
+                              "inhalt": inhalt}, ensure_ascii=False))
+pfad.write_text("\n".join(zeilen) + "\n", encoding="utf-8")
+
+# Die Blockgröße klein setzen: dann liegen viele Grenzen mitten in Zeilen,
+# und derselbe Vergleich prüft die Zerlegung mit.
+ab.LESE_BLOCK = 97
+alle = lang.lesen(sid)
+check("anzahl zählt die Einträge", lang.anzahl(sid), len(alle))
+check("Verlauf vollständig gelesen", len(alle), 20000)
+
+for max_n, vor in ((50, 0), (50, 50), (200, 0), (1, 0), (500, 19950),
+                   (3, 19999), (200, 20000), (7, 1), (5000, 100)):
+    want = sitzung_socket.seite(alle, max_n, vor)
+    got = lang.lesen_seite(sid, max_n, vor)
+    check(f"Seite max={max_n} vor={vor} gleich", got, want)
+
+check("Seite über das Ende hinaus ist leer", lang.lesen_seite(sid, 200, 20000), [])
+check("Unsinniges max verhält sich wie seite()",
+      lang.lesen_seite(sid, 0, 0), sitzung_socket.seite(alle, 0, 0))
+check("Unsinniges vor wird zu 0",
+      lang.lesen_seite(sid, 3, "kaputt"), lang.lesen_seite(sid, 3, 0))
+
+# Speicher: der Punkt der Übung. lesen() baut alle 20 000 Dicts, lesen_seite
+# nur die Seite. Gemessen wird die Spitze, nicht die Dauer (Zeit wäre auf
+# verschiedenen Geräten nicht vergleichbar).
+import tracemalloc  # noqa: E402
+tracemalloc.start()
+lang.lesen_seite(sid, 50, 0)
+spitze_seite = tracemalloc.get_traced_memory()[1]
+tracemalloc.reset_peak()
+lang.lesen(sid)
+spitze_alle = tracemalloc.get_traced_memory()[1]
+tracemalloc.stop()
+check("eine Seite belegt deutlich weniger als alles",
+      spitze_seite < spitze_alle / 20, True)
+print(f"        (Spitze: Seite {spitze_seite // 1024} KiB, "
+      f"alles {spitze_alle // 1024} KiB)")
+
+# Eine halb geschriebene letzte Zeile (Absturz mitten im Schreiben) darf die
+# Seite nicht verschieben. Sie zählt in ``anzahl`` mit — das ist die Zahl der
+# Zeilen in der Datei, und sie wird im Protokoll gemeldet, nicht verschwiegen.
+with open(pfad, "a", encoding="utf-8") as f:
+    f.write('{"art":"nachricht","rolle":"ass')
+letzte = lang.lesen_seite(sid, 5, 0)
+check("halbe Zeile verschiebt die Seite nicht", len(letzte), 5)
+check("halbe Zeile ist der letzte lesbare Eintrag",
+      letzte[-1]["inhalt"].endswith("x" * (19999 % 97)), True)
+check("anzahl zählt die Zeilen der Datei (inkl. kaputter)",
+      lang.anzahl(sid), 20001)
 
 print(f"\n{PASS} ok, {FAIL} FAIL")
 sys.exit(1 if FAIL else 0)

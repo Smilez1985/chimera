@@ -960,6 +960,17 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Ein Verlaufsabruf liest nur noch die Seite, nicht den ganzen Verlauf**
+  (8d): `Ablage.lesen_seite(sid, max, vor)` liest rückwärts in 64-KiB-Blöcken,
+  `anzahl(sid)` zählt Zeilen ohne Dicts. Die Op `lesen` im Sitzungs-Socket
+  nutzt beides; `lesen()` bleibt für Export, Übergabe und das Abspielen des
+  Fensters. Gemessen mit 20 000 Einträgen: Speicherspitze 24 KiB gegen 13 MiB,
+  Seite gleich wie `sitzung_socket.seite()` (9 Wertepaare, Blockgrenzen
+  absichtlich mitten in Zeilen). Eine halb geschriebene letzte Zeile
+  verschiebt die Seite nicht; `anzahl` zählt die Zeilen der Datei. Der Test
+  ist zugleich das Abnahmekriterium für `chimera-sitzung` in Rust.
+  Gegenproben: vier Mutationen (Grenzverlust, `vor` ignoriert, leere Zeilen
+  mitgezählt, alles-lesen) — jede wird rot.
 - **Vier Entscheidungen vom 14.11. ins Design eingetragen** (noch kein Code;
   die Reihenfolge steht in `docs/ROADMAP.md`, Phase „Echte Lücken"):
   (a) **Freigabe bekommt einen dritten Modus** `offen_nach_vorschlag` —
