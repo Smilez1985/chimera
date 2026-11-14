@@ -1028,10 +1028,16 @@ fn chat_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {    // Das Recht st
             }
             // Immer an `haupt`. Eine andere Sitzung wird vom Dienst umgeleitet (5s).
             let sid = v["sitzung"].as_str().unwrap_or("haupt");
-            match sitzung::anfragen(
-                &z.sitzung_socket,
-                &json!({"op": "frage", "tuer": "web", "text": text, "sitzung": sid, "ref": ""}),
-            ) {
+            // Die Wahl (Anbieter/Modell/Denkstufe) gehoert zur Sitzung, nicht
+            // zum Fenster: sie geht mit der Frage an den Dienst (14.11.).
+            let mut anfrage = json!({"op": "frage", "tuer": "web", "text": text,
+                                     "sitzung": sid, "ref": ""});
+            for feld in ["anbieter", "modell", "denken"] {
+                if let Some(w) = v[feld].as_str().map(str::trim).filter(|s| !s.is_empty()) {
+                    anfrage[feld] = json!(w);
+                }
+            }
+            match sitzung::anfragen(&z.sitzung_socket, &anfrage) {
                 Ok(r) => json_antwort(200, json!({"ok": true, "umgeleitet": r["umgeleitet"] == true})),
                 Err(e) => fehler(502, &format!("Sitzung nicht erreichbar: {e}")),
             }

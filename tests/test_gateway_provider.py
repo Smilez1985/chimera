@@ -100,6 +100,15 @@ print("== Connector ==")
 def chat(a):
     if a["op"] == "ping":
         return {"ok": True, "programm": "chimera-tor"}
+    if a["op"] == "anbieter_liste":
+        # Seit 14.11. fragt der Dienst zuerst, WELCHE Anbieter es gibt --
+        # vorher war "ollama" fest eingebaut.
+        return {"ok": True, "anbieter": [
+            {"id": "ollama", "typ": "ollama", "bezeichnung": "Ollama im LAN", "an": True},
+            {"id": "deepseek", "typ": "deepseek", "bezeichnung": "DeepSeek", "an": True},
+            {"id": "skurril", "typ": "anthropic", "bezeichnung": "ohne Modul", "an": True},
+            {"id": "aus", "typ": "ollama", "bezeichnung": "ausgeschaltet", "an": False},
+        ], "meldungen": []}
     if a["op"] == "modelle":
         return {"ok": True, "host": "ollama.example:11434", "modelle": ["qwen3:27b", "gemma:7b"],
                 "wahl": "qwen3:27b"}
@@ -149,8 +158,12 @@ check("Grund wird genannt", cn.why_unavailable(), "text-nicht_eingerichtet")
 print("== Einbindung in die Registry ==")
 os.environ["CHIMERA_TOR_SOCKET"] = g4.pfad
 reg, notes = setup.build_registry(probe_network=False)
-check("Registry nimmt ollama ueber das Gateway auf", [x.name for x in reg.connectors()][:1], ["ollama"])
-check("es ist der Gateway-Connector", type(reg.connector("ollama")).__name__, "GatewayOllama")
+check("Registry nimmt die Chat-Anbieter auf", [x.name for x in reg.connectors()][:2], ["ollama", "deepseek"])
+check("Typ ohne Chat-Modul wird nicht aufgenommen",
+      [x.name for x in reg.connectors() if x.name == "skurril"], [])
+check("ausgeschalteter Anbieter wird nicht aufgenommen",
+      [x.name for x in reg.connectors() if x.name == "aus"], [])
+check("es ist der Gateway-Connector", type(reg.connector("ollama")).__name__, "GatewayAnbieter")
 check("Protokoll nennt das Gateway", any("Gateway: erreichbar" in n for n in notes), True)
 check("Protokoll nennt keine Adresse, nur den Host", any("ollama.example:11434" in n for n in notes), True)
 
@@ -163,9 +176,33 @@ reg2, notes2 = setup.build_registry(probe_network=False)
 _o2 = reg2.connector("ollama")
 check("ohne Gateway: Anbieter eingetragen, aber nicht verfuegbar",
       bool(_o2) and not _o2.is_available(), True)
-check("ohne Gateway: es wird nichts direkt geholt", type(_o2).__name__, "GatewayOllama")
+check("ohne Gateway: es wird nichts direkt geholt", type(_o2).__name__, "GatewayAnbieter")
 check("ohne Gateway: das Protokoll sagt es",
       any("nicht erreichbar" in n for n in notes2), True)
+
+print("== Ausdrueckliche Wahl: kein Rueckfall (DESIGN, Modellwahl 14.11.) ==")
+# Die Registry traegt ollama und deepseek. Wer deepseek waehlt, bekommt
+# deepseek -- und wenn der nicht kann, einen Fehler, nicht stillschweigend
+# ollama.
+os.environ["CHIMERA_TOR_SOCKET"] = g4.pfad     # der Block davor zeigt auf "weg"
+_reg, _ = setup.build_registry(probe_network=False)
+# Die Kette setzt sonst `autoconfigure`; hier wird sie von Hand gesetzt, damit
+# die Zusage ohne Netz gemessen wird.
+_reg.assign("chat", ["ollama/qwen3:27b", "deepseek/deepseek-flash"])
+check("ohne Wahl gilt die Reihenfolge des Anbieters",
+      [c.name for c, _m in _reg.resolve("chat")], ["ollama", "deepseek"])
+check("mit Wahl nur das gewaehlte Ziel",
+      [(c.name, m) for c, m in _reg.resolve("chat", "deepseek/deepseek-flash")],
+      [("deepseek", "deepseek-flash")])
+check("unbekannter Anbieter ergibt nichts, statt zu raten",
+      _reg.resolve("chat", "gibtsnicht/x"), [])
+# Der Aufruf landet wirklich beim gewaehlten Anbieter: die Attrappe sieht,
+# welche Anbieter-Kennung im Auftrag steht.
+_ci3 = gateway.GatewayOllama(anbieter="deepseek", pfad=g4.pfad)
+_reg.register(_ci3)
+_ci3.call("Hi", [], model="deepseek-flash")
+check("gewaehlte Kennung geht als anbieter ins Gateway",
+      [a for a in g4.gesehen if a["op"] == "chat"][-1]["anbieter"], "deepseek")
 
 print("== Kontextfenster ==")
 # DESIGN 5a: Das Fenster kommt aus der Abfrage, nicht aus einer Konstante.

@@ -293,11 +293,16 @@ fn auswahl_rubriken(modelle: &[String], katalog: &Value, herkunft: &str) -> (Vec
             .cloned()
             .unwrap_or_else(|| json!({}));
         match e["tools"].as_bool() {
-            Some(true) => chat.push(json!({"modell": m, "herkunft": herkunft})),
+            Some(true) => chat.push(json!({
+                "modell": m,
+                "herkunft": herkunft,
+                "denkstufen": denkstufen_aus(&e, ""),
+            })),
             Some(false) => spezial.push(json!({
                 "modell": m,
                 "art": art_aus(&e),
                 "herkunft": herkunft,
+                "denkstufen": denkstufen_aus(&e, ""),
             })),
             None => unbekannt.push(json!({"modell": m, "herkunft": "nicht gemessen"})),
         }
@@ -324,6 +329,24 @@ fn art_aus(eigenschaften: &Value) -> &'static str {
     "ohne Werkzeuge"
 }
 
+/// Welche Denkstufen ein Modell anbietet -- nur, wo sie belegt sind.
+///
+/// Ollama: `thinking` in den gemessenen `capabilities` (dann `think: true/
+/// false`). DeepSeek: die Doku kennt den Thinking-Modus je Anfrage mit
+/// `reasoning_effort` low/high/max. Ein Modell ohne Beleg bekommt **keine**
+/// Liste -- eine angebotene Stufe, die der Anbieter verwirft, waere eine
+/// Attrappe.
+fn denkstufen_aus(eigenschaften: &Value, typ: &str) -> Vec<&'static str> {
+    if typ == "deepseek" {
+        return vec!["aus", "niedrig", "hoch", "max"];
+    }
+    let kann = eigenschaften["faehigkeiten"]
+        .as_array()
+        .map(|a| a.iter().any(|x| x.as_str() == Some("thinking")))
+        .unwrap_or(false);
+    if kann { vec!["aus", "an"] } else { vec![] }
+}
+
 /// `op: modelle_auswahl` -- was im Chat waehlbar ist, je Anbieter.
 fn modelle_auswahl(stand: &Stand) -> Value {
     let (liste, meldungen) = crate::daten::anbieter_laden(&stand.daten);
@@ -347,7 +370,10 @@ fn modelle_auswahl(stand: &Stand) -> Value {
             // Die API liefert keine Eigenschaften; die Doku sagt, dass alle
             // Chat-Modelle Werkzeuge koennen. Das ist eine Herkunft, keine
             // Messung -- und steht deshalb so da.
-            (namen.iter().map(|m| json!({"modell": m, "herkunft": "dokumentiert"})).collect(), Vec::new(), Vec::new(), "dokumentiert")
+            (namen
+                .iter()
+                .map(|m| json!({"modell": m, "herkunft": "dokumentiert", "denkstufen": denkstufen_aus(&json!({}), "deepseek")}))
+                .collect(), Vec::new(), Vec::new(), "dokumentiert")
         } else {
             let k = katalog_fuer(id, a["adresse"].as_str(), stand);
             let (c, s, u) = auswahl_rubriken(&namen, &k, "gemessen");
@@ -1076,6 +1102,23 @@ mod tests_auswahl {
             let e = json!({"tools": false, "faehigkeiten": faehigkeiten});
             assert_eq!(art_aus(&e), art, "{e}");
         }
+    }
+
+    // Denkstufen: nur was belegt ist. Ein Modell mit "thinking" bekommt
+    // aus/an, eines ohne bekommt gar keine Liste (kein leeres Versprechen).
+    #[test]
+    fn denkstufen_nur_wo_belegt() {
+        let katalog = json!({"modelle": {
+            "denkt": {"tools": true, "faehigkeiten": ["completion", "tools", "thinking"]},
+            "denkt-nicht": {"tools": true, "faehigkeiten": ["completion", "tools"]}
+        }});
+        let modelle: Vec<String> = ["denkt", "denkt-nicht"].iter().map(|s| s.to_string()).collect();
+        let (chat, _, _) = auswahl_rubriken(&modelle, &katalog, "gemessen");
+        assert_eq!(chat[0]["denkstufen"], json!(["aus", "an"]));
+        assert_eq!(chat[1]["denkstufen"], json!([]));
+        // DeepSeek: die Doku kennt vier Stufen, unabhaengig vom Modell.
+        let e = json!({});
+        assert_eq!(denkstufen_aus(&e, "deepseek"), vec!["aus", "niedrig", "hoch", "max"]);
     }
 
     // Ohne Katalog ist alles unbekannt -- und damit nicht waehlbar. Das ist

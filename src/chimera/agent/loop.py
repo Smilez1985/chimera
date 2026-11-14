@@ -162,16 +162,24 @@ class Agent:
 
     # --- der Lauf ---------------------------------------------------------
 
-    def run(self, prompt: str) -> Result:
+    def run(self, prompt: str, *, anbieter: str = "", modell: str = "",
+            denken: str = "") -> Result:
         """Ein Auftrag. Jede Antwort endet mit ``wartet`` (DESIGN: Regel „Sprechgesicht“) -- auch
         bei einem Fehler, sonst bleibt das Gesicht auf dem letzten Ausdruck
-        stehen."""
+        stehen.
+
+        ``anbieter``/``modell``/``denken`` sind die ausdrueckliche Wahl einer
+        Tuer (Web, Telegram, CLI). Sie gilt nur fuer diesen Auftrag und
+        **ohne** Rueckfall auf einen anderen Anbieter: Wer DeepSeek waehlt,
+        will nicht stillschweigend Ollama bekommen (DESIGN, Modellwahl).
+        """
         try:
-            return self._run(prompt)
+            return self._run(prompt, anbieter=anbieter, modell=modell, denken=denken)
         finally:
             self._state("wartet")
 
-    def _run(self, prompt: str) -> Result:
+    def _run(self, prompt: str, *, anbieter: str = "", modell: str = "",
+             denken: str = "") -> Result:
         self.guard.reset()
         steps: list[Step] = []
         system = self._system()
@@ -197,9 +205,13 @@ class Agent:
                         "Fang bitte ein neues an.",
                         steps, provider, model, fell_back, self.guard.calls)
 
+            # Die Wahl jeder Runde neu: sie gilt fuer den ganzen Auftrag.
+            wahl = f"{anbieter}/{modell}" if anbieter and modell else (anbieter or "")
             reply = self.registry.call(
                 self.task, "", self.history, system,
-                **({"werkzeuge": self.tools.schemas()} if self._nativ else {}))
+                bevorzugt=wahl or None,
+                **({"werkzeuge": self.tools.schemas()} if self._nativ else {}),
+                **({"denken": denken} if denken else {}))
             provider, model = reply.provider, reply.model
             fell_back = fell_back or reply.fell_back
             text = reply.text

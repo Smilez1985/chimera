@@ -82,8 +82,14 @@ def _fehler(antwort: dict) -> LLMError:
     return LLMError(f"{text} ({code})")
 
 
-class GatewayOllama(Connector):
-    """Ollama, erreicht ueber das Gateway."""
+class GatewayAnbieter(Connector):
+    """Ein Anbieter, erreicht ueber das Gateway.
+
+    Heisst nicht mehr ``GatewayOllama``: Seit 14.11. spricht derselbe
+    Connector jeden Anbieter, den das Gateway bedient (Ollama und DeepSeek),
+    und bekommt seine Kennung im Konstruktor. Der alte Name bleibt als
+    Alias, damit Aufrufer und Tests nicht doppelt existieren muessen.
+    """
 
     name = "ollama"
     access = Access.LOCAL
@@ -100,7 +106,15 @@ class GatewayOllama(Connector):
 
     PROBE_TTL = 30.0
 
-    def __init__(self, default_model: str | None = None, *, pfad: str | None = None):
+    def __init__(self, default_model: str | None = None, *, pfad: str | None = None,
+                 anbieter: str = "ollama", label: str | None = None):
+        # Der Connector spricht **jeden** Anbieter, den das Gateway bedient
+        # (14.11.): der Name kommt aus der Anbieterliste, nicht aus der
+        # Klassenzeile. Vorher stand hier fest "ollama", und damit war
+        # DeepSeek im Gespraech nicht erreichbar -- egal, was der Nutzer
+        # waehlte.
+        self.name = anbieter
+        self._label = label
         # Keine Einstellung als Quelle (DESIGN 5n, "Das Modell kommt vom
         # Server", smilez 11.11.2026): `OLLAMA_MODEL` wird hier nicht mehr
         # gelesen. Ohne genanntes Modell waehlt das Gateway aus der Liste,
@@ -124,7 +138,9 @@ class GatewayOllama(Connector):
 
     @property
     def label(self) -> str:
-        return f"ollama @ {self.host}" if self.host else "ollama (lokal)"
+        if self._label:
+            return self._label
+        return f"{self.name} @ {self.host}" if self.host else f"{self.name} (Vorgabe)"
 
     def why_unavailable(self) -> str | None:
         if not self.is_available():
@@ -137,7 +153,7 @@ class GatewayOllama(Connector):
             return self._probe[1]
         ok = False
         try:
-            a = anfragen({"op": "modelle", "anbieter": "ollama"}, pfad=self.pfad)
+            a = anfragen({"op": "modelle", "anbieter": self.name}, pfad=self.pfad)
             if a.get("ok"):
                 self._models = list(a.get("modelle", []))
                 self.host = a.get("host", "")
@@ -192,7 +208,7 @@ class GatewayOllama(Connector):
              system: str | None = None, *, model: str | None = None,
              werkzeuge: list[dict] | None = None, **kw) -> str:
         anfrage = {
-            "op": "chat", "anbieter": "ollama",
+            "op": "chat", "anbieter": self.name,
             "modell": model or self.default_model or "",
             "system": system or "", "verlauf": list(history), "prompt": prompt,
         }
@@ -201,6 +217,10 @@ class GatewayOllama(Connector):
             anfrage["werkzeuge"] = list(werkzeuge)
         if kw.get("stream"):
             anfrage["stream"] = True
+        # Denkstufe: neutral weitergereicht, das Gateway uebersetzt sie je
+        # Anbieter (DESIGN, Modellwahl 14.11.).
+        if kw.get("denken"):
+            anfrage["denken"] = kw["denken"]
         try:
             a = anfragen(anfrage, warten=WARTEN_CHAT, pfad=self.pfad)
         except Unavailable:
@@ -212,3 +232,8 @@ class GatewayOllama(Connector):
         # Ein Aufruf ohne Text ist gueltig (DESIGN, Regel „Aufrufe, nicht Text“): die Liste traegt ihn.
         self.letzte_werkzeuge = list(a.get("werkzeuge") or [])
         return a.get("text", "")
+
+
+# Alter Name, gleiche Sache (14.11.): der Connector ist nicht mehr auf
+# Ollama festgelegt. Wer ihn mit Vorgabe baut, bekommt weiterhin ollama.
+GatewayOllama = GatewayAnbieter

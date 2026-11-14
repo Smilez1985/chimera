@@ -248,7 +248,8 @@ class Session:
     # --- der Weg hinein ---------------------------------------------------
 
     def ask(self, prompt: str, channel: Channel = DIRECT,
-            ref: str = "") -> Turn:
+            ref: str = "", *, anbieter: str = "", modell: str = "",
+            denken: str = "") -> Turn:
         """Eine Frage stellen — egal durch welche Tür.
 
         Der Kanalhinweis wird dem Auftrag vorangestellt, nicht in den
@@ -269,7 +270,14 @@ class Session:
             self._busy_channel = channel.name
             self.emit("zustand", channel.name, "denkt", ref)
             try:
-                result = self.agent.run(f"{channel.hint()}\n\n{text}")
+                kwargs = {}
+                if anbieter:
+                    kwargs["anbieter"] = anbieter
+                if modell:
+                    kwargs["modell"] = modell
+                if denken:
+                    kwargs["denken"] = denken
+                result = self.agent.run(f"{channel.hint()}\n\n{text}", **kwargs)
                 turn = Turn(
                     channel=channel.name,
                     prompt=text,

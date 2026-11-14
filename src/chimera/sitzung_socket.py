@@ -300,9 +300,15 @@ class SitzungsServer:
                                           f"Eingabe an {ziel} "
                                           "→ Hauptsitzung")
                     antwort({"ok": True, "umgeleitet": umgeleitet})
+                    # Die Wahl der Tuer (Anbieter/Modell/Denkstufe) geht mit
+                    # -- fehlt sie, gilt die Reihenfolge des Anbieters (5h).
+                    wahl = {k: str(q.get(k)).strip()
+                            for k in ("anbieter", "modell", "denken")
+                            if str(q.get(k) or "").strip()}
                     threading.Thread(
                         target=self.session.ask,
                         args=(text, self._kanal(tuer), str(q.get("ref") or "")),
+                        kwargs=wahl,
                         daemon=True,
                         name="sitzung-frage").start()
                 else:

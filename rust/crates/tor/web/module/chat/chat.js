@@ -21,16 +21,28 @@ class ChimeraChat extends HTMLElement {
                    background:#1c1f28; color:#e6e8ee; font:inherit; }
         button { background:#7aa2ff; color:#0b0d12; border:0; border-radius:.5rem; padding:.5rem 1rem; font:inherit; }
         #denkt { color:#8a90a2; padding:0 .75rem; min-height:1.2em; font-size:.85rem; }
-        #alt { padding:.25rem .75rem; font-size:.85rem; }
+        #alt { padding:.25rem .75rem; font-size:.85rem; display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; }
+        #alt select { max-width:11rem; }
         select { background:#1c1f28; color:#e6e8ee; border:1px solid #2b2f3b; border-radius:.4rem; }
       </style>
-      <div id="alt"><label>Sitzung: <select id="wahl"></select></label></div>
+      <div id="alt">
+        <label>Sitzung: <select id="wahl"></select></label>
+        <label>Anbieter: <select id="a-wahl"></select></label>
+        <label>Modell: <select id="m-wahl"></select></label>
+        <label>Denken: <select id="d-wahl"></select></label>
+      </div>
       <div id="liste"></div>
       <div id="denkt"></div>
       <form><textarea id="eingabe" rows="2" placeholder="Nachricht"></textarea><button type="submit">Senden</button></form>`;
     this.liste = this.shadowRoot.getElementById("liste");
     this.denkt = this.shadowRoot.getElementById("denkt");
     this.wahl = this.shadowRoot.getElementById("wahl");
+    this.aWahl = this.shadowRoot.getElementById("a-wahl");
+    this.mWahl = this.shadowRoot.getElementById("m-wahl");
+    this.dWahl = this.shadowRoot.getElementById("d-wahl");
+    this.auswahlDaten = [];
+    this.aWahl.addEventListener("change", () => this.modelleZeigen());
+    this.mWahl.addEventListener("change", () => this.denkenZeigen());
     this.shadowRoot.querySelector("form").addEventListener("submit", (e) => { e.preventDefault(); this.senden(); });
     this.shadowRoot.getElementById("eingabe").addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); this.senden(); }
@@ -42,6 +54,7 @@ class ChimeraChat extends HTMLElement {
       if (this.liste.scrollTop < 80) this.aeterLaden();
     });
     this.sitzungenLaden();
+    this.auswahlLaden();
     this.hoeren();
   }
   disconnectedCallback() { this.laeuft = false; }
@@ -60,7 +73,13 @@ class ChimeraChat extends HTMLElement {
     const text = feld.value.trim();
     if (!text || this.schreibgeschuetzt) return;
     feld.value = "";
-    const r = await window.chimera.api("/api/chat/senden", { method: "POST", body: JSON.stringify({ text }) });
+    const auftrag = { text };
+    // Die Wahl gilt fuer die Sitzung, nicht nur fuer dieses Fenster: sie geht
+    // mit jeder Frage mit. Leer heisst "der Anbieter entscheidet" (5h).
+    if (this.aWahl.value) auftrag.anbieter = this.aWahl.value;
+    if (this.mWahl.value) auftrag.modell = this.mWahl.value;
+    if (this.dWahl.value && this.aWahl.value) auftrag.denken = this.dWahl.value;
+    const r = await window.chimera.api("/api/chat/senden", { method: "POST", body: JSON.stringify(auftrag) });
     if (!r.ok) this.blase("sys", r.fehler || "Senden fehlgeschlagen");
   }
 
@@ -144,6 +163,77 @@ class ChimeraChat extends HTMLElement {
     d.className = "m " + (e.rolle === "user" ? "ich" : "sie");
     d.appendChild(document.createTextNode(e.inhalt || ""));
     return d;
+  }
+
+  /// Was zur Wahl steht (nur gemessene Werkzeug-Modelle, Spezialmodelle
+  /// getrennt und nicht waehlbar). DESIGN: "Die Modellwahl im Chat".
+  async auswahlLaden() {
+    const r = await window.chimera.api("/api/chat/auswahl");
+    if (!r.ok) { this.aWahl.replaceChildren(this.option("", "Auswahl nicht abrufbar")); return; }
+    this.auswahlDaten = r.anbieter || [];
+    this.aWahl.replaceChildren(this.option("", "automatisch"));
+    for (const a of this.auswahlDaten) {
+      this.aWahl.appendChild(this.option(a.id, a.bezeichnung || a.id));
+    }
+    this.modelleZeigen();
+  }
+
+  option(wert, text, gesperrt) {
+    const o = document.createElement("option");
+    o.value = wert;
+    o.textContent = text;
+    if (gesperrt) o.disabled = true;
+    return o;
+  }
+
+  anbieterDaten() {
+    return this.auswahlDaten.find((a) => a.id === this.aWahl.value) || null;
+  }
+
+  /// Modelle des gewaehlten Anbieters. Spezialmodelle stehen **da**, sind
+  /// aber nicht waehlbar -- sonst raetselt jemand, wo sein Modell bleibt.
+  modelleZeigen() {
+    const a = this.anbieterDaten();
+    this.mWahl.replaceChildren();
+    this.dWahl.replaceChildren(this.option("", "—"));
+    if (!a) { this.mWahl.appendChild(this.option("", "automatisch")); this.dWahl.disabled = true; return; }
+    const chat = a.chat || [];
+    if (!chat.length) {
+      this.mWahl.appendChild(this.option("", "kein Modell mit Werkzeugen"));
+    } else {
+      for (const m of chat) {
+        this.mWahl.appendChild(this.option(m.modell, m.modell));
+      }
+    }
+    if ((a.spezial || []).length) {
+      const g = document.createElement("optgroup");
+      g.label = "Spezialmodelle (nicht für den Chat)";
+      for (const m of a.spezial) g.appendChild(this.option(m.modell, `${m.modell} — ${m.art}`, true));
+      this.mWahl.appendChild(g);
+    }
+    if ((a.unbekannt || []).length) {
+      const g = document.createElement("optgroup");
+      g.label = "Werkzeuge nicht gemessen";
+      for (const m of a.unbekannt) g.appendChild(this.option(m.modell, m.modell, true));
+      this.mWahl.appendChild(g);
+    }
+    this.denkenZeigen();
+  }
+
+  /// Nur die Denkstufen, die dieses Modell wirklich kann.
+  denkenZeigen() {
+    const a = this.anbieterDaten();
+    const m = a && (a.chat || []).find((x) => x.modell === this.mWahl.value);
+    const stufen = (m && m.denkstufen) || [];
+    this.dWahl.replaceChildren();
+    if (!stufen.length) {
+      this.dWahl.appendChild(this.option("", "keine"));
+      this.dWahl.disabled = true;
+      return;
+    }
+    this.dWahl.disabled = false;
+    this.dWahl.appendChild(this.option("", "Vorgabe"));
+    for (const st of stufen) this.dWahl.appendChild(this.option(st, st));
   }
 
   async sitzungenLaden() {

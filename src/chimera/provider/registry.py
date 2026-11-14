@@ -142,12 +142,32 @@ class Registry:
         grp = self._tasks.get(task)
         return grp.targets[0] if grp and grp.targets else None
 
-    def resolve(self, task: str) -> list[tuple[Connector, str | None]]:
+    def resolve(self, task: str, bevorzugt=None) -> list[tuple[Connector, str | None]]:
         """Die benutzbaren Ziele einer Aufgabe, in Reihenfolge.
+
+        ``bevorzugt`` ist die ausdrückliche Wahl eines Menschen
+        (``"deepseek/deepseek-flash"`` oder ein ``Target``). Sie gilt
+        **allein**: Wer DeepSeek wählt, will nicht stillschweigend Ollama
+        bekommen (DESIGN, Modellwahl 14.11.). Der Rückfall nach 5h gilt nur
+        ohne Wahl.
 
         Unbekannte oder nicht verfügbare Ziele fallen heraus. Die Liste
         kann leer sein — das ist keine Ausnahme, sondern eine Auskunft.
         """
+        if bevorzugt:
+            tgt = bevorzugt if isinstance(bevorzugt, Target) else Target.parse(str(bevorzugt))
+            conn = self._conns.get(tgt.provider)
+            if conn is None:
+                log.debug("%s: gewaehlter Anbieter %r unbekannt", task, tgt.provider)
+                return []
+            try:
+                if not conn.is_available():
+                    return []
+            except Exception as exc:                     # noqa: BLE001
+                log.warning("%s: %s nicht prüfbar: %s", task, conn.name, exc)
+                return []
+            return [(conn, tgt.model)]
+
         grp = self._tasks.get(task)
         if grp is None:
             return []
@@ -168,7 +188,7 @@ class Registry:
         return out
 
     def call(self, task: str, prompt: str, history: list[dict] | None = None,
-             system: str | None = None, **kw) -> Reply:
+             system: str | None = None, bevorzugt=None, **kw) -> Reply:
         """Eine Aufgabe ausführen, mit Rückfall über Anbietergrenzen.
 
         Scheitert ein Ziel, wird das nächste versucht — auch wenn es zu
@@ -176,7 +196,7 @@ class Registry:
         weg, hilft ein zweites Ollama-Modell nicht.
         """
         history = history or []
-        candidates = self.resolve(task)
+        candidates = self.resolve(task, bevorzugt)
 
         if not candidates:
             grp = self._tasks.get(task)
@@ -193,7 +213,7 @@ class Registry:
         # Anbieter als erste Wahl, nur weil die eigentlich erste Wahl schon
         # bei der Verfügbarkeitsprüfung herausgefallen ist. Genau das ist
         # der häufigste Fall: Ollama ist aus, also zieht das Abo.
-        wanted = self._first_target(task)
+        wanted = (Target.parse(str(bevorzugt)) if bevorzugt else self._first_target(task))
 
         errors: list[str] = []
         for conn, model in candidates:

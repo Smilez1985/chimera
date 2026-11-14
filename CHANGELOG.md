@@ -939,6 +939,23 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Anbieter, Modell und Denkstufe sind im Chat wählbar** (Auftrag smilez
+  14.11.: „DeepSeek soll überall wählbar sein"): Op `modelle_auswahl` /
+  `/api/chat/auswahl` liefert je Anbieter `chat` (nur **gemessene**
+  `tools: true`), `spezial` (mit Art: vision/bild/audio/embedding) und
+  `unbekannt` — die beiden letzten zeigt das Chat-Modul als Rubrik an, aber
+  nicht wählbar. Je Modell stehen die **belegten Denkstufen** dabei (Ollama:
+  `thinking` in den Fähigkeiten ⇒ aus/an; DeepSeek: aus/niedrig/hoch/max laut
+  Doku). Der Chat schickt `anbieter`/`modell`/`denken` mit jeder Frage; die
+  Sitzung reicht sie über `Agent.run` bis in die Registry, die damit **nur
+  das gewählte Ziel** nimmt — kein stiller Rückfall auf einen anderen
+  Anbieter (das war die Lücke aus `provider/gateway.py`, wo fest
+  `"anbieter": "ollama"` stand). `GatewayOllama` heißt jetzt
+  `GatewayAnbieter` (alter Name bleibt als Alias) und bekommt seine Kennung
+  im Konstruktor; der Dienst registriert alle Anbieter aus
+  `op: anbieter_liste`, deren Typ ein Chat-Modul hat. Tests: 5 in `dienst`
+  (Rubriken, Denkstufen), 6 in `tests/test_gateway_provider.py` (Wahl ohne
+  Rückfall, gewählte Kennung im Auftrag).
 - **Die Kennung eines Anbieters wird gebildet, nicht abgefragt** (14.11.,
   Nutzerbefund: „ich weiß nicht was er in dem Feld Kennung will"): `<id>` ist
   der Dateiname von `config/anbieter/<id>.json` und `config/geheim/<id>`,

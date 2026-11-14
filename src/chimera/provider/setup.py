@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 
 from .anthropic import ClaudeApiConnector, ClaudeSubscriptionConnector
-from .base import CostClass
+from .base import CostClass, LLMError
 from . import gateway
 # Der direkte Ollama-Weg ist entfallen (Regel 5n): kein Netz im Dienst.
 from .registry import Registry, Strategy, Target
@@ -53,19 +53,46 @@ def build_registry(*, probe_network: bool = True) -> tuple[Registry, list[str]]:
     # direkter Weg waere nicht langsam, sondern unmoeglich. Deshalb gibt es
     # keinen Rueckfall mehr -- antwortet das Gateway nicht, ist der Anbieter
     # "nicht verfuegbar", und die Kette faellt auf den naechsten zurueck.
-    tor = gateway.GatewayOllama()
-    reg.register(tor)
+    # **Jeder** Anbieter aus der Anbieterliste, nicht nur Ollama (14.11.):
+    # Der Connector spricht den, dessen Kennung er traegt. Damit ist DeepSeek
+    # im Gespraech waehlbar -- vorher stand hier fest "ollama".
+    anbieter = []
     if gateway.erreichbar():
-        grund = tor.why_unavailable()
         notes.append("Gateway: erreichbar ✓")
-        notes.append("Ollama (ueber das Gateway): "
-                     + (f"{tor.host} ✓" if not grund else grund))
-        if not grund and tor.models():
-            ms = tor.models()
-            notes.append(f"  Modelle: {', '.join(ms[:6])}" + (" …" if len(ms) > 6 else ""))
+        try:
+            liste = gateway.anfragen({"op": "anbieter_liste"})
+        except LLMError as exc:
+            liste = {"ok": False, "fehler": {"text": str(exc)}}
+        for eintrag in (liste.get("anbieter") or []):
+            typ = eintrag.get("typ") or ""
+            if typ not in ("ollama", "deepseek"):
+                notes.append(f"{eintrag.get('bezeichnung') or eintrag.get('id')}: "
+                             f"Typ {typ or '?'} hat kein Chat-Modul -- uebersprungen")
+                continue
+            if eintrag.get("an") is False:
+                continue
+            c = gateway.GatewayOllama(
+                anbieter=str(eintrag.get("id") or ""),
+                label=str(eintrag.get("bezeichnung") or eintrag.get("id") or ""),
+            )
+            reg.register(c)
+            anbieter.append(c)
+            grund = c.why_unavailable()
+            notes.append(f"{c.label} (ueber das Gateway): "
+                         + (f"{c.host} ✓" if not grund else grund))
+            if not grund and c.models():
+                ms = c.models()
+                notes.append(f"  Modelle: {', '.join(ms[:6])}" + (" …" if len(ms) > 6 else ""))
     else:
-        notes.append("Gateway: nicht erreichbar -- Ollama ist nicht verfuegbar.")
+        # Ohne Gateway ist die Anbieterliste nicht lesbar. Der Vorgabe-Anbieter
+        # bleibt **eingetragen und als nicht verfuegbar sichtbar** -- nur so
+        # kann der Nutzer sehen, dass etwas eingerichtet ist (Regel 5n).
+        unerreichbar = gateway.GatewayOllama()
+        reg.register(unerreichbar)
+        notes.append("Gateway: nicht erreichbar -- kein Anbieter verfuegbar.")
         notes.append("  (Der Dienst hat kein eigenes Netz; der Socket ist der eine Weg.)")
+    if gateway.erreichbar() and not anbieter:
+        notes.append("Kein Chat-Anbieter eingetragen (Modul \"Anbieter\").")
 
     return _claude(reg, notes)
 

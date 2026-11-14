@@ -1223,6 +1223,31 @@ Web-Tür dazu. Die Oberfläche baut daraus Anbieter- und Modellwahl.
 Anbieter über seine Registry nimmt. Fehlt die Wahl, bleibt es bei der
 Reihenfolge nach 5h (nichts bricht für Aufrufer, die keine Wahl schicken).
 
+**Eine ausdrückliche Wahl fällt nicht zurück.** Wer DeepSeek wählt und keinen
+Schlüssel hat, bekommt den Grund zu lesen — nicht stillschweigend Ollama.
+Der Rückfall nach 5h gilt nur, wenn *niemand* gewählt hat.
+
+**Denkstufen gehören zum Modell, nicht zur Tür** (14.11., Auftrag smilez:
+„die beim jeweiligen Modell verfügbaren Denkstufen"). Sie stehen deshalb im
+selben Op je Modell als `denkstufen`, und zwar nur, wo sie belegt sind:
+
+| Herkunft | Stufen |
+|---|---|
+| Ollama, `thinking` in den gemessenen `capabilities` | `aus`, `an` (`think: true/false`) |
+| Ollama ohne `thinking` | keine — das Feld fehlt, statt „an" zu behaupten |
+| DeepSeek (Doku: Thinking-Modus je Anfrage) | `aus`, `niedrig`, `hoch`, `max` |
+
+Neutrale Namen, Übersetzung im Gateway (`deepseek::denkstufe`: `mittel`→`high`,
+`minimal`→`low`; Ollama: `an`/`aus`). Die Oberfläche zeigt nur, was in
+`denkstufen` steht — eine Stufe anzubieten, die der Anbieter verwirft, wäre
+eine Attrappe.
+
+**Alle Türen, eine Wahl:** die Wahl ist ein Zustand der Sitzung, nicht eines
+Fensters. Web (`/api/chat/senden`), Telegram (`/modell <anbieter>/<modell>`)
+und CLI (`--anbieter`, `--modell`, `--denken`) setzen dieselbe Wahl; die
+Antwort nennt jedes Mal, was gilt. Etappe 1 (14.11.) ist das Op und die
+Web-Tür; Telegram und CLI folgen.
+
 ### Guthaben je Anbieter (13.11.2026)
 
 **Auftrag smilez:** „Kosten können bei den meisten Anbietern aus der API
