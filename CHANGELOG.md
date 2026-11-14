@@ -20,6 +20,19 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Status-Werkzeug für den Agenten** (Regel 5m, 14.11.): neue Gateway-Op
+  `status_lesen`, die **dieselbe** `status::sonden()`-Liste abfragt wie die
+  Web-Route (`/api/status/messwerte`) — eine Rechnung, zwei Türen. Das
+  Werkzeug `status` (`agent/tools.py`) schickt nur die Op, formatiert die
+  Zeilen nach Gruppen und benennt Warnstufen; „nicht lesbar" bleibt „nicht
+  lesbar" und wird nicht zu 0. Kein neues Recht, kein Netz, kein root.
+  Deckt Temperatur, Takt, Last, Speicher, Platte, Laufzeit und Dienstzustand
+  ab. Tests: Verdrahtungstest in `dienst.rs` (Op liefert die Zeilen der
+  Sonden-Liste, alle Felder gesetzt), Agent-Test 141 ok (11 neue Punkte),
+  neue Gegenprobe `tests/gegenprobe_status_werkzeug.py` (5 Mutationen, alle
+  rot). `test_agent.py` prüft jetzt auch über `CHIMERA_SRC` eine Kopie, damit
+  Mutationen ohne Eingriff in den echten Baum laufen.
+
 - **Dritter Freigabe-Modus `offen_nach_vorschlag` und Vorschläge des Agenten**
   (Regel „Freigabe je Werkzeug auf Zeit", 14.11.): `positivliste` und `offen`
   bleiben, dazu ein Modus, in dem offen nur gilt, was der Nutzer **angenommen**

@@ -1,8 +1,10 @@
 """Tests für Sicherheit, Vorprüfung, Schleifenerkennung, Kontext und Lauf."""
-import json, sys, tempfile
+import json, os, sys, tempfile
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
+# CHIMERA_SRC laesst die Gegenprobe eine veraenderte Kopie pruefen, ohne den
+# echten Quellbaum anzufassen (Muster aus test_freigabe_erinnerung.py).
+sys.path.insert(0, str(Path(os.environ.get("CHIMERA_SRC") or ROOT / "src")))
 
 from chimera.agent.context import Action, Policy, estimate_tokens, policy_for  # noqa: E402
 from chimera.agent.loop import Agent  # noqa: E402
@@ -329,6 +331,57 @@ try:
                                 {"host": "radxa", "adresse": "box.example", "nutzer": "dietpi"})
         check("Ablehnung kommt mit Grund, nicht als Fehler des Programms",
               "steht schon in der Tabelle" in text and "Fehler in 'ssh_vorschlag'" not in text, True)
+finally:
+    _gw.anfragen = _echt
+
+print("== status: dieselbe Liste wie die Statusseite, ohne root ==")
+_echt = _gw.anfragen
+try:
+    gesehen = []
+
+    def _fake_status(anfrage, **kw):
+        gesehen.append(dict(anfrage))
+        return {"ok": True, "zeilen": [
+            {"id": "cpu", "gruppe": "Prozessor", "titel": "CPU-Auslastung",
+             "text": "7 %", "wert": 7.0, "einheit": "%", "anteil": 7.0, "stufe": "ok"},
+            {"id": "temperatur", "gruppe": "Prozessor", "titel": "Temperatur",
+             "text": "81 °C", "wert": 81.0, "einheit": "°C", "anteil": None, "stufe": "kritisch"},
+            {"id": "speicher", "gruppe": "Speicher", "titel": "Arbeitsspeicher",
+             "text": "nicht lesbar", "wert": None, "einheit": "", "anteil": None, "stufe": "unbekannt"},
+        ]}
+
+    _gw.anfragen = _fake_status
+    with tempfile.TemporaryDirectory() as td:
+        tb = Toolbox(td)
+        check("status ist ein Werkzeug des Agenten", "status" in tb.names(), True)
+        schema = [s for s in tb.schemas() if s["name"] == "status"]
+        check("es geht als Schema an das Modell", len(schema), 1)
+        check("keine Pflichtfelder — es gibt keine Argumente",
+              schema[0]["parameters"]["required"], [])
+        text = tb.call("status", {})
+        check("die Op heisst status_lesen", gesehen[0]["op"], "status_lesen")
+        check("das Werkzeug schickt nichts weiter mit", set(gesehen[0]), {"op"})
+        check("Gruppen stehen als Ueberschrift", "[Prozessor]" in text and "[Speicher]" in text, True)
+        check("Werte stehen bei ihrem Titel", "- CPU-Auslastung: 7 %" in text
+              and "- Temperatur: 81 °C" in text, True)
+        check("eine Warnstufe wird benannt", "(kritisch)" in text and "(ok)" not in text, True)
+        check("'nicht lesbar' bleibt 'nicht lesbar'", "nicht lesbar (unbekannt)" in text, True)
+
+    def _leer(anfrage, **kw):
+        return {"ok": True, "zeilen": []}
+    _gw.anfragen = _leer
+    with tempfile.TemporaryDirectory() as td:
+        text = Toolbox(td).call("status", {})
+        check("leere Liste wird als Verdacht gemeldet, nicht als Ruhe",
+              "keine Messwerte" in text, True)
+
+    def _weg(anfrage, **kw):
+        raise OSError("socket weg")
+    _gw.anfragen = _weg
+    with tempfile.TemporaryDirectory() as td:
+        text = Toolbox(td).call("status", {})
+        check("ein toter Socket ist ein Satz, kein Programmfehler",
+              "nicht abrufbar" in text and "Fehler in 'status'" not in text, True)
 finally:
     _gw.anfragen = _echt
 

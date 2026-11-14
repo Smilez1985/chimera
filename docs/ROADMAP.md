@@ -16,33 +16,30 @@ Aus dem Prüfbericht `docs/../shared` bzw. dem Plan
 Design-Seite ist eingetragen (Freigabe-Modus, Übergabe-Modi, Lebenszeichen,
 Netzblick, Log-Tür, Status-Op). **Eins nach dem anderen, in dieser Folge:**
 
-1. [ ] **Status-Op `status_lesen`** (DESIGN 5m): dieselbe `sonden()`-Liste
-       für Route *und* Werkzeug `status`. Deckt Temperatur, Last, Speicher und
-       Dienstzustand ab — vier der acht Agentenwünsche aus dem Bericht.
-2. [ ] **Lebenszeichen und Watchdog** (DESIGN, Regel „Lebenszeichen"):
+1. [ ] **Lebenszeichen und Watchdog** (DESIGN, Regel „Lebenszeichen"):
        eigener Faden schreibt `WATCHDOG=1`, Hauptfaden darf `busy` mit Frist
        setzen, Unit `Type=notify`/`WatchdogSec=30`/`Restart=always`. Belegt am
        Gerät: künstliche Blockade → Neustart; 40-s-Modellaufruf → **kein**
        Neustart.
-3. [ ] **Verdichten mit Verweis** (8d, schon hier offen) — **vor** dem
+2. [ ] **Verdichten mit Verweis** (8d, schon hier offen) — **vor** dem
        Wächter, weil der Wächter gegen dieses Verfahren misst.
-4. [ ] **Wächter im Sitzungsdienst** (8d): Messpaket nach jedem Turn
+3. [ ] **Wächter im Sitzungsdienst** (8d): Messpaket nach jedem Turn
        (Token gegen das Fenster des bedienenden Modells, Bytes und Ladezeit
        der Ablage), Schwellen in `wahl.json`, Entscheidung in Rust.
        **Schwelle „schwer" messen** und ins Design eintragen.
-5. [ ] **Übergabe in drei Modi** (8d): `zustand` (Vorgabe, 0 Tokens),
+4. [ ] **Übergabe in drei Modi** (8d): `zustand` (Vorgabe, 0 Tokens),
        `modell`, `hybrid` (Entwurf vorlegen, Modell ergänzt). Der Entwurf
        entsteht in Rust, die Modellergänzung in Python.
-6. [ ] **`log_lesen`** (10e): Quellenliste, harte Grenzen, Schwärzung nach
+5. [ ] **`log_lesen`** (10e): Quellenliste, harte Grenzen, Schwärzung nach
        Mojo-Mustern; Anfrage auf eine fremde Unit muss abgelehnt werden.
-7. [ ] **Netzblick** (DESIGN, Abschnitt „Netzblick"): erst ROADMAP-Punkt
+6. [ ] **Netzblick** (DESIGN, Abschnitt „Netzblick"): erst ROADMAP-Punkt
        „Das Gateway ordnet ausgehende Ziele ein" (5n), dann passive Sicht
        (Vorgabe), aktive Prüfung als opt-in gegen eingetragene `host:port`.
        **Name noch offen** („LAN-Sicht" ist Arbeitstitel).
-8. [ ] **Rückfrage beim Nutzer** (10s): der Fall, den die Regeln nicht
+7. [ ] **Rückfrage beim Nutzer** (10s): der Fall, den die Regeln nicht
         entscheiden können, wird gefragt statt abgelehnt — Web oder
         Telegram-Knopf. Bis dahin gilt „abgelehnt".
-9. [ ] **Schwärzung vor der Cloud** (DESIGN 985-1007): Muster von Mojo
+8. [ ] **Schwärzung vor der Cloud** (DESIGN 985-1007): Muster von Mojo
         übernehmen, Rückübersetzung je Sitzung, auch in Werkzeugaufrufen und
         über Strom-Stückgrenzen.
 

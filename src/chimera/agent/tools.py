@@ -299,6 +299,39 @@ class Toolbox:
                 f":{anfrage.get('port', 22)}). Der Eintrag wirkt noch **nicht** — der Nutzer "
                 f"bestaetigt ihn im Modul \"Fernzugriff\" mit dem Hostschluessel.")
 
+    def _status(self) -> str:
+        """Messwerte des Systems — **dieselbe** Liste, die die Oberfläche zeigt.
+
+        Das Gateway rechnet (es hat `/proc`, `/sys` und `systemctl`), der Agent
+        formatiert nur. Kein root, kein Netz, kein neues Recht (DESIGN 5m).
+        Ein Wert, der sich nicht lesen lässt, bleibt „nicht lesbar" — die
+        Stufe sagt es, und geraten wird nichts (Regel 10g).
+        """
+        from ..provider import gateway
+
+        try:
+            a = gateway.anfragen({"op": "status_lesen"})
+        except Exception as exc:                      # nicht erreichbar ist eine Auskunft
+            return f"Status nicht abrufbar: {type(exc).__name__}: {exc}"
+        if not a.get("ok"):
+            grund = (a.get("fehler") or {}).get("text") or "ohne Grund"
+            return f"Status nicht abrufbar: {grund}"
+        zeilen = a.get("zeilen") or []
+        if not zeilen:
+            # Leere Ausgabe ist ein Verdachtsfall, keine Auskunft (GLOBAL).
+            return "Der Dienst hat keine Messwerte geliefert (leere Liste)."
+        teile: list[str] = []
+        letzte = None
+        for z in zeilen:
+            gruppe = str(z.get("gruppe") or "")
+            if gruppe != letzte:
+                teile.append(f"[{gruppe}]")
+                letzte = gruppe
+            stufe = z.get("stufe")
+            marke = "" if stufe in (None, "", "ok") else f" ({stufe})"
+            teile.append(f"- {z.get('titel')}: {z.get('text')}{marke}")
+        return "\n".join(teile)
+
     def _freigabe_vorschlag(self, werkzeug: str, ziel: str, notiz: str = "") -> str:
         """Ein Ziel **vorschlagen**, das ein Werkzeug laufen soll.
 
@@ -398,6 +431,14 @@ class Toolbox:
              "notiz": "optional: wozu der Host gut ist"},
             ("host", "adresse", "nutzer"),
         ), self._ssh_vorschlag)
+
+        self.add(ToolSpec(
+            "status",
+            "Messwerte des Geraets: Prozessor, Takt, Temperatur, Last, "
+            "Speicher, Platte, Laufzeit und Dienstzustand. Dieselbe Liste, "
+            "die die Statusseite zeigt. Keine Argumente, kein root.",
+            {},
+        ), self._status)
 
         self.add(ToolSpec(
             "freigabe_vorschlag",

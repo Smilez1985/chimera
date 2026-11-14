@@ -86,6 +86,15 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
         // Die Modellwahl fuer den Chat (14.11.): je Anbieter drei Listen --
         // mit Werkzeugen, Spezialmodelle, unbekannt. `tools: null` ist
         // "nicht gemessen", nicht "ja" (DESIGN 5t).
+        // Messwerte fuer den Agenten (14.11.2026): **dieselbe** Liste wie die
+        // Status-Route der Oberflaeche (Regel 5m) -- eine Rechnung, zwei
+        // Tueren. Kein neues Recht, kein Netz, kein root: Die Sonden lesen
+        // /proc, /sys und `systemctl show`. Was sich nicht lesen laesst,
+        // bleibt "nicht lesbar" und wird nicht zu 0 (Regel 10g).
+        "status_lesen" => crate::status::messen(&crate::status::Kontext {
+            wurzel: std::path::Path::new("/"),
+            mit_befehlen: true,
+        }),
         "modelle_auswahl" => modelle_auswahl(stand),
         "modelle" => match anfrage.get("anbieter").and_then(Value::as_str) {
             Some(a) => modelle(a, stand),
@@ -699,6 +708,36 @@ pub fn anfragen(pfad: &Path, anfrage: &Value) -> Result<Value, String> {
 mod tests {
     // Der Dienst hat kein Netz: Ohne diese Operation muesste er das Fenster
     // raten (DESIGN 5a).
+    /// Der Agent fragt die Messwerte ueber dieselbe Funktion wie die
+    /// Status-Route der Oberflaeche (Regel 5m, 14.11.). Der Test prueft die
+    /// **Verdrahtung** -- dass es die Operation gibt und dass sie Zeilen
+    /// liefert, die die Oberflaeche auch zeichnen wuerde. Frueher hat genau
+    /// das gefehlt: Der Dienst fragte `freigaben_lesen`, das Gateway kannte
+    /// nur `freigabe_lesen`, und alle Tests blieben gruen (13.11.).
+    #[test]
+    fn status_lesen_ueber_den_socket() {
+        let s = Stand::mit_ollama(None);
+        let a = antworten(&json!({"op": "status_lesen"}), &s);
+        assert_eq!(a["ok"], true, "{a}");
+        let zeilen = a["zeilen"].as_array().expect("zeilen fehlen");
+        assert!(zeilen.len() >= 7, "zu wenige Sonden: {}", zeilen.len());
+        for z in zeilen {
+            assert!(z["id"].as_str().map_or(false, |i| !i.is_empty()), "id fehlt: {z}");
+            assert!(z["gruppe"].is_string(), "gruppe fehlt: {z}");
+            assert!(z["titel"].is_string(), "titel fehlt: {z}");
+            assert!(z["text"].as_str().map_or(false, |t| !t.is_empty()), "text fehlt: {z}");
+            // Die Stufe ist immer benannt -- "unbekannt" ist eine Auskunft,
+            // null waere keine.
+            assert!(["ok", "warnung", "kritisch", "unbekannt"].contains(&z["stufe"].as_str().unwrap_or("")), "{z}");
+        }
+        // Die Ids sind die der Sonden-Liste; eine zweite Aufzaehlung gaebe es
+        // nur, wenn hier etwas anderes stuende.
+        let ids: Vec<&str> = zeilen.iter().filter_map(|z| z["id"].as_str()).collect();
+        for pflicht in ["cpu", "takt", "temperatur", "last", "speicher", "platte", "laufzeit"] {
+            assert!(ids.contains(&pflicht), "{pflicht} fehlt in {ids:?}");
+        }
+    }
+
     #[test]
     fn katalog_lesen_ueber_den_socket() {
         let s = Stand::mit_ollama(None);
