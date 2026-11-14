@@ -2994,12 +2994,35 @@ data/gedaechtnis/
 - **Die Sitzung liegt auf der Platte** (`data/sitzungen/<id>/verlauf.jsonl`,
   Zeile für Zeile angehängt) und übersteht damit Neustarts. Heute geht
   sie verloren.
-- **Verdichten im Lauf** (ersetzt `_compact()`): Gelöscht wird nichts,
-  die verdichteten Nachrichten bleiben in `verlauf.jsonl`. Ins Fenster
-  kommen die Zusammenfassung **mit Verweis** auf die Zeilennummern, die
-  offenen Punkte wörtlich und die letzten Turns wörtlich. Das Werkzeug
-  `nachlesen` holt alte Abschnitte zurück.
-  **Nicht gebaut** — `nachlesen` existiert als Werkzeug nicht.
+- **Verdichten im Lauf** (ersetzt `_compact()`, gebaut 14.11.2026):
+  Gelöscht wird nichts, die verdichteten Nachrichten bleiben in
+  `verlauf.jsonl`. Ins Fenster kommen die Zusammenfassung **mit Verweis**
+  auf die Zeilennummern, die offenen Punkte wörtlich und die letzten
+  **3 Runden** wörtlich. Werkzeug `nachlesen` holt alte Abschnitte zurück
+  (höchstens 60 Zeilen je Aufruf, 600 Zeichen je Zeile).
+  **Kein Modell beteiligt:** `agent/verdichten.py` wählt mechanisch aus
+  (Abschnitte mit Zeilenspanne, `- [ ]`-Punkte und `Entscheidung:`-Zeilen
+  wörtlich, frühere Verweise bleiben). Der **Schnitt liegt immer auf einem
+  Rundenbeginn**, nie zwischen Werkzeugaufruf und Ergebnis; offene Punkte
+  und Entscheidungen werden **nie** beschnitten (`analyse/OPENMINIS-MUSTER.md`
+  §2.3, Punkt 7; Papier vom 10.10.). Güte: `tests/test_verdichten.py`
+  (46 ok) und `tests/gegenprobe_verdichten.py` (14 Verfälschungen, alle rot).
+- **Papier „Kontext aus Chathistorie" (14.11.2026, `analyse/2026-11-14-kontext-kompression.md`), bewertet:**
+  Es schlägt zwei Stufen vor. **Übernehmbar ist die erste:** ein
+  In-Context-Wörterbuch („LTSC") — wiederkehrende lange Phrasen durch
+  Makros `[1]`, `[2]` ersetzen, Wörterbuch vorn im Prompt. Das ist
+  verlustfrei, weil der Originaltext im Protokoll bleibt und das Modell
+  das Wörterbuch im selben Fenster liest; der Gewinn entsteht vor allem
+  am **Systemprompt** (Werkzeugliste, Regeln), der bei jedem Turn mitgeht.
+  **Nicht übernommen wird die zweite Stufe** („Trägerwörter": LZMA-Bytes
+  über eine 65 536-Wörter-Tabelle, 1 Token je 16 Bit): Sie ist nur dann
+  verlustfrei, wenn niemand den Text *lesen* muss — dann ist sie aber ein
+  Archiv, und dafür gibt es `tar`/`zstd` (8d, Archiv). Im Kontext wäre der
+  Verlauf für das Modell Kauderwelsch; die Zahlen des Papiers (18–27 %,
+  2–8×, „der Tokenizer trennt diese Wörter nie") haben **keine Quelle**
+  (`[1]` ohne Bibliographie) und sind für `o200k`/`bpe` nicht belegt.
+  Reihenfolge: erst das Wörterbuch (klein, prüfbar), die Trägerwörter nur
+  mit eigener Messung am bedienenden Tokenizer.
 - **Der Wächter ist eingebaut, kein eigener Dienst.** Er misst nach
   jedem Turn das Gewicht: Token des Fensters nach dem Verdichten gegen
   das Fenster des Modells, das gerade bedient (context.py, Regel 5a).

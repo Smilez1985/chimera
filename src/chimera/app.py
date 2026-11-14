@@ -385,7 +385,10 @@ def build(*, probe_network: bool = True, home: Path | None = None,
 
     work = root / "arbeit"
     work.mkdir(exist_ok=True)
-    toolbox = Toolbox(work, face=face)
+    # Die Ablage vor der Toolbox: ``nachlesen`` braucht sie (DESIGN 8d).
+    from .ablage import Ablage, Verlauf
+    ablage = Ablage(root / "sitzungen-ablage")
+    toolbox = Toolbox(work, face=face, ablage=ablage)
 
     memory = Memory(root / "gedaechtnis")
     install_memory(toolbox, memory)
@@ -394,8 +397,6 @@ def build(*, probe_network: bool = True, home: Path | None = None,
 
     agent = Agent(registry, toolbox, skills=skills, memory=memory)
     # Verlauf auf der Platte (Regel 8d): übersteht Neustarts.
-    from .ablage import Ablage, Verlauf
-    ablage = Ablage(root / "sitzungen-ablage")
     agent.history = Verlauf(ablage, ablage.laden())
     session = Session(agent, ablage=ablage)
 

@@ -20,6 +20,28 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Verdichten mit Verweis statt Zusammenfassung durch ein Modell** (Regel 8d,
+  14.11.): `src/chimera/agent/verdichten.py` baut das verdichtete Fenster
+  **mechanisch** — kein Modellaufruf, damit 0 Tokens und nichts erfunden.
+  Ins Fenster kommen die Fundstellen („Zeilen a–b in `verlauf.jsonl`"), die
+  **offenen Punkte** und **Entscheidungen wörtlich** (nie beschnitten) und die
+  **letzten 3 Runden wörtlich**. Der Schnitt liegt **immer auf einem
+  Rundenbeginn** — ein Werkzeugergebnis („Ergebnis von …") beginnt keine
+  Runde, sonst zerriss eine Werkzeugrunde (Papier `analyse/OPENMINIS-MUSTER.md`
+  §2.3, Punkt 7). Eine frühere Verdichtung im Kopf behält ihre **Verweise**
+  (Abschnitt „Frühere Verdichtung"), sonst führt keine Spur mehr zu den ganz
+  alten Zeilen. Neu: `Verlauf.zeilenbereich()` /
+  `Ablage.nachrichten_zeilen(…, abstand=)` liefern die Zeilenspanne aus der
+  Ablage; `Ablage.lesen_zeilen()` liest nur den gewünschten Bereich. Werkzeug
+  **`nachlesen`** (höchstens 60 Zeilen je Aufruf, 600 Zeichen je Zeile) holt
+  den Wortlaut zurück. `Agent._compact()` fragt kein Modell mehr.
+  Tests: `tests/test_verdichten.py` 46 ok; Gegenprobe
+  `tests/gegenprobe_verdichten.py` mit 14 Verfälschungen, **alle rot**.
+  Drei davon haben den Test zuerst überführt: „Punkt A wörtlich" war grün,
+  weil der Abschnittsanfang den Wortlaut ohnehin nennt; die Grenze von
+  `nachlesen` wurde gegen ihre eigene Konstante geprüft; und der
+  Rundenschnitt war an der Hilfsfunktion statt am Ergebnis gemessen.
+
 - **Lebenszeichen an systemd** (Regel „Lebenszeichen", 14.11.):
   `src/chimera/lebenszeichen.py` schickt `READY=1` und alle 10 s
   `WATCHDOG=1` aus einem **eigenen Faden**; der Hauptfaden bzw. ein Turn darf

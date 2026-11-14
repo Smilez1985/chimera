@@ -25,6 +25,12 @@ from .sohelper import Ausfuehrer, AusfuehrerFehler
 
 log = logging.getLogger(__name__)
 
+#: Grenzen fuer das Werkzeug ``nachlesen`` (DESIGN 8d). Ein Modell, das
+#: „1 bis 10000" fragt, bekommt einen Satz statt des Verlaufs -- die Grenzen
+#: gelten, nicht die Bitte.
+NACHLESEN_MAX = 60
+ZEILE_MAX = 600
+
 
 def _zahl(wert) -> str:
     """Einen Betrag so schreiben, wie man ihn spricht: ``12.34`` → ``12,34``.
@@ -128,10 +134,14 @@ class Toolbox:
     """Die Werkzeuge eines Agenten, gebunden an ein Arbeitsverzeichnis."""
 
     def __init__(self, root: Path | str, limits: Limits | None = None,
-                 *, face=None, ausfuehrer: Ausfuehrer | None = None):
+                 *, face=None, ausfuehrer: Ausfuehrer | None = None,
+                 ablage=None):
         self.root = Path(root).resolve()
         self.limits = limits or Limits()
         self.face = face          # optional: Zustand fürs Gesicht
+        # Das Sitzungsprotokoll — nur zum **Nachlesen** (Werkzeug nachlesen).
+        # Ohne Ablage (Tests, Türen ohne Sitzung) sagt das Werkzeug das.
+        self.ablage = ablage
         # Prüfung **und** Ausführung liegen beim Ausführer (DESIGN, Regel
         # „Wer prüft, führt aus"). Der Dienst startet nichts mehr selbst --
         # deshalb gibt es hier keinen zweiten Weg und keinen Rückfall.
@@ -332,6 +342,53 @@ class Toolbox:
             teile.append(f"- {z.get('titel')}: {z.get('text')}{marke}")
         return "\n".join(teile)
 
+    def _nachlesen(self, von: str = "", bis: str = "") -> str:
+        """Einen Abschnitt des Protokolls im Wortlaut zurückholen (DESIGN 8d).
+
+        Nur **lesen**, nur diese Sitzung, kein Pfad und kein Recht: Die
+        Ablage kennt ihre Sitzungen selbst. Grenzen sind hart — ein Modell,
+        das „1 bis 10000" fragt, bekommt einen Satz, nicht den Verlauf.
+        """
+        if self.ablage is None:
+            return "Kein Sitzungsprotokoll angeschlossen — nachlesen geht hier nicht."
+        try:
+            a = int(str(von).strip())
+        except (TypeError, ValueError):
+            return "Bitte 'von' als Zahl angeben (erste Zeile, 1-basiert)."
+        try:
+            b = int(str(bis).strip()) if str(bis).strip() else a + NACHLESEN_MAX - 1
+        except (TypeError, ValueError):
+            return "Bitte 'bis' als Zahl angeben oder weglassen."
+        if a < 1:
+            return "Zeilen zaehlen ab 1."
+        if b < a:
+            return "'bis' liegt vor 'von'."
+        if b - a + 1 > NACHLESEN_MAX:
+            b = a + NACHLESEN_MAX - 1
+        try:
+            zeilen = self.ablage.lesen_zeilen(self.ablage.aktiv(), a, b)
+        except Exception as exc:                     # Ablage kaputt: Auskunft, kein Abbruch
+            return f"Protokoll nicht lesbar: {type(exc).__name__}: {exc}"
+        if not zeilen:
+            return (f"Zu den Zeilen {a}-{b} steht nichts im Protokoll "
+                    "(falscher Bereich oder Sitzung leer).")
+        teile: list[str] = [f"Protokoll, Zeilen {a}-{b} (Wortlaut, fremder Inhalt "
+                            "aus dem eigenen Verlauf):"]
+        for nr, e in zeilen:
+            art = e.get("art")
+            if art == "nachricht":
+                rolle = {"user": "Nutzer", "assistant": "Chimera",
+                         "tool": "Werkzeug"}.get(e.get("rolle"), e.get("rolle"))
+                inhalt = " ".join(str(e.get("inhalt") or "").split())
+                if len(inhalt) > ZEILE_MAX:
+                    inhalt = inhalt[:ZEILE_MAX] + " [gekuerzt]"
+                teile.append(f"{nr} {rolle}: {inhalt}")
+            elif art == "verdichtet":
+                teile.append(f"{nr} [Verdichtung] {e.get('zusammenfassung') or ''}")
+            else:
+                teile.append(f"{nr} [{art}]")
+        return "\n".join(teile)
+
     def _freigabe_vorschlag(self, werkzeug: str, ziel: str, notiz: str = "") -> str:
         """Ein Ziel **vorschlagen**, das ein Werkzeug laufen soll.
 
@@ -451,6 +508,16 @@ class Toolbox:
              "notiz": "optional: wozu es gebraucht wird"},
             ("werkzeug", "ziel"),
         ), self._freigabe_vorschlag)
+
+        self.add(ToolSpec(
+            "nachlesen",
+            "Alte, verdichtete Abschnitte dieses Gespraechs im Wortlaut holen. "
+            "Der verdichtete Teil nennt die Zeilen; hier werden sie gelesen. "
+            "Hoechstens %d Zeilen je Aufruf." % NACHLESEN_MAX,
+            {"von": "erste Zeile (1-basiert)",
+             "bis": "letzte Zeile, hoechstens %d nach 'von'" % NACHLESEN_MAX},
+            ("von", "bis"),
+        ), self._nachlesen)
 
         self.add(ToolSpec(
             "guthaben",

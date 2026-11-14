@@ -16,25 +16,23 @@ Aus dem Prüfbericht `docs/../shared` bzw. dem Plan
 Design-Seite ist eingetragen (Freigabe-Modus, Übergabe-Modi, Lebenszeichen,
 Netzblick, Log-Tür, Status-Op). **Eins nach dem anderen, in dieser Folge:**
 
-1. [ ] **Verdichten mit Verweis** (8d, schon hier offen) — **vor** dem
-       Wächter, weil der Wächter gegen dieses Verfahren misst.
-2. [ ] **Wächter im Sitzungsdienst** (8d): Messpaket nach jedem Turn
+1. [ ] **Wächter im Sitzungsdienst** (8d): Messpaket nach jedem Turn
        (Token gegen das Fenster des bedienenden Modells, Bytes und Ladezeit
        der Ablage), Schwellen in `wahl.json`, Entscheidung in Rust.
        **Schwelle „schwer" messen** und ins Design eintragen.
-3. [ ] **Übergabe in drei Modi** (8d): `zustand` (Vorgabe, 0 Tokens),
+2. [ ] **Übergabe in drei Modi** (8d): `zustand` (Vorgabe, 0 Tokens),
        `modell`, `hybrid` (Entwurf vorlegen, Modell ergänzt). Der Entwurf
        entsteht in Rust, die Modellergänzung in Python.
-4. [ ] **`log_lesen`** (10e): Quellenliste, harte Grenzen, Schwärzung nach
+3. [ ] **`log_lesen`** (10e): Quellenliste, harte Grenzen, Schwärzung nach
        Mojo-Mustern; Anfrage auf eine fremde Unit muss abgelehnt werden.
-5. [ ] **Netzblick** (DESIGN, Abschnitt „Netzblick"): erst ROADMAP-Punkt
+4. [ ] **Netzblick** (DESIGN, Abschnitt „Netzblick"): erst ROADMAP-Punkt
        „Das Gateway ordnet ausgehende Ziele ein" (5n), dann passive Sicht
        (Vorgabe), aktive Prüfung als opt-in gegen eingetragene `host:port`.
        **Name noch offen** („LAN-Sicht" ist Arbeitstitel).
-6. [ ] **Rückfrage beim Nutzer** (10s): der Fall, den die Regeln nicht
+5. [ ] **Rückfrage beim Nutzer** (10s): der Fall, den die Regeln nicht
         entscheiden können, wird gefragt statt abgelehnt — Web oder
         Telegram-Knopf. Bis dahin gilt „abgelehnt".
-7. [ ] **Schwärzung vor der Cloud** (DESIGN 985-1007): Muster von Mojo
+6. [ ] **Schwärzung vor der Cloud** (DESIGN 985-1007): Muster von Mojo
         übernehmen, Rückübersetzung je Sitzung, auch in Werkzeugaufrufen und
         über Strom-Stückgrenzen.
 
@@ -674,8 +672,8 @@ Rust-Teile im selben Cargo-Workspace wie das Gateway (Regel 14).
       hinter derselben Schnittstelle; Werkzeug `nachlesen` für den Agenten.
 - [ ] Wächter im Sitzungsdienst — **geplant in Phase „Echte Lücken", Punkt 6**.
 - [ ] Verdichten neu: Zusammenfassung mit Verweis, offene Punkte
-      wörtlich. `_compact()` in `agent/loop.py` entfällt. — **geplant in
-      Phase „Echte Lücken", Punkt 5** (vor dem Wächter, weil der dagegen misst).
+      wörtlich. `_compact()` in `agent/loop.py` entfällt. — **gebaut
+      14.11.2026** (CHANGELOG), hier nur noch der Umzug nach Rust offen.
 - [ ] **Gedächtnis** Tag → Monat → Jahr → `memory.md`, Quellen bleiben,
       Vollständigkeitsprüfung (Rust) gegen Marker.
 - [ ] **`chimera-hand`** (Rust, root): Freigabe nur durch den Nutzer per

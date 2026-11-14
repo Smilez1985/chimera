@@ -36,6 +36,7 @@ from .loopguard import Config as GuardConfig
 from .loopguard import Level, LoopGuard
 from .preflight import PreflightError, preflight
 from .tools import Toolbox
+from .verdichten import schnittindex, verdichte
 
 #: Wie viele native Aufrufe je Runde ausgeführt werden (DESIGN, Regel „Aufrufe, nicht Text“).
 MAX_WERKZEUGE_JE_RUNDE = 3
@@ -342,33 +343,48 @@ class Agent:
         return out
 
     def _compact(self) -> None:
-        """Den Verlauf verdichten.
+        """Den Verlauf verdichten — **ohne Modell** (DESIGN, Regel 8d).
 
-        Die letzten Nachrichten bleiben wörtlich, der Rest wird von einem
-        billigen Modell zusammengefasst. Scheitert das, wird gekürzt statt
-        aufgegeben — ein verlorener Anfang ist besser als ein Abbruch.
+        Bis zum 14.11.2026 fasste hier ein billiges Modell fünf Sätze
+        zusammen, und der Rest des Verlaufs war weg. Jetzt gilt:
+        Gelöscht wird nichts, ins Fenster kommt ein Gerüst mit
+        **Fundstellen** (``verlauf.jsonl``, Zeilenbereich), die offenen
+        Punkte und Entscheidungen **wörtlich**, und die letzten Turns
+        bleiben wörtlich stehen. Das Werkzeug ``nachlesen`` holt den
+        Wortlaut zurück.
+
+        Ohne Ablage (Tests, Türen ohne Sitzungsdatei) wird derselbe Text
+        gebaut, nur ohne Zeilenbezug — nicht „irgendwie gekürzt".
         """
         if len(self.history) <= 6:
             return
-        head, tail = self.history[:-4], self.history[-4:]
-        text = "\n".join(f"{m['role']}: {m['content']}" for m in head)
+        gesamt = list(self.history)
+        # Die Einheit ist die **Runde**, nicht die Nachricht: Ein Schnitt
+        # zwischen Werkzeugaufruf und Ergebnis wäre sinnentstellend
+        # (Papier OPENMINIS-MUSTER §2.3, Punkt 7).
+        schnitt = schnittindex(gesamt)
 
-        summary = None
-        try:
-            r = self.registry.call(
-                "zusammenfassen",
-                "Fasse diesen Gesprächsverlauf in höchstens fünf Sätzen "
-                "zusammen. Nur die Fakten, keine Einleitung:\n\n" + text[:8000],
-                [], None)
-            summary = r.text.strip()
-        except Exception as exc:
-            log.info("Verdichten über das Modell ging nicht: %s", exc)
+        von = bis = 0
+        if hasattr(self.history, "zeilenbereich"):
+            try:
+                # Fundstelle der Nachrichten, die verdichtet werden — der
+                # wörtliche Rest am Ende bekommt keinen Verweis.
+                von, bis = self.history.zeilenbereich(
+                    schnitt, abstand=len(gesamt) - schnitt)
+            except Exception as exc:            # Ablage kaputt: kein Abbruch
+                log.warning("Zeilenbereich nicht lesbar: %s", exc)
+
+        bericht = verdichte(gesamt, von=von or 1, bis=bis or 0)
+        if not bericht.vollstaendig:
+            log.warning("Verdichtung unvollständig: %d Abschnitte ausgelassen",
+                        bericht.ausgelassen)
 
         if hasattr(self.history, "verdichten"):
             # Auf der Platte: das Protokoll behält alles (Regel 8d).
-            self.history.verdichten(summary or "", 4)
-        elif summary:
-            self.history = [{"role": "user",
-                             "content": f"[Bisheriges Gespräch]\n{summary}"}] + tail
+            self.history.verdichten(bericht.text, len(gesamt) - schnitt,
+                                    zeilen_von=bericht.zeilen_von,
+                                    zeilen_bis=bericht.zeilen_bis)
         else:
-            self.history = tail
+            rest = gesamt[schnitt:]
+            self.history = ([{"role": "user", "content": bericht.text}]
+                            if bericht.text else []) + rest

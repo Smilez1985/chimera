@@ -46,6 +46,15 @@ LESE_BLOCK = 64 * 1024
 _ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 MARKE = "[Bisheriges Gespräch]"
 
+def _mit_marke(z: str) -> str:
+    """Die Marke vor den Text — aber nicht doppelt.
+
+    Seit dem 14.11.2026 bringt der Verdichtungstext seine eigene Marke mit
+    (``verdichten.MARKE``, mit Fundstelle). Ein zweites "[Bisheriges
+    Gespräch]" davor wäre Lärm und würde beim Nachlesen stören.
+    """
+    return z if z.startswith("[Bisheriges Gespräch") else f"{MARKE}\n{z}"
+
 class AblageFehler(Exception):
     pass
 
@@ -70,7 +79,7 @@ def abspielen(eintraege: list[dict]) -> list[dict]:
             n = int(e.get("behalte", 0))
             rest = fenster[-n:] if n > 0 else []
             z = e.get("zusammenfassung") or ""
-            fenster = ([{"role": "user", "content": f"{MARKE}\n{z}"}] if z else []) + rest
+            fenster = ([{"role": "user", "content": _mit_marke(z)}] if z else []) + rest
     return fenster
 
 class Ablage:
@@ -197,6 +206,112 @@ class Ablage:
                 if zeile.strip():
                     n += 1
         return n
+
+    # --- Zeilenweise, für Verdichten und Nachlesen (14.11.2026) ------------
+    #
+    # „Verdichten mit Verweis" (DESIGN 8d) braucht **Zeilennummern** statt
+    # Nachrichten-Zählungen: Der Agent bekommt ins Fenster die Fundstelle,
+    # und das Werkzeug ``nachlesen`` holt genau diese Zeilen zurück. Dafür
+    # wird hier nichts eingelesen, was nicht gebraucht wird.
+
+    def nachrichten_zeilen(self, sid: str, anzahl_nachrichten: int,
+                           abstand: int = 0) -> tuple[int, int]:
+        """Die Zeilenspanne von ``anzahl_nachrichten`` Nachrichten.
+
+        Gezählt wird vom Ende: ``abstand`` Nachrichten werden am Ende
+        übersprungen (die bleiben wörtlich im Fenster und gehören nicht in
+        den verdichteten Abschnitt). Gibt ``(von, bis)`` zurück; ``(0, 0)``,
+        wenn es keine gibt. Nur Zeilen mit ``art == "nachricht"`` zählen —
+        die Verdichtungs- und Leer-Einträge stehen dazwischen und
+        verschieben sonst den Verweis.
+        """
+        gesamt = self.anzahl(sid)
+        anzahl_nachrichten = int(anzahl_nachrichten)
+        abstand = max(0, int(abstand))
+        if gesamt <= 0 or anzahl_nachrichten <= 0:
+            return (0, 0)
+        noetig = anzahl_nachrichten + abstand
+        pfad, arch = self._quelle(sid)
+        if pfad is None:
+            # Archiv: selten und klein — vollständig lesen ist hier billig.
+            alle = self.lesen(sid)
+            treffer = [i + 1 for i, e in enumerate(alle) if e.get("art") == "nachricht"]
+            treffer = treffer[-(anzahl_nachrichten + abstand):]
+            treffer = treffer[:anzahl_nachrichten]
+            return (treffer[0], treffer[-1]) if treffer else (0, 0)
+
+        nummern: list[int] = []
+        nr = gesamt + 1
+        with open(pfad, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            pos = f.tell()
+            rest = b""
+            while pos > 0 and len(nummern) < noetig:
+                n = min(LESE_BLOCK, pos)
+                pos -= n
+                f.seek(pos)
+                stueck = f.read(n) + rest
+                zeilen = stueck.split(b"\n")
+                rest = zeilen.pop(0)      # angeschnitten: gehört in den Block davor
+                for z in reversed(zeilen):
+                    if not z.strip():
+                        continue
+                    nr -= 1
+                    e = self._eine(z)
+                    if e is not None and e.get("art") == "nachricht":
+                        nummern.append(nr)
+                        if len(nummern) >= noetig:
+                            break
+            if len(nummern) < noetig and rest.strip():
+                nr -= 1
+                e = self._eine(rest)
+                if e is not None and e.get("art") == "nachricht":
+                    nummern.append(nr)
+        if not nummern:
+            return (0, 0)
+        # ``nummern`` steht von hinten nach vorne; die letzten ``abstand``
+        # gehören zum wörtlichen Rest und fallen weg.
+        nummern = list(reversed(nummern))[:anzahl_nachrichten]
+        return (nummern[0], nummern[-1]) if nummern else (0, 0)
+
+    def lesen_zeilen(self, sid: str, von: int, bis: int) -> list[tuple[int, dict]]:
+        """Zeilen ``von``..``bis`` (1-basiert, beide eingeschlossen).
+
+        Liest mit dem Zeileniterator und parst **nur** den gewünschten
+        Bereich — die Grundlage für das Werkzeug ``nachlesen``.
+        """
+        try:
+            von = max(1, int(von))
+            bis = int(bis)
+        except (TypeError, ValueError):
+            return []
+        if bis < von:
+            return []
+        pfad, arch = self._quelle(sid)
+        if pfad is None:
+            if arch is None:
+                return []
+            with tarfile.open(arch) as t:
+                m = t.extractfile(f"{sid}/verlauf.jsonl")
+                roh = m.read().splitlines() if m else []
+            out = []
+            for i, z in enumerate(roh, start=1):
+                if von <= i <= bis:
+                    e = self._eine(z)
+                    if e is not None:
+                        out.append((i, e))
+            return out
+        out: list[tuple[int, dict]] = []
+        with open(pfad, "rb") as f:
+            for i, z in enumerate(f, start=1):
+                if i > bis:
+                    break
+                if i < von or not z.strip():
+                    continue
+                e = self._eine(z)
+                if e is not None:
+                    out.append((i, e))
+        return out
 
     def lesen_seite(self, sid: str, max_n=200, vor=0) -> list[dict]:
         """Ein Stück des Protokolls, von hinten gelesen.
@@ -345,25 +460,51 @@ class Verlauf(list):
     Fenster ersetzt (Verdichten), geht über ``Agent.history = ...``.
     """
 
-    def __init__(self, ablage: Ablage, start=()):
+    def __init__(self, ablage: Ablage, start=(), sid: str | None = None):
         super().__init__(start)
         self.ablage = ablage
+        self.sid = sid
+
+    @property
+    def sitzung(self) -> str:
+        return self.sid or self.ablage.aktiv()
 
     def append(self, m: dict) -> None:
         self.ablage.anhaengen({"art": "nachricht", "rolle": m["role"],
-                               "inhalt": m["content"]})
+                               "inhalt": m["content"]}, self.sid)
         super().append(m)
 
     def clear(self) -> None:
-        self.ablage.anhaengen({"art": "leer"})
+        self.ablage.anhaengen({"art": "leer"}, self.sid)
         super().clear()
 
-    def verdichten(self, zusammenfassung: str, behalte: int) -> None:
-        """Fenster verdichten; das Protokoll behält alles (Regel 8d)."""
+    def zeilenbereich(self, anzahl_nachrichten: int | None = None,
+                      abstand: int = 0) -> tuple[int, int]:
+        """Wo die Nachrichten dieses Fensters in ``verlauf.jsonl`` stehen.
+
+        Ohne Angabe: alle Nachrichten, die das Fenster gerade führt.
+        ``abstand`` überspringt so viele Nachrichten am Ende — das sind die,
+        die beim Verdichten wörtlich im Fenster bleiben.
+        """
+        return self.ablage.nachrichten_zeilen(
+            self.sitzung,
+            len(self) if anzahl_nachrichten is None else anzahl_nachrichten,
+            abstand)
+
+    def verdichten(self, zusammenfassung: str, behalte: int,
+                   zeilen_von: int = 0, zeilen_bis: int = 0) -> None:
+        """Fenster verdichten; das Protokoll behält alles (Regel 8d).
+
+        ``zeilen_von``/``zeilen_bis`` sind die Fundstellen des verdichteten
+        Abschnitts. Sie werden **mitgeschrieben** — sonst wüsste später
+        niemand, worauf sich ein Verweis im Fenster bezog.
+        """
         self.ablage.anhaengen({"art": "verdichtet",
                                "zusammenfassung": zusammenfassung,
-                               "behalte": behalte})
+                               "behalte": behalte,
+                               "zeilen_von": zeilen_von,
+                               "zeilen_bis": zeilen_bis}, self.sid)
         rest = list(self)[-behalte:] if behalte > 0 else []
-        neu = ([{"role": "user", "content": f"{MARKE}\n{zusammenfassung}"}]
+        neu = ([{"role": "user", "content": _mit_marke(zusammenfassung)}]
                if zusammenfassung else []) + rest
         list.__setitem__(self, slice(None), neu)
