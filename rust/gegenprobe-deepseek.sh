@@ -117,6 +117,36 @@ mut schluesselrest-im-text \
 	'            format!("{host} nimmt den Schlüssel nicht an (401) -- er ist falsch, abgelaufen oder gesperrt."),' \
 	'            format!("{host} nimmt den Schlüssel nicht an (401): {meldung}"),'
 
+# 12. Ohne Kennung an der Ergebnisnachricht antwortet DeepSeek mit 422
+#     "missing field tool_call_id" -- der Chat war am Pi nach dem ersten
+#     Werkzeugaufruf dauerhaft blockiert (gemessen 15.11.2026).
+mut ohne-tool-call-id \
+	'                if let Some(id) = offen.pop_front() {
+                    m["tool_call_id"] = Value::String(id);
+                }' \
+	'                if false {
+                    m["tool_call_id"] = Value::String("x".into());
+                }'
+
+# 13. Ohne `id` am Aufruf ebenso (die API verlangt sie auch dort).
+mut ohne-aufruf-id \
+	'                        a["id"] = Value::String(id);' \
+	'                        let _ = id;'
+
+# 14. Argumente als Objekt statt JSON-Text -- die OpenAI-Form kennt nur Text.
+mut argumente-als-objekt \
+	'                                if !args.is_string() {
+                                    f["arguments"] =
+                                        Value::String(args.to_string());
+                                }' \
+	'                                let _ = args;'
+
+# 15. Die Umformung wird nicht benutzt (Hilfsfunktion geprueft, Verdrahtung
+#     nicht) -- der Fehler vom Pi kaeme zurueck, alle Tests blieben gruen.
+mut verlauf-ungeformt \
+	'        nachrichten.extend(verlauf_formen(v));' \
+	'        nachrichten.extend(v.iter().cloned());'
+
 zurueck
 echo "---"
 if [ "$gruen" -eq 0 ]; then

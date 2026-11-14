@@ -1659,6 +1659,18 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **DeepSeek nahm keinen Verlauf mit Werkzeugaufrufen an** (15.11., am Pi
+  gefunden): Die API antwortete auf jede weitere Runde mit **HTTP 422
+  „missing field `tool_call_id`"** — der Chat war nach dem ersten
+  Werkzeugaufruf dauerhaft blockiert (Journal: Retry alle 11 s). Ursache:
+  Unser Verlauf ist neutral (Werkzeugname, kein Kennzeichen), die
+  OpenAI-Form verlangt `tool_calls[].id` und `tool_call_id`. Neu:
+  `verlauf_formen()` in `deepseek.rs` vergibt die Kennungen beim Senden
+  (`call_1`, `call_2`, je Nachricht fortlaufend, über eine Warteschlange den
+  Ergebnissen zugeordnet), macht aus `arguments` einen JSON-Text und lässt
+  `tool_name` weg; eine vorhandene `id` bleibt. Tests: 4 neue in `deepseek`
+  (cargo), Gegenprobe `gegenprobe-deepseek.sh` um **4 Mutationen** erweitert
+  (jetzt 15, alle rot).
 - **Der Chatverlauf war nach einem Neuladen weg** (Nutzerbefund 14.11.):
   `chat.js` holte beim Öffnen der Seite nur den Ereignisstrom — den Verlauf
   lud nur `sitzungWechseln()`, und das wurde für die Hauptsitzung nie

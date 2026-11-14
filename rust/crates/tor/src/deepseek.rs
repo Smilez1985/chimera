@@ -108,6 +108,93 @@ fn werkzeug_wahl_verworfen(anfrage: &Value) -> Option<String> {
 
 // ------------------------------------------------------------- Koerper
 
+/// Den Verlauf in die Form bringen, die die OpenAI-Schnittstelle verlangt.
+///
+/// Unser Verlauf ist **neutral** (Regel „Aufrufe, nicht Text"): Der
+/// Werkzeugname steht im Aufruf, das Ergebnis traegt `tool_name`. DeepSeek
+/// besteht dagegen auf `tool_calls[].id` und auf `tool_call_id` an der
+/// Ergebnisnachricht -- ohne sie antwortet die API mit HTTP 422
+/// „missing field `tool_call_id`", und zwar bei **jedem** weiteren Versuch,
+/// weil der Verlauf im Sitzungsprotokoll steht (am Pi gemessen, 15.11.2026:
+/// der Chat war nach dem ersten Werkzeugaufruf dauerhaft blockiert).
+///
+/// Die Kennung wird hier vergeben, nicht im Verlauf gespeichert: Sie gilt
+/// nur fuer diesen einen Aufruf. Zwei Aufrufe in einer Assistant-Nachricht
+/// bekommen zwei Kennungen; die Ergebnisse kommen in derselben Reihenfolge
+/// zurueck und werden ueber eine Warteschlange zugeordnet.
+pub fn verlauf_formen(liste: &[Value]) -> Vec<Value> {
+    use std::collections::{HashSet, VecDeque};
+    let mut offen: VecDeque<String> = VecDeque::new();
+    let mut zaehler = 0usize;
+    let mut raus = Vec::with_capacity(liste.len());
+    // Schon vergebene Kennungen: Eine erfundene darf keine davon doppeln,
+    // sonst zeigt ein Ergebnis auf den falschen Aufruf.
+    let vorhanden: HashSet<String> = liste
+        .iter()
+        .filter_map(|n| n["tool_calls"].as_array())
+        .flatten()
+        .filter_map(|a| a["id"].as_str())
+        .map(str::to_string)
+        .collect();
+
+    for nachricht in liste {
+        let rolle = nachricht["role"].as_str().unwrap_or("");
+        match rolle {
+            "assistant" => {
+                let mut m = nachricht.clone();
+                offen.clear();
+                if let Some(aufrufe) = nachricht["tool_calls"].as_array() {
+                    let mut geformt = Vec::with_capacity(aufrufe.len());
+                    for aufruf in aufrufe {
+                        let id = match aufruf["id"].as_str().filter(|s| !s.is_empty()) {
+                            Some(s) => s.to_string(),
+                            None => {
+                                loop {
+                                    zaehler += 1;
+                                    let k = format!("call_{zaehler}");
+                                    if !vorhanden.contains(&k) {
+                                        break k;
+                                    }
+                                }
+                            }
+                        };
+                        offen.push_back(id.clone());
+                        let mut a = aufruf.clone();
+                        a["id"] = Value::String(id);
+                        a["type"] = Value::String("function".into());
+                        // Die Argumente sind bei uns ein Objekt, in der
+                        // OpenAI-Form ein JSON-Text.
+                        if let Some(f) = a.get_mut("function") {
+                            if let Some(args) = f.get("arguments") {
+                                if !args.is_string() {
+                                    f["arguments"] =
+                                        Value::String(args.to_string());
+                                }
+                            }
+                        }
+                        geformt.push(a);
+                    }
+                    m["tool_calls"] = Value::Array(geformt);
+                }
+                raus.push(m);
+            }
+            "tool" => {
+                let mut m = nachricht.clone();
+                if let Some(o) = m.as_object_mut() {
+                    // `tool_name` kennt die OpenAI-Form nicht.
+                    o.remove("tool_name");
+                }
+                if let Some(id) = offen.pop_front() {
+                    m["tool_call_id"] = Value::String(id);
+                }
+                raus.push(m);
+            }
+            _ => raus.push(nachricht.clone()),
+        }
+    }
+    raus
+}
+
 /// Der Anfragekoerper fuer `/chat/completions`. Rein, damit er sich pruefen
 /// laesst: OpenAI-Form, aber ohne die Felder, die DeepSeek ignoriert
 /// (`frequency_penalty`, `presence_penalty` werden nicht erst geschickt).
@@ -117,7 +204,7 @@ pub fn chat_koerper(modell: &str, anfrage: &Value) -> Value {
         nachrichten.push(json!({"role": "system", "content": s}));
     }
     if let Some(v) = anfrage.get("verlauf").and_then(Value::as_array) {
-        nachrichten.extend(v.iter().cloned());
+        nachrichten.extend(verlauf_formen(v));
     }
     if let Some(p) = anfrage.get("prompt").and_then(Value::as_str).filter(|p| !p.is_empty()) {
         nachrichten.push(json!({"role": "user", "content": p}));
@@ -789,9 +876,88 @@ mod tests {
         assert!(!koerper.contains("sk-test"), "Schlüssel im Körper: {koerper}");
     }
 
+    /// Der Fehler vom Pi (15.11.2026): „missing field `tool_call_id`".
+    /// Der Verlauf ist neutral, die OpenAI-Form verlangt Kennungen.
     #[test]
-    fn strom_ueber_http_wird_gesammelt() {
-        let sse = "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"hmm\"}}],\"usage\":null}\n\
+    fn verlauf_bekommt_kennungen_fuer_werkzeuge() {
+        let verlauf = vec![
+            json!({"role": "user", "content": "mach was"}),
+            json!({"role": "assistant", "content": "", "tool_calls": [
+                {"function": {"name": "list_dir", "arguments": {"path": "a"}}},
+                {"function": {"name": "read_file", "arguments": {"path": "b"}}},
+            ]}),
+            json!({"role": "tool", "content": "eins", "tool_name": "list_dir"}),
+            json!({"role": "tool", "content": "zwei", "tool_name": "read_file"}),
+        ];
+        let raus = verlauf_formen(&verlauf);
+        assert_eq!(raus.len(), 4);
+
+        let aufrufe = raus[1]["tool_calls"].as_array().unwrap();
+        assert_eq!(aufrufe[0]["id"], "call_1");
+        assert_eq!(aufrufe[1]["id"], "call_2");
+        assert_eq!(aufrufe[0]["type"], "function");
+        // Argumente sind in der OpenAI-Form ein JSON-TEXT.
+        assert!(aufrufe[0]["function"]["arguments"].is_string());
+        assert!(aufrufe[0]["function"]["arguments"]
+            .as_str()
+            .unwrap()
+            .contains("\"path\""));
+
+        // Die Ergebnisse werden der Reihe nach zugeordnet, `tool_name` faellt weg.
+        assert_eq!(raus[2]["tool_call_id"], "call_1");
+        assert_eq!(raus[3]["tool_call_id"], "call_2");
+        assert!(raus[2].get("tool_name").is_none());
+        assert_eq!(raus[2]["content"], "eins");
+    }
+
+    /// Eine Kennung, die schon da ist, bleibt — sonst zeigte der Verlauf
+    /// nach einem Neustart auf andere Aufrufe als die Antwort.
+    #[test]
+    fn vorhandene_kennung_bleibt_und_zahlen_zaehlen_weiter() {
+        let verlauf = vec![
+            json!({"role": "assistant", "content": "", "tool_calls": [
+                {"id": "call_alt", "function": {"name": "ls", "arguments": "{}"}},
+            ]}),
+            json!({"role": "tool", "content": "ok", "tool_name": "ls"}),
+            json!({"role": "assistant", "content": "", "tool_calls": [
+                {"function": {"name": "df", "arguments": {}}},
+            ]}),
+            json!({"role": "tool", "content": "frei", "tool_name": "df"}),
+        ];
+        let raus = verlauf_formen(&verlauf);
+        assert_eq!(raus[0]["tool_calls"][0]["id"], "call_alt");
+        assert_eq!(raus[1]["tool_call_id"], "call_alt");
+        assert_eq!(raus[2]["tool_calls"][0]["id"], "call_1");
+        assert_eq!(raus[3]["tool_call_id"], "call_1");
+        // Ein String bleibt ein String.
+        assert_eq!(raus[0]["tool_calls"][0]["function"]["arguments"], "{}");
+    }
+
+    /// Ohne Aufrufe bleibt alles, wie es ist.
+    #[test]
+    fn einfacher_verlauf_bleibt_unveraendert() {
+        let verlauf = vec![json!({"role": "user", "content": "hallo"})];
+        assert_eq!(verlauf_formen(&verlauf), verlauf);
+    }
+
+    /// Der Körper geht wirklich durch die Umformung (Verdrahtung, nicht nur
+    /// die Hilfsfunktion).
+    #[test]
+    fn chat_koerper_formt_den_verlauf() {
+        let k = chat_koerper("deepseek-flash", &json!({"prompt": "hi", "verlauf": [
+            {"role": "assistant", "content": "", "tool_calls": [
+                {"function": {"name": "ls", "arguments": {}}}]},
+            {"role": "tool", "content": "ok", "tool_name": "ls"},
+        ]}));
+        let msgs = k["messages"].as_array().unwrap();
+        let tool_msg = msgs.iter().find(|m| m["role"] == "tool").unwrap();
+        assert!(tool_msg.get("tool_call_id").is_some(), "{tool_msg}");
+        let assistant = msgs.iter().find(|m| m["role"] == "assistant").unwrap();
+        assert!(assistant["tool_calls"][0].get("id").is_some());
+    }
+
+    #[test]
+    fn strom_ueber_http_wird_gesammelt() {        let sse = "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"hmm\"}}],\"usage\":null}\n\
                    : keep-alive\n\
                    data: {\"choices\":[{\"delta\":{\"content\":\"Da\"}}],\"usage\":null}\n\
                    data: {\"choices\":[{\"delta\":{\"content\":\"!\"}}],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":1}}\n\

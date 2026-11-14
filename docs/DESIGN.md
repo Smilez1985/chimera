@@ -1325,8 +1325,23 @@ wie es der Vertrag des Agenten verlangt (`provider/base.py`, `Reply`).
 DeepSeeks `arguments` ist ein JSON-**Text** — er wird gelesen, nicht
 weitergereicht.
 
-**Schlüssel:** erst die Ablage der Oberfläche (`config/geheim/<id>`, gefüllt
-vom Modul „Anbieter"), dann `DEEPSEEK_API_KEY` aus der `.env`. Beide liest
+**Der Verlauf wird für DeepSeek umgeformt** (`verlauf_formen`, 15.11.2026).
+Unser Verlauf ist neutral: Der Aufruf trägt den Werkzeugnamen, das Ergebnis
+`tool_name` — keine Kennungen. Die OpenAI-Form verlangt aber
+`tool_calls[].id` und `tool_call_id` an der Ergebnisnachricht; ohne sie
+antwortet die API mit **HTTP 422 „missing field `tool_call_id`"**, und zwar
+bei jedem weiteren Versuch, weil der Verlauf in der Sitzung steht. Am Pi
+gemessen: nach dem ersten Werkzeugaufruf war der Chat dauerhaft blockiert
+(Retry alle 11 s im Journal). Die Kennung wird **beim Senden** vergeben
+(`call_1`, `call_2`, je Assistant-Nachricht fortlaufend), nicht gespeichert —
+zwei Aufrufe in einer Nachricht bekommen zwei Kennungen, die Ergebnisse
+werden in der Reihenfolge über eine Warteschlange zugeordnet. `tool_name`
+fällt weg, `arguments` wird zum JSON-Text. Eine schon vorhandene `id` bleibt
+stehen. Gegenprobe: vier Mutationen in `rust/gegenprobe-deepseek.sh`
+(`ohne-tool-call-id`, `ohne-aufruf-id`, `argumente-als-objekt`,
+`verlauf-ungeformt`), alle rot.
+
+**Schlüssel:** erst die Ablage der Oberfläche (`config/geheim/<id>`, gefülltvom Modul „Anbieter"), dann `DEEPSEEK_API_KEY` aus der `.env`. Beide liest
 nur das Gateway; in Antworten steht nur, **dass** einer da ist. Ein fehlender
 Schlüssel ergibt `nicht_eingerichtet` mit Klartext, bevor irgendetwas
 geschickt wird.
