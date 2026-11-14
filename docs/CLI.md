@@ -203,7 +203,7 @@ Braucht `CHIMERA_LOG_RAM` und `CHIMERA_LOG_KARTE`. / Needs both variables.
 | `sh installer/tests/test-<name>.sh` | Ein Installertest. / One installer test. |
 | `sh installer/tests/counter-check-<name>.sh` | Gegenprobe zu einem Test. / Counter-check for a test. |
 | `python3 tests/test_<name>.py [--gegenprobe]` | Ein Python-Test, optional mit Gegenprobe. / One Python test. |
-| `node tests/js/<name>.mjs` | Ein JS-Test ohne Browser (Dom-Ersatz im Test). Rahmen: `python3 tests/test_freigaben_anzeige.py`; ohne `node` übersprungen. / One browser-free JS test, wrapped by a Python test; skipped without node. |
+| `node tests/js/<name>.mjs` | Ein JS-Test ohne Browser (Dom-Ersatz im Test). Rahmen: `python3 tests/test_freigaben_anzeige.py` (Anzeige) bzw. `python3 tests/test_anbieter_kennung.py` (Kennung aus der Bezeichnung); ohne `node` übersprungen. / One browser-free JS test, wrapped by a Python test; skipped without node. |
 | `python3 tests/gegenprobe_<name>.py` | Gegenprobe zu einem Python-/JS-Test. / Counter-check for a Python or JS test. |
 | `sh rust/gegenprobe-web.sh` | Gegenprobe der Web-Oberfläche. / Web UI counter-check. |
 | `sh rust/gegenprobe-telegram.sh` | Gegenprobe der Telegram-Tür. / Telegram counter-check. |

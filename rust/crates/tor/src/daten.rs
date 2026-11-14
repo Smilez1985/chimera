@@ -54,6 +54,32 @@ pub fn id_gueltig(id: &str) -> bool {
         && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
+/// Eine Kennung aus einem Anzeigenamen bilden: „DeepSeek" → `deepseek`,
+/// „Mein Anbieter" → `mein-anbieter`. Dieselbe Umformung macht die Oberflaeche
+/// im Anbieter-Modul (`anbieter.js`, `kennungAus`) — hier steht sie, damit eine
+/// abgelehnte Kennung mit einem **Vorschlag** antworten kann statt nur mit
+/// „ungueltig" (Nutzerbefund 14.11.: das Feld war eine Falle).
+pub fn id_vorschlag(text: &str) -> String {
+    let mut s = String::new();
+    for c in text.chars() {
+        match c {
+            'Ä' | 'ä' => s.push_str("ae"),
+            'Ö' | 'ö' => s.push_str("oe"),
+            'Ü' | 'ü' => s.push_str("ue"),
+            'ß' => s.push_str("ss"),
+            c if c.is_ascii_alphanumeric() => s.push(c.to_ascii_lowercase()),
+            _ => {
+                if !s.is_empty() && !s.ends_with('-') {
+                    s.push('-');
+                }
+            }
+        }
+    }
+    let s = s.trim_matches('-');
+    let s = if s.len() > 32 { s[..32].trim_end_matches('-') } else { s };
+    s.to_string()
+}
+
 /// Fortlaufende Nummer fuer Sidecar-Namen, je Prozess.
 static SIDECAR_NR: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
@@ -470,10 +496,25 @@ fn fehler(code: &str, text: &str) -> Value {
     gemein::zeile::fehlerantwort(code, text)
 }
 
+/// Warum eine Kennung abgelehnt wurde -- mit Regel und Vorschlag. Eine
+/// Meldung „ist ungueltig" allein sagt niemandem, was zu tun ist.
+pub fn id_fehlertext(i: &str) -> String {
+    let v = id_vorschlag(i);
+    if id_gueltig(&v) && v != i {
+        format!(
+            "Die Kennung \"{i}\" ist ungueltig: erlaubt sind a-z, 0-9 und \"-\" (hoechstens 32, kein \"-\" vorn). Vorschlag: \"{v}\""
+        )
+    } else {
+        format!(
+            "Die Kennung \"{i}\" ist ungueltig: erlaubt sind a-z, 0-9 und \"-\" (hoechstens 32, kein \"-\" vorn)."
+        )
+    }
+}
+
 fn id_aus(a: &Value) -> Result<&str, Value> {
     match a.get("id").and_then(Value::as_str) {
         Some(i) if id_gueltig(i) => Ok(i),
-        Some(i) => Err(fehler("id_ungueltig", &format!("Id \"{i}\" ist ungueltig"))),
+        Some(i) => Err(fehler("id_ungueltig", &id_fehlertext(i))),
         None => Err(fehler("id_fehlt", "Die Anfrage braucht ein Feld \"id\".")),
     }
 }
@@ -581,6 +622,51 @@ mod tests {
         for gut in ["ollama", "ollama-2", "a1"] {
             assert!(id_gueltig(gut), "{gut:?}");
         }
+    }
+
+    // Aus einem Anzeigenamen eine Kennung bilden -- dieselbe Umformung wie
+    // `anbieter.js` (`kennungAus`), damit Oberflaeche und Vorschlag des
+    // Servers nicht auseinanderlaufen.
+    #[test]
+    fn kennung_aus_bezeichnung() {
+        for (roh, soll) in [
+            ("DeepSeek", "deepseek"),
+            ("Deep Seek", "deep-seek"),
+            ("Konto (privat)", "konto-privat"),
+            ("\u{c4}\u{d6}\u{dc} \u{c4}nderung", "aeoeue-aenderung"),
+            ("Stra\u{df}e", "strasse"),
+            ("  --Test--  ", "test"),
+            ("Test-", "test"),
+            ("", ""),
+            ("1Password", "1password"),
+        ] {
+            assert_eq!(id_vorschlag(roh), soll, "{roh:?}");
+        }
+        // Grenze: hoechstens 32 Zeichen, hart geschnitten, kein "-" am Ende.
+        let lang = id_vorschlag("Sehr langer Name mit vielen Woertern");
+        assert_eq!(lang, "sehr-langer-name-mit-vielen-woer");
+        assert!(id_gueltig(&lang), "{lang}");
+        let grade = id_vorschlag(&"a".repeat(32));
+        assert_eq!(grade.len(), 32);
+        // Was aus dem Vorschlag herauskommt, muss durch `id_gueltig` gehen --
+        // sonst schlaegt der Fehlertext einen unbrauchbaren Wert vor.
+        for roh in ["DeepSeek", "Konto (privat)", "../etc", "A B C", "-x-"] {
+            let v = id_vorschlag(roh);
+            assert!(v.is_empty() || id_gueltig(&v), "{roh:?} -> {v:?}");
+        }
+    }
+
+    // Eine abgelehnte Kennung soll sagen, WARUM, und einen Ausweg anbieten --
+    // nicht nur "ist ungueltig" (Nutzerbefund 14.11.).
+    #[test]
+    fn ungueltige_kennung_nennt_regel_und_vorschlag() {
+        let t = id_fehlertext("DeepSeek");
+        assert!(t.contains("a-z, 0-9"), "{t}");
+        assert!(t.contains("Vorschlag: \"deepseek\""), "{t}");
+        // Ohne brauchbaren Vorschlag bleibt die Regel stehen, kein leerer Satz.
+        let t2 = id_fehlertext("---");
+        assert!(t2.contains("a-z, 0-9"), "{t2}");
+        assert!(!t2.contains("Vorschlag"), "{t2}");
     }
 
     // Zwei Schreiber duerfen sich die Nebendatei nicht teilen.

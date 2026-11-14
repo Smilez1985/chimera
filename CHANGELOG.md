@@ -939,6 +939,18 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Die Kennung eines Anbieters wird gebildet, nicht abgefragt** (14.11.,
+  Nutzerbefund: „ich weiß nicht was er in dem Feld Kennung will"): `<id>` ist
+  der Dateiname von `config/anbieter/<id>.json` und `config/geheim/<id>`,
+  also ein interner Name. Das Modul „Anbieter" bildet sie jetzt aus der
+  Bezeichnung (`kennungAus`, Umlaute ausgeschrieben, höchstens 32 Zeichen,
+  kein Trenner vorn/hinten), zeigt sie gedämpft und lässt sie nur dann
+  gelten, wenn der Nutzer sie selbst anfasst; im Bereich „Schlüssel
+  hinterlegen" ist sie eine **Auswahl** der vorhandenen Anbieter. Der Server
+  antwortet bei einer ungültigen Kennung mit Regel **und** Vorschlag
+  (`daten::id_fehlertext` / `id_vorschlag`) statt nur „ist ungueltig".
+  Tests: 2 neue in `daten`, `tests/js/anbieter_kennung.mjs` (17 Fälle gegen
+  dieselbe Regel wie `id_gueltig`), Gegenprobe mit 5 Mutationen.
 - **Der Erinnerungston ist opt-in** (smilez, 13.11.): Er war für **offene
   Rückfragen** gedacht, nicht für jede Freigabe. `erinnern_alle` ist jetzt
   **Vorgabe 0 = aus**; wer ihn will, wählt im Modul „alle 5/10/30 Minuten".

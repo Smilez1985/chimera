@@ -1160,6 +1160,32 @@ die Web-Oberfläche und die Anbieter-Probe erreichbar — die Auswahl durch den
 Agenten (Reihenfolge nach 5h) ist der nächste Schritt und steht in der
 ROADMAP.
 
+### Die Kennung ist ein interner Name, kein Eingabefeld (14.11.2026)
+
+`<id>` ist der Schlüssel von Anbieter, Schlüsselablage, Katalog und Wahl
+(`config/anbieter/<id>.json`, `config/geheim/<id>`) — ein Name für das
+Dateisystem, kein Name für Menschen. Trotzdem stand sie im Modul „Anbieter"
+als Pflichtfeld vor dem Nutzer; er tippte „DeepSeek" (Großbuchstaben sind
+laut `daten::id_gueltig` verboten), bekam „ist ungueltig" ohne Grund und ohne
+Ausweg, und die Meldung blieb stehen, auch als das Feld längst leer war.
+
+Deshalb gilt: **Das Modul bildet die Kennung aus der Bezeichnung**
+(`ChimeraAnbieter.kennungAus`: Umlaute ausgeschrieben, alles andere zum
+Trenner `-`, höchstens 32 Zeichen, kein Trenner vorn oder am Ende). Sie
+steht gedämpft (`input.auto`) im Feld, damit sie sichtbar bleibt, und wer sie
+anfasst, bekommt sie normal — dann gilt der eigene Wert und die Ableitung
+schweigt. Im Bereich „Schlüssel hinterlegen" ist sie eine **Auswahl der
+vorhandenen Anbieter**, kein zweites Tippfeld: ein Schlüssel kann so nicht an
+eine erfundene Kennung gehen.
+
+**Der Server hilft, statt nur abzulehnen:** `daten::id_vorschlag` macht
+dieselbe Umformung, und `daten::id_fehlertext` antwortet mit Regel **und**
+Vorschlag („erlaubt sind a-z, 0-9 und „-" … Vorschlag: „deepseek""). Beide
+Implementierungen sind Absicht — die Oberfläche braucht die Kennung sofort,
+der Server darf sich auf sie nicht verlassen — und werden von zwei Tests
+gegen dieselbe Regel gehalten (`tests/js/anbieter_kennung.mjs` gegen
+`id_gueltig`, `daten::tests::kennung_aus_bezeichnung`).
+
 ### Guthaben je Anbieter (13.11.2026)
 
 **Auftrag smilez:** „Kosten können bei den meisten Anbietern aus der API

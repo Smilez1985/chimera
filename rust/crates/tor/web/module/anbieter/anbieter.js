@@ -28,6 +28,10 @@ class ChimeraAnbieter extends HTMLElement {
         button.gefahr { background:#ff7a7a; }
         code { font-family:ui-monospace, monospace; font-size:.8rem; word-break:break-all; }
         .feld { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; }
+        /* Die Kennung ist ein interner Name, kein Feld fuer den Nutzer: sie wird
+           aus der Bezeichnung gebildet und nur gedaempft angezeigt. Wer sie
+           anfasst, bekommt sie normal -- dann gilt der eigene Wert. */
+        input.auto { color:#8a90a2; background:#15171e; }
       </style>
       <h3>Anbieter</h3>
       <p class="klein">Jeder Eintrag hier ist ein Sprachmodell-Anbieter. Der Schlüssel wird beim
@@ -40,7 +44,7 @@ class ChimeraAnbieter extends HTMLElement {
       <div class="karte">
         <h4>Anbieter anlegen oder ändern</h4>
         <div class="feld">
-          <label class="klein">Kennung (a-z, 0-9, -)<input id="n-id" placeholder="deepseek"></label>
+          <label class="klein">Bezeichnung<input id="n-bez" placeholder="DeepSeek"></label>
           <label class="klein">Typ
             <select id="n-typ">
               <option value="deepseek">deepseek (Cloud, OpenAI-kompatibel)</option>
@@ -49,7 +53,8 @@ class ChimeraAnbieter extends HTMLElement {
             </select>
           </label>
         </div>
-        <label class="klein">Bezeichnung<input id="n-bez" placeholder="DeepSeek"></label>
+        <label class="klein">Kennung (intern, aus der Bezeichnung gebildet)
+          <input id="n-id" class="auto" placeholder="deepseek"></label>
         <label class="klein">Adresse (leer = Vorgabe des Typs)
           <input id="n-adr" placeholder="https://api.deepseek.com"></label>
         <button id="n-ok">Speichern</button> <span id="n-fehler" class="fehler"></span>
@@ -59,8 +64,8 @@ class ChimeraAnbieter extends HTMLElement {
         <h4>Schlüssel hinterlegen</h4>
         <p class="klein">Hier einfügen (Strg+V / lange drücken → Einfügen). Der Wert wird
         nicht zurückgegeben und steht danach nirgends in der Oberfläche.</p>
-        <label class="klein">Kennung (muss oben eingetragen sein)
-          <input id="k-id" placeholder="deepseek"></label>
+        <label class="klein">Anbieter
+          <select id="k-id"></select></label>
         <label class="klein">Schlüssel
           <input id="k-wert" type="password" autocomplete="off" spellcheck="false"
                  placeholder="sk-…"></label>
@@ -70,7 +75,40 @@ class ChimeraAnbieter extends HTMLElement {
     this.$ = (id) => this.shadowRoot.getElementById(id);
     this.$("n-ok").onclick = () => this.speichern();
     this.$("k-ok").onclick = () => this.schluessel();
+    // Die Kennung ist ein interner Name (`config/geheim/<kennung>`, `config/
+    // anbieter/<kennung>.json`). Der Nutzer soll sie nicht erfinden muessen:
+    // sie folgt der Bezeichnung, solange er sie nicht selbst angefasst hat.
+    this.idVonHand = false;
+    this.$("n-bez").oninput = () => {
+      if (this.idVonHand) return;
+      this.$("n-id").value = ChimeraAnbieter.kennungAus(this.$("n-bez").value)
+        || this.$("n-typ").value;
+    };
+    this.$("n-typ").onchange = () => {
+      if (this.idVonHand) return;
+      if (!this.$("n-bez").value.trim()) this.$("n-id").value = this.$("n-typ").value;
+    };
+    this.$("n-id").oninput = () => {
+      this.idVonHand = true;
+      this.$("n-id").classList.remove("auto");
+    };
     this.laden();
+  }
+
+  /// Die Kennung aus einer Bezeichnung bilden: „DeepSeek" → `deepseek`,
+  /// „Mein Anbieter" → `mein-anbieter`. Erlaubt ist, was `daten::id_gueltig`
+  /// durchlaesst (a-z, 0-9, `-`, hoechstens 32 Zeichen, kein `-` vorn).
+  /// Umlaute werden ausgeschrieben, damit „Änderung" nicht zu „nderung" wird.
+  static kennungAus(text) {
+    let s = String(text == null ? "" : text).toLowerCase()
+      .replace(/ä/g, "ae").replace(/ö/g, "oe")
+      .replace(/ü/g, "ue").replace(/ß/g, "ss")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+/, "");
+    if (s.length > 32) s = s.slice(0, 32);
+    // Ein Trenner am Ende ist bei `daten::id_gueltig` erlaubt, aber haesslich
+    // und macht zwei Kennungen aus einem Namen ("Test" / "Test ").
+    return s.replace(/-+$/, "");
   }
 
   el(tag, text, klasse) {
@@ -129,6 +167,22 @@ class ChimeraAnbieter extends HTMLElement {
     for (const m of r.meldungen || []) {
       liste.appendChild(this.el("p", `${m.quelle}: ${m.text}`, "meldung"));
     }
+    // Auswahl im Schluessel-Bereich: nur vorhandene Anbieter, damit ein
+    // Schluessel nicht an eine erfundene Kennung geht.
+    const sel = this.$("k-id");
+    const vorher = sel.value;
+    sel.replaceChildren();
+    const leer = document.createElement("option");
+    leer.value = "";
+    leer.textContent = alle.length ? "— bitte wählen —" : "— zuerst oben anlegen —";
+    sel.appendChild(leer);
+    for (const a of alle) {
+      const o = document.createElement("option");
+      o.value = a.id;
+      o.textContent = a.id;
+      sel.appendChild(o);
+    }
+    sel.value = alle.some((a) => a.id === vorher) ? vorher : (alle[0] ? alle[0].id : "");
   }
 
   fuelle(a) {
@@ -137,6 +191,8 @@ class ChimeraAnbieter extends HTMLElement {
     this.$("n-bez").value = a.bezeichnung || "";
     this.$("n-adr").value = a.adresse || "";
     this.$("k-id").value = a.id || "";
+    this.idVonHand = true;
+    this.$("n-id").classList.remove("auto");
     this.$("n-fehler").textContent = "";
     this.$("k-fehler").textContent = "";
   }
@@ -160,8 +216,8 @@ class ChimeraAnbieter extends HTMLElement {
       return;
     }
     this.$("n-fehler").textContent = "";
-    this.$("k-id").value = id;
     await this.laden();
+    this.$("k-id").value = id;
   }
 
   async schluessel() {
@@ -169,7 +225,7 @@ class ChimeraAnbieter extends HTMLElement {
     const wert = this.$("k-wert").value.trim();
     this.$("k-erfolg").textContent = "";
     if (!id) {
-      this.$("k-fehler").textContent = "Die Kennung fehlt (oben eintragen).";
+      this.$("k-fehler").textContent = "Bitte oben einen Anbieter anlegen.";
       return;
     }
     if (!wert) {
