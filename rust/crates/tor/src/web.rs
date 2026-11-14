@@ -1042,6 +1042,13 @@ fn chat_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {    // Das Recht st
             let ev = z.strom.seit(seit, frist);
             json_antwort(200, json!({"ok": true, "ereignisse": ev.iter().map(ereignis_json).collect::<Vec<_>>()}))
         }
+        // Was im Chat waehlbar ist (14.11.): je Anbieter die drei Rubriken
+        // `chat` / `spezial` / `unbekannt`. Die Einstufung kommt aus dem
+        // gemessenen Katalog, nicht aus dem Namen des Modells.
+        ("GET", "auswahl") => {
+            let r = crate::dienst::antworten(&json!({"op": "modelle_auswahl"}), &z.stand);
+            json_antwort(200, r)
+        }
         ("GET", "sitzungen") => match sitzung::anfragen(&z.sitzung_socket, &json!({"op": "sitzungen"})) {
             Ok(r) => json_antwort(200, r),
             Err(e) => fehler(502, &format!("Sitzung nicht erreichbar: {e}")),
@@ -1051,7 +1058,13 @@ fn chat_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {    // Das Recht st
             if sid.is_empty() || !sid.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.') {
                 return fehler(400, "sitzung fehlt oder ungueltig");
             }
-            match sitzung::anfragen(&z.sitzung_socket, &json!({"op": "lesen", "sitzung": sid, "max": 200})) {
+            // `vor` holte bisher niemand; die Oberflaeche braucht es, um beim
+            // Hochscrollen rueckwaerts nachzuladen (14.11.).
+            let max: u64 = query_wert(a.query, "max").and_then(|s| s.parse().ok()).unwrap_or(200).clamp(1, 500);
+            let vor: u64 = query_wert(a.query, "vor").and_then(|s| s.parse().ok()).unwrap_or(0);
+            match sitzung::anfragen(&z.sitzung_socket, &json!({
+                "op": "lesen", "sitzung": sid, "max": max, "vor": vor
+            })) {
                 Ok(r) => json_antwort(200, r),
                 Err(e) => fehler(502, &format!("Sitzung nicht erreichbar: {e}")),
             }

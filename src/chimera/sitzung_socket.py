@@ -70,6 +70,31 @@ def _senden(f, obj: dict) -> None:
     f.flush()
 
 
+def seite(alle: list[dict], max_n, vor) -> list[dict]:
+    """Ein Stueck des Verlaufs fuer die Oberflaeche.
+
+    ``vor`` ist der Abstand vom **Ende**: ``vor=0`` heisst „die letzten
+    ``max_n``", ``vor=50`` die 50 davor. Damit laedt die Oberflaeche beim
+    Hochscrollen rueckwaerts nach, ohne den ganzen Verlauf zu holen (Nutzer-
+    befund 14.11.: nach einem Neuladen war der Chat leer).
+
+    Unsinnige Werte werden nicht zu Fehlern, sondern zu Vorgaben: ``max``
+    fällt auf 200, mindestens 1 (0 waere ein leerer Slice -- und saehe wie
+    „kein Verlauf" aus).
+    """
+    try:
+        max_n = max(1, int(max_n if max_n is not None else 200))
+    except (TypeError, ValueError):
+        max_n = 200
+    try:
+        vor = max(0, int(vor if vor is not None else 0))
+    except (TypeError, ValueError):
+        vor = 0
+    ende = max(0, len(alle) - vor)
+    anfang = max(0, ende - max_n)
+    return alle[anfang:ende]
+
+
 class SitzungsServer:
     def __init__(self, session: Session, pfad: str | None = None,
                  sock: socket.socket | None = None,
@@ -254,8 +279,10 @@ class SitzungsServer:
                 elif op == "lesen":
                     sid = str(q.get("sitzung") or "")
                     try:
-                        antwort({"ok": True, "eintraege":
-                                 self.session.ablage.lesen(sid)[-int(q.get("max", 200)):]})
+                        alle = self.session.ablage.lesen(sid)
+                        stueck = seite(alle, q.get("max"), q.get("vor"))
+                        antwort({"ok": True, "gesamt": len(alle),
+                                 "eintraege": stueck})
                     except Exception as exc:              # noqa: BLE001
                         antwort({"ok": False, "fehler": str(exc)})
                 elif op == "frage":

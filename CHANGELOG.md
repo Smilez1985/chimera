@@ -1408,6 +1408,18 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Der Chatverlauf war nach einem Neuladen weg** (Nutzerbefund 14.11.):
+  `chat.js` holte beim Öffnen der Seite nur den Ereignisstrom — den Verlauf
+  lud nur `sitzungWechseln()`, und das wurde für die Hauptsitzung nie
+  aufgerufen. Jetzt lädt das Modul beim Öffnen die letzten 50 Einträge und
+  **blättert beim Hochscrollen rückwärts** nach (Position bleibt stehen). Der
+  Socket kennt dafür `vor` (Abstand vom Ende) und nennt `gesamt`; `max=0`
+  wird auf 1 gehoben statt als leerer Verlauf auszusehen. Der erste
+  Strom-Abruf nach dem Laden setzt nur die Marke, damit nichts doppelt
+  erscheint. Tests: 11 neue in `tests/test_sitzung_socket.py` (Seiten,
+  Grenzen, unsinnige Werte), Gegenprobe `vor wird ignoriert` rot; im Browser
+  mit 240 Zeilen durchgespielt (50 → 100 → 240, `zeile-000` erreichbar).
+
 - **Web-Passwort ließ sich nicht neu setzen.** Der Installer setzt den Hash
   nur einmal (aus `CHIMERA_WEB_PASSWORT`) und rührt ihn danach nicht an —
   nach einem vergessenen Passwort war die Oberfläche nicht mehr erreichbar.

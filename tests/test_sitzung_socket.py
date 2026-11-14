@@ -41,6 +41,13 @@ class Agent:
 
 
 if GEGENPROBE:
+    # Fehler eingebaut: das Blaettern ignoriert "vor" und liefert immer den
+    # Schluss -- genau der Zustand, in dem man im Chat nicht zurueckscrollen
+    # kann. Der Test muss dann rot werden.
+    _seite_orig = sitzung_socket.seite
+    def seite_ohne_vor(alle, max_n, vor):
+        return _seite_orig(alle, max_n, 0)
+    sitzung_socket.seite = seite_ohne_vor
     # Fehler eingebaut: Ereignisse gehen nur an den ersten Abonnenten.
     _orig = Session.emit
     def nur_erster(self, art, tuer, text="", ref=""):
@@ -160,6 +167,46 @@ while time.time() - t0 < 2:
     if len(nrs) >= sess.nr:
         break
 check("alles nachgeliefert", nrs, list(range(1, sess.nr + 1)))
+
+print("== Verlauf seitenweise lesen (Hochscrollen) ==")
+from chimera.ablage import Ablage  # noqa: E402
+d2 = tempfile.mkdtemp()
+abl = Ablage(Path(d2) / "sitzungen-ablage")
+sid = ablage_id = abl.aktiv()
+for i in range(120):
+    abl.anhaengen({"art": "nachricht", "rolle": "user", "inhalt": f"zeile-{i:03d}"})
+pfad2 = os.path.join(d2, "s2.sock")
+sess2 = Session(Agent(), ablage=abl)
+srv2 = sitzung_socket.SitzungsServer(sess2, pfad=pfad2).start()
+time.sleep(0.1)
+k = Client(pfad2)
+
+def hole(**kw):
+    k.senden(op="lesen", sitzung=sid, **kw)
+    return k.lesen()
+
+r = hole(max=50)
+check("letzte Seite vollständig", len(r["eintraege"]), 50)
+check("Gesamtzahl wird genannt", r["gesamt"], 120)
+check("letzter Eintrag ist der neueste", r["eintraege"][-1]["inhalt"], "zeile-119")
+check("erste Seite beginnt bei 70", r["eintraege"][0]["inhalt"], "zeile-070")
+
+r2 = hole(max=50, vor=50)
+check("zweite Seite endet vor der letzten", r2["eintraege"][-1]["inhalt"], "zeile-069")
+check("zweite Seite beginnt bei 20", r2["eintraege"][0]["inhalt"], "zeile-020")
+
+r3 = hole(max=50, vor=100)
+check("dritte Seite reicht bis zum Anfang", r3["eintraege"][0]["inhalt"], "zeile-000")
+check("dritte Seite hat nur noch 20", len(r3["eintraege"]), 20)
+
+r4 = hole(max=50, vor=500)
+check("über den Anfang hinaus ist leer, nicht kaputt", r4["eintraege"], [])
+
+r5 = hole(max=0)
+check("max=0 wird auf 1 gehoben, nicht als leerer Slice gedeutet",
+      len(r5["eintraege"]), 1)
+r6 = hole(max="quatsch")
+check("unsinniges max fällt auf 200 zurück", len(r6["eintraege"]), 120)
 
 print("== Fehlerfälle ==")
 x = Client(pfad)

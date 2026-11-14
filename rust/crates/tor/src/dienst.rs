@@ -83,6 +83,10 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
             Some(a) => chat(a, anfrage, stand),
             None => zeile::fehlerantwort("anbieter_fehlt", "Der Chat braucht ein Feld \"anbieter\"."),
         },
+        // Die Modellwahl fuer den Chat (14.11.): je Anbieter drei Listen --
+        // mit Werkzeugen, Spezialmodelle, unbekannt. `tools: null` ist
+        // "nicht gemessen", nicht "ja" (DESIGN 5t).
+        "modelle_auswahl" => modelle_auswahl(stand),
         "modelle" => match anfrage.get("anbieter").and_then(Value::as_str) {
             Some(a) => modelle(a, stand),
             None => zeile::fehlerantwort("anbieter_fehlt", "Die Abfrage braucht ein Feld \"anbieter\"."),
@@ -270,6 +274,101 @@ fn anbieter_finden(id: &str, stand: &Stand) -> Result<(String, Option<String>), 
 }
 
 /// Der Typ, den dieser Weg nicht bedient -- mit Klartext statt „unbekannt“.
+
+/// Eine Modellliste in die drei Rubriken der Chat-Auswahl zerlegen.
+///
+/// `katalog` ist der gemessene Stand (`/api/show` -> `capabilities`). Was
+/// dort `tools: true` sagt, darf in die Chat-Auswahl; `false` heisst
+/// Spezialmodell (mit seiner Art); fehlender Eintrag heisst **unbekannt**
+/// und bleibt draussen. Unbekannt als "kann Werkzeuge" zu behandeln waere
+/// genau der Fehler, den DESIGN 5t verbietet.
+fn auswahl_rubriken(modelle: &[String], katalog: &Value, herkunft: &str) -> (Vec<Value>, Vec<Value>, Vec<Value>) {
+    let eintraege = katalog["modelle"].as_object();
+    let mut chat = Vec::new();
+    let mut spezial = Vec::new();
+    let mut unbekannt = Vec::new();
+    for m in modelle {
+        let e = eintraege
+            .and_then(|k| k.get(m))
+            .cloned()
+            .unwrap_or_else(|| json!({}));
+        match e["tools"].as_bool() {
+            Some(true) => chat.push(json!({"modell": m, "herkunft": herkunft})),
+            Some(false) => spezial.push(json!({
+                "modell": m,
+                "art": art_aus(&e),
+                "herkunft": herkunft,
+            })),
+            None => unbekannt.push(json!({"modell": m, "herkunft": "nicht gemessen"})),
+        }
+    }
+    (chat, spezial, unbekannt)
+}
+
+/// Die Art eines Modells, das keine Werkzeuge kann: was es sonst kann.
+fn art_aus(eigenschaften: &Value) -> &'static str {
+    let f: Vec<&str> = eigenschaften["faehigkeiten"]
+        .as_array()
+        .map(|a| a.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    for (name, art) in [
+        ("vision", "vision"),
+        ("image", "bild"),
+        ("audio", "audio"),
+        ("embedding", "embedding"),
+    ] {
+        if f.iter().any(|x| *x == name) {
+            return art;
+        }
+    }
+    "ohne Werkzeuge"
+}
+
+/// `op: modelle_auswahl` -- was im Chat waehlbar ist, je Anbieter.
+fn modelle_auswahl(stand: &Stand) -> Value {
+    let (liste, meldungen) = crate::daten::anbieter_laden(&stand.daten);
+    let mut anbieter = Vec::new();
+    let mut meld = Vec::new();
+    for (id, a) in &liste {
+        if a["an"].as_bool() == Some(false) {
+            continue;
+        }
+        let typ = a["typ"].as_str().unwrap_or("");
+        let r = modelle(id, stand);
+        if r["ok"] != true {
+            meld.push(json!({"anbieter": id, "text": r["fehler"]["text"]}));
+            continue;
+        }
+        let namen: Vec<String> = r["modelle"]
+            .as_array()
+            .map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect())
+            .unwrap_or_default();
+        let (chat, spezial, unbekannt, herkunft) = if typ == "deepseek" {
+            // Die API liefert keine Eigenschaften; die Doku sagt, dass alle
+            // Chat-Modelle Werkzeuge koennen. Das ist eine Herkunft, keine
+            // Messung -- und steht deshalb so da.
+            (namen.iter().map(|m| json!({"modell": m, "herkunft": "dokumentiert"})).collect(), Vec::new(), Vec::new(), "dokumentiert")
+        } else {
+            let k = katalog_fuer(id, a["adresse"].as_str(), stand);
+            let (c, s, u) = auswahl_rubriken(&namen, &k, "gemessen");
+            (c, s, u, "gemessen")
+        };
+        anbieter.push(json!({
+            "id": id,
+            "typ": typ,
+            "bezeichnung": a["bezeichnung"],
+            "host": r["host"],
+            "herkunft": herkunft,
+            "chat": chat,
+            "spezial": spezial,
+            "unbekannt": unbekannt,
+        }));
+    }
+    let mut alle_meld = meldungen.iter().map(|m| json!({"quelle": m.quelle, "text": m.text})).collect::<Vec<_>>();
+    alle_meld.extend(meld);
+    json!({"ok": true, "anbieter": anbieter, "meldungen": alle_meld})
+}
+
 fn typ_nicht_bedient(id: &str, typ: &str) -> Value {
     zeile::fehlerantwort(
         "anbieter_unbekannt",
@@ -931,5 +1030,62 @@ mod tests_deepseek {
         let a = antworten(&json!({"op": "chat", "anbieter": "cloud", "prompt": "x"}), &s);
         assert_eq!(a["fehler"]["code"], "anbieter_unbekannt");
         assert!(a["fehler"]["text"].as_str().unwrap().contains("litellm"), "{a}");
+    }
+}
+
+#[cfg(test)]
+mod tests_auswahl {
+    use super::*;
+
+    fn namen(v: &[Value]) -> Vec<String> {
+        v.iter().map(|e| e["modell"].as_str().unwrap_or("").to_string()).collect()
+    }
+
+    // Die Chat-Auswahl zeigt nur, was Werkzeuge kann. `false` ist ein
+    // Spezialmodell, **fehlend** ist unbekannt -- und unbekannt ist nicht
+    // "kann Werkzeuge" (DESIGN 5t, Nutzerauftrag 14.11.).
+    #[test]
+    fn nur_gemessene_werkzeuge_stehen_zur_wahl() {
+        let modelle: Vec<String> = ["tools-an", "tools-aus", "unbekannt", "leer"]
+            .iter().map(|s| s.to_string()).collect();
+        let katalog = json!({"modelle": {
+            "tools-an": {"tools": true, "faehigkeiten": ["completion", "tools"]},
+            "tools-aus": {"tools": false, "faehigkeiten": ["completion", "vision"]},
+            "unbekannt": {"tools": null},
+            "leer": {}
+        }});
+        let (chat, spezial, unbekannt) = auswahl_rubriken(&modelle, &katalog, "gemessen");
+        assert_eq!(namen(&chat), ["tools-an"]);
+        assert_eq!(namen(&spezial), ["tools-aus"]);
+        assert_eq!(namen(&unbekannt), ["unbekannt", "leer"]);
+        // Die Art des Spezialmodells kommt aus seinen Faehigkeiten.
+        assert_eq!(spezial[0]["art"], "vision");
+        // Die Herkunft steht dabei -- eine Messung wird nicht als Doku verkauft.
+        assert_eq!(chat[0]["herkunft"], "gemessen");
+    }
+
+    #[test]
+    fn spezialarten_werden_benannt() {
+        for (faehigkeiten, art) in [
+            (json!(["completion", "vision"]), "vision"),
+            (json!(["completion", "image"]), "bild"),
+            (json!(["completion", "audio"]), "audio"),
+            (json!(["embedding"]), "embedding"),
+            (json!(["completion"]), "ohne Werkzeuge"),
+        ] {
+            let e = json!({"tools": false, "faehigkeiten": faehigkeiten});
+            assert_eq!(art_aus(&e), art, "{e}");
+        }
+    }
+
+    // Ohne Katalog ist alles unbekannt -- und damit nicht waehlbar. Das ist
+    // die Haelfte der Zusage: lieber nichts anbieten als ein Modell, das
+    // Werkzeuge nur zu versprechen scheint.
+    #[test]
+    fn ohne_katalog_ist_nichts_waehlbar() {
+        let m: Vec<String> = vec!["a".into(), "b".into()];
+        let (chat, spezial, unbekannt) = auswahl_rubriken(&m, &json!({}), "gemessen");
+        assert!(chat.is_empty() && spezial.is_empty());
+        assert_eq!(namen(&unbekannt), ["a", "b"]);
     }
 }

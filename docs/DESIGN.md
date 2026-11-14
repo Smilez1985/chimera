@@ -1186,6 +1186,43 @@ der Server darf sich auf sie nicht verlassen — und werden von zwei Tests
 gegen dieselbe Regel gehalten (`tests/js/anbieter_kennung.mjs` gegen
 `id_gueltig`, `daten::tests::kennung_aus_bezeichnung`).
 
+### Die Modellwahl im Chat: nur was Werkzeuge kann (14.11.2026)
+
+**Befund des Nutzers:** „DeepSeek ist zwar angebunden, aber der Chat ist
+Ollama, DeepSeek und/oder Modell sind im WebChat aktuell nicht wählbar."
+Richtig — der WebChat schickte `{"op": "frage", "text": …}` ohne Anbieter und
+Modell, und der Agent fragte fest `"anbieter": "ollama"`.
+
+**Zwei Zusagen, die daraus folgen:**
+
+1. **Zur Auswahl steht nur, was Werkzeuge kann.** Ein Modell ohne
+   Werkzeugaufruf ist im Chat ein halber Agent: Es erzählt, was es tun würde,
+   statt zu messen. Die Einstufung kommt aus dem, was das Gateway **gemessen**
+   hat (`/api/show` → `capabilities`), nie aus einer Vermutung:
+   - `tools: true` → Chat-Auswahl,
+   - `tools: false` → nicht wählbar,
+   - `tools: null` (nicht messbar) → **nicht wählbar**, sondern als
+     „unbekannt" geführt. Unbekannt ist nicht „ja" (DESIGN 5t).
+   Für einen Typ, dessen API keine Eigenschaften liefert, gilt das, was die
+   Herkunft sagt — bei `deepseek` die Doku („alle Chat-Modelle können
+   Werkzeuge"), ausgewiesen als `herkunft: "dokumentiert"`, nicht als Messung.
+
+2. **Spezialmodelle bekommen eine eigene Rubrik.** Bilderzeugung, Bild- und
+   Audioverarbeitung, Embedding-Modelle sind keine Chat-Modelle. Sie stehen
+   in der Auswahl unter „Spezialmodelle" mit ihrer Art (`vision`,
+   `embedding`, `image`, `audio`, sonst `ohne Werkzeuge`) und sind dort
+   **nicht wählbar** — sichtbar, damit niemand rätselt, wo ein Modell
+   geblieben ist.
+
+**Ein Op, zwei Türen:** `modelle_auswahl` (Socket) liefert je Anbieter die
+drei Listen `chat` / `spezial` / `unbekannt`; `/api/chat/auswahl` ist die
+Web-Tür dazu. Die Oberfläche baut daraus Anbieter- und Modellwahl.
+
+**Der Weg der Wahl:** `/api/chat/senden` schickt `anbieter` und `modell` mit
+`op: frage` an die Sitzung; die Sitzung gibt sie an den Agenten, der den
+Anbieter über seine Registry nimmt. Fehlt die Wahl, bleibt es bei der
+Reihenfolge nach 5h (nichts bricht für Aufrufer, die keine Wahl schicken).
+
 ### Guthaben je Anbieter (13.11.2026)
 
 **Auftrag smilez:** „Kosten können bei den meisten Anbietern aus der API

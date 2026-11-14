@@ -4,6 +4,7 @@
 class ChimeraChat extends HTMLElement {
   connectedCallback() {
     this.seit = 0;
+    this.ersterStrom = true;
     this.laeuft = true;
     this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = `
@@ -35,6 +36,11 @@ class ChimeraChat extends HTMLElement {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); this.senden(); }
     });
     this.wahl.addEventListener("change", () => this.sitzungWechseln());
+    // Beim Hochscrollen rueckwaerts nachladen (Nutzerbefund 14.11.: nach
+    // einem Neuladen war der Verlauf weg).
+    this.liste.addEventListener("scroll", () => {
+      if (this.liste.scrollTop < 80) this.aeterLaden();
+    });
     this.sitzungenLaden();
     this.hoeren();
   }
@@ -66,7 +72,14 @@ class ChimeraChat extends HTMLElement {
         if (r.status === 401) { location.reload(); return; }
         if (r.ok) {
           pause = 1000;
-          for (const e of r.ereignisse) { this.seit = Math.max(this.seit, e.nr); this.ereignis(e); }
+          for (const e of r.ereignisse) {
+            this.seit = Math.max(this.seit, e.nr);
+            // Der erste Abruf nach dem Laden holt den Puffer nach -- was
+            // schon im Verlauf steht, waere sonst doppelt. Deshalb wird beim
+            // ersten Durchgang nur die Marke gesetzt.
+            if (!this.ersterStrom) this.ereignis(e);
+          }
+          this.ersterStrom = false;
           continue;
         }
       } catch (_) { /* Netz weg: neu versuchen */ }
@@ -83,6 +96,56 @@ class ChimeraChat extends HTMLElement {
     else if (e.art === "umgeleitet" || e.art === "wechsel" || e.art === "neu") this.blase("sys", e.text);
   }
 
+  /// Die letzten Eintraege einer Sitzung holen und anzeigen. `vor` ist der
+  /// Abstand vom Ende -- damit laesst sich stueckweise rueckwaerts laden.
+  async verlaufLaden(sid, vor = 0) {
+    const pfad = `/api/chat/lesen?sitzung=${encodeURIComponent(sid)}&max=50&vor=${vor}`;
+    const r = await window.chimera.api(pfad);
+    if (!r.ok) { this.blase("sys", r.fehler || "Verlauf nicht lesbar"); return null; }
+    return r;
+  }
+
+  /// Aeltere Eintraege vorne anhaengen und die Scrollposition halten --
+  /// sonst springt der Text beim Nachladen unter dem Finger weg.
+  async aeterLaden() {
+    if (this.laedtAlt || !this.gesamt || !this.sid) return;
+    const geladen = this.geladen || 0;
+    if (geladen >= this.gesamt) return;
+    this.laedtAlt = true;
+    try {
+      const r = await this.verlaufLaden(this.sid, geladen);
+      if (r && r.eintraege && r.eintraege.length) {
+        const hoehe = this.liste.scrollHeight;
+        const vorne = document.createDocumentFragment();
+        for (const e of r.eintraege) {
+          const knoten = this.blasenKnoten(e);
+          if (knoten) vorne.appendChild(knoten);
+        }
+        this.liste.insertBefore(vorne, this.liste.firstChild);
+        this.geladen = geladen + r.eintraege.length;
+        this.liste.scrollTop = this.liste.scrollHeight - hoehe;
+      } else {
+        this.geladen = this.gesamt;   // nichts mehr da
+      }
+    } finally {
+      this.laedtAlt = false;
+    }
+  }
+
+  /// Eine Blase bauen, ohne sie anzuhaengen (fuer das Nachladen oben).
+  blasenKnoten(e) {
+    const d = document.createElement("div");
+    if (!e || e.art === "verdichtet") {
+      d.className = "m sys";
+      d.textContent = "— verdichtet —";
+      return d;
+    }
+    if (e.art !== "nachricht") return null;
+    d.className = "m " + (e.rolle === "user" ? "ich" : "sie");
+    d.appendChild(document.createTextNode(e.inhalt || ""));
+    return d;
+  }
+
   async sitzungenLaden() {
     const r = await window.chimera.api("/api/chat/sitzungen");
     if (!r.ok) return;
@@ -92,19 +155,34 @@ class ChimeraChat extends HTMLElement {
     o(r.haupt, "Aktuelle (Haupt)");
     if (r.alt) o(r.alt, "Vorherige (nur lesbar)");
     for (const a of r.archiv || []) o(a, `Archiv ${a} (nur lesbar)`);
+    // Der Verlauf kommt beim Oeffnen der Seite -- nicht erst beim Umschalten.
+    this.sid = r.haupt;
+    this.wahl.value = r.haupt;
+    await this.verlaufZeigen();
   }
 
   async sitzungWechseln() {
-    const sid = this.wahl.value;
-    if (sid === this.haupt) { this.schreibgeschuetzt = false; this.liste.replaceChildren(); this.seit = 0; return; }
-    this.schreibgeschuetzt = true;
-    const r = await window.chimera.api(`/api/chat/lesen?sitzung=${encodeURIComponent(sid)}`);
+    this.sid = this.wahl.value;
+    this.schreibgeschuetzt = this.sid !== this.haupt;
     this.liste.replaceChildren();
-    if (!r.ok) { this.blase("sys", r.fehler || "Nicht lesbar"); return; }
-    for (const e of r.eintraege) {
-      if (e.art === "nachricht") this.blase(e.rolle === "user" ? "ich" : "sie", e.inhalt);
-      else if (e.art === "verdichtet") this.blase("sys", "— verdichtet —");
+    this.geladen = 0;
+    this.seit = 0;
+    await this.verlaufZeigen();
+  }
+
+  /// Den Verlauf der gewaehlten Sitzung anzeigen -- beim Laden UND beim
+  /// Wechseln derselbe Weg, damit nach einem Neuladen nichts fehlt.
+  async verlaufZeigen() {
+    if (!this.sid) return;
+    const r = await this.verlaufLaden(this.sid, 0);
+    if (!r) return;
+    this.gesamt = r.gesamt || 0;
+    this.geladen = (r.eintraege || []).length;
+    for (const e of r.eintraege || []) {
+      const k = this.blasenKnoten(e);
+      if (k) this.liste.appendChild(k);
     }
+    this.liste.scrollTop = this.liste.scrollHeight;
   }
 }
 customElements.define("chimera-chat", ChimeraChat);
