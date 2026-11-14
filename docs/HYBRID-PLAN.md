@@ -57,9 +57,15 @@ ehrlichste Statusdisplay, das sich bauen lässt.
     │  + RGB-LED, Lautsprecher, Taste                   │
     └───────────────────────────────────────────────────┘
 
-**Fertig ist die untere Hälfte.** Ausdruck, Renderer und Ausgabe stehen
-und sind geprüft (162 Tests). Was fehlt, ist der Agent darüber — und
-genau der existiert in openclawgotchi bereits.
+**Beide Hälften stehen** (Stand 14.11.2026). Ausdruck, Renderer und
+Ausgabe sind gebaut; der Agent darüber ebenfalls — `src/chimera/agent/`
+mit zwölf Modulen (Schleife, Werkzeuge, Sitzung, Gedächtnis, Skills,
+Schleifenerkennung, Vorprüfung, Sicherheitsgrenze, Kontext, Gesicht,
+Ausführer-Anbindung), verdrahtet in `src/chimera/app.py`. Der Plan hat
+seinerzeit mit 162 Tests gerechnet; der Baum trägt heute 514 Rust-Tests,
+rund tausend Python-Prüfungen und 49 Installer-Testskripte. Was noch
+**nicht** gebaut ist, steht in `docs/ROADMAP.md` — vor allem die Sprache
+(DESIGN §4) und der Briefkasten (Regel 5o).
 
 ---
 
@@ -80,7 +86,7 @@ Diese Befehle **bleiben**. Nur was dahinter geschieht, ändert sich:
 |---|---|---|
 | `FACE:` | Emoticon aus einer Datei mit 10 Einträgen | Mood aus der Registry — auch ein erfundener |
 | `DISPLAY:` | Text aufs E-Paper | Statuszeile in den 40 zusätzlichen Zeilen |
-| `SAY:` | Sprechblase | Sprechblase **und** Sprachausgabe |
+| `SAY:` | Sprechblase | Sprechblase **und** Sprachausgabe *(Sprachausgabe entworfen, nicht gebaut)* |
 
 Damit laufen bestehende Skills und der Systemprompt unverändert weiter.
 Das ist der Grund, diese Schnittstelle nicht anzufassen, obwohl sie

@@ -5,8 +5,10 @@ Bequemlichkeit, sondern senkt die Einstiegshürde: Wer schon einen Pi mit
 E-Paper oder einen GamePi13 hat, soll Chimera benutzen können, ohne erst
 Hardware zu kaufen.
 
-Stand: 2026-09-29. Entwurf — außer dem Whisplay-Panel ist noch nichts
-gebaut.
+Stand: 2026-11-14. **Gebaut ist allein das Whisplay-Panel** (mit
+Panel-Modul `keine` für Geräte ohne Anzeige). GamePi13 und beide
+Waveshare-Varianten sind Entwurf: kein Treiber, kein Profil, kein Test.
+Der Erkennungscode kennt sie als Fall (`displays/erkennen.py`), mehr nicht.
 
 ---
 
@@ -39,7 +41,7 @@ infrage kommt (Abschnitt „Darstellungsarten").
 
 | Panel | Auflösung | Farben | Bildrate | Stand |
 |---|---|---|---|---|
-| **Whisplay HAT** | 240×280 | RGB565 | ~30 | ✅ gebaut |
+| **Whisplay HAT** | 240×280 | RGB565 | **15** | ✅ gebaut (der Pi Zero 2 W hält 15 Bilder/s, nicht 30 — `display.json`, `panel.py`) |
 | **GamePi13** (ST7789) | 240×240 | RGB565 | 15 | geplant |
 | **Waveshare 2.13" V4 mono** | 250×122 | 1 Bit | ~0,4 /s | geplant |
 | **Waveshare 2.13" B** | 250×122 | S/W + Rot | ~0,07 /s | geplant |

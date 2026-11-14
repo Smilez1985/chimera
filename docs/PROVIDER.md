@@ -41,23 +41,36 @@ Weil OpenMinis GPL-3 ist, wird dessen Teil **nachgebaut, nicht
 ## 2. Aufbau
 
     Agent-Schleife  (aus openclawgotchi, angepasst)
-      │  ├─ Werkzeuge + Sicherheitsschicht   ← Gotchi, unverändert
+      │  ├─ Werkzeuge + Sicherheitsschicht   ← Gotchi-Gerüst, Werkzeuge ersetzt
+      │      (Zehn eigene Werkzeuge; fünf davon laufen nicht mehr im Dienst,
+      │       sondern über den Ausführer des Gateways — Regel 5l/5n.
+      │       „Unverändert" wäre falsch: die Sicherheitsgrenze ist gewandert.)
       │  ├─ Vorprüfung + JSON-Reparatur      ← OpenMinis-Muster
       │  ├─ Schleifenerkennung               ← OpenMinis-Muster
       │  └─ Kontextschwellen                 ← OpenMinis-Muster
       ▼
     Aufgaben → Gruppen           ← OpenMinis-Muster, Regel 5h
-      gespraech      → [ abo/sonnet-5, ollama/qwen ]
+      gespraech      → [ abo/sonnet-5, ollama/qwen ]      (Beispiel, s. Hinweis)
       mood_erfindung → [ ollama/qwen, abo/haiku ]
       umgebung       → [ ollama/qwen ]
+
+      Hinweis zum Stand: Die Kette wird zur Laufzeit aus den Kostenklassen
+      gebaut (`provider/setup.py`, `CHEAP_TASKS`). Beide Gateway-Connectoren
+      melden heute `cost = FREE` — auch für einen bezahlten DeepSeek-Schlüssel.
+      Folge am Pi: `mood_erfindung` läuft zuerst auf DeepSeek, nicht lokal.
+      Offen in ROADMAP („access/cost je Anbieter trennen").
       │
       ▼
     Anbieter-Registry            ← OpenMinis-Muster, Regel 5a
+      ├─ DeepSeek          gebaut und im Betrieb (Regel 5n, `deepseek.rs`)
+      ├─ Ollama            eigenes Netz, wenn vorhanden (5c) — gebaut
       ├─ AnthropicOAuth    Abo-Anmeldung, Kennung zur Laufzeit (5b)
       ├─ AnthropicKey      API-Schlüssel
-      ├─ Ollama            eigenes Netz, wenn vorhanden (5c)
-      ├─ LiteLLM           alles Weitere
-      └─ MCP-Werkzeuge     fremde Werkzeugquellen (Abschnitt „MCP")
+      │    Beide Connectoren liegen in `src/chimera/provider/anthropic.py`,
+      │    sind aber im Betrieb nicht erreichbar: der Dienst hat kein Netz,
+      │    und das Gateway kennt keinen Anthropic-Typ. Also entworfen, nicht nutzbar.
+      ├─ LiteLLM           alles Weitere          — **nicht gebaut**
+      └─ MCP-Werkzeuge     fremde Werkzeugquellen — **nicht gebaut** (Abschnitt „MCP")
 
 ---
 
@@ -256,9 +269,14 @@ Alle Anbieter liegen außerhalb des Geräts (Regel 5). Fällt das Netz aus:
 
 ---
 
-## 4. MCP
+## 4. MCP — entworfen, **nicht gebaut**
 
-Chimera soll fremde Werkzeugquellen einbinden können. Aktueller Stand
+> **Stand:** kein MCP-Client im Baum. `mcp` kommt nur als Protokollfeld im
+> ACP-Gerüst vor (`rust/crates/acp/src/kern.rs`: `"mcpCapabilities"`) und als
+> leerer Testwert `mcpServers: []`. Kein Werkzeugname mit Punkt, keine
+> Bibliothek in `requirements.txt`. Die Regeln unten sind Entwurf.
+
+Chimera soll fremde Werkzeugquellen einbinden können. Recherchestand
 (geprüft 29.09.2026): Spezifikation **2026-07-28**, Python-Bibliothek
 **2.2.0** (ab Python 3.10 — Trixie hat 3.13, passt).
 
@@ -281,7 +299,14 @@ werden deshalb **bei Bedarf gestartet**, nicht im Voraus.
 
 ---
 
-## 5. Audio als eigener Prozess
+## 5. Audio als eigener Prozess — entworfen, **nicht gebaut**
+
+> **Stand:** es gibt keinen Audio-Prozess und kein geteiltes Gedächtnis
+> (`rg 'shared_memory|multiprocessing' src/` → kein Treffer). Der einzige
+> Ton im Code ist der Messton des Installers (`src/chimera/displays/mikro.py`,
+> `aplay`/`arecord`). Der Pegel-Eingang des Renderers ist ein leerer Kanal
+> mit dem Kommentar „wer ihn füllt". Was hier steht, ist der Entwurf für
+> das Sprachpaket (DESIGN §4), nicht der Betrieb.
 
 ### Architekturregel 5g — Audio läuft getrennt, aber schlank
 

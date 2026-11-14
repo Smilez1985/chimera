@@ -960,6 +960,29 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Dokumente auf den gebauten Stand gezogen** (14.11., nach einem
+  Abgleich von README, DESIGN, INSTALLER, PROVIDER, HYBRID-PLAN und
+  DISPLAYS gegen Code und Gerät): Entfernt wurde nichts — was noch nicht
+  gebaut ist, steht jetzt ausdrücklich als „Nicht gebaut" daneben.
+  README: Sprachschicht (sherpa-onnx, TTS, VAD, Wake-Word) als ungebaut
+  gekennzeichnet, Anbieterliste um DeepSeek ergänzt, Anthropic als
+  „Connector da, im Betrieb nicht erreichbar" ehrlich benannt, LiteLLM und
+  MCP als geplant, „mehrere Anzeigen" auf „eine gebaut" korrigiert, Web-UI
+  als vorhanden statt „vielleicht später", Gateway-Abschnitt ergänzt,
+  Statuszeile mit CI-Vorabmarken statt „nothing is tagged", Zustandstabelle
+  mit Spalte „Built?". DESIGN: Kopf auf 14.11. datiert, „eingebaut sind
+  chat und status" auf neun Module, „fünf Ablagen" auf sechs (Hosts),
+  `ReadWritePaths` vollständig (neun Pfade), Rechteliste am Code,
+  `op: wahl_feld_setzen` statt `wahl_setzen`, `backup_file`-Beispiel als
+  geschlossen markiert; Marken „Nicht gebaut" bei 5o (Briefkasten),
+  5q (Cache), 5u (Werksreset) und 8c/8d (`erinnern`, `nachlesen`) sowie im
+  Regelverzeichnis. INSTALLER: „Entwurf, noch nicht implementiert" ersetzt
+  (13 Module, 17 lib, 49 Tests, im Betrieb), Modultabelle um 27/46/55
+  ergänzt, 99-gateway/99-sohelper statt „99 migrate (geplant)".
+  HYBRID-PLAN: „der Agent fehlt" auf „beide Hälften stehen", Testzahl
+  berichtigt. DISPLAYS: Whisplay 15 statt 30 Bilder/s, Stand präzisiert.
+  PROVIDER: MCP und Audio-Prozess als Entwurf markiert, „Werkzeuge
+  unverändert" berichtigt, Hinweis auf `cost = FREE` bei DeepSeek.
 - **Die Chat-Wahl liegt jetzt bei der Sitzung** (`wahl.json`, Felder
   `anbieter`/`modell`/`denken`) statt nur im Fenster: `/api/chat/auswahl`
   liefert sie mit, die Oberfläche zeigt sie beim Öffnen und schreibt jede

@@ -3,7 +3,14 @@
 Was und warum. Tragende Entscheidungen, Architekturregeln, Grenzen.
 Wer etwas ändert, das hier beschrieben ist, ändert **zuerst dieses Dokument**.
 
-Stand: 2026-09-29. Pre-Alpha, nichts getaggt.
+Stand: 2026-11-14. Pre-Alpha, kein Release getaggt (nur CI-Vorabmarken
+`rust-<sha>`), `VERSION` = `0.1.0-pre`.
+
+**Wie dieses Dokument zu lesen ist.** Es beschreibt Ziel und Begründung,
+auch dort, wo noch nichts gebaut ist. Wo eine Regel **keinen Code** hat,
+steht das seit dem 14.11.2026 ausdrücklich dabei („**Nicht gebaut.**") —
+entfernt wurde nichts. Der gebaute Stand ist an denselben Stellen benannt;
+was offen ist, führt `docs/ROADMAP.md` mit Belegen.
 
 ---
 
@@ -138,6 +145,13 @@ vermerkt das, lehnt aber nicht ab.
 
 Damit sind Noisys 41 Moods das, was sie sein sollen: **Beispiele dafür,
 was möglich ist** — Startbestand zum Mischen, nicht Katalog zum Auswählen.
+
+**Stand 14.11.2026:** Der Startbestand ist da und geladen —
+`data/moods-builtin.json` führt **43** Moods (Noisys 41 plus die zwei
+Chimera-eigenen `UPDATE` und `SPEAK`). Er ist der Ausdrucksvorrat des
+Renderers, nicht der Katalog der Auslöser: dass ein *Gerät* oder ein
+*Broker* einen Mood von außen setzt, ist der **ungebaute** Teil (siehe
+Regel „MQTT" weiter unten und die Tabelle in `docs/ROADMAP.md`).
 
 Zwei Dinge bleiben fest, beide aus gutem Grund:
 
@@ -274,6 +288,14 @@ eine Stimmung, es verliert nur die Deutung. Das ist der Normalfall bei
 einem Gerät, das an einem externen Modell hängt — und kein Fehlerzustand.
 
 ## 4. Sprache — vollständig offline
+
+
+> **Nicht gebaut.** Kein Audio-Pfad im Baum: `rg -il sherpa src rust installer`
+> findet nichts, es gibt keinen Aufnahme-, VAD-, KWS-, STT- oder TTS-Code.
+> Der einzige Ton im Code ist der Messton des Installers
+> (`src/chimera/displays/mikro.py`). Modelle, Prozessform (5g) und die
+> Kopplung an den Mood sind Entwurf; das Sprachpaket steht in
+> `docs/ROADMAP.md`.
 
 Ein Framework für alles: **sherpa-onnx**. Läuft auf Raspberry Pi, ohne
 Netz, und deckt STT, TTS, VAD und Keyword-Spotting ab.
@@ -1497,7 +1519,7 @@ Gateway-Tür (`telegram.rs`): `/model` zeigt die Serverliste mit der
 geltenden Wahl markiert und benennt Modelle, die gemessen keine Werkzeuge
 können; `/model 3` oder `/model <name>` zieht den Verweis
 `ollama/<modell>` in `wahl.json` nach vorn (Doppelung raus, alles andere in
-der Datei bleibt). Geschrieben wird über `op: wahl_setzen`, also von der
+der Datei bleibt). Geschrieben wird über `op: wahl_feld_setzen`, also von der
 Stelle, der die Datei gehört (5l). **„Set Ollama IP“ im Chat entfällt**
 (smilez). Adressen werden auf der Web-Oberfläche eingetragen oder durch
 die Netzsuche gefunden.
@@ -1560,9 +1582,14 @@ modular.
 - **Schnittstelle je Modul:** `/api/<modul>/…`. Eingebaut beantwortet sie das
   Gateway; ein Zusatzmodul nennt im Manifest einen Unix-Socket, an den das
   Gateway weiterreicht (Regel 14, keine Fremdbibliothek im Gateway).
-- **Rechte:** Das Manifest nennt, was ein Modul darf (z. B. `chat`,
+- **Rechte:** Das Manifest nennt, was ein Modul darf. Die gültige Liste steht
+  im Code (`web.rs`, `RECHTE`) und lautet heute: `chat`, `status`,
   `anbieter-lesen`, `anbieter-schreiben`, `wahl-lesen`, `wahl-schreiben`,
-  `anzeige`). Das Gateway reicht nur durch, was eingetragen ist.
+  `freigaben-lesen`, `freigaben-schreiben`, `ssh-lesen`, `ssh-schreiben`,
+  `netz-lesen`, `netz-schreiben`. Das Gateway reicht nur durch, was
+  eingetragen ist; ein unbekanntes Recht verwirft das Manifest.
+  *(Ein Recht `anzeige` für den Anzeigespiegel unten gibt es noch nicht —
+  der Spiegel selbst ist ebenfalls nicht gebaut, siehe „Nicht gebaut" dort.)
 - **Anzeigespiegel:** Der Renderer (Regel 7, ein Prozess, ein Framebuffer)
   legt das fertige Bild lesbar im Shared Memory ab; das Gateway liest nur
   und liefert es als Bildfolge an die Seite. Das Gateway schreibt nie ins
@@ -1668,10 +1695,12 @@ Beispiele, keine Vorgabe.
     0640-Datei keine 0644 machen.
 - **Format JSON-Dateien**, kein SQLite: kleiner Bestand, von Hand lesbar.
   SQLite bleibt dem Gedächtnisindex (8h).
-- **Kleinste Schreibrechte:** `ReadWritePaths` nennt nur
-  `config/anbieter`, `config/geheim`, `config/wahl`, `config/freigaben`,
-  `state/katalog` und `state/log` (Protokoll der Freigaben),
-  nie `config/` als Ganzes. Telegram-Token und Passwort-Hash ziehen aus der
+- **Kleinste Schreibrechte:** `ReadWritePaths` nennt je Ablage einen Ordner
+  (nie `config/` als Ganzes). Stand 14.11.2026 neun Pfade, wie die Unit sie
+  setzt (`installer/lib/gateway.sh`): `config/anbieter`, `config/geheim`,
+  `config/wahl`, `config/freigaben`, `config/ssh`, `state/katalog`,
+  `state/log` (Protokoll der Freigaben), `state/quota`, `state/web`.
+  Der Test `tests/test_ablagen_wirksam.py` hält Code und Unit gegeneinander. Telegram-Token und Passwort-Hash ziehen aus der
   `.env` nach `config/geheim/`; die `.env` bleibt für Adressen und Schalter
   und wird vom Gateway nur gelesen. Der Installer übernimmt den Umzug in
   `migrate_from()`.
@@ -1688,6 +1717,13 @@ Beispiele, keine Vorgabe.
   Modul „Reihenfolge“, das nur Verweise der Wahl führt.
 
 ### Architekturregel 5u — Passwort ändern braucht das alte; Werksreset braucht das Gerät
+
+
+> **Teilweise gebaut.** Das **Ändern** mit altem Passwort ist gebaut
+> (Web-Modul, `/api/passwort-neu` für die Ersteinrichtung, `bin/web-passwort`
+> auf dem Gerät für den Notfall). Der **Werksreset** mit zwei Sätzen,
+> Vorlagenpool und Sperrstufen ist **nicht gebaut**: kein `reset` in
+> `rust/crates/tor/src/web.rs`, keine Seite dafür.
 
 **Ändern:** Das alte Passwort wird geprüft (die Bremse aus 5m gilt),
 danach enden alle Anmeldungen.
@@ -1780,7 +1816,9 @@ Nutzers; der Installer legt ihn unter einem eigenen Nutzer an.
 `--module-neu`, `--module-pruefen` mit Prüfsumme über alle Dateien, Dateinamen
 und -grenzen, ohne symbolische Verweise) und Punkt 6 für Sonden (`status.rs`).
 Offen sind Punkt 2 (Freigabe), 3 (Sandbox-iframe) und 4 (Modul-Socket).
-Eingebaut sind `chat` und `status`.
+**Eingebaut sind neun Module** (`rust/crates/tor/src/web.rs`, `include_str!`):
+`chat`, `status`, `anbieter`, `ollama`, `freigaben`, `wahl`, `ssh`, `konten`,
+`netz` — dazu die Vorlage `_vorlage` für neue Module (`--module-neu`).
 
 ### Architekturregel 5b, Fassung für das Gateway — PR #407 ist die Vorlage, Punkt für Punkt
 
@@ -1844,6 +1882,13 @@ Vorlage ab und wird beim Umzug ersetzt:**
 
 
 ### Architekturregel 5o — Der Briefkasten ist ein eigener Prozess hinter dem Gateway, mit eigenem Port
+
+
+> **Nicht gebaut.** Es gibt keinen Crate im Workspace (`rust/Cargo.toml`
+> kennt `gemein`, `tor`, `acp`, `sohelper`), keinen Nutzer `chimera-post`,
+> keinen `/run/chimera/post.sock` und keinen Port. Der Briefkasten, den
+> dieses Projekt benutzt, ist der **fremde** woa-l-Server (Skill
+> `geraeteaustausch`), nicht Chimeras eigener. Offen in `ROADMAP.md`.
 
 andere Agenten ──► Gateway :<briefkasten-port>  (Token-Prüfung A19)
                           │ Unix-Socket /run/chimera/post.sock
@@ -1938,6 +1983,14 @@ liefert (z. B. `encrypted_content` der Websuche), kommen **unverändert**
 zurück, auch in der Sitzungsablage (8d).
 
 **3. Cache-Marken je Anbieter, nach deren Beispielcode** (Adapter im Gateway):
+
+> **Nicht gebaut.** Kein Adapter setzt Cache-Marken (`cache_control` /
+> `ephemeral` kommt im Baum nicht vor), `Reply.cache` mit
+> `gelesen`/`geschrieben`/`neu` gibt es nicht, und `chimera status` hat keine
+> Cache-Sonde. Was existiert: DeepSeek meldet seine eigenen Zahlen
+> (`prompt_cache_hit_tokens`/`prompt_cache_miss_tokens` in `deepseek.rs`,
+> als `cache_treffer`/`cache_neu`). Die Tabelle unten ist Entwurf.
+
 
 | Anbieter | Was das Gateway setzt |
 |---|---|
@@ -2823,7 +2876,10 @@ data/gedaechtnis/
   keine Aufgabenliste).
 - **Nichts fällt heraus:** Die Quellen werden **nie gelöscht**.
   Verdichtet wird nach oben, die unteren Stufen bleiben auf der Platte
-  und über das Werkzeug `erinnern` durchsuchbar. Die Zusammenfassung
+  und über das Werkzeug `erinnern` durchsuchbar.
+  **Nicht gebaut:** das Werkzeug `erinnern` gibt es nicht — die zehn
+  Werkzeuge stehen in `src/chimera/agent/tools.py`, `erinnern` ist keines
+  davon. Die Zusammenfassung
   führt die **Fundstellen** (welcher Tag), damit der Agent gezielt
   nachlesen kann. Das ist der Unterschied zu `_compact()` heute.
 - **Gegen stilles Verdünnen:** Eine Verdichtung ist nur gültig, wenn sie
@@ -2848,6 +2904,7 @@ data/gedaechtnis/
   kommen die Zusammenfassung **mit Verweis** auf die Zeilennummern, die
   offenen Punkte wörtlich und die letzten Turns wörtlich. Das Werkzeug
   `nachlesen` holt alte Abschnitte zurück.
+  **Nicht gebaut** — `nachlesen` existiert als Werkzeug nicht.
 - **Der Wächter ist eingebaut, kein eigener Dienst.** Er misst nach
   jedem Turn das Gewicht: Token des Fensters nach dem Verdichten gegen
   das Fenster des Modells, das gerade bedient (context.py, Regel 5a).
@@ -3377,9 +3434,10 @@ Roadmap oder als bekannte Einschränkung im Changelog, mit seinem
 tatsächlichen Zustand.
 
 Bereits eingetreten: Modul 10 lag zunächst ohne Aufrufer da (kein
-`chimera-install`), und `backup_file` hatte keinen. Ersteres ist
-verdrahtet, Letzteres ist im Quelltext als „noch ohne Aufrufer, gebraucht
-von Modul 60" vermerkt.
+`chimera-install`), und `backup_file` hatte keinen. Beides ist inzwischen
+verdrahtet — `backup_file` seit dem Speichermodul
+(`installer/lib/speicher.sh`, Zram-Konfiguration). Das Beispiel bleibt
+stehen, weil es den Ablauf zeigt: offenes Ende benannt, später geschlossen.
 
 ### Architekturregel 10l — Jeder Installationsschritt hat sein Gegenstück
 
@@ -5449,6 +5507,17 @@ Transportschicht, damit eine IDE das Gateway ansprechen kann.**
 
 ### Regel „MQTT“ — Ein Broker in Rust löst gespeicherte Moods auf dem Display aus
 
+> **Nicht gebaut.** Kein MQTT-Broker im Workspace, kein Kanal
+> `displays/<name>/mood`, kein gemeinsamer Router für Hand/MQTT/MCP — und
+> kein MCP-Client, über den Moods *gebaut* werden könnten (`rg -i mqtt src
+> rust installer` → kein Treffer). Was existiert, ist der **Bestand**:
+> 43 Moods aus Noisys Bibliothek (`data/moods-builtin.json`, geladen über
+> `tools/import-noisy-moods.py`), die Validierung erfundener Formen
+> (`mood/draw.py`, `max_shapes` 40) und die internen Zustände
+> (`wartet`, `hoert`, `denkt`, `spricht`, `fehler`). Die Herkunft der
+> **Auslöser** (Hand, MQTT, MCP) fehlt; die Moods selbst fehlen nicht.
+
+
 Vorgabe smilez (2.11.): Chimera ist eine Mischung aus Noisy, OpenMinis, woa-l,
 openclawgotchi und PaKaChi-SM. Die **StateMaschine** mit MQTT stammt aus PaKaChi-SM (Quelle, privat);
 sie soll hier eingebaut werden. Der MQTT-Broker ist **Rust** und mit
@@ -5572,13 +5641,13 @@ Abhängigkeit.
 - **2** — Ein generierter Mood wird immer validiert
 - **3a** — Das Modell wird nicht pro Geräusch gefragt
 - **3b** — Nur im Ruhezustand wird zugehört
-- **4a** — VAD läuft vor STT, KWS vor VAD
-- **4b** — Gesicht und Stimme tragen denselben Mood
+- **4a** — VAD läuft vor STT, KWS vor VAD — *nicht gebaut (keine Sprachschicht)*
+- **4b** — Gesicht und Stimme tragen denselben Mood — *nicht gebaut (keine Stimme)*
 - **4c** — Das Sprachmodell setzt Absicht, nicht Bilder
-- **Sprechgesicht** — Sprechen hat einen eigenen Ausdruck mit Mundphasen
+- **Sprechgesicht** — Sprechen hat einen eigenen Ausdruck mit Mundphasen — *Mundphasen gebaut, Stimme nicht*
 - **5** — Sprache lokal, Sprachmodell immer remote
 - **5a** — Registry statt fester Connector-Attribute
-- **5b** — Anthropic-Anmeldung wie im OpenMinis-PR
+- **5b** — Anthropic-Anmeldung wie im OpenMinis-PR — *Connector gebaut, im Betrieb nicht erreichbar (Gateway kennt keinen Anthropic-Typ)*
 - **5h** — Kein Anbieter wird vorausgesetzt
 - **5c** — Ollama ist ein erstklassiger Anbieter
 - **5d** — Ein Gespräch, zwei Türen
@@ -5588,14 +5657,14 @@ Abhängigkeit.
 - **5l** — Wer Schlüssel hat, hat kein Werkzeug; wer Werkzeuge hat, hat keine Schlüssel
 - **5m** — Die Web-Oberfläche ist Teil des Gateways und braucht kein Framework
 - **5n** — Chimera spricht nur über sein Gateway mit der Welt
-- **5t** — Anbieter, Schlüssel, Katalog, Wahl und Freigaben sind fünf Ablagen mit je einem Schreiber
-- **5u** — Passwort ändern braucht das alte; Werksreset braucht das Gerät
+- **5t** — Anbieter, Schlüssel, Katalog, Wahl, Freigaben und Hosts sind sechs Ablagen mit je einem Schreiber
+- **5u** — Passwort ändern braucht das alte; Werksreset braucht das Gerät — *Ändern gebaut, Werksreset nicht*
 - **5v** — Module melden sich einfach und sicher am Gateway an
-- **5o** — Der Briefkasten ist ein eigener Prozess hinter dem Gateway, mit eigenem Port
+- **5o** — Der Briefkasten ist ein eigener Prozess hinter dem Gateway, mit eigenem Port — *nicht gebaut*
 - **5p** — Was ein anderer Agent schreibt, ist Eingabe, kein Befehl
 - **5e** — zram und Auslagerungsdatei gehören zum Aufbau
-- **5f** — Fremde Werkzeuge sind nicht vertrauenswürdig
-- **5g** — Audio läuft getrennt, aber schlank
+- **5f** — Fremde Werkzeuge sind nicht vertrauenswürdig — *nicht gebaut (kein MCP-Client)*
+- **5g** — Audio läuft getrennt, aber schlank — *nicht gebaut (kein Audio-Prozess)*
 - **6** — Keine absoluten Pixelwerte
 - **6b** — Weich ist der Normalfall, hart muss möglich bleiben
 - **6c** — Das Panel ist eine Eigenschaft, keine Annahme

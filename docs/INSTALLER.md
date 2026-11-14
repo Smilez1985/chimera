@@ -1,6 +1,11 @@
 # Chimera — Installer
 
-Entwurf. Noch nicht implementiert.
+**Gebaut und im Betrieb.** 13 Module, 17 Bibliotheksdateien, 49 Testskripte,
+ein Uninstaller; das Gerät läuft seit dem 13.11. aus diesem Baum
+(`/opt/chimera/source`), und der Lauf meldet „Fertig: 13 Modul(e), ohne
+Fehler". Dieses Dokument ist die Beschreibung des Gebauten — die Abschnitte
+zu geplanten Modulen (60, 70, 80, 95, 99-migrate) sind als „geplant"
+markiert und haben keinen Code.
 
 Der Installer ist kein Beiwerk, sondern trägt die Last der Plattformfrage.
 Er ist der Ort, an dem die Radxa-/DietPi-Treiberfrage gelöst wird — nicht
@@ -118,18 +123,26 @@ nach aufruft (DESIGN, Regel „Installerhelfer“).
 | 10 | `check-system` | Board und Betriebssystem erkennen, Whisplay-Revision, Speicher, Platz |
 | 20 | `install-packages` | Systempakete |
 | 25 | `speicher` | zram (75 %) und Auslagerungsdatei, gestaffelt nach Kartengröße (siehe „Modul 50 — Python-Umgebung") |
+| 27 | `mojo` | Dienste und Sockets prüfen, Ursache nennen, sanft reparieren (Regel Mojo) |
 | 30 | `install-headers` | Header beschaffen — **der schwierige Teil** (Abschnitt „Modul 30") |
 | 40 | `install-display` | Anzeige erkennen und festhalten, neutrale Busse, Ton zur Laufzeit (Abschnitt „Modul 40") |
+| 46 | `mikro` | Mikrofon prüfen und festhalten (Abschnitt „Modul 46 — Mikrofon") |
 | 50 | `python` | venv, Abhängigkeiten **mit Versionsprüfung** (requirements + Anzeigemodul), Nachweis (siehe „Modul 50 — Python-Umgebung") |
+| 55 | `rust` | Rust-Binaries aus dem Baum bzw. `.deb` setzen, Lauf prüfen (Abschnitt „Modul 55 — Rust") |
 | 60 | `overlay` *(geplant)* | Gerätebaum-Overlay, kollidierende abschalten (Abschnitt „Modul 60") |
 | 70 | `alsa` *(geplant)* | Audio-Konfiguration |
 | 80 | `models` *(geplant)* | sherpa-onnx-Modelle laden und prüfen |
 | 95 | `config` *(geplant)* | `.env` aus Vorlage, Ollama-Adresse erfragen |
-| 98 | `service` | systemd-Unit |
-| 99 | `migrate` *(geplant)* | Übergänge von älteren Installationen |
+| 98 | `service` | systemd-Unit (Dienst, Gateway, Ausführer, Sockets, Timer) |
+| 99 | `gateway` | Gateway-Binary setzen, Socket und Unit, Ablagen anlegen |
+| 99 | `sohelper` | Ausführer-Binary setzen, Socket und Unit (eigener Nutzer, kein Netz) |
+| 99 | `migrate` *(geplant)* | Übergänge von älteren Installationen — **eigener Name, noch nicht gebaut** |
 
 Nummerierung mit Lücken, damit sich später etwas dazwischen schiebt, ohne
-alles umzubenennen.
+alles umzubenennen. **Achtung, drei Belegungen der 99:** `gateway` und
+`sohelper` sind gebaut und laufen in dieser Reihenfolge; `migrate` ist
+geplant und hat noch keine Datei — es wird einen vierten Namen unter 99
+bekommen, nicht den Platz der beiden anderen.
 
 ---
 
