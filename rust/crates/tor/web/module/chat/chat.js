@@ -41,8 +41,9 @@ class ChimeraChat extends HTMLElement {
     this.mWahl = this.shadowRoot.getElementById("m-wahl");
     this.dWahl = this.shadowRoot.getElementById("d-wahl");
     this.auswahlDaten = [];
-    this.aWahl.addEventListener("change", () => this.modelleZeigen());
-    this.mWahl.addEventListener("change", () => this.denkenZeigen());
+    this.aWahl.addEventListener("change", () => { this.modelleZeigen(); this.wahlMerken(); });
+    this.mWahl.addEventListener("change", () => { this.denkenZeigen(); this.wahlMerken(); });
+    this.dWahl.addEventListener("change", () => this.wahlMerken());
     this.shadowRoot.querySelector("form").addEventListener("submit", (e) => { e.preventDefault(); this.senden(); });
     this.shadowRoot.getElementById("eingabe").addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); this.senden(); }
@@ -176,6 +177,38 @@ class ChimeraChat extends HTMLElement {
       this.aWahl.appendChild(this.option(a.id, a.bezeichnung || a.id));
     }
     this.modelleZeigen();
+    // Die Wahl gehoert der Sitzung (wahl.json): beim Oeffnen zeigen, was gilt.
+    this.wahlZeigen(r.wahl);
+  }
+
+  /// Die gespeicherte Wahl in die drei Felder setzen. Rein lesend -- ohne
+  /// `wahlMerken`, damit das Laden nichts schreibt.
+  wahlZeigen(wahl) {
+    if (!wahl) return;
+    if (wahl.anbieter && this.auswahlDaten.some((a) => a.id === wahl.anbieter)) {
+      this.aWahl.value = wahl.anbieter;
+      this.modelleZeigen();
+      if (wahl.modell) {
+        const da = [...this.mWahl.options].some((o) => o.value === wahl.modell && !o.disabled);
+        if (da) { this.mWahl.value = wahl.modell; this.denkenZeigen(); }
+      }
+      if (wahl.denken) {
+        const da = [...this.dWahl.options].some((o) => o.value === wahl.denken);
+        if (da) this.dWahl.value = wahl.denken;
+      }
+    }
+  }
+
+  /// Die Wahl der Sitzung sagen. Leer heisst loeschen -- dann entscheidet
+  /// wieder die Reihenfolge des Anbieters (5h).
+  async wahlMerken() {
+    const auftrag = {
+      anbieter: this.aWahl.value || "",
+      modell: this.mWahl.value || "",
+      denken: this.dWahl.value || "",
+    };
+    const r = await window.chimera.api("/api/chat/wahl", { method: "POST", body: JSON.stringify(auftrag) });
+    if (!r.ok) this.blase("sys", `Wahl nicht gespeichert: ${r.fehler || "ohne Grund"}`);
   }
 
   option(wert, text, gesperrt) {

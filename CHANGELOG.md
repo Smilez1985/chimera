@@ -24,9 +24,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   spricht das Sitzungsprotokoll (`anmelden`/`frage`/`sitzungen`/`lesen`) auf
   einem Unix-Socket, protokolliert jede Frage als JSON-Zeile und antwortet im
   Strom; `ollama_stub.py` liefert `/api/tags` und `/api/show` mit zwei
-  Chat-Modellen, einem Vision- und einem schweigenden Modell. Damit lässt
-  sich die Oberfläche ohne Gerät und ohne echten Anbieter durchklicken —
-  erstmals für die drei Auswahlfelder genutzt
+  Chat-Modellen, einem Vision- und einem schweigenden Modell; und
+  `telegram_stub.py` beantwortet `getMe`, `getUpdates`, `sendMessage` und
+  `sendChatAction`, sodass die Telegram-Tür über
+  `CHIMERA_TELEGRAM_API` ohne Token und ohne Netz läuft. Damit lässt sich die
+  Oberfläche ohne Gerät und ohne echten Anbieter durchklicken — erstmals für
+  die drei Auswahlfelder und den `/modell`-Befehl genutzt
   (`docs/messungen/2026-11-14-chat-wahl.md`).
 - **Erstes Passwort beim Anmelden** (Entscheidung smilez 14.11.): Ist kein
   Passwort gesetzt, startet die Oberfläche und zeigt **nur** die Seite zum
@@ -947,6 +950,21 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Die Chat-Wahl liegt jetzt bei der Sitzung** (`wahl.json`, Felder
+  `anbieter`/`modell`/`denken`) statt nur im Fenster: `/api/chat/auswahl`
+  liefert sie mit, die Oberfläche zeigt sie beim Öffnen und schreibt jede
+  Änderung über `POST /api/chat/wahl`; `/api/chat/senden` nimmt die
+  Fensterwahl, sonst die gespeicherte. Ein leerer Wert **löscht** ein Feld
+  (dann gilt wieder die Reihenfolge), ungültige Kennungen, zu lange
+  Modellnamen und unbekannte Denkstufen werden mit Grund abgelehnt.
+- **Telegram `/modell` wählt Anbieter und Modell** (auch `/model`,
+  `/modelle`): `/modell` zeigt alle Chat-Modelle mit Markierung und die
+  Denkstufen des gewählten Modells, `/modell <anbieter>/<modell> [stufe]`
+  (auch Nummer oder eindeutiger Name) setzt sie, `/modell aus` löscht sie.
+  Jede Antwort nennt die geltende Wahl; Spezialmodelle und ungemessene sind
+  nicht wählbar und werden mit Grund abgelehnt. Die Tür schickt die Wahl bei
+  jeder Frage mit.
+
 - **Anbieter, Modell und Denkstufe sind im Chat wählbar** (Auftrag smilez
   14.11.: „DeepSeek soll überall wählbar sein"): Op `modelle_auswahl` /
   `/api/chat/auswahl` liefert je Anbieter `chat` (nur **gemessene**

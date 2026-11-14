@@ -405,15 +405,17 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       Web-Werkzeugen aus 5r), **Rückfrage beim Nutzer** (Weg wie 10s; wann
       sie auslöst, ist festzulegen). Jedes Tor mit Gegenprobe.
 - [ ] **Die Wahl über die anderen Türen** (Folge von „Modellwahl im Chat",
-  gebaut 14.11.): Im WebGUI sind Anbieter, Modell und Denkstufe wählbar, und
-  die Wahl geht über `Agent.run` bis in die Registry — ohne Rückfall auf
-  einen anderen Anbieter. Offen: **Telegram** (`/modell
-  <anbieter>/<modell>`, die Antwort nennt die geltende Wahl), **CLI**
-  (`--anbieter`, `--modell`, `--denken`), **Voice** danach. Ebenfalls offen:
+  gebaut 14.11.): Im WebGUI sind Anbieter, Modell und Denkstufe wählbar;
+  seit 14.11. liegt die Wahl in `wahl.json` (`anbieter`/`modell`/`denken`),
+  wird beim Öffnen angezeigt und von **Telegram** (`/modell
+  <anbieter>/<modell> [stufe]`, `/modell` zeigt sie, `/modell aus` löscht)
+  mitgesetzt und mit jeder Frage mitgeschickt. Offen: **CLI**
+  (`--anbieter`, `--modell`, `--denken`), **Voice** danach, und ein Lauf der
+  Telegram-Tür gegen den echten Bot (in der Sandkastenumgebung nur als
+  Einheitstest geprüft). Ebenfalls offen:
   **`access` und `cost` trennen** — `GatewayAnbieter` meldet heute `LOCAL`/
   `FREE`, auch für den bezahlten DeepSeek-Schlüssel; Modell und Anbieter in
-  der **Statuszeile**. Der Browser-Test der drei Auswahlfelder ist
-  durchgespielt (`docs/messungen/2026-11-14-chat-wahl.md`).
+  der **Statuszeile**.
   Am Gate steht die Wahl schon: `op: modelle_auswahl` und
   `/api/chat/auswahl` nennen je Modell die **belegten** Denkstufen.
 

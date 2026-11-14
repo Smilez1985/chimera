@@ -376,11 +376,54 @@ pub fn wahl_speichern(p: &Pfade, wahl: &Value) -> Result<(), String> {
 /// Web-Modul die Struktur ueberschreiben, und drei Tueren haetten drei
 /// Fassungen von "lesen, aendern, schreiben". Jedes Feld prueft seinen Wert
 /// selbst (`feld_wert_pruefen`), weil "gueltig" je Feld etwas anderes heisst.
-const EINZELN_SETZBAR: &[&str] = &["stream", "reihenfolge"];
+const EINZELN_SETZBAR: &[&str] = &["stream", "reihenfolge", "anbieter", "modell", "denken"];
+
+/// Die Denkstufen, die eine Tuer hoechstens verlangen darf. Neutrale Namen;
+/// die Uebersetzung in die Sprache des Anbieters macht das Gateway
+/// (`deepseek::denkstufe`). Was der Anbieter davon wirklich kann, steht je
+/// Modell in `modelle_auswahl` -- hier wird nur geprueft, dass niemand
+/// Unsinn ablegt.
+pub const DENKSTUFEN: &[&str] = &["aus", "an", "minimal", "niedrig", "mittel", "hoch", "max"];
+
+/// Die ausdrueckliche Wahl einer Tuer aus `wahl.json`: nur die drei Felder,
+/// leere heisst "nichts gewaehlt". Rein.
+pub fn chat_wahl(wahl: &Value) -> Value {
+    let f = |k: &str| wahl.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+    json!({"anbieter": f("anbieter"), "modell": f("modell"), "denken": f("denken")})
+}
 
 /// Hoechstzahl der Eintraege in der Kette. Eine Wahl mit hundert Modellen ist
 /// kein Vorschlag mehr, sondern eine Liste, die niemand pflegt.
 pub const KETTE_MAX: usize = 64;
+
+/// Wert fuer eines der drei Wahlfelder einer Tuer. Leer heisst **loeschen**:
+/// dann entscheidet wieder die Reihenfolge (5h). `Null` im Ergebnis ist
+/// dieses Loeschen.
+fn chat_wahl_wert(feld: &str, wert: &Value) -> Result<Value, (&'static str, String)> {
+    let text = match wert {
+        Value::Null => String::new(),
+        Value::String(s) => s.trim().to_string(),
+        _ => return Err(("wert_ungueltig", format!("\"{feld}\" braucht Text (bekam {wert})."))),
+    };
+    if text.is_empty() {
+        return Ok(Value::Null);
+    }
+    match feld {
+        "anbieter" if !id_gueltig(&text) => Err((
+            "wert_ungueltig",
+            format!("Anbieter {text:?} ist keine gueltige Kennung (a-z, 0-9, \"-\", hoechstens 32)."),
+        )),
+        "modell" if text.len() > 128 || text.chars().any(|c| c.is_control()) => Err((
+            "wert_ungueltig",
+            "Der Modellname ist zu lang oder enthaelt Steuerzeichen.".into(),
+        )),
+        "denken" if !DENKSTUFEN.contains(&text.to_lowercase().as_str()) => Err((
+            "wert_ungueltig",
+            format!("Denkstufe {text:?} kenne ich nicht (bekannt: {}).", DENKSTUFEN.join(", ")),
+        )),
+        _ => Ok(json!(if feld == "denken" { text.to_lowercase() } else { text })),
+    }
+}
 
 /// Den Wert fuer ein Feld pruefen und in die Form bringen, die in die Datei
 /// geht. `Err` nennt Code und Grund -- der Aufrufer meldet beides weiter.
@@ -392,6 +435,7 @@ fn feld_wert_pruefen(feld: &str, wert: &Value) -> Result<Value, (&'static str, S
                 .ok_or(("wert_ungueltig", format!("\"stream\" braucht true oder false (bekam {wert}).")))?;
             Ok(json!(an))
         }
+        "anbieter" | "modell" | "denken" => chat_wahl_wert(feld, wert),
         "reihenfolge" => {
             let liste = wert
                 .as_array()
@@ -439,7 +483,11 @@ pub fn wahl_feld_setzen(p: &Pfade, feld: &str, wert: &Value) -> Result<Value, (&
     let Some(obj) = wahl.as_object_mut() else {
         return Err(("wahl_kaputt", "wahl.json ist kein Objekt.".into()));
     };
-    obj.insert(feld.to_string(), wert.clone());
+    if wert.is_null() {
+        obj.remove(feld);
+    } else {
+        obj.insert(feld.to_string(), wert.clone());
+    }
     wahl_speichern(p, &wahl).map_err(|e| ("wahl_ungueltig", e))?;
     Ok(wert)
 }
@@ -908,6 +956,42 @@ mod tests {
         assert_eq!(r["brauchbar"].as_array().unwrap().len(), 0);
         assert!(!r["meldungen"].as_array().unwrap().is_empty());
         assert_eq!(r["wahl"]["reihenfolge"][0], "ollama/x", "nicht still geloescht");
+    }
+
+    #[test]
+    fn die_wahl_einer_tuer_wird_einzeln_gesetzt_und_wieder_geloescht() {
+        let p = tmp("chatwahl");
+        for (feld, wert) in [("anbieter", "deepseek"), ("modell", "deepseek-flash"), ("denken", "MITTEL")] {
+            op("wahl_feld_setzen", &json!({"feld": feld, "wert": wert}), &p).unwrap();
+        }
+        let w = chat_wahl(&wahl_laden(&p).unwrap());
+        assert_eq!(w, json!({"anbieter": "deepseek", "modell": "deepseek-flash", "denken": "mittel"}),
+                   "Denkstufe klein geschrieben, alle drei Felder da");
+        // Leer heisst loeschen -- dann entscheidet wieder die Reihenfolge (5h).
+        let r = op("wahl_feld_setzen", &json!({"feld": "denken", "wert": ""}), &p).unwrap();
+        assert_eq!(r["wert"], Value::Null, "leer loescht");
+        let datei = wahl_laden(&p).unwrap();
+        assert!(!datei.as_object().unwrap().contains_key("denken"),
+                "Feld ist wirklich weg, nicht nur null: {datei}");
+        assert_eq!(chat_wahl(&datei)["denken"], "");
+        assert_eq!(chat_wahl(&wahl_laden(&p).unwrap())["anbieter"], "deepseek", "andere Felder bleiben");
+    }
+
+    #[test]
+    fn unsinnige_werte_werden_abgelehnt_und_nichts_geschrieben() {
+        let p = tmp("chatwahl-falsch");
+        for (feld, wert, code) in [
+            ("anbieter", json!("DeepSeek"), "wert_ungueltig"),
+            ("anbieter", json!(7), "wert_ungueltig"),
+            ("denken", json!("sehr"), "wert_ungueltig"),
+            ("modell", json!("x".repeat(129)), "wert_ungueltig"),
+        ] {
+            let r = op("wahl_feld_setzen", &json!({"feld": feld, "wert": wert}), &p).unwrap();
+            assert_eq!(r["ok"], false, "{feld}={wert}: {r}");
+            assert_eq!(r["fehler"]["code"], code, "{feld}={wert}");
+        }
+        assert_eq!(chat_wahl(&wahl_laden(&p).unwrap()),
+                   json!({"anbieter": "", "modell": "", "denken": ""}), "nichts abgelegt");
     }
 
     #[test]

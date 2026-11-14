@@ -298,7 +298,7 @@ pub fn entscheiden(erlaubt: &BTreeSet<i64>, e: &Eingang) -> Entscheidung {
                 let arg = t.splitn(2, char::is_whitespace).nth(1).unwrap_or("").trim().to_string();
                 return Entscheidung::Frei(arg);
             }
-            "model" | "modelle" => {
+            "model" | "modelle" | "modell" => {
                 let arg = t.splitn(2, char::is_whitespace).nth(1).unwrap_or("").trim();
                 return Entscheidung::Modelle(arg.to_string());
             }
@@ -458,40 +458,158 @@ fn suche_text(a: &Value) -> String {
     t
 }
 
-/// Die Modellliste als Text: die geltende Wahl ist markiert, ein gemessen
-/// untaugliches Modell wird benannt (DESIGN 5n). Rein.
-pub fn modell_text(modelle: &[String], katalog: &Value, wahl: Option<&str>) -> String {
-    if modelle.is_empty() {
-        return "Der Ollama-Server meldet kein Modell.".to_string();
-    }
-    let mut t = String::from("Modelle (Zahl oder Name schicken):\n");
-    for (i, m) in modelle.iter().enumerate() {
-        let merker = if Some(m.as_str()) == wahl { "\u{25b8}" } else { " " };
-        let ohne = katalog["modelle"][m]["tools"] == Value::Bool(false);
-        t.push_str(&format!(
-            "{merker} {}. {m}{}\n",
-            i + 1,
-            if ohne { "  (ohne Werkzeuge)" } else { "" }
+/// `/modell <ziel> [stufe]` aufloesen: Nummer aus der Liste, `<anbieter>/<modell>`
+/// oder ein Modellname, den genau ein Anbieter hat. Geprueft wird gegen die
+/// Chat-Auswahl -- was dort nicht steht, ist nicht waehlbar, und der Grund
+/// wird genannt (Spezialmodelle, ungemessene). Rein; `Err` ist der Text, den
+/// der Nutzer liest.
+pub fn ziel_aufloesen(ziel: &str, stufe: &str, auswahl: &Value) -> Result<(String, String, String), String> {
+    let ziele = chat_wahl_ziele(auswahl);
+    let treffer: Option<(String, String)> = match ziel.parse::<usize>() {
+        Ok(n) if n >= 1 => ziele.iter().find(|(i, _, _)| *i == n).map(|(_, an, m)| (an.clone(), m.clone())),
+        _ => {
+            if let Some((an, m)) = ziel.split_once('/') {
+                Some((an.trim().to_string(), m.trim().to_string()))
+            } else {
+                let passend: Vec<&(usize, String, String)> = ziele.iter().filter(|(_, _, m)| m == ziel).collect();
+                match passend.len() {
+                    1 => Some((passend[0].1.clone(), passend[0].2.clone())),
+                    0 => None,
+                    _ => {
+                        let namen: Vec<String> = passend.iter().map(|(_, an, _)| an.clone()).collect();
+                        return Err(format!(
+                            "{ziel} gibt es bei mehreren Anbietern ({}). Bitte /modell <anbieter>/<modell>.",
+                            namen.join(", ")
+                        ));
+                    }
+                }
+            }
+        }
+    };
+    let Some((anbieter, modell)) = treffer else {
+        return Err("Das Modell kenne ich nicht. /modell zeigt die Liste.".to_string());
+    };
+    let eintrag = auswahl["anbieter"]
+        .as_array()
+        .and_then(|list| list.iter().find(|x| x["id"].as_str() == Some(&anbieter)))
+        .and_then(|x| x["chat"].as_array())
+        .and_then(|c| c.iter().find(|m| m["modell"].as_str() == Some(&modell)));
+    let Some(eintrag) = eintrag else {
+        return Err(format!(
+            "{anbieter}/{modell} steht nicht in der Chat-Auswahl. /modell zeigt, was waehlbar ist \
+             (Spezialmodelle und ungemessene sind es nicht)."
+        ));
+    };
+    let stufen: Vec<String> = eintrag["denkstufen"]
+        .as_array()
+        .map(|v| v.iter().filter_map(Value::as_str).map(String::from).collect())
+        .unwrap_or_default();
+    if !stufe.is_empty() && !stufen.iter().any(|s| *s == stufe) {
+        return Err(format!(
+            "{modell} kann die Denkstufe \"{stufe}\" nicht. Moeglich: {}",
+            if stufen.is_empty() { "keine".to_string() } else { stufen.join(", ") }
         ));
     }
-    t
+    Ok((anbieter, modell, stufe.to_string()))
 }
 
-/// Neue Reihenfolge: der gewaehlte Verweis nach vorn, ohne Doppelung.
-/// Alles andere aus der Datei bleibt stehen (5h: ein Vorschlag, den niemand
-/// ueberschreibt -- hier wird nur eins vorgezogen). Rein.
-pub fn reihenfolge_mit(alt: &Value, verweis: &str) -> Value {
-    let mut liste = vec![json!(verweis)];
-    if let Some(a) = alt.get("reihenfolge").and_then(Value::as_array) {
-        for v in a {
-            if v.as_str() != Some(verweis) {
-                liste.push(v.clone());
+/// Was gerade gilt, als eine Zeile (die Tuer sagt es zu jeder Wahl dazu).
+/// Rein.
+pub fn wahl_zeile(wahl: &Value) -> String {
+    let f = |k: &str| wahl.get(k).and_then(Value::as_str).unwrap_or("").trim().to_string();
+    let (a, m, d) = (f("anbieter"), f("modell"), f("denken"));
+    if a.is_empty() && m.is_empty() {
+        return "Gilt: keine Wahl — der Anbieter entscheidet.".to_string();
+    }
+    let ziel = if a.is_empty() { m } else { format!("{a}/{m}") };
+    if d.is_empty() {
+        format!("Gilt: {ziel} (Denkstufe: Vorgabe).")
+    } else {
+        format!("Gilt: {ziel} (Denken: {d}).")
+    }
+}
+
+/// Die waehlbaren Ziele als (Nummer, Anbieter, Modell) -- in derselben
+/// Reihenfolge, in der `chat_wahl_text` sie nummeriert. Rein.
+pub fn chat_wahl_ziele(auswahl: &Value) -> Vec<(usize, String, String)> {
+    let mut ziele = Vec::new();
+    let Some(liste) = auswahl["anbieter"].as_array() else { return ziele };
+    for a in liste {
+        let id = a["id"].as_str().unwrap_or("");
+        for m in a["chat"].as_array().map(|v| v.as_slice()).unwrap_or(&[]) {
+            if let Some(name) = m["modell"].as_str() {
+                ziele.push((ziele.len() + 1, id.to_string(), name.to_string()));
             }
         }
     }
-    let mut w = alt.as_object().cloned().unwrap_or_default();
-    w.insert("reihenfolge".into(), Value::Array(liste));
-    Value::Object(w)
+    ziele
+}
+
+/// `/modell` ohne Argument: was waehlbar ist, was gilt, wie man es setzt.
+/// Spezialmodelle und ungemessene stehen dabei, sind aber nicht waehlbar --
+/// sonst raetselt jemand, wo sein Modell geblieben ist. Rein.
+pub fn chat_wahl_text(auswahl: &Value, wahl: &Value) -> String {
+    let gilt = wahl_zeile(wahl);
+    let wa = wahl.get("anbieter").and_then(Value::as_str).unwrap_or("");
+    let wm = wahl.get("modell").and_then(Value::as_str).unwrap_or("");
+    let Some(liste) = auswahl["anbieter"].as_array() else {
+        return format!("{gilt}\n\nKeine Anbieter eingerichtet.");
+    };
+    if liste.is_empty() {
+        return format!("{gilt}\n\nKeine Anbieter eingerichtet.");
+    }
+    let mut t = format!("{gilt}\n");
+    let mut nr = 0;
+    for a in liste {
+        let id = a["id"].as_str().unwrap_or("");
+        let name = a["bezeichnung"].as_str().unwrap_or(id);
+        t.push_str(&format!("\n{name} ({id})\n"));
+        let chat = a["chat"].as_array().map(|v| v.as_slice()).unwrap_or(&[]);
+        if chat.is_empty() {
+            t.push_str("  kein Modell mit Werkzeugen\n");
+        }
+        for m in chat {
+            let Some(mn) = m["modell"].as_str() else { continue };
+            nr += 1;
+            let merker = if id == wa && mn == wm { "▸" } else { " " };
+            let stufen = m["denkstufen"].as_array().map(|s| s.len()).unwrap_or(0);
+            t.push_str(&format!(
+                "{merker} {nr}. {mn}{}\n",
+                if stufen > 0 { format!(" (Denkstufen: {stufen})") } else { String::new() }
+            ));
+        }
+        for m in a["spezial"].as_array().map(|v| v.as_slice()).unwrap_or(&[]) {
+            if let Some(mn) = m["modell"].as_str() {
+                let art = m["art"].as_str().unwrap_or("ohne Werkzeuge");
+                t.push_str(&format!("    {mn} — {art} (nicht für den Chat)\n"));
+            }
+        }
+        if let Some(ub) = a["unbekannt"].as_array() {
+            for m in ub {
+                if let Some(mn) = m["modell"].as_str() {
+                    t.push_str(&format!("    {mn} (Werkzeuge nicht gemessen)\n"));
+                }
+            }
+        }
+    }
+    t.push_str("\nWählen: /modell <anbieter>/<modell> [stufe] — z. B. /modell 2 an\nOhne Wahl: /modell aus");
+    // Die Denkstufen des gewaehlten Modells nennen, damit niemand raten muss.
+    if !wa.is_empty() && !wm.is_empty() {
+        if let Some(m) = liste
+            .iter()
+            .find(|a| a["id"].as_str() == Some(wa))
+            .and_then(|a| a["chat"].as_array())
+            .and_then(|c| c.iter().find(|m| m["modell"].as_str() == Some(wm)))
+        {
+            if let Some(st) = m["denkstufen"].as_array() {
+                if !st.is_empty() {
+                    let namen: Vec<&str> = st.iter().filter_map(Value::as_str).collect();
+                    t.push_str(&format!("\nDenkstufen für {wm}: {}", namen.join(", ")));
+                }
+            }
+        }
+    }
+    t
 }
 
 /// Was ein Ereignis des Stroms in Telegram bewirkt, sonst `None`.
@@ -547,7 +665,16 @@ impl Tuer {
             Entscheidung::Tailscale(arg) => self.tailscale_befehl(e.chat_id, &arg),
             Entscheidung::Fragen(text) => {
                 self.api.tippt(e.chat_id);
-                if let Err(f) = sitzung::fragen(&self.sitzung, TUER, &text, &format!("tg-{}", e.update_id)) {
+                // Die Wahl ist ein Zustand der Sitzung (wahl.json): sie geht
+                // bei jeder Frage mit, damit Telegram dieselbe Wahl benutzt
+                // wie Web und CLI (14.11.).
+                let stand = crate::dienst::Stand::neu();
+                let wahl = crate::daten::wahl_laden(&stand.daten)
+                    .map(|w| crate::daten::chat_wahl(&w))
+                    .unwrap_or_else(|_| json!({}));
+                if let Err(f) = sitzung::fragen_mit(
+                    &self.sitzung, TUER, &text, &format!("tg-{}", e.update_id), &wahl,
+                ) {
                     melden(Stufe::Fehler, &format!("Telegram: Sitzung nicht erreichbar: {f}"));
                     antworten(&self.api, e.chat_id, "Die Sitzung antwortet nicht. Versuch es gleich nochmal.");
                 }
@@ -559,45 +686,63 @@ impl Tuer {
     /// (Daten des Gateways, 5l) -- die Wahl gilt fuer die naechste Frage.
     fn modell_befehl(&self, chat: i64, arg: &str) {
         let stand = crate::dienst::Stand::neu();
-        let a = crate::dienst::antworten(&json!({"op": "modelle", "anbieter": "ollama"}), &stand);
+        let a = crate::dienst::antworten(&json!({"op": "modelle_auswahl"}), &stand);
         if a["ok"] != true {
             let grund = a["fehler"]["text"].as_str().unwrap_or("ohne Grund");
             antworten(&self.api, chat, &format!("Die Modellliste kommt nicht: {grund}"));
             return;
         }
-        let modelle: Vec<String> = a["modelle"]
-            .as_array()
-            .map(|l| l.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-            .unwrap_or_default();
-        let katalog = crate::dienst::antworten(&json!({"op": "katalog_lesen", "id": "ollama"}), &stand)
-            ["katalog"]
-            .clone();
-        let wahl = a["wahl"].as_str().map(String::from);
-        if arg.is_empty() {
-            antworten(&self.api, chat, &modell_text(&modelle, &katalog, wahl.as_deref()));
-            return;
-        }
-        let name = arg
-            .trim()
-            .parse::<usize>()
-            .ok()
-            .and_then(|n| n.checked_sub(1))
-            .and_then(|i| modelle.get(i).cloned())
-            .or_else(|| modelle.iter().find(|m| m.as_str() == arg.trim()).cloned());
-        let Some(name) = name else {
-            antworten(&self.api, chat, "Das Modell kenne ich nicht. /model zeigt die Liste.");
-            return;
+        let wahl = |stand: &crate::dienst::Stand| {
+            crate::daten::wahl_laden(&stand.daten)
+                .map(|w| crate::daten::chat_wahl(&w))
+                .unwrap_or_else(|_| json!({}))
         };
-        let verweis = format!("ollama/{name}");
-        let alt = crate::dienst::antworten(&json!({"op": "wahl_lesen"}), &stand)["wahl"].clone();
-        let neu = reihenfolge_mit(&alt, &verweis);
-        let w = crate::dienst::antworten(&json!({"op": "wahl_setzen", "wahl": neu}), &stand);
-        if w["ok"] != true {
-            let grund = w["fehler"]["text"].as_str().unwrap_or("ohne Grund");
-            antworten(&self.api, chat, &format!("Die Wahl liess sich nicht speichern: {grund}"));
+        let arg = arg.trim();
+        if arg.is_empty() {
+            antworten(&self.api, chat, &chat_wahl_text(&a, &wahl(&stand)));
             return;
         }
-        antworten(&self.api, chat, &format!("Gewaehlt: {name}. Es gilt ab der naechsten Frage."));
+        let mut teile = arg.split_whitespace();
+        let ziel = teile.next().unwrap_or("");
+        let stufe = teile.next().unwrap_or("").to_lowercase();
+        // Ohne Wahl: der Anbieter entscheidet wieder (5h).
+        if ["aus", "auto", "automatisch", "keine"].contains(&ziel.to_lowercase().as_str()) {
+            for feld in ["anbieter", "modell", "denken"] {
+                let r = crate::dienst::antworten(
+                    &json!({"op": "wahl_feld_setzen", "feld": feld, "wert": ""}),
+                    &stand,
+                );
+                if r["ok"] != true {
+                    let grund = r["fehler"]["text"].as_str().unwrap_or("ohne Grund");
+                    antworten(&self.api, chat, &format!("Wahl liess sich nicht loeschen: {grund}"));
+                    return;
+                }
+            }
+            antworten(&self.api, chat, &format!("{}\nEs gilt ab der naechsten Frage.", wahl_zeile(&wahl(&stand))));
+            return;
+        }
+        // Ziel aufloesen: Nummer, `<anbieter>/<modell>` oder ein Name, den
+        // genau ein Anbieter hat. Die Entscheidung ist rein (Test dafuer).
+        let (anbieter, modell, stufe) = match ziel_aufloesen(ziel, &stufe, &a) {
+            Ok(t) => t,
+            Err(text) => {
+                antworten(&self.api, chat, &text);
+                return;
+            }
+        };
+        let felder = [("anbieter", anbieter.clone()), ("modell", modell.clone()), ("denken", stufe)];
+        for (feld, wert) in felder {
+            let r = crate::dienst::antworten(
+                &json!({"op": "wahl_feld_setzen", "feld": feld, "wert": wert}),
+                &stand,
+            );
+            if r["ok"] != true {
+                let grund = r["fehler"]["text"].as_str().unwrap_or("ohne Grund");
+                antworten(&self.api, chat, &format!("Die Wahl liess sich nicht speichern: {grund}"));
+                return;
+            }
+        }
+        antworten(&self.api, chat, &format!("{}\nEs gilt ab der naechsten Frage.", wahl_zeile(&wahl(&stand))));
     }
 
     /// `/frei`: Freigaben je Werkzeug zeigen oder setzen (DESIGN, Regel
@@ -1142,37 +1287,98 @@ mod tests {
     }
 
     #[test]
-    fn stream_wird_erkannt_mit_und_ohne_wert() {
-        assert_eq!(entscheiden(&liste(), &eingang(7, "/stream")), Entscheidung::Strom("".into()));
-        assert_eq!(entscheiden(&liste(), &eingang(7, "/stream an")), Entscheidung::Strom("an".into()));
-        assert_eq!(entscheiden(&liste(), &eingang(7, "/stream AUS")), Entscheidung::Strom("aus".into()));
+    fn ziele_werden_aufgeloest_und_falsche_mit_grund_abgelehnt() {
+        let auswahl = json!({"anbieter": [
+            {"id": "ollama", "bezeichnung": "Ollama", "chat": [
+                {"modell": "a:7b", "denkstufen": []},
+                {"modell": "denker:8b", "denkstufen": ["aus", "an"]}],
+             "spezial": [{"modell": "ocr", "art": "vision"}], "unbekannt": []},
+            {"id": "deepseek", "bezeichnung": "DeepSeek", "chat": [
+                {"modell": "deepseek-flash", "denkstufen": ["aus", "niedrig", "hoch", "max"]}],
+             "spezial": [], "unbekannt": [{"modell": "deepseek-x"}]}
+        ]});
+        // Nummer, Anbieter/Modell, bloßer Name -- alle drei Wege.
+        assert_eq!(ziel_aufloesen("2", "an", &auswahl), Ok(("ollama".into(), "denker:8b".into(), "an".into())));
+        assert_eq!(
+            ziel_aufloesen("deepseek/deepseek-flash", "hoch", &auswahl),
+            Ok(("deepseek".into(), "deepseek-flash".into(), "hoch".into()))
+        );
+        assert_eq!(
+            ziel_aufloesen("deepseek-flash", "", &auswahl),
+            Ok(("deepseek".into(), "deepseek-flash".into(), "".into()))
+        );
+        // Nicht waehlbar: Spezialmodell und ungemessenes werden benannt, nicht gewaehlt.
+        let e = ziel_aufloesen("ollama/ocr", "", &auswahl).unwrap_err();
+        assert!(e.contains("steht nicht in der Chat-Auswahl"), "{e}");
+        let e = ziel_aufloesen("deepseek-x", "", &auswahl).unwrap_err();
+        assert!(e.contains("kenne ich nicht"), "{e}");
+        // Denkstufe, die das Modell nicht kann -- mit den moeglichen.
+        let e = ziel_aufloesen("ollama/denker:8b", "hoch", &auswahl).unwrap_err();
+        assert!(e.contains("Moeglich: aus, an"), "{e}");
+        let e = ziel_aufloesen("ollama/a:7b", "an", &auswahl).unwrap_err();
+        assert!(e.contains("Moeglich: keine"), "ohne Denkstufen: {e}");
+        // Mehrdeutig: derselbe Name bei zwei Anbietern.
+        let zwei = json!({"anbieter": [
+            {"id": "a", "chat": [{"modell": "gleich", "denkstufen": []}]},
+            {"id": "b", "chat": [{"modell": "gleich", "denkstufen": []}]}
+        ]});
+        let e = ziel_aufloesen("gleich", "", &zwei).unwrap_err();
+        assert!(e.contains("bei mehreren Anbietern (a, b)"), "{e}");
     }
 
     #[test]
-    fn die_modellliste_markiert_die_wahl_und_benennt_untaugliche() {
-        let modelle = vec!["gross:27b".to_string(), "klein:14b".to_string(), "ocr".to_string()];
-        let katalog = json!({"modelle": {
-            "gross:27b": {"tools": true}, "klein:14b": {"tools": true}, "ocr": {"tools": false}
-        }});
-        let t = modell_text(&modelle, &katalog, Some("klein:14b"));
-        assert!(t.starts_with("Modelle (Zahl oder Name schicken):"), "{t}");
+    fn die_wahltexte_nennen_was_gilt_und_was_waehlbar_ist() {
+        let auswahl = json!({"anbieter": [
+            {"id": "ollama", "bezeichnung": "Ollama im LAN", "chat": [
+                {"modell": "gross:27b", "denkstufen": []},
+                {"modell": "denker:8b", "denkstufen": ["aus", "an"]}],
+             "spezial": [{"modell": "ocr", "art": "vision"}],
+             "unbekannt": [{"modell": "stumm:1b"}]},
+            {"id": "deepseek", "bezeichnung": "DeepSeek", "chat": [
+                {"modell": "deepseek-flash", "denkstufen": ["aus", "niedrig", "hoch", "max"]}],
+             "spezial": [], "unbekannt": []}
+        ]});
+        let wahl = json!({"anbieter": "ollama", "modell": "denker:8b", "denken": "an"});
+        let t = chat_wahl_text(&auswahl, &wahl);
+        assert!(t.starts_with("Gilt: ollama/denker:8b (Denken: an)."), "{t}");
         assert!(t.contains("  1. gross:27b\n"), "{t}");
-        assert!(t.contains("\u{25b8} 2. klein:14b\n"), "die Wahl ist markiert: {t}");
-        assert!(t.contains("3. ocr  (ohne Werkzeuge)"), "untauglich wird benannt: {t}");
+        assert!(t.contains("\u{25b8} 2. denker:8b (Denkstufen: 2)\n"), "die Wahl ist markiert: {t}");
+        assert!(t.contains("    ocr — vision (nicht für den Chat)\n"), "{t}");
+        assert!(t.contains("    stumm:1b (Werkzeuge nicht gemessen)\n"), "{t}");
+        assert!(t.contains("Denkstufen für denker:8b: aus, an"), "{t}");
+
+        // Nummern in derselben Reihenfolge wie im Text.
+        let ziele = chat_wahl_ziele(&auswahl);
+        assert_eq!(ziele.len(), 3);
+        assert_eq!(ziele[1], (2, "ollama".to_string(), "denker:8b".to_string()));
+        assert_eq!(ziele[2], (3, "deepseek".to_string(), "deepseek-flash".to_string()));
+
+        // Ohne Wahl: die Zeile sagt es, statt eine zu erfinden.
+        assert_eq!(wahl_zeile(&json!({})), "Gilt: keine Wahl — der Anbieter entscheidet.");
         assert_eq!(
-            modell_text(&[], &json!({}), None),
-            "Der Ollama-Server meldet kein Modell."
+            wahl_zeile(&json!({"anbieter": "deepseek", "modell": "deepseek-flash"})),
+            "Gilt: deepseek/deepseek-flash (Denkstufe: Vorgabe)."
+        );
+        // Kein Anbieter eingerichtet: der Text bleibt wahr.
+        assert!(chat_wahl_text(&json!({"anbieter": []}), &json!({})).contains("Keine Anbieter eingerichtet"));
+    }
+
+    #[test]
+    fn modell_wird_als_befehl_erkannt_auch_auf_deutsch() {
+        for text in ["/modell", "/modell deepseek/deepseek-flash", "/model", "/modelle"] {
+            assert!(matches!(entscheiden(&liste(), &eingang(7, text)), Entscheidung::Modelle(_)), "{text}");
+        }
+        assert_eq!(
+            entscheiden(&liste(), &eingang(7, "/modell deepseek/deepseek-flash hoch")),
+            Entscheidung::Modelle("deepseek/deepseek-flash hoch".into())
         );
     }
 
     #[test]
-    fn die_wahl_wird_vorgezogen_ohne_doppelung_und_ohne_verlust() {
-        let alt = json!({"reihenfolge": ["ollama/a", "anthropic/x", "ollama/b"], "sprache": "de"});
-        let neu = reihenfolge_mit(&alt, "ollama/b");
-        assert_eq!(neu["reihenfolge"], json!(["ollama/b", "ollama/a", "anthropic/x"]));
-        assert_eq!(neu["sprache"], "de", "was sonst in der Datei steht, bleibt");
-        let leer = reihenfolge_mit(&json!({}), "ollama/a");
-        assert_eq!(leer["reihenfolge"], json!(["ollama/a"]));
+    fn stream_wird_erkannt_mit_und_ohne_wert() {
+        assert_eq!(entscheiden(&liste(), &eingang(7, "/stream")), Entscheidung::Strom("".into()));
+        assert_eq!(entscheiden(&liste(), &eingang(7, "/stream an")), Entscheidung::Strom("an".into()));
+        assert_eq!(entscheiden(&liste(), &eingang(7, "/stream AUS")), Entscheidung::Strom("aus".into()));
     }
 
     #[test]

@@ -1028,12 +1028,17 @@ fn chat_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {    // Das Recht st
             }
             // Immer an `haupt`. Eine andere Sitzung wird vom Dienst umgeleitet (5s).
             let sid = v["sitzung"].as_str().unwrap_or("haupt");
-            // Die Wahl (Anbieter/Modell/Denkstufe) gehoert zur Sitzung, nicht
-            // zum Fenster: sie geht mit der Frage an den Dienst (14.11.).
+            // Die Wahl (Anbieter/Modell/Denkstufe) ist ein Zustand der Sitzung,
+            // nicht des Fensters (14.11.). Was das Fenster mitschickt, gilt;
+            // schickt es nichts, gilt die gespeicherte Wahl aus `wahl.json`.
             let mut anfrage = json!({"op": "frage", "tuer": "web", "text": text,
                                      "sitzung": sid, "ref": ""});
+            let gespeichert = crate::daten::wahl_laden(&z.stand.daten)
+                .map(|w| crate::daten::chat_wahl(&w))
+                .unwrap_or_else(|_| json!({}));
+            let wahl = wahl_fuer_frage(&v, &gespeichert);
             for feld in ["anbieter", "modell", "denken"] {
-                if let Some(w) = v[feld].as_str().map(str::trim).filter(|s| !s.is_empty()) {
+                if let Some(w) = wahl[feld].as_str().filter(|s| !s.is_empty()) {
                     anfrage[feld] = json!(w);
                 }
             }
@@ -1052,8 +1057,41 @@ fn chat_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {    // Das Recht st
         // `chat` / `spezial` / `unbekannt`. Die Einstufung kommt aus dem
         // gemessenen Katalog, nicht aus dem Namen des Modells.
         ("GET", "auswahl") => {
-            let r = crate::dienst::antworten(&json!({"op": "modelle_auswahl"}), &z.stand);
+            let mut r = crate::dienst::antworten(&json!({"op": "modelle_auswahl"}), &z.stand);
+            // Die geltende Wahl liegt bei der Sitzung (wahl.json, 5h): die
+            // Oberflaeche zeigt sie beim Oeffnen, statt leer zu starten.
+            if let Ok(w) = crate::daten::wahl_laden(&z.stand.daten) {
+                r["wahl"] = crate::daten::chat_wahl(&w);
+            }
             json_antwort(200, r)
+        }
+        // Die Wahl setzen (oder mit leerem Wert loeschen). Sie gehoert der
+        // Sitzung, nicht dem Fenster -- dieselbe Ablage wie Telegram und CLI.
+        ("POST", "wahl") => {
+            let v: Value = match serde_json::from_slice(a.body) {
+                Ok(v) => v,
+                Err(_) => return fehler(400, "kein JSON"),
+            };
+            let mut gesetzt = Vec::new();
+            for feld in ["anbieter", "modell", "denken"] {
+                let Some(wert) = v.get(feld) else { continue };
+                let r = crate::dienst::antworten(
+                    &json!({"op": "wahl_feld_setzen", "feld": feld, "wert": wert}),
+                    &z.stand,
+                );
+                if r["ok"] != true {
+                    let text = r["fehler"]["text"].as_str().unwrap_or("abgelehnt");
+                    return fehler(400, &format!("{feld}: {text}"));
+                }
+                gesetzt.push(feld);
+            }
+            if gesetzt.is_empty() {
+                return fehler(400, "kein Feld (anbieter, modell, denken)");
+            }
+            let w = crate::daten::wahl_laden(&z.stand.daten)
+                .map(|w| crate::daten::chat_wahl(&w))
+                .unwrap_or_else(|_| json!({}));
+            json_antwort(200, json!({"ok": true, "gesetzt": gesetzt, "wahl": w}))
         }
         ("GET", "sitzungen") => match sitzung::anfragen(&z.sitzung_socket, &json!({"op": "sitzungen"})) {
             Ok(r) => json_antwort(200, r),
@@ -1077,6 +1115,21 @@ fn chat_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {    // Das Recht st
         }
         _ => fehler(404, "nicht gefunden"),
     }
+}
+
+/// Die Wahl, die mit einer Frage der Web-Tuer geht: was das Fenster
+/// mitschickt, sonst was als Wahl der Sitzung gespeichert ist (`wahl.json`).
+/// Leer im Fenster heisst nicht "loeschen", sondern "nimm, was gilt" -- das
+/// Fenster kennt die Wahl beim Oeffnen, ein zweites Geraet aber nicht. Rein.
+fn wahl_fuer_frage(koerper: &Value, gespeichert: &Value) -> Value {
+    let wert = |q: &Value, k: &str| q[k].as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from);
+    let mut w = json!({});
+    for feld in ["anbieter", "modell", "denken"] {
+        if let Some(x) = wert(koerper, feld).or_else(|| wert(gespeichert, feld)) {
+            w[feld] = json!(x);
+        }
+    }
+    w
 }
 
 // --- Betrieb --------------------------------------------------------------

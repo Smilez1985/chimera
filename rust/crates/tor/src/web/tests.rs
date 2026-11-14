@@ -1105,3 +1105,26 @@ fn richtiger_code_legt_das_passwort_an_und_danach_kommt_man_hinein() {
     assert_eq!(r.status, 409);
     assert!(String::from_utf8_lossy(&r.body).contains("web-passwort"));
 }
+
+#[test]
+fn die_gespeicherte_wahl_gilt_wenn_das_fenster_nichts_gewaehlt_hat() {
+    let gespeichert = json!({"anbieter": "deepseek", "modell": "deepseek-flash", "denken": "hoch"});
+    // Fenster schickt nichts: die Wahl der Sitzung gilt (zweites Geraet,
+    // Neuladen, fremde Tuer).
+    assert_eq!(
+        wahl_fuer_frage(&json!({"text": "hi"}), &gespeichert),
+        json!({"anbieter": "deepseek", "modell": "deepseek-flash", "denken": "hoch"})
+    );
+    // Fenster waehlt ausdruecklich: seine Wahl gewinnt.
+    assert_eq!(
+        wahl_fuer_frage(&json!({"anbieter": "ollama", "modell": "klein:7b"}), &gespeichert),
+        json!({"anbieter": "ollama", "modell": "klein:7b", "denken": "hoch"})
+    );
+    // Leere Felder im Fenster sind "nichts gewaehlt", kein Loeschen.
+    assert_eq!(
+        wahl_fuer_frage(&json!({"anbieter": "", "modell": "  "}), &gespeichert),
+        json!({"anbieter": "deepseek", "modell": "deepseek-flash", "denken": "hoch"})
+    );
+    // Garnichts gespeichert: die Frage geht ohne Wahl (Reihenfolge, 5h).
+    assert_eq!(wahl_fuer_frage(&json!({"text": "hi"}), &json!({})), json!({}));
+}

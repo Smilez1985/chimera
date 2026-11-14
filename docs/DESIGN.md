@@ -1243,10 +1243,28 @@ Neutrale Namen, Übersetzung im Gateway (`deepseek::denkstufe`: `mittel`→`high
 eine Attrappe.
 
 **Alle Türen, eine Wahl:** die Wahl ist ein Zustand der Sitzung, nicht eines
-Fensters. Web (`/api/chat/senden`), Telegram (`/modell <anbieter>/<modell>`)
-und CLI (`--anbieter`, `--modell`, `--denken`) setzen dieselbe Wahl; die
-Antwort nennt jedes Mal, was gilt. Etappe 1 (14.11.) ist das Op und die
-Web-Tür; Telegram und CLI folgen.
+Fensters. Sie liegt in `wahl.json` als drei Felder `anbieter`, `modell`,
+`denken` — dieselbe Datei, die schon die Kette hält, ein Ort (10g).
+Web (`/api/chat/senden`, gesetzt über `/api/chat/wahl`), Telegram
+(`/modell <anbieter>/<modell> [stufe]`, `/modell` zeigt sie, `/modell aus`
+löscht) und später CLI (`--anbieter`, `--modell`, `--denken`) setzen sie;
+**jede Tür schickt sie bei jeder Frage mit** — im Web gilt das, was das
+Fenster mitschickt, sonst das Gespeicherte. Wer nichts wählt, lässt die
+Reihenfolge nach 5h gelten.
+
+**Warum in der Ablage und nicht im Fenster:** Beim Neuladen war die Wahl
+sonst weg (Befund 14.11.), und ein zweites Gerät hätte dieselbe Sitzung mit
+einer anderen Wahl gefragt. Die Oberfläche zeigt beim Öffnen, was gilt, und
+schreibt jede Änderung sofort.
+
+**Die Antwort nennt sie** (Auftrag smilez: „die Antwort nennt jedes Mal
+Anbieter/Modell/Denkstufe"): `/modell` antwortet mit „Gilt: …" — und nennt
+dabei die Wahrheit, auch wenn nichts gewählt ist („keine Wahl — der Anbieter
+entscheidet"). Eine leere Zeichenkette löscht ein Feld; `null` ensteht dabei
+nicht, damit „kein Wert" und „leerer Wert" nicht zwei Dinge sind.
+
+Etappe 1 (14.11.) war das Op und die Web-Tür; Etappe 2 (14.11.) Telegram und
+die gemeinsame Ablage; die CLI folgt.
 
 ### Guthaben je Anbieter (13.11.2026)
 

@@ -27,8 +27,33 @@ EOF
 	fi
 }
 
+mut2() { # name, datei, suchen1, ersetzen1, suchen2, ersetzen2, testfilter
+	zurueck
+	python3 - "$2" "$3" "$4" "$5" "$6" <<'EOF'
+import sys
+f, a1, b1, a2, b2 = sys.argv[1:6]
+s = open(f).read()
+assert s.count(a1) >= 1, "Muster fehlt: " + a1
+assert s.count(a2) >= 1, "Muster fehlt: " + a2
+s = s.replace(a1, b1, 1).replace(a2, b2, 1)
+open(f, "w").write(s)
+EOF
+	[ $? -eq 0 ] || { echo "MUSTER FEHLT: $1"; gruen=$((gruen + 1)); return; }
+	if CARGO_TARGET_DIR=/root/chimera-target cargo test --offline -p chimera-tor "$7" >/tmp/gp-wahl.log 2>&1; then
+		echo "GRUEN (schlecht): $1"
+		gruen=$((gruen + 1))
+	else
+		echo "rot (gut): $1"
+	fi
+}
+
 # 1. Das Feld wird nicht geprueft: beliebiges Feld schreibbar.
-mut feld-ungeprueft "$D" 'if !EINZELN_SETZBAR.contains(&feld) {' 'if false {' 'wahl'
+#    Zwei Waechter: die Liste der setzbaren Felder (wahl_feld_setzen) und die
+#    Pruefung je Feld (feld_wert_pruefen). Mutiert werden muessen BEIDE --
+#    sonst haelt der andere und die Mutation misst nur sich selbst.
+mut2 feld-ungeprueft "$D" 'if !EINZELN_SETZBAR.contains(&feld) {' 'if false {' \
+	'_ => Err(("feld_unbekannt", format!("Feld \"{feld}\" hat keine Pruefung."))),' \
+	'_ => Ok(wert.clone()),' 'wahl' 
 # 2. Der Wert wird nicht geprueft: "an" als Zeichenkette gilt als wahr.
 mut wert-ungeprueft "$D" '            let an = wert
                 .as_bool()' '            let an = wert

@@ -57,9 +57,17 @@ pub fn anfragen(pfad: &Path, anfrage: &Value) -> Result<Value, String> {
     Ok(a)
 }
 
-/// Eine Frage in die Hauptsitzung geben. Gibt zurueck, ob sie umgeleitet wurde.
-pub fn fragen(pfad: &Path, tuer: &str, text: &str, bezug: &str) -> Result<bool, String> {
-    let a = anfragen(pfad, &json!({"op": "frage", "tuer": tuer, "text": text, "ref": bezug}))?;
+/// Eine Frage mit der Wahl der Tuer (Anbieter, Modell, Denkstufe) in die
+/// Hauptsitzung geben. Gibt zurueck, ob sie umgeleitet wurde.
+/// Was in `wahl` leer ist, geht nicht mit -- dann gilt die Reihenfolge (5h).
+pub fn fragen_mit(pfad: &Path, tuer: &str, text: &str, bezug: &str, wahl: &Value) -> Result<bool, String> {
+    let mut a = json!({"op": "frage", "tuer": tuer, "text": text, "ref": bezug});
+    for feld in ["anbieter", "modell", "denken"] {
+        if let Some(w) = wahl.get(feld).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()) {
+            a[feld] = json!(w);
+        }
+    }
+    let a = anfragen(pfad, &a)?;
     Ok(a["umgeleitet"] == true)
 }
 
@@ -125,6 +133,27 @@ mod tests {
     }
 
     #[test]
+    fn die_wahl_der_tuer_geht_mit_und_leere_felder_nicht() {
+        let p = tmp("frage-wahl");
+        let l = UnixListener::bind(&p).unwrap();
+        let h = std::thread::spawn(move || {
+            let (s, _) = l.accept().unwrap();
+            let mut w = s.try_clone().unwrap();
+            let a = zeile::lesen(&mut BufReader::new(s), 4096).unwrap();
+            zeile::schreiben(&mut w, &json!({"ok": true, "umgeleitet": false})).unwrap();
+            a
+        });
+        let wahl = json!({"anbieter": "deepseek", "modell": "deepseek-flash", "denken": ""});
+        assert_eq!(fragen_mit(&p, "telegram", "hi", "tg-1", &wahl), Ok(false));
+        let a = h.join().unwrap();
+        assert_eq!(a["anbieter"], "deepseek", "die Wahl geht mit: {a}");
+        assert_eq!(a["modell"], "deepseek-flash");
+        assert!(a.get("denken").is_none(), "leere Denkstufe wird nicht behauptet: {a}");
+        assert_eq!(a["tuer"], "telegram");
+        assert_eq!(a["ref"], "tg-1");
+    }
+
+    #[test]
     fn fragen_meldet_umleitung() {
         let p = tmp("frage");
         let l = UnixListener::bind(&p).unwrap();
@@ -135,7 +164,7 @@ mod tests {
             zeile::schreiben(&mut w, &json!({"ok": true, "umgeleitet": true})).unwrap();
             a
         });
-        assert_eq!(fragen(&p, "telegram", "hi", "t-1"), Ok(true));
+        assert_eq!(fragen_mit(&p, "telegram", "hi", "t-1", &json!({})), Ok(true));
         let a = h.join().unwrap();
         assert_eq!(a["op"], "frage");
         assert_eq!(a["tuer"], "telegram");
@@ -144,7 +173,7 @@ mod tests {
 
     #[test]
     fn fragen_ohne_server_ist_ein_fehler() {
-        assert!(fragen(Path::new("/nonexistent/sitzung.sock"), "t", "x", "").is_err());
+        assert!(fragen_mit(Path::new("/nonexistent/sitzung.sock"), "t", "x", "", &json!({})).is_err());
     }
 
     #[test]

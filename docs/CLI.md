@@ -214,6 +214,7 @@ Braucht `CHIMERA_LOG_RAM` und `CHIMERA_LOG_KARTE`. / Needs both variables.
 | `sh rust/gegenprobe-netzsuche.sh` | Gegenprobe der Netzsuche. / Network discovery counter-check. |
 | `sh rust/gegenprobe-freigaben.sh` | Gegenprobe der Freigaben je Werkzeug (Negativliste, Ablauf, unbekanntes Werkzeug, Teilauftrag, Dauer, „aus“). / Per-tool grant counter-check. |
 | `sh rust/gegenprobe-wahl.sh` | Gegenprobe der Wahl (Feld prüfen, Wert prüfen, Rest erhalten, Tür ohne Recht). / Choice counter-check (field, value, preserved rest, door without right). |
+| `sh rust/gegenprobe-chatwahl.sh` | Gegenprobe der Chat-Wahl über alle Türen (leerer Wert löscht, Denkstufe geprüft und klein geschrieben, Nicht-Wählbares abgelehnt, falsche Stufe mit Gründen, Nummern, „keine Wahl" nicht erfunden, Web- und Telegram-Weg schicken sie mit). / Chat choice across doors counter-check. |
 | `sh rust/gegenprobe-abruf.sh` | Gegenprobe des Webabrufs (Freigabe übergangen, eigene Adresse frei, Umleitung ungeprüft, Nicht-Text, keine Kürzung, falsches Schema, Anmeldung in der Adresse). / Web-fetch counter-check. |
 | `sh rust/gegenprobe-ssh.sh` | Gegenprobe der Host-Tabelle (Vorschlag wirkt, Vorschlag überschreibt, Hostschlüssel fehlt, geändertes Ziel, Fingerabdruck geglaubt, Pfad als Schlüsselname, unbekannte Rechte, unbestätigter Host, freie Namen, known_hosts ohne Port). / Host-table counter-check. |
 | `sh rust/gegenprobe-mojo.sh` | Gegenprobe von Mojo (Ursachen, Reparaturen, Nachprüfung, Meldung). / Mojo counter-check. |
