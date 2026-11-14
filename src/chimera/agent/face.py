@@ -81,7 +81,9 @@ class Face:
         found = self.moods.find(key)
         if found is None:
             raise KeyError(
-                f"{key!r} — bekannt sind: {', '.join(sorted(self.moods.names())[:12])} …"
+                f"{key!r} — die ganze Liste gibt das Werkzeug 'moods' "
+                f"({len(self.moods)} Ausdrücke, z. B. "
+                f"{', '.join(sorted(self.moods.names())[:6])} …)"
             )
         return self.moods.get(key)
 

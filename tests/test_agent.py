@@ -563,5 +563,36 @@ with tempfile.TemporaryDirectory() as td:
     check("Werkzeugaufrufe mitgezaehlt", res.tool_calls, 2)
 
 print()
+# --- moods: welche Ausdruecke gibt es? (15.11., aus dem Web-Chat) ---
+
+def _mit_gesicht():
+    """Toolbox mit echter Mood-Bibliothek und einem Zustand, der nichts zeichnet."""
+    from chimera.agent.face import Face
+    from chimera.mood.registry import Registry as MR
+    reg = MR.load(str(ROOT / "data" / "moods-builtin.json"))
+
+    class Zustand:
+        def set_mood(self, *a, **k):
+            pass
+
+    return Toolbox(tempfile.mkdtemp(prefix="chimera-moods-"), face=Face(reg, Zustand()))
+
+print("== moods: die Liste der Ausdruecke ==")
+_tb = _mit_gesicht()
+_t = _tb.call("moods", {})
+check("moods nennt die Anzahl", "43 von 43" in _t, True)
+for _n in ("ROCK", "CHILL", "IDLE"):
+    check(f"moods nennt {_n}", f"- {_n}" in _t, True)
+check("moods nennt die Herkunft", "(eingebaut)" in _t, True)
+_t = _tb.call("moods", {"suche": "rock"})
+check("Filter findet ROCK", "- ROCK" in _t, True)
+check("Filter nennt die Menge", "1 von 43" in _t, True)
+check("leerer Filter ist eine Auskunft",
+      "Kein Ausdruck passt" in _tb.call("moods", {"suche": "gibtsnicht"}), True)
+check("unbekannter Ausdruck verweist auf das Werkzeug",
+      "'moods'" in _tb.call("set_face", {"mood": "GIBTSNICHT"}), True)
+
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(1 if FAIL else 0)
+
+

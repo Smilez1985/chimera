@@ -529,6 +529,14 @@ class Toolbox:
         ), self._guthaben)
 
         self.add(ToolSpec(
+            "moods",
+            "Die verfuegbaren Gesichtsausdruecke (Moods) nennen: Namen, "
+            "Herkunft (eingebaut/vom Agenten angelegt) und Anzahl. Ohne "
+            "Argumente alles, mit 'suche' gefiltert.",
+            {"suche": "optional: Teil eines Namens (z. B. 'ROCK')"},
+        ), self._moods)
+
+        self.add(ToolSpec(
             "set_face",
             "Den Gesichtsausdruck setzen. Entweder ein bekannter "
             "Mood-Name oder eine Mischung wie 'CHILL+ROCK'.",
@@ -568,6 +576,39 @@ class Toolbox:
 
     def _list_dir(self, path: str = "") -> str:
         return self._frage("list", path=path)
+
+    def _moods(self, suche: str = "") -> str:
+        """Welche Ausdruecke gibt es? Dieselbe Bibliothek, die `set_face` nutzt.
+
+        Der Agent hatte bisher **keine** Moeglichkeit, das zu erfahren: Die
+        Fehlermeldung von `set_face` nannte nur die ersten zwoelf Namen. Im
+        Web-Chat am 14.11. hat er deshalb gefragt, welche Moods es gibt —
+        eine Antwort, die das Gerät selbst kennt und nicht sagen konnte.
+        """
+        if self.face is None:
+            return "Keine Anzeige angeschlossen — es gibt keine Moods zu nennen."
+        try:
+            eintraege = self.face.moods.entries()
+        except Exception as exc:                      # Bibliothek kaputt: Auskunft
+            return f"Mood-Bibliothek nicht lesbar: {type(exc).__name__}: {exc}"
+        if not eintraege:
+            return ("Die Mood-Bibliothek ist leer — das ist ein Verdacht, "
+                    "kein Normalzustand (data/moods-builtin.json fehlt?).")
+        muster = str(suche or "").strip().upper()
+        namen = []
+        for e in eintraege:
+            name = str(e.mood.get("name") or "?")
+            if muster and muster not in name.upper():
+                continue
+            herkunft = "eingebaut" if e.origin == "builtin" else "vom Agenten"
+            namen.append((name, herkunft))
+        if not namen:
+            return (f"Kein Ausdruck passt zu {suche!r}. "
+                    f"Es gibt {len(eintraege)} — ohne 'suche' kommen alle.")
+        namen.sort()
+        kopf = (f"{len(namen)} von {len(eintraege)} Ausdruecken"
+                + (f" zu {suche!r}" if muster else "") + ":")
+        return kopf + "\n" + "\n".join(f"- {n} ({h})" for n, h in namen)
 
     def _set_face(self, mood: str, hard: str = "") -> str:
         """Den Ausdruck setzen — das ist `FACE:` aus openclawgotchi.
