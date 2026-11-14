@@ -1137,6 +1137,41 @@ Umgebung sind **nicht** gebaut und werden nicht nachgeholt. Eine
 Abweichung vom Fork ist schon entschieden (Regel 5l): Die Adresse wird
 nicht im Chat gesetzt.
 
+### Netzblick — was das Gateway im eigenen Netz sieht (Entwurf, 14.11.2026)
+
+Auftrag smilez (14.11.): „beides, passiv als Standard, aktiv opt-in." Der
+Name ist noch offen — „LAN-Sicht" ist ein Arbeitstitel und wird gesondert
+besprochen. Inhaltlich ist es eine **Sicht**, kein Zugriff: Der Agent soll
+wissen, ob NAS und Drucker da sind, ohne dafür ein Ziel treffen zu dürfen.
+
+**Voraussetzung:** ROADMAP-Punkt „Das Gateway ordnet ausgehende Ziele ein"
+(`ip_im_lan` gilt heute nur für eingehende Web-Anfragen). Ohne diese
+Einordnung wäre ein Netzblick ein zweiter Weg daran vorbei — und genau der
+ist in 5n verboten.
+
+**Zwei Stufen, eine Vorgabe:**
+
+1. **Passiv (Vorgabe, kostet nichts, sendet nichts):** eigene Adressen und
+   Namen, die Nachbartabelle (`ip neigh`), im Tailnet sichtbare Geräte
+   (`tailscale status`), der Stand der eigenen Sockets. Kein Paket geht
+   hinaus — das ist der Grund, warum das die Vorgabe ist: Auf einem Gerät,
+   das autonom läuft, ist ein Paket, das niemand bestellt hat, eine
+   Entscheidung und keine Nebensache.
+2. **Aktiv (opt-in, je Ziel):** ein Verbindungsversuch auf **eingetragene**
+   `host:port` — dieselbe Positivliste wie bei `web_abruf`, keine eigene
+   Ablage. Ein Erfolg heißt „erreichbar", kein „Dienst läuft" (das wäre eine
+   Deutung).
+
+**Nicht gebaut, nicht geplant:** ein Portscan über einen Adressbereich. Er
+findet Dinge, für die niemand eine Freigabe gegeben hat, und auf einem Gerät
+ohne Aufsicht ist der Ärger größer als der Nutzen. Wer ihn will, schreibt ihn
+als eigenes Werkzeug mit eigener Freigabe — nicht als Nebenwirkung einer
+Sicht.
+
+**Ausgabe und Protokoll:** Der Agent bekommt Namen, Adressen und Erreichbarkeit
+als Text, nie Rohpakete, nie Antwortinhalte. Jede aktive Prüfung steht im
+Freigabe-Protokoll (Regel 10e), mit Ziel und Ergebnis.
+
 ### Anbieter vom Typ `deepseek` (13.11.2026)
 
 **Auftrag smilez:** DeepSeek als Anbieter über die OpenAI-kompatible API.
@@ -1599,6 +1634,16 @@ modular.
 - **Sitzungen:** Es bleibt bei **einer** Hauptsitzung für alle Türen
   (Regel 5s, 8d). Das Chat-Modul hängt am selben Strom wie Telegram;
   „Alle Chats“ heißt: die Hauptsitzung plus die abgelegten, diese nur lesbar.
+
+**Dieselben Sonden bedienen den Agenten** (14.11.2026). Der Agent braucht
+Systemzustand für eigene Diagnose — heute bekommt er ihn nur als Text von
+`run_command` und nur mit offener Freigabe. Deshalb wird die Messung aus
+`status.rs` über **eine** Gateway-Operation (`status_lesen`) auch dem Agenten
+zugänglich; die Web-Route und das Werkzeug rufen **dieselbe** `sonden()`-Liste,
+keine zweite Rechnung. Kein neues Recht, kein Netz, kein root: Die Sonden
+lesen `/proc`, `/sys` und `systemctl show`, nichts davon braucht Vorrechte.
+Ein Wert, der sich nicht lesen lässt, bleibt „nicht lesbar" und wird **nicht**
+zu 0 (Regel 10g).
 
 **Umsetzung (Stand):** Rahmen, Anmeldung, Modul-Erkennung und das Chat-Modul
 stehen in `rust/crates/tor/src/web.rs` und `rust/crates/tor/web/`. Festgelegt
@@ -2968,6 +3013,24 @@ data/gedaechtnis/
   was offen ist, was als Nächstes kommt. Die neue Sitzung beginnt mit
   dieser Übergabe, `memory.md` und den letzten Tagen. Läuft gerade ein
   Turn, wird erst danach gewechselt (wie woa-l A21).
+- **Drei Wege, die Übergabe zu füllen** (Vorgabe smilez, 14.11.2026:
+  „beides möglich machen, modellgeführt, sowie harness gesteuert plus
+  hybrid"). Geschaltet in `wahl.json` als `uebergabe`:
+  1. **`zustand`** (Vorgabe): der Harness schreibt den Entwurf **ohne
+     Modell** aus dem, was er ohnehin weiß — offene Punkte wörtlich aus dem
+     Verlauf, die letzten Fehlschläge, die gesetzte Wahl, die Messwerte des
+     Wächters, die letzten Turns gekürzt. **0 Tokens.** Ein Wechsel darf
+     nicht daran scheitern, dass ein Modell gerade nicht erreichbar ist —
+     genau dann wird gewechselt.
+  2. **`modell`**: ein Modellaufruf schreibt die Übergabe (wie bisher).
+  3. **`hybrid`**: der Harness legt den Entwurf vor, das Modell darf ihn
+     **ergänzen** (anhängen), nicht ersetzen. Fällt der Aufruf aus, bleibt
+     der Entwurf gültig und der Wechsel läuft weiter — das ist der
+     Unterschied zu 2.
+  In allen drei Fällen gilt: ein Entwurf ist **kein Beweis**. Die neue
+  Sitzung liest ihre Übergabe als Behauptung und prüft, was sie prüfen kann
+  (GLOBAL: nie raten) — der Harness trägt deshalb Messwerte mit Zeitstempel
+  ein, keine Deutung.
 - **Ein Satz an Sitzungen:** `aktiv` und `alt`. Beim Wechsel wird
   `alt` zu `archiv/<id>.tar.zst` (oder `.tar.gz`, falls zstd fehlt),
   `aktiv` wird zu `alt`, die neue wird `aktiv`. Archive, die älter als
@@ -3443,6 +3506,25 @@ Schritt mit Ergebnis und eine Schlussbilanz. Auf dem Schirm darf es
 knapper zugehen als in der Datei. Kann kein Protokoll angelegt werden,
 wird das **gemeldet** und nicht stillschweigend übergangen.
 
+**Der Agent liest Protokolle nur durch eine Tür** (Entwurf, 14.11.2026).
+Ohne Logs kann er eigene Fehlerschleifen nicht erkennen — der häufigste
+Grund, warum ein Modell denselben Fehler dreimal macht. Er bekommt deshalb
+**kein** Journal-Recht und keinen Pfad in die Logs, sondern eine Gateway-
+Operation `log_lesen` mit drei Grenzen:
+
+1. **Positivliste der Quellen** (Installer-Protokoll, Journal der
+   chimera-Units, Freigabe-Protokoll) — wie bei den Anbietern: kein Name,
+   keine Quelle. `journalctl` mit freiem Muster wäre ein Fernrohr in fremde
+   Dienste.
+2. **Grenzen** (Zeilen, Zeichen, Alter), hart im Gateway, nicht im Werkzeug.
+3. **Geschwärzt**, nach denselben Mustern wie Mojo (`~` für das
+   Heimverzeichnis, `<redacted len=N>` für Schlüssel und Token, LAN-Adressen
+   als Platzhalter) — sonst wandern Pfade und Zugangsdaten in den
+   Modellkontext und von dort in eine Cloud.
+
+Gelesen wird **nur**, geschrieben nie. Was geschrieben werden soll, ist ein
+Protokoll des Laufs selbst (10e), kein Gegenstand eines Werkzeugs.
+
 ### Architekturregel 10f — Keine Container auf dem Gerät
 
 Auf Pi und Radxa läuft alles **nativ**. Der Aufwand an Speicher,
@@ -3701,6 +3783,51 @@ sprengt.
 beendet (`os._exit(1)` im Testpfad, nicht im Produktivcode). Ohne die
 Regel stirbt der zweite Start genauso. Mit der Regel läuft er mit dem
 Standard, die Quarantänedatei existiert und das Protokoll nennt sie.
+
+### Regel „Lebenszeichen" — der Dienst meldet sich selbst, sonst startet systemd ihn neu
+
+Vorgabe smilez (14.11.2026): **hybrid** — ein eigenes Lebenszeichen **und**
+eine Rücksicht auf lange Modellaufrufe. Der Anlass ist gemessen: Mojo prüft
+**stündlich** und bei `OnFailure` (`OnUnitActiveSec=1h`); ein Dienst, der
+zwar läuft, aber **hängt** (kein Absturz), fällt damit bis zu einer Stunde
+nicht auf. Auf einem Gerät, das unbeaufsichtigt im Wohnzimmer steht, ist eine
+Stunde Stille von einem gewollten Nichtstun nicht zu unterscheiden.
+
+**Die Regel.**
+
+1. **Das Lebenszeichen kommt aus einem eigenen Faden**, nicht aus dem
+   Hauptfaden. Der Hauptfaden wartet auf das Modell; ein Lebenszeichen von
+   dort wäre genau dann still, wenn ein Aufruf hängt — und würde im
+   schlechtesten Fall einen hängenden Aufruf als gesund melden.
+2. **Der Hauptfaden darf „beschäftigt" setzen**, und zwar mit einer
+   **Obergrenze**: Eine Zeile `busy <zweck> <frist>` (Unix-Zeit) in
+   `state/lebenszeichen.json`. Solange eine gültige Frist läuft, gilt ein
+   länger ausbleibender Fortschritt als erwartet, nicht als Hänger.
+   Abgelaufene Frist ohne Fortschritt = Hänger. Die Obergrenze schützt davor,
+   dass ein Aufruf sich selbst unendlich verlängert.
+3. **Die Unit prüft hart:** `Type=notify`, `WatchdogSec=` (Vorgabe 30 s,
+   weil das Lebenszeichen aus dem eigenen Faden kommt), `Restart=always`.
+   Ein toter Faden ohne Absturz führt damit in Sekunden zu einem Neustart.
+4. **Mojo bleibt die zweite Ebene.** Der Watchdog sagt „läuft nicht mehr" und
+   startet neu; Mojo sagt **warum** und ob die Reparatur geholfen hat (Regel
+   „Mojo"). Keiner ersetzt den anderen: Der Watchdog kennt keine Ursache, und
+   Mojo ist zu langsam für einen Hänger.
+5. **Kein Lebenszeichen ohne Prüfung.** Der Satz „ich lebe" wird an
+   `$NOTIFY_SOCKET` geschrieben (ein Unix-Socket, kein Paket, keine neue
+   Abhängigkeit). Fehlt die Variable, läuft der Dienst trotzdem — dann
+   meldet er beim Start, dass der Watchdog nicht greift (stiller Erfolg wäre
+   hier: niemand merkt, dass niemand aufpasst).
+6. **Langlaufende Dienste haben ihn auch.** `chimera-sohelper` (ein Faden je
+   Verbindung, wartet auf Befehle) und das Gateway bekommen dieselbe Form;
+   ein hängender Ausführer blockiert sonst das Werkzeug eines Turns, ohne dass
+   jemand es merkt.
+
+**Gegenprobe (Regel 9):** (a) Ein Test fängt die Zeilen an einem
+selbstgebauten Unix-Socket ab — ohne systemd im Sandkasten. (b) Dienst im
+Test künstlich blockieren: ohne Regel kein Neustart, mit Regel einer, und das
+Journal nennt den Watchdog. (c) Ein **erlaubt langer** Aufruf (40 s Modell,
+`busy` gesetzt) darf **keinen** Neustart auslösen — sonst misst die Regel nur
+die Geduld des Prüfers.
 
 ### Architekturregel 10q — Speicher wird am Prozess gemessen und vom Prozess begrenzt
 
@@ -4034,8 +4161,30 @@ Gateway schreibt, der Agent liest sie **nie** — er bekommt „erlaubt“ oder
 }
 ```
 
-- **`modus`** — `positivliste` (Vorgabe, nur Ziele in `positiv`) oder
-  `offen` (jedes Ziel außer `negativ`).
+- **`modus`** — drei Werte (der dritte auf Vorgabe smilez vom 14.11.2026):
+  1. `positivliste` (**Vorgabe**, nur Ziele in `positiv`),
+  2. `offen` (jedes Ziel außer `negativ`),
+  3. `offen_nach_vorschlag` (jedes Ziel außer `negativ`, **aber nur wenn es
+     einmal angenommen wurde**).
+- **Warum der dritte Wert, und warum er der zweite nicht ersetzt.** Smilez
+  am 14.11.: „beide Modi, offen nach Vorschlag, und alles immer offen."
+  `offen` bleibt für den Fall „ich will jetzt nicht bei jedem Programm
+  gefragt werden". `offen_nach_vorschlag` ist der Alltagsfall bei
+  `run_command`: Der Agent schlägt ein Programm vor (`ls`, `df`, `uptime`),
+  der Nutzer nimmt es an, danach läuft es ohne Rückfrage — ein Programm, das
+  der Agent **nicht** vorgeschlagen hat, läuft nicht. Damit gilt weiter der
+  Satz aus Stufe 3: „`offen` erlaubt mehr Ziele, nicht mehr Programme"; der
+  dritte Modus macht aus dem Programmziel eine echte Positivliste, ohne die
+  Bequemlichkeit von `offen` abzuschaffen.
+- **Ein Vorschlag ist nicht die Annahme.** Der Eintrag trägt `herkunft`
+  (`agent`) und `angenommen: false`; erst der Nutzer setzt das Häkchen (Web
+  oder Telegram), und nur ein angenommener Eintrag zählt. Dasselbe Muster wie
+  bei der Host-Tabelle der Fernausführung (Regel „Fernzugriff"): ein Vorschlag
+  wirkt nie von selbst, auch nicht mit nachgetragenem Ziel.
+- **Der Vorschlag wird nie stillschweigend scharf.** Kein Vorschlag ändert
+  den Modus: Wer `positivliste` eingestellt hat, bleibt dort, bis er
+  umschaltet. Das ist die Lehre aus der Host-Tabelle (12.11.): Ein Weg, der
+  sich selbst freischaltet, ist kein Weg.
 *Soll-Zustand (noch nicht gebaut):*
 
 - **`seit`** — wann die Freigabe geöffnet wurde (Unix-Zeit). Nicht die Frist:
@@ -4310,6 +4459,21 @@ Ausführer für ihn.
   erfährt den Grund — kein Rückfall auf die Ausführung im Dienst.
 - Speicher im Ruhezustand wird am Pi gemessen (Vergleichswert:
   `chimera-tor --dienst` mit 1,6 MB RSS, 3.11.).
+
+**Was noch fehlt — und was ausdrücklich nicht kommt** (Stand 14.11.2026).
+
+Gebaut ist die **Bauform**: Prüfung und Ausführung liegen zusammen, das
+Modell startet nichts. Offen ist der Fall, den die Regel selbst nennt: Was
+die Regeln **nicht entscheiden können** („ein Programm, das kein Muster
+kennt, aber Schaden anrichten kann"), soll der **Nutzer** entscheiden — die
+Rückfrage (Regel 10s) ist dafür nicht gebaut. Bis dahin gilt die strengere
+Seite: abgelehnt. Ein Werkzeug, das im Zweifel durchläuft, wäre die
+Umkehrung dieser Regel.
+
+**Kein zweites Modell als Prüfer** (smilez, 14.11.2026, auf Vorlage hin
+bestätigt): Es kostet bei jedem Werkzeugaufruf Tokens und Zeit und lässt
+sich täuschen wie das erste. Was eine Regel entscheiden kann, entscheidet
+eine Regel; was sie nicht entscheiden kann, entscheidet der Nutzer.
 
 ---
 
@@ -5102,7 +5266,8 @@ nicht auf das Modell wartet, wird Rust.
 | Root-Helfer `chimera-hand` (10s) | **Rust** | läuft als root; kleiner Code mit klaren Typen ist hier ein Sicherheitsgewinn |
 | Gedächtnis: Marker zählen, Vollständigkeit prüfen, Dateien rollen (8c) | **Rust**, im Sitzungsdienst | deterministisch, prüfbar ohne Modell |
 | Gedächtnis: der Text der Zusammenfassung (8c) | **Python** (Agent) | ist ein Modellaufruf; der Agent fragt, Rust prüft das Ergebnis |
-| Übergabe schreiben (8d) | **Python** (Agent) | Inhalt kommt vom Modell |
+| Übergabe: Entwurf aus dem Zustand (8d, `uebergabe: zustand`/`hybrid`) | **Rust**, im Sitzungsdienst | reine Zusammenstellung aus Verlauf, Wahl und Messwerten; kein Modell, prüfbar, 0 Tokens |
+| Übergabe: Text vom Modell (8d, `uebergabe: modell`; bei `hybrid` als Ergänzung) | **Python** (Agent) | ist ein Modellaufruf; der Entwurf bleibt gültig, wenn er ausfällt |
 | Agentenschleife, Werkzeuge, Moods, Gesichter (8b) | **Python** | wartet auf das Modell, lebt von Python (Regel 14) |
 
 Folge: Neben Gateway und Renderer entstehen in Rust der Briefkasten,

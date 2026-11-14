@@ -960,6 +960,25 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Vier Entscheidungen vom 14.11. ins Design eingetragen** (noch kein Code;
+  die Reihenfolge steht in `docs/ROADMAP.md`, Phase „Echte Lücken"):
+  (a) **Freigabe bekommt einen dritten Modus** `offen_nach_vorschlag` —
+  `positivliste` und `offen` bleiben beide bestehen; im dritten Modus gilt
+  offen nur für Ziele, die der Nutzer **angenommen** hat, ein Vorschlag des
+  Agenten wirkt nie von selbst (DESIGN, Regel „Freigabe je Werkzeug auf Zeit").
+  (b) **Übergabe in drei Modi** `zustand` (Vorgabe, 0 Tokens), `modell`,
+  `hybrid` (Entwurf vorlegen, Modell ergänzt) — die Zuteilungstabelle trennt
+  dafür Entwurf (Rust) und Modellergänzung (Python). (c) **Regel
+  „Lebenszeichen"**: eigener Faden schreibt `WATCHDOG=1`, der Hauptfaden darf
+  `busy` mit Frist setzen, Unit `Type=notify`; Mojo bleibt die zweite Ebene.
+  (d) **Netzblick** als Entwurf: passiv als Vorgabe (sendet nichts), aktiv
+  nur gegen eingetragene `host:port`, kein Portscan; Name noch offen.
+  Dazu zwei Lücken benannt statt gebaut: der Agent liest Protokolle nur über
+  eine Gateway-Tür mit Quellenliste und Schwärzung (10e), und die Status-Op
+  `status_lesen` bedient Route und Werkzeug aus **derselben** `sonden()`-Liste
+  (5m). Festgehalten ist außerdem, dass **kein zweites Modell** als Prüfer
+  kommt (Regel „Wer prüft, führt aus").
+
 - **Statusbereich ist jetzt eine Liste von Feldern** (Regel „Anzeigefelder",
   14.11.): Statt einer Zeile zeichnet `display/statusline.py` Felder aus
   `display/felder/<name>.py` — ein neues Feld ist eine neue Datei, kein

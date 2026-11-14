@@ -9,6 +9,57 @@ Stand: 2026-11-10. Pre-Alpha.
 
 ---
 
+## Phase „Echte Lücken" — Reihenfolge nach Wirkung je Aufwand (14.11.2026)
+
+Aus dem Prüfbericht `docs/../shared` bzw. dem Plan
+`shared/chimera/planung/2026-11-14-plan-echte-luecken.md` (Fassung 2). Die
+Design-Seite ist eingetragen (Freigabe-Modus, Übergabe-Modi, Lebenszeichen,
+Netzblick, Log-Tür, Status-Op). **Eins nach dem anderen, in dieser Folge:**
+
+1. [ ] **`ablage.lesen` speicherschonend** (Zwischenschritt, klar befristet).
+       `sitzung_socket.py` ruft heute `lesen(sid)` (ganze `verlauf.jsonl`
+       parsen) und schneidet danach eine Seite heraus. Bau: `lesen_seite()`
+       rückwärts in 64-KiB-Blöcken, `anzahl()` ohne JSON-Objekte. Der Test
+       (Seite aus 50 000 Zeilen gleich wie heute, Mutation an der
+       Blockgrenze) wird zum **Abnahmekriterium für `chimera-sitzung`** in
+       Rust — sonst misst er nur die Zwischenlösung.
+2. [ ] **Dritter Freigabe-Modus `offen_nach_vorschlag`** (DESIGN, Regel
+       „Freigabe je Werkzeug auf Zeit"): `positivliste`, `offen` und der neue
+       Modus bestehen nebeneinander. Der Agent schlägt Programme vor
+       (Muster `ssh_vorschlag`), der Nutzer nimmt an; ohne Annahme läuft
+       nichts. Negativliste behält Vorrang in allen Modi.
+3. [ ] **Status-Op `status_lesen`** (DESIGN 5m): dieselbe `sonden()`-Liste
+       für Route *und* Werkzeug `status`. Deckt Temperatur, Last, Speicher und
+       Dienstzustand ab — vier der acht Agentenwünsche aus dem Bericht.
+4. [ ] **Lebenszeichen und Watchdog** (DESIGN, Regel „Lebenszeichen"):
+       eigener Faden schreibt `WATCHDOG=1`, Hauptfaden darf `busy` mit Frist
+       setzen, Unit `Type=notify`/`WatchdogSec=30`/`Restart=always`. Belegt am
+       Gerät: künstliche Blockade → Neustart; 40-s-Modellaufruf → **kein**
+       Neustart.
+5. [ ] **Verdichten mit Verweis** (8d, schon hier offen) — **vor** dem
+       Wächter, weil der Wächter gegen dieses Verfahren misst.
+6. [ ] **Wächter im Sitzungsdienst** (8d): Messpaket nach jedem Turn
+       (Token gegen das Fenster des bedienenden Modells, Bytes und Ladezeit
+       der Ablage), Schwellen in `wahl.json`, Entscheidung in Rust.
+       **Schwelle „schwer" messen** und ins Design eintragen.
+7. [ ] **Übergabe in drei Modi** (8d): `zustand` (Vorgabe, 0 Tokens),
+       `modell`, `hybrid` (Entwurf vorlegen, Modell ergänzt). Der Entwurf
+       entsteht in Rust, die Modellergänzung in Python.
+8. [ ] **`log_lesen`** (10e): Quellenliste, harte Grenzen, Schwärzung nach
+       Mojo-Mustern; Anfrage auf eine fremde Unit muss abgelehnt werden.
+9. [ ] **Netzblick** (DESIGN, Abschnitt „Netzblick"): erst ROADMAP-Punkt
+       „Das Gateway ordnet ausgehende Ziele ein" (5n), dann passive Sicht
+       (Vorgabe), aktive Prüfung als opt-in gegen eingetragene `host:port`.
+       **Name noch offen** („LAN-Sicht" ist Arbeitstitel).
+10. [ ] **Rückfrage beim Nutzer** (10s): der Fall, den die Regeln nicht
+        entscheiden können, wird gefragt statt abgelehnt — Web oder
+        Telegram-Knopf. Bis dahin gilt „abgelehnt".
+11. [ ] **Schwärzung vor der Cloud** (DESIGN 985-1007): Muster von Mojo
+        übernehmen, Rückübersetzung je Sitzung, auch in Werkzeugaufrufen und
+        über Strom-Stückgrenzen.
+
+---
+
 ## Phase 0 — Blaupause ✅
 
 Erledigt bis auf einen Punkt, der nicht am Rechner zu klären ist: die
@@ -641,10 +692,10 @@ Rust-Teile im selben Cargo-Workspace wie das Gateway (Regel 14).
       aktiv/alt, Archiv, Löschen nach 3 Tagen nach geprüftem Auspacken,
       Verdichtung ohne Verlust im Protokoll). Umzug nach Rust (Regel 14)
       hinter derselben Schnittstelle; Werkzeug `nachlesen` für den Agenten.
-- [ ] Wächter im Sitzungsdienst. **Schwelle „schwer“ messen** und ins
-      Design eintragen.
+- [ ] Wächter im Sitzungsdienst — **geplant in Phase „Echte Lücken", Punkt 6**.
 - [ ] Verdichten neu: Zusammenfassung mit Verweis, offene Punkte
-      wörtlich. `_compact()` in `agent/loop.py` entfällt.
+      wörtlich. `_compact()` in `agent/loop.py` entfällt. — **geplant in
+      Phase „Echte Lücken", Punkt 5** (vor dem Wächter, weil der dagegen misst).
 - [ ] **Gedächtnis** Tag → Monat → Jahr → `memory.md`, Quellen bleiben,
       Vollständigkeitsprüfung (Rust) gegen Marker.
 - [ ] **`chimera-hand`** (Rust, root): Freigabe nur durch den Nutzer per
