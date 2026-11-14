@@ -417,6 +417,22 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
   filtert `typ === "ollama"`); heute legt man ihn über
   `/api/anbieter/setzen` an.
 
+- [ ] **Passkey (WebAuthn) für die Web-Oberfläche** (Wunsch smilez,
+  14.11.): Registrierung eines Passkeys nach dem ersten Passwort, Anmeldung
+  damit (alternative zum Passwort). **Voraussetzung: TLS** — ein Browser
+  bietet WebAuthn nur im sicheren Kontext an (`https://` oder `localhost`);
+  über `http://<LAN-IP>` ist der Knopf wirkungslos. Reihenfolge: (1) TLS vor
+  die Oberfläche (eigenes Zertifikat, sichtbarer Import-Hinweis), (2)
+  Registrierung (`navigator.credentials.create`, ES256, `rpId` = Hostname,
+  Origin prüfen, Challenge je Versuch einmalig), (3) Anmeldung
+  (`navigator.credentials.get`), (4) Passkey löschen und Passwort-Rückfall.
+  Ablage: `state/web/passkeys.json` (öffentliche Schlüssel, nie private).
+- [ ] **Passwort in der Oberfläche zurücksetzen** (Wunsch smilez 14.11.:
+  „zurücksetzen nur vorbereiten, bauen wir später"): heute nur auf dem Gerät
+  (`sudo /opt/chimera/bin/web-passwort`), und die Login-Seite sagt das.
+  Offen: ein Weg aus der Oberfläche selbst — nur wer angemeldet ist, oder
+  mit Bestätigung am Gerät (Taste/Display). Bewusst nicht gebaut: Ein
+  Selbstbedienungs-Reset ohne zweiten Faktor wäre ein Loch.
 - [ ] **Guthaben je Anbieter — Restarbeiten** (gebaut 13.11., siehe
   `docs/DESIGN.md`, „Guthaben je Anbieter"): Das Gateway fragt den Anbieter
   (`quota_lesen`, Ablage `state/quota/<id>.json`), Mo­dul „Konten" im Web,

@@ -328,7 +328,10 @@ impl Strom {
 }
 
 pub struct Zustand {
-    pub hash: String,
+    /// Der Passwort-Hash. **Leer heisst: noch kein Passwort** -- dann zeigt
+    /// die Oberflaeche nur die Seite „Passwort anlegen" (Regel 5j, Fassung
+    /// 14.11.), und nur mit dem Einmal-Code aus dem Protokoll.
+    hash: Mutex<String>,
     pub modul_dir: Option<PathBuf>,
     pub sitzung_socket: PathBuf,
     pub strom: Arc<Strom>,
@@ -343,7 +346,7 @@ pub struct Zustand {
 impl Zustand {
     pub fn neu(hash: String, modul_dir: Option<PathBuf>, sitzung_socket: PathBuf, strom: Arc<Strom>) -> Zustand {
         Zustand {
-            hash,
+            hash: Mutex::new(hash),
             modul_dir,
             sitzung_socket,
             strom,
@@ -352,6 +355,16 @@ impl Zustand {
             angemeldet: Mutex::new(BTreeMap::new()),
             fehlversuche: Mutex::new(VecDeque::new()),
         }
+    }
+
+    /// Ist noch kein Passwort gesetzt? Dann ist die Oberflaeche im
+    /// Einrichtungsbetrieb (nur die Seite dafuer, sonst nichts).
+    fn braucht_einrichtung(&self) -> bool {
+        self.hash.lock().unwrap().is_empty()
+    }
+
+    fn hash_kopie(&self) -> String {
+        self.hash.lock().unwrap().clone()
     }
 
     fn token_neu(&self) -> String {
@@ -420,6 +433,7 @@ fn query_wert(q: &str, name: &str) -> Option<String> {
 
 const COOKIE: &str = "chimera_sitzung";
 
+
 /// Sekunden seit der Epoche -- fuer die Restzeit einer Freigabe.
 fn jetzt_s() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
@@ -446,8 +460,20 @@ pub fn behandle(z: &Zustand, a: &Anfrage) -> Antwort {
                 cookie: None,
             }
         }
+        ("GET", "/api/einrichtung") => {
+            return json_antwort(200, json!({
+                "ok": true,
+                "noetig": z.braucht_einrichtung(),
+            }))
+        }
+        ("POST", "/api/passwort-neu") => return passwort_neu(z, a),
         ("POST", "/api/login") => return login(z, a),
         _ => {}
+    }
+    // Ohne Passwort gibt es keinen Inhalt -- auch nicht mit gueltigem Cookie
+    // von vorher (nach einer Ruecksetzung ist alles zu).
+    if z.braucht_einrichtung() {
+        return fehler(409, "Noch kein Passwort gesetzt");
     }
 
     let angemeldet = cookie_wert(a.cookie, COOKIE).map(|t| z.token_gueltig(t)).unwrap_or(false);
@@ -500,6 +526,50 @@ pub fn behandle(z: &Zustand, a: &Anfrage) -> Antwort {
     }
 }
 
+/// `POST /api/passwort-neu`: das **erste** Passwort anlegen.
+///
+/// Nur solange keines gesetzt ist (danach 409 -- ein neues gibt es ueber
+/// `web-passwort` auf dem Geraet), mindestens 8 Zeichen, zweimal gleich.
+/// Geschrieben
+/// wird nach `state/web/passwort-hash` (0600) -- das Gateway laeuft als
+/// eigener Nutzer und darf die `.env` nicht anfassen (Regel 5l/5t). Die
+/// `.env` gewinnt weiter, wenn der Installer dort einen Hash eintraegt.
+fn passwort_neu(z: &Zustand, a: &Anfrage) -> Antwort {
+    // Auch hier bremst die Fehlversuchsbremse.
+    if !z.versuch_frei() {
+        return fehler(429, "zu viele Fehlversuche, bitte eine Minute warten");
+    }
+    if !z.braucht_einrichtung() {
+        return fehler(409, "Es ist schon ein Passwort gesetzt. Vergessen? Auf dem Geraet: sudo /opt/chimera/bin/web-passwort");
+    }
+    let v: Value = match serde_json::from_slice(a.body) {
+        Ok(v) => v,
+        Err(_) => return fehler(400, "kein JSON"),
+    };
+    let pw = v["passwort"].as_str().unwrap_or("");
+    let pw2 = v["wiederholung"].as_str().unwrap_or("");
+    if pw.chars().count() < 8 {
+        return fehler(400, "Das Passwort braucht mindestens 8 Zeichen.");
+    }
+    if pw != pw2 {
+        return fehler(400, "Die beiden Eingaben sind nicht gleich.");
+    }
+    let hash = match hash_erzeugen(pw) {
+        Ok(h) => h,
+        Err(e) => return fehler(500, &format!("Hash nicht erzeugt: {e}")),
+    };
+    if let Err(e) = hash_ablegen(&z.stand.daten, &hash) {
+        return fehler(500, &format!("Passwort nicht abgelegt: {e}"));
+    }
+    // Erst pruefen, dann behaupten: der gespeicherte Wert muss der neue sein.
+    if gespeicherter_hash(&z.stand.daten).as_deref() != Some(hash.as_str()) {
+        return fehler(500, "Passwort nicht abgelegt (Eintrag stimmt nicht)");
+    }
+    *z.hash.lock().unwrap() = hash;
+    melden(Stufe::Info, "Web: erstes Passwort angelegt (state/web/passwort-hash).");
+    json_antwort(200, json!({"ok": true}))
+}
+
 fn login(z: &Zustand, a: &Anfrage) -> Antwort {
     if !z.versuch_frei() {
         return fehler(429, "zu viele Fehlversuche, bitte eine Minute warten");
@@ -509,7 +579,10 @@ fn login(z: &Zustand, a: &Anfrage) -> Antwort {
         Err(_) => return fehler(400, "kein JSON"),
     };
     let pw = v["passwort"].as_str().unwrap_or("");
-    if !pw.is_empty() && hash_pruefen(&z.hash, pw) {
+    if z.braucht_einrichtung() {
+        return fehler(409, "Noch kein Passwort gesetzt");
+    }
+    if !pw.is_empty() && hash_pruefen(&z.hash_kopie(), pw) {
         let t = z.token_neu();
         let mut r = json_antwort(200, json!({"ok": true}));
         r.cookie = Some(format!(
@@ -992,19 +1065,44 @@ fn chat_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {    // Das Recht st
 /// Was die Umgebung ueber die Web-Oberflaeche sagt.
 #[derive(Debug, PartialEq)]
 pub enum Konfig {
-    Aus,
     Falsch(String),
     Bereit { hash: String, adresse: String },
 }
 
-/// `CHIMERA_WEB_PASSWORT_HASH` leer: aus (kein Fehler, Regel 5j). Gesetzt, aber
-/// kein gueltiger Hash: Fehlkonfiguration.
+/// Wo das erste Passwort liegt, wenn die `.env` keines nennt.
+fn hash_datei(p: &crate::daten::Pfade) -> PathBuf {
+    p.state.join("web").join("passwort-hash")
+}
+
+/// Den Hash aus der Ablage der Oberflaeche lesen (leer, wenn keiner da ist).
+fn gespeicherter_hash(p: &crate::daten::Pfade) -> Option<String> {
+    let t = std::fs::read_to_string(hash_datei(p)).ok()?;
+    let t = t.trim().to_string();
+    if t.is_empty() || !hash_gueltig(&t) {
+        return None;
+    }
+    Some(t)
+}
+
+/// Den Hash ablegen (0600, atomar). Prueft die Laenge, nicht nur den Exitcode.
+fn hash_ablegen(p: &crate::daten::Pfade, hash: &str) -> Result<(), String> {
+    let f = hash_datei(p);
+    if let Some(d) = f.parent() {
+        std::fs::create_dir_all(d).map_err(|e| format!("{} nicht anlegbar: {e}", d.display()))?;
+    }
+    let mut text = hash.as_bytes().to_vec();
+    text.push(b'\n');
+    crate::daten::atomar_schreiben(&f, &text, 0o600)
+}
+
+/// `CHIMERA_WEB_PASSWORT_HASH` leer heisst **nicht** mehr „aus", sondern
+/// „Einrichtungsbetrieb" (Fassung 14.11., Entscheidung smilez): Die
+/// Oberflaeche startet und zeigt nur die Seite zum Anlegen des ersten
+/// Passworts -- und die nur mit dem Einmal-Code aus dem Protokoll.
+/// Gesetzt, aber kein gueltiger Hash: Fehlkonfiguration.
 pub fn konfig_aus(hash: Option<&str>, port: Option<&str>, bind: Option<&str>) -> Konfig {
     let h = hash.map(str::trim).unwrap_or("");
-    if h.is_empty() {
-        return Konfig::Aus;
-    }
-    if !hash_gueltig(h) {
+    if !h.is_empty() && !hash_gueltig(h) {
         return Konfig::Falsch("CHIMERA_WEB_PASSWORT_HASH hat nicht die Form pbkdf2-sha256$N$SALZ$HASH (chimera-tor --passwort-hash).".into());
     }
     let p = match port.map(str::trim).filter(|s| !s.is_empty()) {
@@ -1019,8 +1117,17 @@ pub fn konfig_aus(hash: Option<&str>, port: Option<&str>, bind: Option<&str>) ->
 }
 
 pub fn konfig() -> Konfig {
+    let env_hash = std::env::var("CHIMERA_WEB_PASSWORT_HASH").ok();
+    let aus_env = env_hash.as_deref().map(str::trim).unwrap_or("");
+    // Die .env gewinnt (der Installer schreibt sie); sonst gilt, was die
+    // Oberflaeche beim ersten Anmelden abgelegt hat.
+    let hash = if !aus_env.is_empty() {
+        Some(aus_env.to_string())
+    } else {
+        gespeicherter_hash(&crate::daten::Pfade::aus_umgebung())
+    };
     konfig_aus(
-        std::env::var("CHIMERA_WEB_PASSWORT_HASH").ok().as_deref(),
+        hash.as_deref(),
         std::env::var("CHIMERA_WEB_PORT").ok().as_deref(),
         std::env::var("CHIMERA_WEB_BIND").ok().as_deref(),
     )

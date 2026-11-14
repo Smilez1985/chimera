@@ -36,11 +36,23 @@
     <button class="knopf" id="abmelden">Abmelden</button>
   </header>
   <main id="inhalt">
+    <form id="einrichtung" style="display:none">
+      <h2>Willkommen</h2>
+      <p class="klein">Noch kein Passwort gesetzt. Lege jetzt eines an — mindestens 8 Zeichen,
+      zweimal eingeben. Danach gilt es für jede Anmeldung; vergessen? Auf dem Gerät:
+      <code>sudo /opt/chimera/bin/web-passwort</code></p>
+      <input id="e-pw" type="password" autocomplete="new-password" placeholder="Neues Passwort" autofocus>
+      <input id="e-pw2" type="password" autocomplete="new-password" placeholder="Passwort wiederholen">
+      <button class="knopf" type="submit">Passwort anlegen</button>
+      <div class="fehler" id="einrichtungsfehler"></div>
+    </form>
     <form id="anmeldung">
       <h2>Chimera</h2>
       <input id="pw" type="password" autocomplete="current-password" placeholder="Passwort" autofocus>
       <button class="knopf" type="submit">Anmelden</button>
       <div class="fehler" id="anmeldefehler"></div>
+      <p class="klein">Passwort vergessen? Auf dem Gerät:
+      <code>sudo /opt/chimera/bin/web-passwort</code></p>
     </form>
   </main>
 </div>
@@ -86,6 +98,16 @@ async function zeigeModul(m) {
 }
 
 async function start() {
+  // Erst fragen, ob ueberhaupt ein Passwort gesetzt ist: ohne eines zeigt die
+  // Oberflaeche nur die Seite zum Anlegen (Regel 5j, Fassung 14.11.).
+  try {
+    const e = await api("/api/einrichtung");
+    if (e.noetig) {
+      $("anmeldung").style.display = "none";
+      $("einrichtung").style.display = "block";
+      return;
+    }
+  } catch (_) {}
   const r = await api("/api/module");
   if (r.status === 401) { $("kopf").hidden = true; $("anmeldung").style.display = "block"; return; }
   $("anmeldung").style.display = "none";
@@ -108,6 +130,21 @@ $("anmeldung").addEventListener("submit", async (e) => {
   $("pw").value = "";
   if (r.ok) { $("anmeldefehler").textContent = ""; start(); }
   else $("anmeldefehler").textContent = r.fehler || "Fehler";
+});
+$("einrichtung").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const r = await api("/api/passwort-neu", { method: "POST", body: JSON.stringify({
+    passwort: $("e-pw").value, wiederholung: $("e-pw2").value,
+  }) });
+  $("e-pw").value = ""; $("e-pw2").value = "";
+  if (!r.ok) { $("einrichtungsfehler").textContent = r.fehler || "Fehler"; return; }
+  // Angelegt: jetzt anmelden mit genau diesem Passwort.
+  $("einrichtung").style.display = "none";
+  $("anmeldung").style.display = "block";
+  $("anmeldefehler").textContent = "";
+  $("anmeldefehler").style.color = "#7be0a0";
+  $("anmeldefehler").textContent = "Passwort angelegt — bitte jetzt anmelden.";
+  $("pw").focus();
 });
 $("abmelden").onclick = async () => { await api("/api/logout", { method: "POST", body: "{}" }); location.reload(); };
 start();

@@ -20,6 +20,17 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Erstes Passwort beim Anmelden** (Entscheidung smilez 14.11.): Ist kein
+  Passwort gesetzt, startet die Oberfläche und zeigt **nur** die Seite zum
+  Anlegen (mindestens 8 Zeichen, zweimal) — alles andere antwortet `409`.
+  Der Hash liegt in `state/web/passwort-hash` (0600, neue Ablage in
+  `ReadWritePaths`); ein Hash in der `.env` gewinnt. Danach gilt das Passwort
+  für jede Anmeldung; vergessen ⇒ `sudo /opt/chimera/bin/web-passwort` auf
+  dem Gerät (die Login-Seite sagt es). Ein einmaliger Einrichtungs-Code war
+  gebaut und ist auf Wunsch wieder **entfernt** — umständlich, und der Weg
+  auf dem Gerät ist ohnehin da. Tests: 5 neue in `web::tests`
+  (ohne Passwort 409, zu kurz/ungleich abgelehnt, Hash abgelegt und Login
+  danach, zweites Anlegen 409).
 - **Web-Modul „Anbieter"** (14.11., aus der Frage „wo trage ich den
   DeepSeek-Schlüssel ein?"): Liste aller Anbieter mit Typ, Adresse und ob ein
   Schlüssel hinterlegt ist; Formular zum Anlegen und Ändern (Typ `deepseek` /

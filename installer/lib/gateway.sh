@@ -130,7 +130,7 @@ RestrictSUIDSGID=yes
 # startet die Unit trotzdem (der Installer legt sie vorher an).
 ReadWritePaths=-$CHIMERA_CONFIG/anbieter -$CHIMERA_CONFIG/geheim -$CHIMERA_CONFIG/wahl \
 	-$CHIMERA_CONFIG/freigaben -$CHIMERA_CONFIG/ssh -$CHIMERA_STATE/katalog -$CHIMERA_STATE/log \
-	-$CHIMERA_STATE/quota
+	-$CHIMERA_STATE/quota -$CHIMERA_STATE/web
 EOF
 }
 
@@ -143,7 +143,7 @@ EOF
 # "Read-only file system" und die Freigabe bleibt eine Anzeige ohne Wirkung.
 # rc 0 ok, 2 nicht anlegbar.
 gateway_ablagen() {
-	for _ga_d in "$CHIMERA_CONFIG/anbieter" "$CHIMERA_CONFIG/geheim" "$CHIMERA_CONFIG/wahl" "$CHIMERA_CONFIG/freigaben" "$CHIMERA_CONFIG/ssh" "$CHIMERA_STATE/katalog" "$CHIMERA_STATE/log" "$CHIMERA_STATE/quota"; do
+	for _ga_d in "$CHIMERA_CONFIG/anbieter" "$CHIMERA_CONFIG/geheim" "$CHIMERA_CONFIG/wahl" "$CHIMERA_CONFIG/freigaben" "$CHIMERA_CONFIG/ssh" "$CHIMERA_STATE/katalog" "$CHIMERA_STATE/log" "$CHIMERA_STATE/quota" "$CHIMERA_STATE/web"; do
 		if is_dry_run; then info "[wuerde anlegen] $_ga_d"; continue; fi
 		_ga_p="$(rootpath "$_ga_d")"
 		mkdir -p "$_ga_p" || { err "nicht anlegbar: $_ga_d"; return 2; }

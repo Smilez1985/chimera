@@ -514,7 +514,6 @@ fn main() -> ExitCode {
                     netzsuche::starten();
                     // Web-Oberflaeche (Regel 5m): ohne Passwort-Hash bleibt sie zu (5j).
                     match web::konfig() {
-                        web::Konfig::Aus => melden(Stufe::Info, "Web-Oberflaeche nicht eingerichtet (CHIMERA_WEB_PASSWORT_HASH leer)."),
                         web::Konfig::Falsch(f) => {
                             melden(Stufe::Fehler, &format!("Web falsch eingerichtet: {f}"));
                             return ExitCode::from(2);
@@ -522,7 +521,11 @@ fn main() -> ExitCode {
                         web::Konfig::Bereit { hash, adresse } => {
                             let sock = std::env::var("CHIMERA_SITZUNG_SOCKET")
                                 .unwrap_or_else(|_| sitzung::SOCKET.to_string());
+                            let einrichtung = hash.trim().is_empty();
                             match web::starten(hash, &adresse, web::modul_verzeichnis(), PathBuf::from(sock)) {
+                                Ok(a) if einrichtung => melden(Stufe::Info, &format!(
+                                    "Web-Oberflaeche auf http://{a} -- Einrichtungsbetrieb: noch kein Passwort gesetzt (Code steht oben im Protokoll)."
+                                )),
                                 Ok(a) => melden(Stufe::Info, &format!("Web-Oberflaeche auf http://{a} (unverschluesselt, nur im eigenen Netz).")),
                                 Err(e) => {
                                     melden(Stufe::Fehler, &format!("Web-Oberflaeche startet nicht: {e}"));

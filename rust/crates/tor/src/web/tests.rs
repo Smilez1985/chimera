@@ -56,9 +56,18 @@ fn erzeugter_hash_ist_gueltig() {
 // --- Konfiguration (Regel 5j) ---
 
 #[test]
-fn ohne_hash_ist_die_oberflaeche_aus() {
-    assert_eq!(konfig_aus(None, None, None), Konfig::Aus);
-    assert_eq!(konfig_aus(Some("  "), Some("9"), None), Konfig::Aus);
+fn ohne_hash_ist_die_oberflaeche_im_einrichtungsbetrieb() {
+    // Fassung 14.11. (Entscheidung smilez): Ohne Passwort startet die
+    // Oberflaeche und zeigt **nur** die Seite zum Anlegen -- nicht "aus".
+    for k in [konfig_aus(None, None, None), konfig_aus(Some("  "), Some("9"), None)] {
+        match k {
+            Konfig::Bereit { hash, adresse } => {
+                assert!(hash.is_empty(), "Hash muss leer sein");
+                assert!(!adresse.is_empty());
+            }
+            anderes => panic!("{anderes:?}"),
+        }
+    }
 }
 
 #[test]
@@ -1017,4 +1026,82 @@ fn quota_unbekannter_weg_ist_404() {
     let alle = vec![modul("konten", &["anbieter-lesen", "anbieter-schreiben"], true)];
     let r = quota_antwort(&z, &a("GET", "/api/quota/gibtsnicht", "", b""), "gibtsnicht", &alle);
     assert_eq!(r.status, 404);
+}
+
+// --- Erstes Passwort anlegen (Fassung 14.11.) ------------------------------
+
+fn einrichtung_zustand(n: &str) -> Zustand {
+    let d = tmp(n);
+    let p = crate::daten::Pfade::neu(d.join("config"), d.join("state"));
+    // Ohne Passwort: Hash leer, dann den Einmal-Code anlegen lassen.
+    let mut z = Zustand::neu(String::new(), None, "/x".into(), Strom::neu());
+    z.stand = crate::dienst::Stand::mit(None, p);
+    z
+}
+
+#[test]
+fn ohne_passwort_ist_alles_zu_und_die_einrichtung_offen() {
+    let z = einrichtung_zustand("einricht-zu");
+    let v: Value = serde_json::from_slice(
+        &behandle(&z, &a("GET", "/api/einrichtung", "", b"")).body).unwrap();
+    assert_eq!(v["noetig"], true);
+    // Kein Inhalt ohne Passwort -- auch nicht mit einem Cookie von vorher.
+    assert_eq!(behandle(&z, &a("GET", "/api/module", "", b"")).status, 409);
+    assert_eq!(behandle(&z, &a("POST", "/api/login", "", br#"{"passwort":"x"}"#)).status, 409);
+    // Die Huelle selbst darf geladen werden (sie zeigt das Formular).
+    assert_eq!(behandle(&z, &a("GET", "/", "", b"")).status, 200);
+}
+
+#[test]
+fn ohne_passwort_ist_der_weg_frei_aber_sonst_nichts() {
+    let z = einrichtung_zustand("einricht-offen");
+    // Der Anlege-Weg selbst ist offen (Entscheidung smilez 14.11.: kein
+    // Einmal-Code). Alles andere bleibt zu.
+    assert_eq!(behandle(&z, &a("GET", "/api/module", "", b"")).status, 409);
+    let r = behandle(&z, &a("POST", "/api/passwort-neu", "",
+        br#"{"passwort":"kurz","wiederholung":"kurz"}"#));
+    assert_eq!(r.status, 400, "zu kurzes Passwort wird geprueft, nicht angenommen");
+    assert_eq!(z.braucht_einrichtung(), true);
+}
+
+#[test]
+fn kurzes_oder_ungleiches_passwort_wird_abgelehnt() {
+    let z = einrichtung_zustand("einricht-pw");
+    let r = behandle(&z, &a("POST", "/api/passwort-neu", "",
+        br#"{"passwort":"kurz","wiederholung":"kurz"}"#));
+    assert_eq!(r.status, 400);
+    let r = behandle(&z, &a("POST", "/api/passwort-neu", "",
+        br#"{"passwort":"geheim-1234","wiederholung":"geheim-9999"}"#));
+    assert_eq!(r.status, 400);
+    assert_eq!(z.braucht_einrichtung(), true);
+}
+
+#[test]
+fn richtiger_code_legt_das_passwort_an_und_danach_kommt_man_hinein() {
+    let z = einrichtung_zustand("einricht-ok");
+    let r = behandle(&z, &a("POST", "/api/passwort-neu", "",
+        br#"{"passwort":"geheim-1234","wiederholung":"geheim-1234"}"#));
+    assert_eq!(r.status, 200, "{}", String::from_utf8_lossy(&r.body));
+    assert_eq!(z.braucht_einrichtung(), false);
+    // Ablage: 0600 und der Hash darin (nicht das Passwort).
+    let f = z.stand.daten.state.join("web").join("passwort-hash");
+    let inhalt = std::fs::read_to_string(&f).expect("Passwortdatei fehlt");
+    assert!(inhalt.trim().starts_with("pbkdf2-sha256$"), "{inhalt}");
+    assert!(!inhalt.contains("geheim-1234"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(std::fs::metadata(&f).unwrap().permissions().mode() & 0o777, 0o600);
+    }
+    // Jetzt die Anmeldung mit genau diesem Passwort.
+    let r = behandle(&z, &a("POST", "/api/login", "", br#"{"passwort":"geheim-1234"}"#));
+    assert_eq!(r.status, 200, "{}", String::from_utf8_lossy(&r.body));
+    let c = r.cookie.unwrap().split(';').next().unwrap().to_string();
+    assert_eq!(behandle(&z, &a("GET", "/api/module", &c, b"")).status, 200);
+    // Und die Einrichtung ist zu: ein zweites Passwort gaebe es nur ueber
+    // den Weg auf dem Geraet (web-passwort), nicht hier.
+    let r = behandle(&z, &a("POST", "/api/passwort-neu", "",
+        br#"{"passwort":"anders-1234","wiederholung":"anders-1234"}"#));
+    assert_eq!(r.status, 409);
+    assert!(String::from_utf8_lossy(&r.body).contains("web-passwort"));
 }

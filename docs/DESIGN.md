@@ -1489,10 +1489,32 @@ Internet bleibt Sache des Nutzers); sie fängt den Fall ab, dass der Port
 versehentlich erreichbar wird. `CHIMERA_WEB_LAN_NUR=0` hebt sie auf.
 
 **Unverändert aus Fassung 1:** läuft im Gateway, nicht als eigener Prozess;
-ohne Passwort startet sie nicht (5j); HTTP mit Passwort im LAN als
-Voreinstellung, HTTPS Opt-in, sichtbarer Hinweis bei HTTP; Änderungen wirken
-ohne Neustart; Schlüssel werden nur geschrieben, nie wieder angezeigt
-(zurück kommt „gesetzt“).
+HTTP mit Passwort im LAN als Voreinstellung, HTTPS Opt-in, sichtbarer Hinweis
+bei HTTP; Änderungen wirken ohne Neustart; Schlüssel werden nur geschrieben,
+nie wieder angezeigt (zurück kommt „gesetzt“).
+
+**Erstes Passwort (Entscheidung smilez, 14.11.2026).** Ohne Passwort startet
+die Oberfläche und zeigt **nur** die Seite „Passwort anlegen“ (mindestens 8
+Zeichen, zweimal); alles andere antwortet `409`. Der Hash landet in
+`state/web/passwort-hash` (0600) — das Gateway läuft als eigener Nutzer und
+darf die `.env` nicht anfassen; ein Hash in der `.env` gewinnt, falls der
+Installer einen einträgt. Ein einmaliger **Code** (15 Minuten, im Protokoll)
+war gebaut und wurde verworfen: für den Nutzer umständlich, und der Weg auf
+dem Gerät (`sudo /opt/chimera/bin/web-passwort`) ist ohnehin da.
+
+**Der Preis, offen benannt:** Solange kein Passwort gesetzt ist, kann jeder
+im LAN die Oberfläche übernehmen, indem er sie zuerst aufruft. Das ist
+vertretbar, weil der Zustand nur zwischen Installation und erster Anmeldung
+besteht und der Installer ein Passwort setzen kann (`CHIMERA_WEB_PASSWORT`).
+Wer das nicht will, setzt es sofort.
+
+**Passkey (WebAuthn), Stand 14.11.:** noch nicht gebaut, und das hat einen
+harten Grund: Ein Browser bietet WebAuthn nur in einem **sicheren Kontext**
+an (`https://` oder `localhost`). Über `http://<LAN-IP>:8080` gibt es
+`navigator.credentials` nicht — ein Passkey-Knopf wäre dort wirkungslos.
+Reihenfolge ist deshalb: TLS vor die Oberfläche, dann Registrierung und
+Anmeldung mit Passkey (ES256, `rpId` = Hostname, Origin-Prüfung). Steht in
+der ROADMAP.
 
 ### Architekturregel 5t — Anbieter, Schlüssel, Katalog, Wahl, Freigaben und Hosts sind sechs Ablagen mit je einem Schreiber
 
@@ -1596,7 +1618,8 @@ Browser:
   vorbehalten.
 - **Ausnahme zu 5j:** Der Zustand „Ersteinrichtung“ (kein Passwort-Hash
   vorhanden) bedient nur die Seite „Passwort vergeben“, nur aus dem LAN
-  und nur, solange der Hash fehlt.
+  und nur, solange der Hash fehlt. **Gebaut 14.11.** (`/api/einrichtung`,
+  `/api/passwort-neu`, Seite im Rahmen); ohne Einmal-Code, siehe oben.
 
 ### Architekturregel 5v — Module melden sich einfach und sicher am Gateway an
 
