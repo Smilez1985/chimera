@@ -219,6 +219,7 @@ Braucht `CHIMERA_LOG_RAM` und `CHIMERA_LOG_KARTE`. / Needs both variables.
 | `python3 tests/test_<name>.py [--gegenprobe]` | Ein Python-Test, optional mit Gegenprobe. / One Python test. |
 | `node tests/js/<name>.mjs` | Ein JS-Test ohne Browser (Dom-Ersatz im Test). Rahmen: `python3 tests/test_freigaben_anzeige.py` (Anzeige) bzw. `python3 tests/test_anbieter_kennung.py` (Kennung aus der Bezeichnung); ohne `node` übersprungen. / One browser-free JS test, wrapped by a Python test; skipped without node. |
 | `python3 tests/gegenprobe_<name>.py` | Gegenprobe zu einem Python-/JS-Test. / Counter-check for a Python or JS test. |
+| `python3 tests/gegenprobe_anbieter_klassen.py` | Gegenprobe der Anbieter-Klassen (DeepSeek abgerechnet, unbekannter Typ kostenpflichtig, Klassen aus dem Typ statt aus der Zeile, nur Typen mit Chat-Modul). / Provider access/cost counter-check. |
 | `python3 tests/gegenprobe_chat_wahl.py` | Gegenprobe der Chat-Wahl der Türen (Wahl wird gelesen, nur die drei Felder, Ablehnung wird gemeldet, leerer Wert löscht, CLI-Deutung von „nicht angegeben", CLI schickt die Wahl mit, CLI bricht bei Ablehnung ab). / Chat-choice-across-doors counter-check (read, three fields only, rejection reported, empty deletes, CLI default handling, CLI sends the choice, CLI aborts on rejection). |
 | `sh rust/gegenprobe-web.sh` | Gegenprobe der Web-Oberfläche. / Web UI counter-check. |
 | `sh rust/gegenprobe-telegram.sh` | Gegenprobe der Telegram-Tür. / Telegram counter-check. |

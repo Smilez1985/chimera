@@ -90,11 +90,12 @@ agent itself has no network at all (DESIGN 5l/5n).
   instead of being silently ignored
 - **MCP tools** — **planned, not built** (see `docs/PROVIDER.md`)
 
-Cheap tasks (`mood_erfindung`, `umgebung`, `zusammenfassen`, `titel`) are
-meant to run on the local model so the device's own expression does not
-depend on a paid quota. **Known gap:** both gateway connectors currently
-report `cost = FREE`, so a paid DeepSeek key sorts into the cheap chain and
-cloud can win those tasks (ROADMAP: separate `access`/`cost` per provider).
+Cheap tasks (`mood_erfindung`, `umgebung`, `zusammenfassen`, `titel`) go to
+the local model first, so the device's own expression does not depend on a
+paid quota. Access and cost belong to the provider *type*
+(`provider/gateway.py`, `TYP_KLASSEN`): Ollama is local and free, DeepSeek
+is a metered API key, and an unknown type counts as metered — which keeps it
+out of the cheap chain rather than quietly making it free.
 
 ## How it is put together
 

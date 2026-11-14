@@ -262,6 +262,46 @@ class OhneWahl:
 check("ohne Wahl gilt weiter der Name", setup._target_for(OhneWahl(), prefer="big"), "ollama/klein:70b")
 del os.environ["OLLAMA_MODEL"]
 
+print("== Zugang und Kosten je Anbieter (ROADMAP 14.11.) ==")
+# Vorher meldete jeder Anbieter hinter dem Gateway LOCAL/FREE -- auch der
+# bezahlte DeepSeek-Schluessel. Folge am Geraet: `mood_erfindung` lief zuerst
+# auf DeepSeek, obwohl die Aufgabe ins Lokale gehoert (README, 5h).
+os.environ["CHIMERA_TOR_SOCKET"] = g4.pfad
+_reg2, _notes2 = setup.build_registry(probe_network=False)
+_o = _reg2.connector("ollama")
+_d = _reg2.connector("deepseek")
+check("ollama ist lokal", _o.access.label, "lokal")
+check("ollama kostet nichts", _o.cost.value, "free")
+check("deepseek laeuft ueber einen Schluessel", _d.access.label, "API")
+check("deepseek wird abgerechnet", _d.cost.value, "metered")
+check("Typ ohne Chat-Modul wird benannt, nicht aufgenommen",
+      _reg2.connector("skurril"), None)
+check("und das Protokoll sagt warum",
+      any("kein Chat-Modul" in n for n in _notes2), True)
+
+_plan = setup.suggest(_reg2)
+_mood = [z.split("/")[0] for z in _plan["mood_erfindung"]]
+check("billige Aufgabe beginnt lokal", _mood[0], "ollama")
+check("der bezahlte Anbieter steht dort nur als Rueckfall", _mood.count("deepseek"), 1)
+check("und nicht vorn", _mood.index("deepseek") > 0, True)
+check("das Gespraech nimmt den bezahlten Anbieter zuerst",
+      _plan["gespraech"][0].split("/")[0], "deepseek")
+check("und haelt den lokalen als Rueckfall",
+      "ollama" in [z.split("/")[0] for z in _plan["gespraech"]], True)
+
+# Nur DeepSeek eingerichtet: dann darf die billige Aufgabe nicht leerlaufen.
+class NurBezahlt:
+    def connectors(self):
+        return [_d]
+_plan2 = setup.suggest(NurBezahlt())
+check("ohne lokalen Anbieter bleibt die Kette nicht leer",
+      _plan2["mood_erfindung"][0].split("/")[0], "deepseek")
+
+# Unbekannter Typ: im Zweifel kostenpflichtig, also nicht in der billigen Kette.
+check("unbekannter Typ gilt als abgerechnet",
+      gateway.klassen_fuer("irgendwas")[1].value, "metered")
+check("ohne Typ gilt die Kennung", gateway.klassen_fuer("")[1].value, "metered")
+
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(1 if FAIL else 0)

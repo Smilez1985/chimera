@@ -415,10 +415,10 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
   mit; ein abgelehnter Wert endet mit 2, statt still ohne Wahl zu laufen.
   Offen: **Voice** danach, und ein Lauf der
   Telegram-Tür gegen den echten Bot (in der Sandkastenumgebung nur als
-  Einheitstest geprüft). Ebenfalls offen:
-  **`access` und `cost` trennen** — `GatewayAnbieter` meldet heute `LOCAL`/
-  `FREE`, auch für den bezahlten DeepSeek-Schlüssel; Modell und Anbieter in
-  der **Statuszeile**.
+  Einheitstest geprüft). **`access`/`cost` je Anbieter** sind seit 14.11.
+  getrennt (`provider/gateway.py`, `TYP_KLASSEN`: Ollama lokal/kostenlos,
+  DeepSeek Schlüssel/abgerechnet, unbekannter Typ abgerechnet); offen bleibt
+  nur **Modell und Anbieter in der Statuszeile**.
   Am Gate steht die Wahl schon: `op: modelle_auswahl` und
   `/api/chat/auswahl` nennen je Modell die **belegten** Denkstufen.
 

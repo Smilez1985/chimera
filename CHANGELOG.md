@@ -960,6 +960,18 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **`access`/`cost` je Anbieter** (ROADMAP-Punkt, 14.11.): Zugang und
+  Kostenklasse gehören jetzt zum Anbieter-**Typ**, nicht zur Connector-Zeile
+  (`provider/gateway.py`, `TYP_KLASSEN`): Ollama `lokal`/`free`, DeepSeek
+  `API`/`metered`, ein unbekannter Typ `metered` — die vorsichtige Seite,
+  damit er nicht stillschweigend in die billige Kette rutscht.
+  `GatewayAnbieter` nimmt den Typ im Konstruktor; `provider/setup.py` reicht
+  ihn durch und prüft die erlaubten Typen gegen **eine** Liste
+  (`gateway.CHAT_TYPEN`) statt gegen eine zweite im Aufrufer. Folge am Gerät:
+  `mood_erfindung` und die übrigen billigen Aufgaben beginnen wieder lokal,
+  der bezahlte Schlüssel bleibt Rückfall; das Gespräch nimmt weiter den
+  stärksten Anbieter zuerst. Tests: `tests/test_gateway_provider.py` 60 ok
+  (11 neu), Gegenprobe `tests/gegenprobe_anbieter_klassen.py` 5/5 rot.
 - **Dokumente auf den gebauten Stand gezogen** (14.11., nach einem
   Abgleich von README, DESIGN, INSTALLER, PROVIDER, HYBRID-PLAN und
   DISPLAYS gegen Code und Gerät): Entfernt wurde nichts — was noch nicht

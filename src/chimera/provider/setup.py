@@ -65,7 +65,10 @@ def build_registry(*, probe_network: bool = True) -> tuple[Registry, list[str]]:
             liste = {"ok": False, "fehler": {"text": str(exc)}}
         for eintrag in (liste.get("anbieter") or []):
             typ = eintrag.get("typ") or ""
-            if typ not in ("ollama", "deepseek"):
+            # Welche Typen ein Chat-Modul haben, steht **einmal** in
+            # `gateway.CHAT_TYPEN` -- nicht als zweite Liste hier (sonst
+            # laufen sie auseinander, sobald ein Anbieter dazukommt).
+            if typ not in gateway.CHAT_TYPEN:
                 notes.append(f"{eintrag.get('bezeichnung') or eintrag.get('id')}: "
                              f"Typ {typ or '?'} hat kein Chat-Modul -- uebersprungen")
                 continue
@@ -74,6 +77,7 @@ def build_registry(*, probe_network: bool = True) -> tuple[Registry, list[str]]:
             c = gateway.GatewayOllama(
                 anbieter=str(eintrag.get("id") or ""),
                 label=str(eintrag.get("bezeichnung") or eintrag.get("id") or ""),
+                typ=typ,
             )
             reg.register(c)
             anbieter.append(c)

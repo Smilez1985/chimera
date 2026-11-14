@@ -82,6 +82,31 @@ def _fehler(antwort: dict) -> LLMError:
     return LLMError(f"{text} ({code})")
 
 
+#: Zugang und Kosten je Anbietertyp — **ein Ort** (Grundsatz „ein Feld, ein
+#: Ort"): die Aufgabenkette wählt nach `cost` (5h), die Anzeige nennt
+#: `access`, beide lesen hier. Aufgeführt ist nur, was das Gateway wirklich
+#: bedient (`dienst::anbieter_finden` und der Modulverteiler in Rust).
+TYP_KLASSEN = {
+    "ollama": (Access.LOCAL, CostClass.FREE),
+    "deepseek": (Access.API_KEY, CostClass.METERED),
+}
+
+#: Die Typen mit Chat-Modul im Gateway. `provider.setup` nimmt nur diese;
+#: ein Eintrag anderen Typs wird benannt und übersprungen, nie geraten.
+CHAT_TYPEN = tuple(TYP_KLASSEN)
+
+#: Was für einen unbekannten Typ gilt. **Nicht** LOCAL/FREE: ein Anbieter,
+#: dessen Kosten niemand kennt, gehört nicht in die billige Kette (5h) — die
+#: vorsichtige Seite ist die richtige, weil sie nur Geld kostet, wenn jemand
+#: den Eintrag ausdrücklich wählt.
+FREMD_KLASSEN = (Access.API_KEY, CostClass.METERED)
+
+
+def klassen_fuer(typ: str) -> tuple[Access, CostClass]:
+    """`(access, cost)` für einen Anbietertyp — unbekannt heißt kostenpflichtig."""
+    return TYP_KLASSEN.get((typ or "").strip().lower(), FREMD_KLASSEN)
+
+
 class GatewayAnbieter(Connector):
     """Ein Anbieter, erreicht ueber das Gateway.
 
@@ -92,6 +117,9 @@ class GatewayAnbieter(Connector):
     """
 
     name = "ollama"
+    #: Vorgabe für die Klassenzeile; der echte Wert kommt je Anbieter aus
+    #: `klassen_fuer()` (14.11.: DeepSeek meldete hier LOCAL/FREE und
+    #: sortierte damit in die billige Kette — auch für den bezahlten Schlüssel).
     access = Access.LOCAL
     cost = CostClass.FREE
     supports_tools = True
@@ -107,13 +135,19 @@ class GatewayAnbieter(Connector):
     PROBE_TTL = 30.0
 
     def __init__(self, default_model: str | None = None, *, pfad: str | None = None,
-                 anbieter: str = "ollama", label: str | None = None):
+                 anbieter: str = "ollama", label: str | None = None,
+                 typ: str | None = None):
         # Der Connector spricht **jeden** Anbieter, den das Gateway bedient
         # (14.11.): der Name kommt aus der Anbieterliste, nicht aus der
         # Klassenzeile. Vorher stand hier fest "ollama", und damit war
         # DeepSeek im Gespraech nicht erreichbar -- egal, was der Nutzer
         # waehlte.
         self.name = anbieter
+        # Zugang und Kosten gehören zum **Typ**, nicht zur Kennung: derselbe
+        # Connector bedient ollama (lokal, kostenlos) und deepseek (Schlüssel,
+        # abgerechnet). Ohne Typ gilt der Typ der Kennung; ist auch die
+        # unbekannt, bleibt es bei den vorsichtigen Klassen.
+        self.access, self.cost = klassen_fuer(typ if typ is not None else anbieter)
         self._label = label
         # Keine Einstellung als Quelle (DESIGN 5n, "Das Modell kommt vom
         # Server", smilez 11.11.2026): `OLLAMA_MODEL` wird hier nicht mehr
