@@ -524,7 +524,7 @@ fn main() -> ExitCode {
                             let einrichtung = hash.trim().is_empty();
                             match web::starten(hash, &adresse, web::modul_verzeichnis(), PathBuf::from(sock)) {
                                 Ok(a) if einrichtung => melden(Stufe::Info, &format!(
-                                    "Web-Oberflaeche auf http://{a} -- Einrichtungsbetrieb: noch kein Passwort gesetzt (Code steht oben im Protokoll)."
+                                    "Web-Oberflaeche auf http://{a} -- Einrichtungsbetrieb: noch kein Passwort gesetzt, die Seite fragt beim ersten Aufruf danach."
                                 )),
                                 Ok(a) => melden(Stufe::Info, &format!("Web-Oberflaeche auf http://{a} (unverschluesselt, nur im eigenen Netz).")),
                                 Err(e) => {
