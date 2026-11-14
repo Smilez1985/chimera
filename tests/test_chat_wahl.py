@@ -35,7 +35,7 @@ def check(m, got, want):
 
 TMP = tempfile.mkdtemp(prefix="chimera-wahltest-")
 
-DENKSTUFEN = ("aus", "niedrig", "mittel", "hoch", "max")
+DENKSTUFEN = ("aus", "an", "minimal", "niedrig", "mittel", "hoch", "max")
 
 
 class Gateway:

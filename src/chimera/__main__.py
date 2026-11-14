@@ -49,7 +49,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--modell", metavar="NAME", default=None,
                     help="Modell wählen (setzt die Wahl für alle Türen)")
     ap.add_argument("--denken", metavar="STUFE", default=None,
-                    help="Denkstufe wählen: aus, niedrig, mittel, hoch, max")
+                    help="Denkstufe wählen: aus, an, minimal, niedrig, mittel, "
+                         "hoch, max (geprüft wird im Gateway)")
     ap.add_argument("-v", "--ausfuehrlich", action="store_true")
     args = ap.parse_args(argv)
 

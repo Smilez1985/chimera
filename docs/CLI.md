@@ -45,7 +45,7 @@ interactive terminal conversation.
 | `--dienst` | Als Dienst laufen: ohne Terminal, bis SIGTERM. / Run as a service: no terminal, until SIGTERM. |
 | `--anbieter ID` | Anbieter wählen; setzt die Chat-Wahl für **alle** Türen (`wahl.json`). / Choose the provider; sets the chat choice for **all** doors (`wahl.json`). |
 | `--modell NAME` | Modell wählen; setzt die Chat-Wahl. / Choose the model; sets the chat choice. |
-| `--denken STUFE` | Denkstufe wählen: `aus`, `niedrig`, `mittel`, `hoch`, `max`. / Reasoning level. |
+| `--denken STUFE` | Denkstufe wählen: `aus`, `an`, `minimal`, `niedrig`, `mittel`, `hoch`, `max` — geprüft im Gateway, je Modell sind nicht alle belegt. / Reasoning level, validated by the gateway. |
 | `-v`, `--ausfuehrlich` | Ausführliche Protokollierung. / Verbose logging. |
 | `-h`, `--help` | Hilfe. / Help. |
 
