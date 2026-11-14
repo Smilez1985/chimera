@@ -656,6 +656,37 @@ verhalten als der erste. Wenn er es tut, hängt irgendwo Zustand am Kanal.
 
 ---
 
+### Telegram einrichten — im Web, ohne Datei (14.11.2026)
+
+Auftrag smilez: „im WebUI fehlt die Möglichkeit, den Bot-Token einzutragen,
+und je weniger der Nutzer eintragen muss, um so besser."
+
+- **Der Token liegt in der Geheim-Ablage**, nicht in der `.env`:
+  `config/geheim/telegram/einstellung.json`, Modus 0600, Besitzer
+  `chimera-tor` (wie `geheim/ssh/`). Er kommt **nie** zurück — die Oberfläche
+  sieht „gesetzt: ja/nein", die Quelle (`ablage`/`umgebung`) und den
+  Bot-Namen. Jede Fehlermeldung ist geschwärzt (`Api::ohne_token`).
+- **Erst fragen, dann schreiben:** Der Token wird über `getMe` geprüft und
+  **nur bei Antwort** abgelegt. Ein toter Token in der Ablage wäre eine tote
+  Tür, die niemand bemerkt.
+- **Nichts weiter tippen:** Die Server-Adresse ist fest (`api.telegram.org`,
+  in Tests über `CHIMERA_TELEGRAM_API` ersetzbar), die Bot-Kennung kommt aus
+  `getMe`, die Chat-Kennungen aus `getUpdates` — als Liste zum Ankreuzen,
+  nicht als Zahlenfeld. Die Positivliste bleibt Pflicht: ohne Eintrag startet
+  die Tür nicht (Regel 5s).
+- **Die Umgebung bleibt gültig.** Steht `CHIMERA_TELEGRAM_TOKEN` in der
+  `.env`, läuft die Tür weiter; die Ablage hat Vorrang. Eine kaputte Ablage
+  ist ein **Fehler** (rc 2 beim Start), kein stiller Rückfall.
+- **Wirksam beim nächsten Start des Gateways.** Der Tür-Start ist an den
+  Prozessstart gebunden (zwei Fäden, ein Abholer je Token). Die Oberfläche
+  sagt das nach dem Speichern; ein Neustart im Betrieb ist ein eigener
+  Schritt (Mojo/`--neustart`), kein Nebeneffekt eines Formulars.
+- **Ort in der Oberfläche:** eigenes Modul „Telegram" (Symbol ✈️), direkt
+  hinter „Fernzugriff" (Reihenfolge 71). Ein eigener Menüpunkt statt eines
+  Unterpunkts im SSH-Modul, weil die Modularitätsregel (5m) sagt: eine
+  Änderung = eine Datei; ein Umbau am SSH-Modul hätte dessen Prüfungen
+  mitgerissen.
+
 ### Architekturregel 5s — Ein Kanal, eine Hauptsitzung, alles läuft über denselben Strom
 
 Vorgabe smilez (30.10.): Telegram, Web-Oberfläche (und später Sprache)

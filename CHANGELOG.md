@@ -20,6 +20,24 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Telegram im Web einrichten** (14.11.2026, Auftrag smilez): neues Modul
+  „Telegram" (`web/module/telegram/`, Symbol ✈️, hinter „Fernzugriff") und
+  die Gateway-Ops `stand`, `token`, `absender`, `erlaubt`, `loeschen`.
+  `rust/crates/tor/src/telegram_einstellung.rs` legt Token und Positivliste
+  in `config/geheim/telegram/einstellung.json` ab (**0600**, Besitzer
+  `chimera-tor`, für den Agenten unlesbar). Der Nutzer tippt **nur** den
+  Token: Die Server-Adresse ist fest, Bot-Name und Kennung kommen aus
+  `getMe`, die Absender aus `getUpdates` zum Ankreuzen. Der Token wird
+  **erst geprüft, dann gespeichert** (kein toter Eintrag), erscheint in
+  keiner Antwort und wird in Fehlermeldungen geschwärzt. `telegram::konfig`
+  liest zuerst die Ablage, dann die `.env` (Altinstallationen laufen
+  weiter); eine kaputte Ablage ist ein Fehler, kein stiller Rückfall.
+  Wirksam beim nächsten Start des Gateways — die Oberfläche sagt es.
+  Tests: 8 neue in `telegram_einstellung` + 4 in `web::tests` (cargo 479);
+  `rust/gegenprobe-telegram.sh` jetzt **20 Mutationen, alle rot**
+  (u. a. toter Token wird abgelegt, `stand` verrät den Token, 0600 wird 0644,
+  kaputte Ablage gilt als leer, Formprüfung entfällt).
+
 - **Verdichten mit Verweis statt Zusammenfassung durch ein Modell** (Regel 8d,
   14.11.): `src/chimera/agent/verdichten.py` baut das verdichtete Fenster
   **mechanisch** — kein Modellaufruf, damit 0 Tokens und nichts erfunden.

@@ -224,7 +224,7 @@ Braucht `CHIMERA_LOG_RAM` und `CHIMERA_LOG_KARTE`. / Needs both variables.
 | `python3 tests/gegenprobe_verdichten.py` | Gegenprobe des Verdichtens mit Verweis (Zeilenbezug, offene Punkte und Entscheidungen wörtlich, Rundenschnitt, frühere Verweise, Grenze von `nachlesen`, kein Modellaufruf). / Compaction-with-reference counter-check (line reference, verbatim open points and decisions, round boundary, earlier references, `nachlesen` limits, no model call). |
 | `python3 tests/gegenprobe_chat_wahl.py` | Gegenprobe der Chat-Wahl der Türen (Wahl wird gelesen, nur die drei Felder, Ablehnung wird gemeldet, leerer Wert löscht, CLI-Deutung von „nicht angegeben", CLI schickt die Wahl mit, CLI bricht bei Ablehnung ab). / Chat-choice-across-doors counter-check (read, three fields only, rejection reported, empty deletes, CLI default handling, CLI sends the choice, CLI aborts on rejection). |
 | `sh rust/gegenprobe-web.sh` | Gegenprobe der Web-Oberfläche. / Web UI counter-check. |
-| `sh rust/gegenprobe-telegram.sh` | Gegenprobe der Telegram-Tür. / Telegram counter-check. |
+| `sh rust/gegenprobe-telegram.sh` | Gegenprobe der Telegram-Tür **und ihrer Einstellungen** (Token wird erst nach `getMe` abgelegt, 0600, kein Token in der Auskunft, Positivliste nur mit Token, kaputte Ablage ist ein Fehler). / Telegram door and settings counter-check. |
 | `sh rust/gegenprobe-status.sh` | Gegenprobe der Status-Sonden. / Status probes counter-check. |
 | `sh rust/gegenprobe-vorlage.sh` | Gegenprobe der Modul-Vorlage und Prüfsumme. / Module template and checksum counter-check. |
 | `sh rust/gegenprobe-daten.sh` | Gegenprobe der Datenschicht (Anbieter, Schlüssel, Katalog, Wahl). / Data layer counter-check. |

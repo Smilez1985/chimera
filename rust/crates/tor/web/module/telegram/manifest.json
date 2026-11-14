@@ -1,0 +1,9 @@
+{
+  "name": "telegram",
+  "titel": {"de": "Telegram", "en": "Telegram"},
+  "symbol": "✈️",
+  "reihenfolge": 71,
+  "einstieg": "telegram.js",
+  "element": "chimera-telegram",
+  "rechte": ["telegram-lesen", "telegram-schreiben"]
+}

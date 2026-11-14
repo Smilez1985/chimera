@@ -167,7 +167,7 @@ fn ok_manifest(n: &str) -> String {
 fn das_eingebaute_chatmodul_ist_gueltig_und_erkannt() {
     let (m, f) = module_erkennen(None);
     assert!(f.is_empty(), "{f:?}");
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "netz", "status"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status"]);
     assert!(m.iter().all(|x| x.eingebaut));
 }
 
@@ -178,12 +178,12 @@ fn ein_neues_verzeichnis_erscheint_im_menue_ohne_codeaenderung() {
     std::fs::write(d.join("zusatz/manifest.json"), ok_manifest("zusatz")).unwrap();
     let (m, f) = module_erkennen(Some(&d));
     assert!(f.is_empty(), "{f:?}");
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "netz", "status", "zusatz"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status", "zusatz"]);
     let z = zustand(Some(d), "/x".into());
     let c = anmelden(&z);
     let r = behandle(&z, &a("GET", "/api/module", &c, b""));
     let v: Value = serde_json::from_slice(&r.body).unwrap();
-    assert_eq!(v["module"].as_array().unwrap().len(), 10);
+    assert_eq!(v["module"].as_array().unwrap().len(), 11);
 }
 
 #[test]
@@ -197,7 +197,7 @@ fn ein_kaputtes_manifest_verwirft_nur_dieses_modul_und_wird_gemeldet() {
     std::fs::create_dir_all(d.join("leer")).unwrap(); // Verzeichnis ohne Manifest
     let (m, f) = module_erkennen(Some(&d));
     let namen: Vec<_> = m.iter().map(|x| x.name.as_str()).collect();
-    assert_eq!(namen, vec!["chat", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "netz", "status", "gut"]);
+    assert_eq!(namen, vec!["chat", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status", "gut"]);
     assert_eq!(f.len(), 4, "{f:?}");
 }
 
@@ -207,7 +207,7 @@ fn ein_nachgelegtes_modul_ersetzt_kein_eingebautes() {
     std::fs::create_dir_all(d.join("chat")).unwrap();
     std::fs::write(d.join("chat/manifest.json"), ok_manifest("chat")).unwrap();
     let (m, f) = module_erkennen(Some(&d));
-    assert_eq!(m.len(), 9);
+    assert_eq!(m.len(), 10);
     assert!(m.iter().all(|x| x.eingebaut));
     assert_eq!(f.len(), 1);
 }
@@ -221,7 +221,7 @@ fn die_reihenfolge_kommt_aus_dem_manifest() {
             format!(r#"{{"name":"{n}","titel":"T","element":"x-{n}","einstieg":"a.js","rechte":[],"reihenfolge":{r}}}"#)).unwrap();
     }
     let (m, _) = module_erkennen(Some(&d));
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["b-zuerst", "chat", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "netz", "status", "a-zuletzt"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["b-zuerst", "chat", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status", "a-zuletzt"]);
 }
 
 #[test]
@@ -1127,4 +1127,63 @@ fn die_gespeicherte_wahl_gilt_wenn_das_fenster_nichts_gewaehlt_hat() {
     );
     // Garnichts gespeichert: die Frage geht ohne Wahl (Reihenfolge, 5h).
     assert_eq!(wahl_fuer_frage(&json!({"text": "hi"}), &json!({})), json!({}));
+}
+
+// --- Telegram einrichten (Modul "Telegram", 14.11.2026) ---
+
+#[test]
+fn das_telegram_modul_wird_ausgeliefert_und_hat_seine_rechte() {
+    let z = zustand(None, tmp("tg-modul").join("s.sock"));
+    let c = anmelden(&z);
+    let r = behandle(&z, &a("GET", "/api/module", &c, b""));
+    assert_eq!(r.status, 200);
+    let v: Value = serde_json::from_slice(&r.body).unwrap();
+    let m = v["module"].as_array().unwrap();
+    let tg = m.iter().find(|x| x["name"] == "telegram").expect("Modul fehlt im Menü");
+    assert_eq!(tg["titel"]["de"], "Telegram");
+    assert!(tg["rechte"].as_array().unwrap().iter().any(|r| r == "telegram-schreiben"));
+
+    let r = behandle(&z, &a("GET", "/module/telegram/telegram.js", &c, b""));
+    assert_eq!(r.status, 200, "die JS-Datei fehlt im Binary");
+    assert!(String::from_utf8_lossy(&r.body).contains("chimera-telegram"));
+}
+
+#[test]
+fn ohne_das_modul_bleibt_die_telegram_schnittstelle_zu() {
+    let z = zustand(None, tmp("tg-recht").join("s.sock"));
+    let c = anmelden(&z);
+    // Der Rahmen liefert die echten Module mit -- die Rechte sind da. Ein
+    // Aufruf auf einen unbekannten Weg muss trotzdem 404 sein.
+    let r = behandle(&z, &a("GET", "/api/telegram/gibtsnicht", &c, b""));
+    assert_eq!(r.status, 404);
+    // Falsche Methode: `stand` ist lesend, `token` schreibend.
+    let r = behandle(&z, &a("POST", "/api/telegram/stand", &c, b""));
+    assert_eq!(r.status, 405);
+    let r = behandle(&z, &a("GET", "/api/telegram/token", &c, b""));
+    assert_eq!(r.status, 405);
+}
+
+#[test]
+fn der_token_kommt_in_keiner_antwort_zurueck() {
+    let z = zustand(None, tmp("tg-token").join("s.sock"));
+    let c = anmelden(&z);
+    // Müll statt Token: abgelehnt, und die Meldung nennt den Wert nicht.
+    let r = behandle(&z, &a("POST", "/api/telegram/token", &c, br#"{"token":"kein-token"}"#));
+    assert_eq!(r.status, 400);
+    let t = String::from_utf8_lossy(&r.body).to_string();
+    assert!(!t.contains("kein-token") || t.contains("Form"), "Antwort: {t}");
+    // Lesen: nur ob, nie was.
+    let r = behandle(&z, &a("GET", "/api/telegram/stand", &c, b""));
+    assert_eq!(r.status, 200);
+    let v: Value = serde_json::from_slice(&r.body).unwrap();
+    assert_eq!(v["stand"]["token_gesetzt"], json!(false));
+}
+
+#[test]
+fn die_positivliste_braucht_zahlen() {
+    let z = zustand(None, tmp("tg-ids").join("s.sock"));
+    let c = anmelden(&z);
+    let r = behandle(&z, &a("POST", "/api/telegram/erlaubt", &c, br#"{"ids":["abc"]}"#));
+    assert_eq!(r.status, 400);
+    assert!(String::from_utf8_lossy(&r.body).contains("Zahl"));
 }

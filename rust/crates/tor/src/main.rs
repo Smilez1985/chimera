@@ -21,6 +21,7 @@ mod status;
 mod suche;
 mod tailscale;
 mod telegram;
+mod telegram_einstellung;
 mod wahl;
 mod web;
 
@@ -498,7 +499,7 @@ fn main() -> ExitCode {
                     // Telegram ist eine Tuer im Gateway (Regel 5s). Ohne Token
                     // bleibt sie zu; mit Token aber falscher Liste ist es eine
                     // Fehlkonfiguration (rc 2, kein Neustart hilft).
-                    match telegram::konfig() {
+                    match telegram::konfig(&daten::Pfade::aus_umgebung()) {
                         telegram::Konfig::Aus => melden(Stufe::Info, "Telegram nicht eingerichtet (CHIMERA_TELEGRAM_TOKEN leer)."),
                         telegram::Konfig::Falsch(f) => {
                             melden(Stufe::Fehler, &format!("Telegram falsch eingerichtet: {f}"));

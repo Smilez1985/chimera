@@ -86,6 +86,11 @@ const EINGEBAUT: &[Eingebaut] = &[
         dateien: &[("konten.js", "text/javascript; charset=utf-8", include_str!("../web/module/konten/konten.js"))],
     },
     Eingebaut {
+        name: "telegram",
+        manifest: include_str!("../web/module/telegram/manifest.json"),
+        dateien: &[("telegram.js", "text/javascript; charset=utf-8", include_str!("../web/module/telegram/telegram.js"))],
+    },
+    Eingebaut {
         name: "netz",
         manifest: include_str!("../web/module/netz/manifest.json"),
         dateien: &[("netz.js", "text/javascript; charset=utf-8", include_str!("../web/module/netz/netz.js"))],
@@ -168,7 +173,7 @@ pub struct Modul {
 /// eintragen**, wenn das Gateway ein neues Recht kennt. Ein Recht, das nicht in
 /// dieser Liste steht, verwirft das Modul -- sonst wuerde ein Tippfehler im
 /// Manifest still ein wirkungsloses Recht verlangen.
-pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben", "wahl-lesen", "wahl-schreiben", "freigaben-lesen", "freigaben-schreiben", "ssh-lesen", "ssh-schreiben", "netz-lesen", "netz-schreiben"];
+pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben", "wahl-lesen", "wahl-schreiben", "freigaben-lesen", "freigaben-schreiben", "ssh-lesen", "ssh-schreiben", "telegram-lesen", "telegram-schreiben", "netz-lesen", "netz-schreiben"];
 
 fn name_ok(s: &str) -> bool {
     !s.is_empty() && s.len() <= 32 && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
@@ -520,6 +525,7 @@ pub fn behandle(z: &Zustand, a: &Anfrage) -> Antwort {
         (_, p) if p.starts_with("/api/wahl/") => wahl_api(z, a, &p["/api/wahl/".len()..]),
         (_, p) if p.starts_with("/api/freigaben/") => freigaben_api(z, a, &p["/api/freigaben/".len()..]),
         (_, p) if p.starts_with("/api/ssh/") => ssh_api(z, a, &p["/api/ssh/".len()..]),
+        (_, p) if p.starts_with("/api/telegram/") => telegram_api(z, a, &p["/api/telegram/".len()..]),
         (_, p) if p.starts_with("/api/netz/") => netz_api(z, a, &p["/api/netz/".len()..]),
         (_, p) if p.starts_with("/api/quota/") => quota_api(z, a, &p["/api/quota/".len()..]),
         _ => fehler(404, "nicht gefunden"),
@@ -801,6 +807,72 @@ fn netz_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort {
                 json_antwort(200, r)
             } else {
                 fehler(400, r["fehler"]["text"].as_str().unwrap_or("abgelehnt"))
+            }
+        }
+    }
+}
+
+/// Die Telegram-Tuer einrichten (14.11.2026, Auftrag smilez): Token eintragen,
+/// Bot-Kennung und Absender **vom Server holen**, Positivliste wählen.
+///
+/// Der Token wird **nie** zurückgegeben — weder an die Oberfläche noch in eine
+/// Fehlermeldung (er steckt in der URL, siehe `telegram::Api::ohne_token`).
+/// Ohne Netz ist das hier eine Auskunft, kein Absturz.
+fn telegram_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
+    let (m, _) = module_erkennen(z.modul_dir.as_deref());
+    let (recht, nur_post) = match was {
+        "stand" => ("telegram-lesen", false),
+        "token" | "erlaubt" | "absender" | "loeschen" => ("telegram-schreiben", true),
+        _ => return fehler(404, "nicht gefunden"),
+    };
+    if !schreibrecht_vergeben(&m, recht) {
+        return fehler(403, &format!("kein Modul hat das Recht '{recht}'"));
+    }
+    if nur_post != (a.methode == "POST") {
+        return fehler(405, "Methode nicht erlaubt");
+    }
+    let p = &z.stand.daten;
+    match was {
+        "stand" => json_antwort(200, json!({"ok": true, "stand": crate::telegram_einstellung::stand(p)})),
+        "absender" => match crate::telegram_einstellung::absender(p) {
+            Ok(v) => json_antwort(200, json!({"ok": true, "absender": v["absender"]})),
+            Err(text) => fehler(400, &text),
+        },
+        "loeschen" => match crate::telegram_einstellung::loeschen(p) {
+            Ok(weg) => json_antwort(200, json!({"ok": true, "geloescht": weg, "neustart_noetig": true})),
+            Err(text) => fehler(400, &text),
+        },
+        _ => {
+            let v: Value = match serde_json::from_slice(a.body) {
+                Ok(v @ Value::Object(_)) => v,
+                _ => return fehler(400, "kein JSON-Objekt"),
+            };
+            if was == "token" {
+                let Some(token) = v["token"].as_str() else {
+                    return fehler(400, "Feld \"token\" fehlt");
+                };
+                return match crate::telegram_einstellung::token_setzen(p, token) {
+                    Ok(bot) => json_antwort(200, json!({
+                        "ok": true, "bot": bot["bot"], "erlaubt": bot["erlaubt"],
+                        "neustart_noetig": true,
+                        "meldung": "Token abgelegt und von Telegram bestätigt.".to_string(),
+                    })),
+                    Err(text) => fehler(400, &text),
+                };
+            }
+            // erlaubt
+            let mut ids: Vec<i64> = Vec::new();
+            for x in v["ids"].as_array().cloned().unwrap_or_default() {
+                match x.as_i64() {
+                    Some(n) => ids.push(n),
+                    None => return fehler(400, "Jede Kennung ist eine Zahl."),
+                }
+            }
+            match crate::telegram_einstellung::erlaubt_setzen(p, &ids) {
+                Ok(r) => json_antwort(200, json!({
+                    "ok": true, "erlaubt": r["erlaubt"], "neustart_noetig": true,
+                })),
+                Err(text) => fehler(400, &text),
             }
         }
     }

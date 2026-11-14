@@ -76,7 +76,7 @@ pub fn setzen(p: &Pfade, host: &str, passwort: &str) -> Result<(), (&'static str
 /// Die Datei dem Eigentümer ihres Ordners geben. Scheitert das (kein root),
 /// bleibt der Aufrufer Eigentümer — dann hat er sie ohnehin selbst lesbar
 /// angelegt, und es gibt nichts zu heilen.
-fn eigentuemer_des_ordners_uebernehmen(ziel: &std::path::Path) {
+pub(crate) fn eigentuemer_des_ordners_uebernehmen(ziel: &std::path::Path) {
     use std::os::unix::fs::MetadataExt;
     let Some(ordner) = ziel.parent() else { return };
     let Ok(m) = std::fs::metadata(ordner) else { return };

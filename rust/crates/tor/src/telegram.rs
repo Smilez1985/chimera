@@ -10,6 +10,7 @@
 //! Alles hier ist rein bis auf den HTTP-Aufruf und den Socket; die Tests
 //! sprechen mit Servern aus dem Testprozess, nicht mit dem Netz.
 
+use crate::daten;
 use gemein::protokoll::{melden, Stufe};
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
@@ -82,7 +83,24 @@ pub fn konfig_aus(token: Option<&str>, erlaubt: Option<&str>) -> Konfig {
     Konfig::Bereit { token: token.to_string(), erlaubt: liste }
 }
 
-pub fn konfig() -> Konfig {
+/// Die Ablage gewinnt, die Umgebung bleibt gültig (14.11.2026).
+///
+/// Seit dem 14.11. trägt der Nutzer Token und Positivliste im Web-Modul
+/// „Telegram" ein; sie liegen in `config/geheim/telegram/einstellung.json`
+/// (0600, `chimera-tor`). Eine Altinstallation mit `CHIMERA_TELEGRAM_TOKEN`
+/// in der `.env` läuft unverändert weiter — ein Update darf eine laufende
+/// Tür nicht abschalten. Ist die Ablage **kaputt**, wird das gemeldet und
+/// nicht stillschweigend auf die Umgebung ausgewichen: Sonst liefe eine
+/// Tür mit halben Einstellungen.
+pub fn konfig(p: &daten::Pfade) -> Konfig {
+    match crate::telegram_einstellung::lesen(p) {
+        Ok(e) if !e.token.is_empty() => {
+            let erlaubt: Vec<String> = e.erlaubt.iter().map(|x| x.to_string()).collect();
+            return konfig_aus(Some(&e.token), Some(&erlaubt.join(",")));
+        }
+        Ok(_) => {}
+        Err(f) => return Konfig::Falsch(format!("Telegram-Ablage nicht lesbar: {f}")),
+    }
     konfig_aus(
         std::env::var("CHIMERA_TELEGRAM_TOKEN").ok().as_deref(),
         std::env::var("CHIMERA_TELEGRAM_ALLOWED").ok().as_deref(),
