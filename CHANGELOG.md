@@ -20,6 +20,21 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Lebenszeichen an systemd** (Regel „Lebenszeichen", 14.11.):
+  `src/chimera/lebenszeichen.py` schickt `READY=1` und alle 10 s
+  `WATCHDOG=1` aus einem **eigenen Faden**; der Hauptfaden bzw. ein Turn darf
+  `busy(zweck, sekunden)` anmelden (Turn: 300 s, die Zeitgrenze des
+  Gateway-Aufrufs). Bleibt der Fortschritt länger als 90 s aus (plus 30 s
+  Zuschlag auf eine laufende Frist), wird **kein** Schlag mehr geschickt —
+  systemd startet neu, Mojo sagt danach warum. Entschieden wird auf
+  `time.monotonic()` (keine Neustarts durch ZeitSprünge), die Frist steht
+  zusätzlich als Unix-Zeit in `state/lebenszeichen.json`. Ohne
+  `NOTIFY_SOCKET` läuft der Dienst weiter **und meldet**, dass der Watchdog
+  nicht greift. Unit: `Type=notify`, `NotifyAccess=all`, `WatchdogSec=30`
+  (Abweichung: `Restart=on-failure` bleibt, damit ein gewolltes Ende nicht
+  wieder hochkommt — im DESIGN begründet). Tests: 32 ok, zwei Verfälschungen
+  (`--gegenprobe`, `--gegenprobe=busy`) werden rot.
+
 - **Status-Werkzeug für den Agenten** (Regel 5m, 14.11.): neue Gateway-Op
   `status_lesen`, die **dieselbe** `status::sonden()`-Liste abfragt wie die
   Web-Route (`/api/status/messwerte`) — eine Rechnung, zwei Türen. Das

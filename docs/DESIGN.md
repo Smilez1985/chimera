@@ -3842,12 +3842,38 @@ Stunde Stille von einem gewollten Nichtstun nicht zu unterscheiden.
    ein hängender Ausführer blockiert sonst das Werkzeug eines Turns, ohne dass
    jemand es merkt.
 
+**Gebaut (14.11.2026): `src/chimera/lebenszeichen.py`.**
+
+- `Melder` schickt `READY=1` und danach alle 10 s `WATCHDOG=1`; Entschieden
+  wird mit `erlaubte_stille(grund, busy_rest, nachlass)` — eine reine
+  Rechnung (Grundgeduld 90 s, Zuschlag 30 s auf eine `busy`-Frist), damit sie
+  ohne Faden prüfbar ist.
+- Eingehängt in `__main__.dienst`: Melder starten, je Schleifendurchlauf
+  `fortschritt()`, beim Beenden `stop()`. `Session.ask` meldet vor dem
+  Modellaufruf `busy("Turn …", 300 s)` an — 300 s ist die Zeitgrenze des
+  Gateway-Aufrufs und damit die Obergrenze, nicht eine Freikarte.
+- Zustandsdatei `state/lebenszeichen.json` (über `CHIMERA_LEBENSZEICHEN`):
+  Zweck, Dauer, Frist als Unix-Zeit. **Entschieden wird auf
+  `time.monotonic()`** — eine springende Systemzeit (Gerät ohne RTC) darf
+  weder neu starten noch eine Frist verlängern.
+- Fehlt `NOTIFY_SOCKET`, läuft der Dienst weiter und **meldet**, dass der
+  Watchdog nicht greift.
+
+**Eine Abweichung vom Entwurf, mit Grund:** Die Unit behält
+`Restart=on-failure` statt `Restart=always`. Ein Watchdog-Abbruch ist ein
+Fehlschlag und startet neu; ein **gewolltes** Ende (`SIGTERM`, Exit 0) soll
+aber nicht wieder hochkommen — `always` würde den Dienst nach jedem
+Installationslauf erneut starten. `RestartPreventExitStatus=2` bleibt: eine
+falsche Konfiguration ist keine Schleife wert.
+
 **Gegenprobe (Regel 9):** (a) Ein Test fängt die Zeilen an einem
 selbstgebauten Unix-Socket ab — ohne systemd im Sandkasten. (b) Dienst im
 Test künstlich blockieren: ohne Regel kein Neustart, mit Regel einer, und das
 Journal nennt den Watchdog. (c) Ein **erlaubt langer** Aufruf (40 s Modell,
 `busy` gesetzt) darf **keinen** Neustart auslösen — sonst misst die Regel nur
-die Geduld des Prüfers.
+die Geduld des Prüfers. Gemessen: `tests/test_lebenszeichen.py` 32 ok, zwei
+Verfälschungen (`--gegenprobe`: der Faden schlägt immer;
+`--gegenprobe=busy`: `busy` wird vergessen) werden rot.
 
 ### Architekturregel 10q — Speicher wird am Prozess gemessen und vom Prozess begrenzt
 

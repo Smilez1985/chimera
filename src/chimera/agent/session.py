@@ -101,6 +101,12 @@ class Channel:
         return cut[: max(self.limit - len(mark), 0)].rstrip() + mark
 
 #: Die Tür, die immer existiert: der Standardweg ohne Besonderheiten.
+#: Wie lange ein Turn höchstens dauern darf, ohne dass das Lebenszeichen
+#: unruhig wird. Der Gateway-Aufruf hat 300 s Zeitgrenze; die Frist deckt ihn
+#: und ist die **Obergrenze** für `busy` (DESIGN, Regel „Lebenszeichen"): Ein
+#: hängender Turn verlängert sich nicht selbst.
+TURN_FRIST_S = 300.0
+
 DIRECT = Channel("direkt", mode="text")
 
 @dataclass
@@ -266,6 +272,12 @@ class Session:
 
         # Eingabe sofort sichtbar machen, auch wenn sie noch warten muss.
         self.emit("eingabe", channel.name, text, ref)
+        # Ein Turn ist die Stelle, an der der Dienst legitim lange still ist
+        # (Modellaufruf bis 300 s, gemessen 31 s). Das Lebenszeichen bekommt
+        # die Frist vorher -- sonst startet der Watchdog mitten im Denken neu
+        # (DESIGN, Regel „Lebenszeichen", 14.11.).
+        from .. import lebenszeichen
+        lebenszeichen.busy(f"Turn ({channel.name})", TURN_FRIST_S)
         with self._lock:
             self._busy_channel = channel.name
             self.emit("zustand", channel.name, "denkt", ref)
@@ -297,6 +309,7 @@ class Session:
                 )
             finally:
                 self._busy_channel = None
+                lebenszeichen.fortschritt()
 
             self.emit("fehler" if turn.error else "antwort",
                       channel.name, turn.text, ref)

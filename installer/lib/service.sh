@@ -104,7 +104,14 @@ StartLimitIntervalSec=300
 StartLimitBurst=5
 
 [Service]
-Type=simple
+# Type=notify, weil der Dienst sein Lebenszeichen selbst meldet (DESIGN,
+# Regel "Lebenszeichen", 14.11.): Der Faden "lebenszeichen" schickt
+# WATCHDOG=1, solange der Hauptfaden Fortschritt macht. Bleibt er haengen
+# (kein Absturz), startet systemd ihn nach WatchdogSec neu -- Mojo braucht
+# dafuer sonst bis zu einer Stunde.
+Type=notify
+NotifyAccess=all
+WatchdogSec=30
 User=$CHIMERA_DIENSTNUTZER
 Group=$CHIMERA_DIENSTNUTZER
 EOF
@@ -139,6 +146,9 @@ ExecStopPost=-/bin/sh $SERVICE_ABGLEICH
 Restart=on-failure
 RestartSec=5
 RestartPreventExitStatus=2
+# Wo das Lebenszeichen seine laufende Frist notiert (nur zur Ansicht --
+# entschieden wird auf der monotonen Uhr, siehe lebenszeichen.py).
+Environment=CHIMERA_LEBENSZEICHEN=$CHIMERA_STATE/lebenszeichen.json
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=read-only

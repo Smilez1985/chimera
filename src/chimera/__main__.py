@@ -206,6 +206,16 @@ def dienst(chi, stop: threading.Event | None = None, env=None) -> int:
         log.info("Kein Sitzungs-Socket (weder LISTEN_FDS noch "
                  "CHIMERA_SITZUNG_SOCKET).")
 
+    # Lebenszeichen (DESIGN, Regel "Lebenszeichen", 14.11.): eigener Faden
+    # schickt WATCHDOG=1 an systemd, solange der Dienst Fortschritt macht.
+    # Ohne NOTIFY_SOCKET (Start von Hand) laeuft alles weiter -- mit einer
+    # Meldung, damit niemand glaubt, es passe jemand auf.
+    from .lebenszeichen import Melder, setze_melder
+    waechter = Melder(zustandsdatei=(env.get("CHIMERA_LEBENSZEICHEN") or None))
+    setze_melder(waechter)
+    waechter.start()
+    waechter.fortschritt()
+
     log.info("Dienst bereit.")
     # Anbieter regelmaessig pruefen und das Ergebnis an die Statuszeile geben
     # (Quelle anbieter_weg). Hier und nicht im Renderer: Die Pruefung kann ins
@@ -221,11 +231,15 @@ def dienst(chi, stop: threading.Event | None = None, env=None) -> int:
         if erinnern is not None:
             erinnern()
         while not stop.wait(ANBIETER_TAKT_S):
+            # Ein Durchlauf ist ein Lebenszeichen: der Hauptfaden kommt herum.
+            waechter.fortschritt()
             if melden is not None:
                 melden()
             if erinnern is not None:
                 erinnern()
     finally:
+        setze_melder(None)
+        waechter.stop()
         if bot is not None:
             bot.stop()
         if sitzung_srv is not None:
