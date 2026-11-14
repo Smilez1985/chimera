@@ -687,6 +687,46 @@ und je weniger der Nutzer eintragen muss, um so besser."
   Änderung = eine Datei; ein Umbau am SSH-Modul hätte dessen Prüfungen
   mitgerissen.
 
+### Web-Oberfläche: Eingabe, Dateien, Skills, Türen (Auftrag smilez, 14.11.2026 abends)
+
+Fünf Aufträge, in dieser Reihenfolge gebaut (ROADMAP, Phase „Web-Aufträge"):
+
+1. **Eingabefeld verhält sich wie Markdown.** Beim Tippen wird geformt,
+   nicht nachträglich gerendert: „- " am Zeilenanfang wird „• ", drei
+   Bindestriche in einer eigenen Zeile werden zu einer Trennlinie,
+   „**fett**" bleibt sichtbar als Markup. Der Text geht **als Markdown**
+   an die Sitzung (das Modell versteht es) und wird in der Blase gerendert.
+   Kein Rich-Text-Editor: Das Feld bleibt ein `textarea` mit einer
+   Einrück-/Zeichenlogik davor, damit Kopieren, Einfügen und Vorlesen
+   unverändert funktionieren.
+2. **Dateien anhängen** (drag&drop auf das Chatfenster **und** „+"-Knopf):
+   `.txt .md .csv .xml .json .pdf .doc/.docx .xlsx` und Bilder
+   (`.png .jpg .webp`), sofern das bedienende Modell Bild-Eingabe hat
+   (`image_input` in der Anbieter-Registry). Text wird **ausgelagert**
+   (Regel: große Ergebnisse nicht ins Fenster), kleine Textanhänge gehen
+   mit einem Kopf „Anhang: <name>, <n> Zeichen" in den Prompt; PDF/DOCX
+   werden zu Text gezogen, Bilder als Anhang mitgeschickt. Ablage je
+   Sitzung: `data/upload/<sitzung>/<zeit>-<name>` (0600, Name bereinigt).
+   **Kamera:** Platzhalter-Knopf, der ohne Kameramodul **sagt**, dass
+   keines angeschlossen ist — kein stiller Knopf, der nichts tut.
+3. **Türen stummschalten** (Schalter im Chatfenster): „Telegram stumm" heißt
+   **nicht** „Telegram zu". Was über Telegram hereinkommt, landet weiter in
+   der Sitzung und im Strom (sonst ginge die Nachricht verloren, wenn man
+   gerade am PC sitzt); nur die **Antwort** geht nicht hinaus, solange stumm.
+   Beim Wiedereinschalten wird der Rückstand nachgeliefert — der Strom kennt
+   die Nummern (Regel 5s), die Tür merkt sich ihre letzte.
+4. **Skills als Reiter** mit drei Herkünften: `system` (im Repo
+   mitgeliefert), `user` (vom Nutzer angelegt), `agent` (vom Modell gebaut).
+   Angezeigt werden Name, Zweck, Voraussetzungen (erfüllt/fehlt) und die
+   Herkunft; geschrieben wird nur, was die Herkunft erlaubt.
+5. **Skill-Creator als Werkzeug, nicht als Textdatei.** Ein Skill ist bei
+   chimera **Code + Beschreibung** (`agent/skills.py` prüft
+   Voraussetzungen), kein Prompt-Schnipsel. Die Werkzeuge `skill_neu`,
+   `skill_pruefen` und `skill_loeschen` legen einen Skill an, prüfen seine
+   Voraussetzungen gegen das Gerät und melden, was fehlt; das Modell darf
+   **nur** `agent`-Skills schreiben. Ein Skill ohne erfüllte Voraussetzung
+   wird geladen, aber als „nicht lauffähig" benannt — nicht versteckt.
+
 ### Architekturregel 5s — Ein Kanal, eine Hauptsitzung, alles läuft über denselben Strom
 
 Vorgabe smilez (30.10.): Telegram, Web-Oberfläche (und später Sprache)

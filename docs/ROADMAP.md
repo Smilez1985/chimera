@@ -38,6 +38,26 @@ Netzblick, Log-Tür, Status-Op). **Eins nach dem anderen, in dieser Folge:**
 
 ---
 
+## Phase „Web-Aufträge" — Eingabe, Dateien, Skills, Türen (14.11.2026 abends)
+
+Auftrag smilez, nach dem Abend mit Verdichten und Telegram. **Eins nach dem
+anderen**, Design steht in `docs/DESIGN.md` („Web-Oberfläche: Eingabe,
+Dateien, Skills, Türen"):
+
+1. [ ] **Markdown-Eingabefeld** im Chatfenster (Formen beim Tippen, Versand
+       als Markdown, Vorschau in der Blase).
+2. [ ] **Datei-Upload** per drag&drop und „+" (Text auslagern, PDF/DOCX zu
+       Text, Bilder nur bei `image_input`), Ablage je Sitzung; **Kamera nur
+       als Platzhalter**, der sagt, dass kein Modul angeschlossen ist.
+3. [ ] **Türen stumm schalten** (Telegram-Schalter im Chatfenster):
+       Eingang läuft weiter, Antwort geht nicht hinaus, Wiedereinschalten
+       liefert den Rückstand nach.
+4. [ ] **Skills-Reiter** im Web (system/user/agent getrennt, Voraussetzungen
+       sichtbar, Schreibrecht je Herkunft).
+5. [ ] **Skill-Creator als Werkzeuge** (`skill_neu`, `skill_pruefen`,
+       `skill_loeschen`) — Code + Beschreibung, kein Prompt-Textfile; das
+       Modell schreibt nur `agent`-Skills.
+
 ## Phase 0 — Blaupause ✅
 
 Erledigt bis auf einen Punkt, der nicht am Rechner zu klären ist: die
