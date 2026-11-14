@@ -43,13 +43,27 @@ interactive terminal conversation.
 | `--pruefen` | Nur zeigen, was vorhanden ist. / Only show what is available. |
 | `--offline` | Nicht im Netz nach Anbietern suchen. / Do not search the network for providers. |
 | `--dienst` | Als Dienst laufen: ohne Terminal, bis SIGTERM. / Run as a service: no terminal, until SIGTERM. |
+| `--anbieter ID` | Anbieter wählen; setzt die Chat-Wahl für **alle** Türen (`wahl.json`). / Choose the provider; sets the chat choice for **all** doors (`wahl.json`). |
+| `--modell NAME` | Modell wählen; setzt die Chat-Wahl. / Choose the model; sets the chat choice. |
+| `--denken STUFE` | Denkstufe wählen: `aus`, `niedrig`, `mittel`, `hoch`, `max`. / Reasoning level. |
 | `-v`, `--ausfuehrlich` | Ausführliche Protokollierung. / Verbose logging. |
 | `-h`, `--help` | Hilfe. / Help. |
+
+Die drei Wahl-Optionen schreiben in dieselbe `wahl.json` wie Web und Telegram:
+eine Wahl gilt der Sitzung, nicht einem Lauf. Ein leerer Wert (`--modell ""`)
+**löscht** das Feld; ohne Angabe bleibt es, wie es ist. Geprüft wird im
+Gateway — ein abgelehnter Wert endet mit Code 2, statt still ohne Wahl
+weiterzulaufen. / The three choice options write to the same `wahl.json` as
+the web UI and Telegram: a choice belongs to the session, not to one run. An
+empty value (`--modell ""`) **deletes** the field; without the option it stays
+as it is. The gateway validates — a rejected value exits with code 2 instead of
+silently running without a choice.
 
 Beispiele / Examples:
 
     chimera -f "Wie spät ist es?"
     chimera --pruefen
+    chimera --anbieter deepseek --modell deepseek-flash --denken hoch
 
 ---
 
@@ -205,6 +219,7 @@ Braucht `CHIMERA_LOG_RAM` und `CHIMERA_LOG_KARTE`. / Needs both variables.
 | `python3 tests/test_<name>.py [--gegenprobe]` | Ein Python-Test, optional mit Gegenprobe. / One Python test. |
 | `node tests/js/<name>.mjs` | Ein JS-Test ohne Browser (Dom-Ersatz im Test). Rahmen: `python3 tests/test_freigaben_anzeige.py` (Anzeige) bzw. `python3 tests/test_anbieter_kennung.py` (Kennung aus der Bezeichnung); ohne `node` übersprungen. / One browser-free JS test, wrapped by a Python test; skipped without node. |
 | `python3 tests/gegenprobe_<name>.py` | Gegenprobe zu einem Python-/JS-Test. / Counter-check for a Python or JS test. |
+| `python3 tests/gegenprobe_chat_wahl.py` | Gegenprobe der Chat-Wahl der Türen (Wahl wird gelesen, nur die drei Felder, Ablehnung wird gemeldet, leerer Wert löscht, CLI-Deutung von „nicht angegeben", CLI schickt die Wahl mit, CLI bricht bei Ablehnung ab). / Chat-choice-across-doors counter-check (read, three fields only, rejection reported, empty deletes, CLI default handling, CLI sends the choice, CLI aborts on rejection). |
 | `sh rust/gegenprobe-web.sh` | Gegenprobe der Web-Oberfläche. / Web UI counter-check. |
 | `sh rust/gegenprobe-telegram.sh` | Gegenprobe der Telegram-Tür. / Telegram counter-check. |
 | `sh rust/gegenprobe-status.sh` | Gegenprobe der Status-Sonden. / Status probes counter-check. |

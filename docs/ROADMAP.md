@@ -409,8 +409,11 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
   seit 14.11. liegt die Wahl in `wahl.json` (`anbieter`/`modell`/`denken`),
   wird beim Öffnen angezeigt und von **Telegram** (`/modell
   <anbieter>/<modell> [stufe]`, `/modell` zeigt sie, `/modell aus` löscht)
-  mitgesetzt und mit jeder Frage mitgeschickt. Offen: **CLI**
-  (`--anbieter`, `--modell`, `--denken`), **Voice** danach, und ein Lauf der
+  mitgesetzt und mit jeder Frage mitgeschickt. Seit 14.11. nimmt auch die
+  **CLI** sie: `--anbieter`, `--modell`, `--denken` schreiben in dieselbe
+  `wahl.json` (leerer Wert löscht), jede Frage der Terminal-Tür liest sie
+  mit; ein abgelehnter Wert endet mit 2, statt still ohne Wahl zu laufen.
+  Offen: **Voice** danach, und ein Lauf der
   Telegram-Tür gegen den echten Bot (in der Sandkastenumgebung nur als
   Einheitstest geprüft). Ebenfalls offen:
   **`access` und `cost` trennen** — `GatewayAnbieter` meldet heute `LOCAL`/

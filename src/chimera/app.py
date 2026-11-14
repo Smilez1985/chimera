@@ -115,9 +115,17 @@ class Chimera:
 
     # --- Türen ------------------------------------------------------------
 
-    def ask(self, prompt: str, channel: Channel = DIRECT):
-        """Durch die Standardtür fragen."""
-        return self.session.ask(prompt, channel)
+    def ask(self, prompt: str, channel: Channel = DIRECT, *,
+            anbieter: str = "", modell: str = "", denken: str = ""):
+        """Durch die Standardtür fragen.
+
+        ``anbieter``/``modell``/``denken`` sind die ausdrückliche Wahl der
+        Tür (``wahl.json``) und gehen unverändert an die Sitzung: Eine
+        ausdrückliche Wahl fällt dort nicht auf einen anderen Anbieter
+        zurück.
+        """
+        return self.session.ask(prompt, channel, anbieter=anbieter,
+                                modell=modell, denken=denken)
 
     def telegram(self):
         """Die Telegram-Tür öffnen — in *diese* Sitzung (Regel 5d)."""

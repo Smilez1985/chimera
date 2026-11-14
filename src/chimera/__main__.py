@@ -16,9 +16,11 @@ import logging
 import sys
 import threading
 
+from . import chat_wahl
 from .agent.session import Channel
 from .app import build
 from .protokoll import datei_einrichten
+from .provider.base import Unavailable
 
 log = logging.getLogger("chimera")
 
@@ -41,6 +43,13 @@ def main(argv: list[str] | None = None) -> int:
                     help="Nicht im Netz nach Anbietern suchen")
     ap.add_argument("--dienst", action="store_true",
                     help="Als Dienst laufen: ohne Terminal, bis SIGTERM")
+    ap.add_argument("--anbieter", metavar="ID", default=None,
+                    help="Anbieter für dieses Gespräch wählen (setzt die Wahl "
+                         "für alle Türen, '' = löschen)")
+    ap.add_argument("--modell", metavar="NAME", default=None,
+                    help="Modell wählen (setzt die Wahl für alle Türen)")
+    ap.add_argument("--denken", metavar="STUFE", default=None,
+                    help="Denkstufe wählen: aus, niedrig, mittel, hoch, max")
     ap.add_argument("-v", "--ausfuehrlich", action="store_true")
     args = ap.parse_args(argv)
 
@@ -72,6 +81,9 @@ def _lauf(chi, args) -> int:
     if args.pruefen:
         return 0
 
+    if not _wahl_setzen(args):
+        return 2
+
     if args.dienst:
         return dienst(chi)
 
@@ -89,7 +101,7 @@ def _lauf(chi, args) -> int:
         print("Gesicht einmalig gezeichnet (Panel ohne Bildrate).")
 
     if args.frage:
-        turn = chi.ask(args.frage, TERMINAL)
+        turn = chi.ask(args.frage, TERMINAL, **chat_wahl.auftrag())
         print(turn.text)
         return 1 if turn.error else 0
 
@@ -220,6 +232,35 @@ def dienst(chi, stop: threading.Event | None = None, env=None) -> int:
     return 0
 
 
+def _wahl_setzen(args) -> bool:
+    """``--anbieter``/``--modell``/``--denken`` in die Wahl schreiben.
+
+    Geprüft wird im Gateway (``daten::wahl_feld_setzen``), nicht hier: eine
+    zweite Regel für dieselben Felder liefe auseinander. Ein abgelehnter
+    Wert endet mit 2 -- wer eine Wahl ausdrücklich bestellt, soll nicht
+    stillschweigend ohne sie weiterlaufen.
+
+    ``None`` heisst "nicht angegeben"; ``''`` heisst "Feld löschen" und ist
+    damit etwas anderes als Schweigen.
+    """
+    gesetzt = []
+    for feld in chat_wahl.FELDER:
+        wert = getattr(args, feld, None)
+        if wert is None:
+            continue
+        try:
+            chat_wahl.setzen(feld, wert)
+        except Unavailable as exc:
+            print(f"Wahl nicht gesetzt: {exc}", file=sys.stderr)
+            return False
+        except (chat_wahl.WahlFehler, ValueError) as exc:
+            print(f"{feld}: {exc}", file=sys.stderr)
+            return False
+        gesetzt.append(f"{feld}={wert or '(gelöscht)'}")
+    if gesetzt:
+        print("Wahl: " + ", ".join(gesetzt))
+    return True
+
 def _gespraech(chi) -> int:
     """Das Terminal als Tür. Leere Zeile oder Strg-D beendet."""
     print("Schreib etwas. Leere Zeile beendet.")
@@ -231,7 +272,9 @@ def _gespraech(chi) -> int:
             return 0
         if not prompt:
             return 0
-        turn = chi.ask(prompt, TERMINAL)
+        # Die Wahl gilt der Sitzung, nicht dem Lauf: was eine andere Tür
+        # inzwischen umgestellt hat, soll auch hier gelten.
+        turn = chi.ask(prompt, TERMINAL, **chat_wahl.auftrag())
         print(turn.text)
         print()
 

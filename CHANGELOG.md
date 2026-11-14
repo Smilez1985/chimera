@@ -20,6 +20,16 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Wahl auch in der CLI** (`chimera --anbieter`, `--modell`, `--denken`):
+  Die drei Optionen schreiben in dieselbe `wahl.json` wie Web und Telegram —
+  eine Wahl gilt der Sitzung, nicht einem Lauf — und jede Frage der
+  Terminal-Tür schickt sie mit (`chimera.chat_wahl`: `lesen`, `setzen`,
+  `auftrag`; Regeln prüft weiter das Gateway, kein zweiter Satz in Python).
+  `None` heisst „nicht angegeben" und lässt das Feld stehen, `''` **löscht**
+  es; ein abgelehnter Wert endet mit 2, statt still ohne Wahl weiterzulaufen.
+  Die Telegram-Tür im Dienst (`bot/telegram.py`) schickt die Wahl ebenfalls
+  mit — sie galt bisher nur dort, wo das Gateway die Tür führt. Tests:
+  `tests/test_chat_wahl.py` (30), Gegenprobe 8/8 rot, `docs/CLI.md` ergänzt.
 - **Attrappen für Browser-Tests** (`tests/attrappen/`): `sitzung_stub.py`
   spricht das Sitzungsprotokoll (`anmelden`/`frage`/`sitzungen`/`lesen`) auf
   einem Unix-Socket, protokolliert jede Frage als JSON-Zeile und antwortet im

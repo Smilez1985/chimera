@@ -28,6 +28,7 @@ import urllib.request
 from dataclasses import dataclass, field
 
 from ..agent.session import Channel, Session, Turn
+from .. import chat_wahl
 
 log = logging.getLogger(__name__)
 
@@ -193,7 +194,8 @@ class Bot:
         self.api.typing(upd.chat_id)
         self._state("denkt")
         try:
-            turn: Turn = self.session.ask(upd.text, CHANNEL)
+            turn: Turn = self.session.ask(upd.text, CHANNEL,
+                                          **chat_wahl.auftrag())
             self._state("fehler" if turn.error else "spricht")
             self._send(upd.chat_id, turn.text)
             return turn.text
