@@ -404,18 +404,18 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       Cloud-Anbieter), **Positivliste der Ziele für `web_abruf`** (mit den
       Web-Werkzeugen aus 5r), **Rückfrage beim Nutzer** (Weg wie 10s; wann
       sie auslöst, ist festzulegen). Jedes Tor mit Gegenprobe.
-- [ ] **DeepSeek im Agenten auswählen** (Folge von „DeepSeek als Anbieter",
-  gebaut 13.11.): `src/chimera/provider/gateway.py` fragt `op: chat` fest mit
-  `"anbieter": "ollama"`. Offen sind (a) ein Weg, wie der Agent den Anbieter
-  erfährt (Reihenfolge aus `wahl.json`, 5h — nicht nachgebaut im Dienst),
-  (b) `provider/registry.py`: „Abo" gegen „Schlüssel" trennen (`access`,
-  `cost`), damit DeepSeek als bezahlter Schlüssel erscheint und nicht als
-  lokal, (c) Anzeige von Modell und Anbieter in der Statuszeile, (d) Kosten
-  dieser Aufrufe (nächster Punkt). Bis dahin ist DeepSeek über den Socket,
-  die Web-Oberfläche und die Anbieter-Probe erreichbar, nicht im Gespräch.
-  **Auch offen:** ein eigenes Web-Modul für den Anbieter (das Modul `ollama`
-  filtert `typ === "ollama"`); heute legt man ihn über
-  `/api/anbieter/setzen` an.
+- [ ] **Die Wahl über die anderen Türen** (Folge von „Modellwahl im Chat",
+  gebaut 14.11.): Im WebGUI sind Anbieter, Modell und Denkstufe wählbar, und
+  die Wahl geht über `Agent.run` bis in die Registry — ohne Rückfall auf
+  einen anderen Anbieter. Offen: **Telegram** (`/modell
+  <anbieter>/<modell>`, die Antwort nennt die geltende Wahl), **CLI**
+  (`--anbieter`, `--modell`, `--denken`), **Voice** danach. Ebenfalls offen:
+  **`access` und `cost` trennen** — `GatewayAnbieter` meldet heute `LOCAL`/
+  `FREE`, auch für den bezahlten DeepSeek-Schlüssel; Modell und Anbieter in
+  der **Statuszeile**; und der **Browser-Test der drei Auswahlfelder** (bis
+  jetzt nur `node --check`, keine Klicks).
+  Am Gate steht die Wahl schon: `op: modelle_auswahl` und
+  `/api/chat/auswahl` nennen je Modell die **belegten** Denkstufen.
 
 - [ ] **Anmeldung ohne Zertifikate-Gefrickel** (Entscheidung smilez,
   14.11.: „das ist alles zu kompliziert, das muss ein Dau-User
