@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import logging
 
+from ..mood import ablage as moodablage
 from ..mood import blend
+from ..mood.ablage import AblageFehler
 
 log = logging.getLogger(__name__)
 
@@ -42,11 +44,33 @@ HARD_STATES = {"verwirrt", "fehler"}
 class Face:
     """Setzt Ausdrücke auf dem Renderer-Zustand."""
 
-    def __init__(self, registry, state):
-        """``registry`` ist die Mood-Bibliothek, ``state`` der Renderer-Zustand."""
+    def __init__(self, registry, state, *, ablage=None):
+        """``registry`` ist die Mood-Bibliothek, ``state`` der Renderer-Zustand.
+
+        ``ablage`` ist die Datei der eigenen Ausdrücke (DESIGN 3.3b). Fehlt
+        sie, kann der Agent nichts ablegen — er sagt das dann, statt still
+        zu verlieren, was er gerade erfunden hat.
+        """
         self.moods = registry
         self.state = state
+        self.ablage = ablage
         self._last_state: str | None = None
+
+    # --- eigene Ausdrücke -----------------------------------------------
+
+    def anlegen(self, name: str, *, von: str = "", felder: dict | None = None):
+        """Einen Ausdruck erfinden und behalten (DESIGN 3.3b)."""
+        if self.ablage is None:
+            raise AblageFehler("Keine Ablage für eigene Ausdrücke gesetzt — "
+                              "es wird nichts gespeichert.")
+        return moodablage.anlegen(self.moods, self.ablage, name,
+                                  von=von, felder=felder)
+
+    def entfernen(self, name: str) -> str:
+        """Einen selbst angelegten Ausdruck löschen. Eingebaute nie."""
+        if self.ablage is None:
+            raise AblageFehler("Keine Ablage für eigene Ausdrücke gesetzt.")
+        return moodablage.entfernen(self.moods, self.ablage, name)
 
     # --- vom Agenten ------------------------------------------------------
 

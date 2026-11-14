@@ -20,6 +20,24 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Eigene Moods, die der Agent selbst anlegt** (DESIGN 3.3b, 14.11.2026):
+  `src/chimera/mood/ablage.py` und die Werkzeuge `mood_anlegen` /
+  `mood_entfernen`. Der Agent leitet einen Ausdruck von einem vorhandenen
+  ab (`von`) und/oder ändert Felder (`felder`, JSON), alles geht durch
+  `safe_validate` (Regel 2), wird mit Herkunft `generated` in
+  `<CHIMERA_HOME>/moods.json` gespeichert (atomar) und übersteht den
+  Neustart. Grenzen an einer Stelle: Name `A-Z 0-9 _ -` bis 24 Zeichen,
+  **eingebaute Ausdrücke werden weder überschrieben noch gelöscht**,
+  Obergrenze `Registry.capacity` mit `prune` (Eingebautes nie), Felder
+  höchstens 6 Ebenen tief. In der Datei stehen **nur die eigenen** Moods
+  (`to_json(nur_eigene=True)`) — sonst entstünde eine zweite Kopie der
+  eingebauten, die eine spätere Paketfassung überschriebe. `Registry` hat
+  dafür `remove()` bekommen; `app._try_face` lädt zwei Quellen in fester
+  Reihenfolge (mitgeliefert, dann eigen) und meldet den Bestand in der
+  Statuszeile; eine kaputte eigene Datei ist ein Befund, kein Startabbruch.
+  Tests: `tests/test_mood_ablage.py` 51 ok (inkl. Verdrahtung über
+  `app._try_face`), `tests/gegenprobe_mood_ablage.py` **10/10 rot**.
+
 - **Telegram im Web einrichten** (14.11.2026, Auftrag smilez): neues Modul
   „Telegram" (`web/module/telegram/`, Symbol ✈️, hinter „Fernzugriff") und
   die Gateway-Ops `stand`, `token`, `absender`, `erlaubt`, `loeschen`.
@@ -1046,6 +1064,17 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Der Systemprompt führt das Gesicht** (14.11.2026, Auftrag smilez): neuer
+  fester Abschnitt `GESICHT_TEMPLATE` in `agent/loop.py` — kürzester Weg
+  (`set_face <NAME>`), neue Ausdrücke nur **bei einer Änderung**, die vier
+  Werkzeuge in einer Zeile (`set_face`, `moods`, `mood_anlegen`,
+  `mood_entfernen`, dazu `read_skill`-freier Hinweis). Der **aktive**
+  Ausdruck steht nicht dort, sondern als letzte Zeile der neuen Nachricht
+  (`[Gesicht: active=mood_idle]`, `Agent._mit_laufzeit`), weil ein
+  wechselnder Wert im Systemprompt jeden Cache ungültig macht (DESIGN 5q).
+  Ohne Gesicht entfällt beides. Tests: 14 neue in `tests/test_agent.py`
+  (164 ok), `tests/gegenprobe_gesicht_prompt.py` **5/5 rot**.
+
 - **Ein Verlaufsabruf liest nur noch die Seite, nicht den ganzen Verlauf**
   (8d): `Ablage.lesen_seite(sid, max, vor)` liest rückwärts in 64-KiB-Blöcken,
   `anzahl(sid)` zählt Zeilen ohne Dicts. Die Op `lesen` im Sitzungs-Socket

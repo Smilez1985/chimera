@@ -271,6 +271,13 @@ nicht verbunden:
 Was fehlt, ist die Schicht darüber: ein **Gesicht** ist mehr als ein Mood.
 Es ist ein Bündel aus Moods, Vorgaben, Namen und Herkunft.
 
+**Stand 14.11.2026:** Das Ablegen **eines einzelnen Ausdrucks** ist gebaut
+(`src/chimera/mood/ablage.py`, Werkzeuge `mood_anlegen` / `mood_entfernen`,
+DESIGN 3.3b) — der Agent kann einen Mood erfinden, prüfen lassen, speichern
+und nach einem Neustart wieder aufrufen. Offen bleibt das **Paket**: Ordner,
+`face.json`, `assets/`, Verdrängung der Suchpfade und alles, was unten mit
+`gesicht_*` und `mood_in_gesicht_legen` beginnt.
+
 - [ ] **Format festlegen — und zwar JSON, nicht TOML**
 
       HATFaces nimmt TOML mit Pydantic-Validierung. Für Chimera ist das

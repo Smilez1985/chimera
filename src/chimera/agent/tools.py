@@ -15,6 +15,7 @@ Vorprüfung — zwei Listen würden auseinanderdriften.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -537,6 +538,29 @@ class Toolbox:
         ), self._moods)
 
         self.add(ToolSpec(
+            "mood_anlegen",
+            "Einen eigenen Gesichtsausdruck (Mood) erfinden und behalten. "
+            "Er wird geprueft und in der Bibliothek gespeichert -- nach "
+            "einem Neustart ist er noch da. Ableiten von einem vorhandenen "
+            "Ausdruck ('von') und/oder Felder aendern ('felder', ein "
+            "JSON-Objekt). Eingebaute Ausdruecke bleiben unveraendert.",
+            {"name": "Name des neuen Ausdrucks (A-Z, 0-9, _ und -, bis 24)",
+             "von": "optional: Name eines vorhandenen Ausdrucks als Vorbild",
+             "felder": "optional: JSON-Objekt mit den Feldern, die anders "
+                       "sein sollen (z. B. {\"mouth\": {\"style\": \"frown\"}, "
+                       "\"body\": {\"color\": [200, 60, 60]}})"},
+            ("name",),
+        ), self._mood_anlegen)
+
+        self.add(ToolSpec(
+            "mood_entfernen",
+            "Einen selbst angelegten Ausdruck wieder loeschen. Eingebaute "
+            "Ausdruecke lassen sich nicht loeschen.",
+            {"name": "Name des Ausdrucks"},
+            ("name",),
+        ), self._mood_entfernen)
+
+        self.add(ToolSpec(
             "set_face",
             "Den Gesichtsausdruck setzen. Entweder ein bekannter "
             "Mood-Name oder eine Mischung wie 'CHILL+ROCK'.",
@@ -609,6 +633,52 @@ class Toolbox:
         kopf = (f"{len(namen)} von {len(eintraege)} Ausdruecken"
                 + (f" zu {suche!r}" if muster else "") + ":")
         return kopf + "\n" + "\n".join(f"- {n} ({h})" for n, h in namen)
+
+    def _mood_anlegen(self, name: str, von: str = "", felder: str = "") -> str:
+        """Einen Ausdruck erfinden und behalten (DESIGN 3.3b).
+
+        Die Arbeit macht die Bibliothek (``mood/ablage.py``): pruefen,
+        klemmen, schreiben. Hier wird nur uebersetzt und berichtet -- zwei
+        Stellen, die dasselbe validieren, driften auseinander (Regel 2).
+        """
+        if self.face is None:
+            return "Kein Gesicht angeschlossen — es gibt keine Bibliothek."
+        werte = None
+        if str(felder or "").strip():
+            try:
+                werte = json.loads(felder)
+            except ValueError as exc:
+                return (f"'felder' ist kein gueltiges JSON ({exc}). "
+                        "Erwartet wird ein Objekt, z. B. "
+                        '{"mouth": {"style": "frown"}}.')
+            if not isinstance(werte, dict):
+                return ("'felder' muss ein JSON-Objekt sein, keine Liste "
+                        "und keine Zahl.")
+        try:
+            eintrag, bericht = self.face.anlegen(name, von=von, felder=werte)
+        except Exception as exc:                      # noqa: BLE001 — Auskunft
+            return f"Nicht angelegt: {exc}"
+
+        zeilen = [f"Angelegt: {eintrag.name} (Nr. {eintrag.mood_id}, "
+                  f"{len(self.face.moods)} Ausdruecke insgesamt)."]
+        if bericht.fixes:
+            zeilen.append("Zurechtgestutzt: " + "; ".join(bericht.fixes[:6]))
+        if bericht.drops:
+            zeilen.append("Verworfen: " + "; ".join(bericht.drops[:6]))
+        if not bericht.fixes and not bericht.drops:
+            zeilen.append("Alle Felder lagen im Rahmen.")
+        zeilen.append("Mit 'set_face' zeigen, mit 'mood_entfernen' loeschen.")
+        return "\n".join(zeilen)
+
+    def _mood_entfernen(self, name: str) -> str:
+        if self.face is None:
+            return "Kein Gesicht angeschlossen — es gibt keine Bibliothek."
+        try:
+            weg = self.face.entfernen(name)
+        except Exception as exc:                      # noqa: BLE001 — Auskunft
+            return f"Nicht geloescht: {exc}"
+        return (f"Geloescht: {weg} ({len(self.face.moods)} Ausdruecke "
+                "bleiben).")
 
     def _set_face(self, mood: str, hard: str = "") -> str:
         """Den Ausdruck setzen — das ist `FACE:` aus openclawgotchi.

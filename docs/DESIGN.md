@@ -163,6 +163,55 @@ Zwei Dinge bleiben fest, beide aus gutem Grund:
   Diashow. Der Wert ist eine Einstellung und gehört auf echter Hardware
   gemessen.
 
+### 3.3b Eigene Moods, die der Agent selbst ablegt (14.11.2026)
+
+Stufe 3 („Erfinden") war bis dahin nur behauptet. `set_face` konnte einen
+Ausdruck **setzen**, `moods` konnte die Bibliothek **nennen** — ablegen
+konnte der Agent nichts. Jeder erfundene Ausdruck war mit dem Turn
+verloren, und auf die Frage „kannst du dir einen ausdenken?" antwortete das
+Modell mit einer Beschreibung statt mit einem Ergebnis.
+
+**Ablage.** `<CHIMERA_HOME>/moods.json`, neben dem Verlauf, im selben
+Format wie `Registry.to_json()` — eine mitgelieferte Bibliothek kann
+dieselbe Datei sein. Gelesen wird beim Start in zwei Schritten: erst
+`data/moods-builtin.json` (Herkunft `builtin`), dann die eigene Datei
+(Herkunft aus der Datei, sonst `generated`). Die zweite Quelle gewinnt bei
+gleichem Namen — nur so kann eine mitgelieferte Fassung einen erfundenen
+Ausdruck ersetzen, ohne dass die Nummern wandern. Geschrieben wird atomar
+(`save()`: Nebendatei + `replace`); ein kaputter eigener Bestand ist ein
+**Befund in der Statuszeile**, kein Startabbruch — das Gesicht ist Beiwerk,
+nicht der Dienst.
+
+**Grenzen, die das Modell nicht überschreitet:**
+
+- **Name** 1–24 Zeichen aus `A-Z 0-9 _ -`, wird groß geschrieben. Er ist
+  ein Feld, kein Pfad — geprüft wird er trotzdem.
+- **Eingebautes wird nicht überschrieben.** `CHILL` bleibt `CHILL`; der
+  Versuch wird abgelehnt und benannt. `Registry.add` behält die Herkunft
+  `builtin` bereits (Schutz vor `prune`), überschreibt aber den Inhalt —
+  diese Lücke schließt die Brücke im Agenten (`Face.anlegen`), weil dort
+  die Herkunft bekannt ist.
+- **Regel 2 gilt unverändert**: jeder neue Ausdruck läuft durch
+  `safe_validate`, Grenzen werden geklemmt und jede Korrektur im Bericht
+  genannt.
+- **Obergrenze** ist `Registry.capacity`; der Überlauf räumt nach
+  `last_used`/`uses` weg, Eingebautes nie (`prune`).
+- **Herkunft `generated`** wird mitgespeichert. Ohne sie wäre später nicht
+  unterscheidbar, was das Gerät geliefert hat und was erfunden wurde.
+- **Kein Python, keine Assets.** Gesichter als Pakete (Ordner, `face.json`,
+  `assets/`) bleiben ROADMAP-Phase 3b; hier entsteht ein einzelner
+  Ausdruck in einer Datei.
+
+**Vorbild statt Schema.** Das Vokabular (elf Zeichenbefehle, dutzende
+Felder) passt nicht in einen Werkzeugaufruf. Ein neuer Ausdruck wird
+deshalb **von einem bestehenden abgeleitet** (`von`) und mit ausdrücklichen
+Feldern geändert (`felder`, ein JSON-Objekt, tief gemischt). Fehlt beides,
+wird abgelehnt und der Grund genannt — geraten wird nicht (Regel „nie
+raten").
+
+**Löschen** darf der Agent nur, was er selbst angelegt hat (`origin !=
+builtin`); eingebaute Ausdrücke sind Beispiele, keine Kandidaten.
+
 ### Architekturregel 2 — Ein generierter Mood wird immer validiert
 
 Ein Mood geht direkt in den Renderer. Ohne Schranken bedeutet
@@ -2084,6 +2133,16 @@ misst die Treffer. Auf den Anbieter verlassen wir uns nicht.
 - **Laufzeit** (Uhrzeit, Sensoren, Kanal) steht nie im Systemprompt. Sie
   geht als letzter Block an die neue Nachricht. Begründung: Ein Zeitstempel
   vorn macht jeden Cache ungültig (Anthropic, Groq: „Common mistake“).
+- **Dasselbe gilt für den Gesichtsausdruck** (14.11.2026, Auftrag smilez):
+  Die *Anweisung*, das Gesicht zu führen, ist fester Teil des
+  Systemprompts (`GESICHT_TEMPLATE`: kürzester Weg `set_face <NAME>`, neue
+  Anforderung nur bei Änderung, die vier Werkzeuge in einer Zeile). Der
+  *aktive* Ausdruck steht dagegen als letzte Zeile der neuen Nachricht:
+  `[Gesicht: active=mood_idle]`. Er wechselt mit jeder Antwort — im
+  Systemprompt wäre er ein Cache-Brecher, und zwar ein teurer, weil er
+  mitten im stabilen Teil stünde. Gemessen wird das am Verhalten: derselbe
+  Systemprompt bei zwei verschiedenen Ausdrücken (`tests/test_agent.py`,
+  Gegenprobe `zustand-im-systemprompt`).
 - Die Werkzeugliste ist **je Sitzung eingefroren**: gleiche Werkzeuge in
   gleicher Reihenfolge (sortiert nach Name), dazu dieselbe `tool_choice` und
   dieselbe Denkstufe. Neue Werkzeuge oder Skills wirken erst ab der nächsten

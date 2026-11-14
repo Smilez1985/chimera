@@ -112,6 +112,20 @@ class Registry:
             self.prune()
         return entry, rep
 
+    def remove(self, key: int | str) -> bool:
+        """Einen Eintrag löschen. ``False``, wenn es ihn nicht gab.
+
+        Die Nummer wird **nicht** wiederverwendet: Ein gespeicherter Verweis
+        auf einen gelöschten Ausdruck zeigt damit ins Leere statt auf einen
+        fremden (dieselbe Begründung wie in ``add``).
+        """
+        e = self.find(key)
+        if e is None:
+            return False
+        del self._by_id[e.mood_id]
+        self._by_name.pop(e.name.upper(), None)
+        return True
+
     def prune(self, *, keep: int | None = None) -> list[str]:
         """Selten Gebrauchtes entfernen, Eingebautes nie.
 
@@ -150,7 +164,14 @@ class Registry:
             return {k: Registry._jsonable(v) for k, v in value.items()}
         return value
 
-    def to_json(self) -> str:
+    def to_json(self, *, nur_eigene: bool = False) -> str:
+        """Die Bibliothek als JSON.
+
+        ``nur_eigene`` laesst die mitgelieferten weg. Gebraucht fuer die
+        Datei der eigenen Ausdruecke (DESIGN 3.3b): Dort gehoert nur hin,
+        was der Agent angelegt hat -- sonst entstuende eine zweite Kopie der
+        eingebauten Moods, die eine spaetere Paketfassung ueberschriebe.
+        """
         data = {
             "next_id": self._next_id,
             "moods": [
@@ -163,11 +184,12 @@ class Registry:
                     "mood": self._jsonable(e.mood),
                 }
                 for e in self._by_id.values()
+                if not (nur_eigene and e.origin == "builtin")
             ],
         }
         return json.dumps(data, ensure_ascii=False, indent=2)
 
-    def save(self, path: str | Path) -> None:
+    def save(self, path: str | Path, *, nur_eigene: bool = False) -> None:
         """Atomar schreiben — dieselbe Regel wie im Installer.
 
         Ein abgebrochener Schreibvorgang darf keine halbe Bibliothek
@@ -175,7 +197,7 @@ class Registry:
         """
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
-        payload = self.to_json()
+        payload = self.to_json(nur_eigene=nur_eigene)
         if not payload.strip():
             raise ValueError("Leere Ausgabe — wird nicht geschrieben")
         tmp = p.with_suffix(p.suffix + ".tmp")

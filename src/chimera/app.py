@@ -379,7 +379,7 @@ def build(*, probe_network: bool = True, home: Path | None = None,
 
     registry, notes = autoconfigure(probe_network=probe_network)
 
-    face, renderer, panel = _try_face(notes) if with_face \
+    face, renderer, panel = _try_face(notes, root) if with_face \
         else (None, None, None)
     statusline, led = _try_zeile_und_led(renderer, panel, notes)
 
@@ -435,7 +435,7 @@ def build(*, probe_network: bool = True, home: Path | None = None,
 #: Die mitgelieferte Mood-Bibliothek.
 BUILTIN_MOODS = Path(__file__).resolve().parent.parent.parent / "data" / "moods-builtin.json"
 
-def _try_face(notes: list[str]) -> tuple[object, object, object]:
+def _try_face(notes: list[str], root) -> tuple[object, object, object]:
     """Gesicht, Renderer und Panel aufsetzen — und alle drei behalten.
 
     Die drei gehören zusammen und werden hier verdrahtet (Regel 7b): Das
@@ -454,14 +454,18 @@ def _try_face(notes: list[str]) -> tuple[object, object, object]:
     try:
         from .agent.face import Face
         from .display.panel import NullPanel, open_panel
-        from .mood.registry import Registry as MoodRegistry
+        from .mood.ablage import lade as mood_laden
         from .render.avatar import NoisyRenderer, State
     except ImportError as exc:
         notes.append(f"Gesicht: Baustein fehlt ({exc.name})")
         return None, None, None
 
+    # Zwei Quellen, eine Reihenfolge (DESIGN 3.3b): erst die mitgelieferte
+    # Bibliothek, dann die eigenen Ausdrücke des Agenten daneben.
+    eigene_moods = Path(root) / "moods.json"
     try:
-        moods = MoodRegistry.load(BUILTIN_MOODS)
+        moods, hinweise = mood_laden(BUILTIN_MOODS, eigene_moods)
+        notes.extend(hinweise)
     except Exception as exc:                          # noqa: BLE001
         notes.append(f"Gesicht: Bibliothek nicht ladbar ({exc})")
         return None, None, None
@@ -487,9 +491,9 @@ def _try_face(notes: list[str]) -> tuple[object, object, object]:
     except Exception as exc:                          # noqa: BLE001
         notes.append(f"Renderer: nicht aufsetzbar ({exc}) — Gesicht "
                      "ohne Bild")
-        return Face(moods, state), None, panel
+        return Face(moods, state, ablage=eigene_moods), None, panel
 
-    return Face(moods, state), renderer, panel
+    return Face(moods, state, ablage=eigene_moods), renderer, panel
 
 #: Agentenzustand -> (Text der Statuszeile, LED-Quelle oder None). Eine
 #: Tabelle fuer beide Darstellungen, damit Zeile und LED nicht

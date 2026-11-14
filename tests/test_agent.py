@@ -572,6 +572,8 @@ def _mit_gesicht():
     reg = MR.load(str(ROOT / "data" / "moods-builtin.json"))
 
     class Zustand:
+        mood_name = "IDLE"
+
         def set_mood(self, *a, **k):
             pass
 
@@ -591,6 +593,50 @@ check("leerer Filter ist eine Auskunft",
       "Kein Ausdruck passt" in _tb.call("moods", {"suche": "gibtsnicht"}), True)
 check("unbekannter Ausdruck verweist auf das Werkzeug",
       "'moods'" in _tb.call("set_face", {"mood": "GIBTSNICHT"}), True)
+
+print("== Gesicht im Prompt (14.11.2026) ==")
+
+# Die Anweisung ist fest (Cache, DESIGN 5q) und nur da, wenn ein Gesicht da ist.
+_tb_ges = _mit_gesicht()
+_ag_ges = Agent(StubRegistry(), _tb_ges)
+_sys = _ag_ges._system()
+check("Anweisung steht im Systemprompt", "Dein Gesicht" in _sys, True)
+check("kuerzester Weg genannt", "set_face <NAME>" in _sys, True)
+check("nur bei Aenderung", "Nur bei einer Änderung" in _sys, True)
+check("Optionen knapp: moods", "moods (optional" in _sys, True)
+check("Optionen knapp: mood_anlegen", "mood_anlegen" in _sys, True)
+check("Optionen knapp: mood_entfernen", "mood_entfernen" in _sys, True)
+# Die Cache-Zusage (5q) wird am Verhalten gemessen, nicht an einem Wort:
+# derselbe Systemprompt, egal welcher Ausdruck gerade zu sehen ist.
+_sys_vorher = _ag_ges._system()
+_tb_ges.face.state.mood_name = "CHAOS"
+check("Systemprompt aendert sich mit dem Ausdruck nicht",
+      _ag_ges._system(), _sys_vorher)
+
+# Ohne Gesicht keine Anweisung -- sonst stuende dort ein Werkzeug, das immer
+# "Keine Anzeige angeschlossen" antwortet.
+_ag_ohne = Agent(StubRegistry(), Toolbox(tempfile.mkdtemp(prefix="chimera-ohne-")))
+check("ohne Gesicht keine Anweisung", "Dein Gesicht" in _ag_ohne._system(), False)
+
+# Der Laufzeitstand haengt an der NEUEN Nachricht, in Kurzform.
+_ges_state = _tb_ges.face.state
+_ges_state.mood_name = "Thinking Hard"
+_text = _ag_ges._mit_laufzeit("hallo")
+check("Laufzeitzeile am Ende", _text.endswith("[Gesicht: active=mood_thinking_hard]"),
+      True)
+check("Nachricht bleibt vorn", _text.startswith("hallo"), True)
+_ges_state.mood_name = "IDLE"
+check("Kurzform klein", _ag_ges._mit_laufzeit("x").endswith("active=mood_idle]"), True)
+check("ohne Gesicht keine Zeile", _ag_ohne._mit_laufzeit("hallo"), "hallo")
+
+# Beim echten Lauf landet die Zeile im Verlauf -- nicht im Systemprompt.
+_tb2 = _mit_gesicht()
+_reg2 = StubRegistry()
+Agent(_reg2, _tb2).run("hallo")
+_letzte = _reg2.gesehen[0]["verlauf"][-1]["content"]
+check("Verlauf traegt die Kurzform", _letzte.endswith("active=mood_idle]"), True)
+check("Systemprompt bleibt ohne active",
+      "active=" not in str(_reg2.gesehen[0].get("system") or ""), True)
 
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(1 if FAIL else 0)

@@ -66,6 +66,25 @@ Verfügbare Werkzeuge:
 Halte dich kurz. Du läufst auf einem kleinen Gerät, und deine Antworten
 werden vorgelesen."""
 
+#: Der feste Teil der Gesichtsanweisung (smilez, 14.11.2026). Er gehört zum
+#: **stabilen** Anfang des Prompts: gleiche Werkzeuge, gleiche Reihenfolge,
+#: damit der Cache trifft (DESIGN 5q). Der **aktive** Ausdruck steht
+#: ausdrücklich NICHT hier -- ein wechselnder Wert im Systemprompt macht
+#: jeden Cache ungültig -- sondern als letzte Zeile der neuen Nachricht.
+GESICHT_TEMPLATE = """
+
+Dein Gesicht:
+Du hast ein Gesicht auf einem kleinen Display. Führe es bei jeder Antwort
+bewusst — es ist der einzige Teil von dir, den man sieht.
+- Kürzester Weg: set_face <NAME>. Mischen geht mit A+B, gewichten mit A+B:0.3.
+- Nur bei einer Änderung: zeigt das Gesicht den Ausdruck schon, ist set_face
+  unnötig. Einen neuen Ausdruck (mood_anlegen) nur, wenn keiner der
+  vorhandenen passt — nicht jeder Turn braucht einen.
+- Namen finden: moods (optional mit "suche"). Eigenen löschen:
+  mood_entfernen.
+- "active=mood_…" am Ende der Nachricht ist der Ausdruck, der gerade zu
+  sehen ist. Er ist der Stand vor deiner Antwort, keine Frage an dich."""
+
 
 @dataclass
 class Step:
@@ -136,6 +155,12 @@ class Agent:
             lines.append(f"- {spec.name}({args}): {spec.description}")
         text = SYSTEM_TEMPLATE.replace("{tools}", "\n".join(lines))
 
+        # Die Anweisung, das Gesicht zu führen, gehört nur hinein, wenn es
+        # eines gibt — ein Gerät ohne Anzeige hätte sonst ein Werkzeug, das
+        # immer "Keine Anzeige angeschlossen" antwortet (Regel 8a).
+        if getattr(self.tools, "face", None) is not None:
+            text += GESICHT_TEMPLATE
+
         if self.skills is not None:
             cat = self.skills.catalog()
             if cat:
@@ -148,6 +173,21 @@ class Agent:
                 text += "\n\n" + ctx
 
         return text
+
+    def _mit_laufzeit(self, prompt: str) -> str:
+        """Den Laufzeitstand an die **neue Nachricht** hängen, nicht in den
+        Systemprompt (DESIGN 5q: ein wechselnder Wert vorn macht jeden Cache
+        ungültig; der Verlauf wird nur angehängt).
+
+        Die Kurzform nennt den Ausdruck so, wie das Modell ihn wieder
+        setzen kann: ``active=mood_idle``.
+        """
+        gesicht = getattr(self.tools, "face", None)
+        if gesicht is None:
+            return prompt
+        name = str(getattr(getattr(gesicht, "state", None), "mood_name", "") or "")
+        kurz = re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")
+        return f"{prompt}\n\n[Gesicht: active=mood_{kurz or 'unbekannt'}]"
 
     def _state(self, what: str) -> None:
         if self.on_state:
@@ -184,7 +224,7 @@ class Agent:
         self.guard.reset()
         steps: list[Step] = []
         system = self._system()
-        self.history.append({"role": "user", "content": prompt})
+        self.history.append({"role": "user", "content": self._mit_laufzeit(prompt)})
 
         provider = model = ""
         fell_back = False

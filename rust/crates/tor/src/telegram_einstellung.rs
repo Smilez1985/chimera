@@ -252,7 +252,7 @@ mod tests {
     fn ablage_schreibt_0600_und_liest_zurueck() {
         let p = p("ablage");
         let mut e = Einstellung::default();
-        e.token = "123456:ABCdefghijklmnopqrstuvwxyz0".into();
+        e.token = "123456:ABCdefghijklmnopqrstuvwxyz0".into(); // noqa: Attrappe
         e.erlaubt.insert(42);
         e.erlaubt.insert(7);
         schreiben(&p, &e).unwrap();
@@ -294,7 +294,7 @@ mod tests {
     fn stand_verraet_den_token_nicht() {
         let p = p("stand");
         let mut e = Einstellung::default();
-        e.token = "123456:GEHEIMgeheimGEHEIMgeheim123".into();
+        e.token = "123456:GEHEIMgeheimGEHEIMgeheim123".into(); // noqa: Attrappe
         e.erlaubt.insert(5);
         schreiben(&p, &e).unwrap();
         let s = stand(&p).to_string();
@@ -330,7 +330,7 @@ mod tests {
     fn loeschen_ist_wahr_und_wiederholbar() {
         let p = p("loeschen");
         let mut e = Einstellung::default();
-        e.token = "123456:ABCdefghijklmnopqrstuvwxyz0".into();
+        e.token = "123456:ABCdefghijklmnopqrstuvwxyz0".into(); // noqa: Attrappe
         schreiben(&p, &e).unwrap();
         assert_eq!(loeschen(&p).unwrap(), true);
         assert_eq!(loeschen(&p).unwrap(), false);

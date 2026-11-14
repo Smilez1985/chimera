@@ -18,6 +18,7 @@ Jeder Test hat eine Gegenprobe (Regel 9).
 
 import logging
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -136,7 +137,9 @@ check("target_fps uebersteuert das Panel",
 print("== app.py verdrahtet Panel und Renderer (B1, B2) ==")
 
 notes = []
-face, renderer, panel2 = app._try_face(notes)
+# eigener Heimordner je Lauf: _try_face legt dort die Ablage der eigenen
+# Moods an (DESIGN 3.3b) -- nicht in den echten ~/.chimera schreiben.
+face, renderer, panel2 = app._try_face(notes, Path(tempfile.mkdtemp()))
 
 if face is None:
     bad("_try_face liefert kein Gesicht")
