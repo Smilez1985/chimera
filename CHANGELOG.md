@@ -20,6 +20,24 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Dritter Freigabe-Modus `offen_nach_vorschlag` und Vorschläge des Agenten**
+  (Regel „Freigabe je Werkzeug auf Zeit", 14.11.): `positivliste` und `offen`
+  bleiben, dazu ein Modus, in dem offen nur gilt, was der Nutzer **angenommen**
+  hat. Der Agent bekommt genau eine Operation (`freigabe_vorschlag`, Werkzeug
+  `freigabe_vorschlag` in `agent/tools.py`), die ausschließlich in die neue
+  Liste `vorschlaege` schreibt (mit `herkunft: agent`, `seit`, `notiz`) —
+  `pruefen` liest sie nie. Die Annahme über `freigabe_setzen` (`annehmen`/
+  `verwerfen`, ein Ziel statt eines Schalters) trägt das Ziel in `positiv` ein;
+  ein abgelehnter Vorschlag kommt **nicht** auf die Negativliste. Vorschläge
+  gibt es nur im dritten Modus (`modus_keine_vorschlaege` sonst), höchstens 20
+  je Werkzeug, und ein Teilauftrag wirft sie nicht weg. Negativliste gewinnt
+  auch gegen eine Annahme — dann fällt der Vorschlag weg (er soll nicht
+  liegen bleiben und später wirken). Web-Modul: dritter Knopf, Zustandstext
+  „offen nach Vorschlag (n angenommen)" (nicht „offen"), Vorschlagsliste mit
+  Annehmen/Verwerfen. Rust 467 Tests (12 neue in `freigaben`, 1 Werkzeug-Test),
+  `gegenprobe-freigaben.sh` 16 Mutationen, alle rot; JS-Anzeigetest 32 ok,
+  JS-Gegenprobe 9 ok.
+
 - **Wahl auch in der CLI** (`chimera --anbieter`, `--modell`, `--denken`):
   Die drei Optionen schreiben in dieselbe `wahl.json` wie Web und Telegram —
   eine Wahl gilt der Sitzung, nicht einem Lauf — und jede Frage der

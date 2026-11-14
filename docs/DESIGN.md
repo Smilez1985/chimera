@@ -4196,11 +4196,14 @@ Gateway schreibt, der Agent liest sie **nie** — er bekommt „erlaubt“ oder
   Satz aus Stufe 3: „`offen` erlaubt mehr Ziele, nicht mehr Programme"; der
   dritte Modus macht aus dem Programmziel eine echte Positivliste, ohne die
   Bequemlichkeit von `offen` abzuschaffen.
-- **Ein Vorschlag ist nicht die Annahme.** Der Eintrag trägt `herkunft`
-  (`agent`) und `angenommen: false`; erst der Nutzer setzt das Häkchen (Web
-  oder Telegram), und nur ein angenommener Eintrag zählt. Dasselbe Muster wie
-  bei der Host-Tabelle der Fernausführung (Regel „Fernzugriff"): ein Vorschlag
-  wirkt nie von selbst, auch nicht mit nachgetragenem Ziel.
+- **Ein Vorschlag ist nicht die Annahme.** Er steht in der eigenen Liste
+  `vorschlaege` (mit `herkunft: agent`, `seit`, `notiz`), **nicht** in
+  `positiv`; erst die Annahme durch den Nutzer trägt das Ziel dorthin (Web
+  oder Telegram). Dasselbe Muster wie bei der Host-Tabelle der
+  Fernausführung (Regel „Fernzugriff"): ein Vorschlag wirkt nie von selbst.
+  Bewusst **kein** Feld `angenommen` — das wäre eine zweite Wahrheit neben
+  `positiv`; es gilt: was in `positiv` steht, ist freigegeben, was in
+  `vorschlaege` steht, nicht.
 - **Der Vorschlag wird nie stillschweigend scharf.** Kein Vorschlag ändert
   den Modus: Wer `positivliste` eingestellt hat, bleibt dort, bis er
   umschaltet. Das ist die Lehre aus der Host-Tabelle (12.11.): Ein Weg, der
@@ -4272,10 +4275,41 @@ bekommt auch keine Restzeit zu sehen.
 **Wer freigibt, ist immer der Nutzer.** Die Türen sind die Web-Oberfläche
 (Modul `freigaben`) und Telegram (`/frei`) — beide schreiben dieselbe Datei
 über `op: freigabe_setzen`; der Agent kann **keine** Freigabe anlegen, auch
-nicht über einen Umweg (kein Werkzeug dafür). Die harten Grenzen aus
+nicht über einen Umweg. Die harten Grenzen aus
 `safety.py` / dem Ausführer (`sudo`, `su`, Interpreter, Shell-Zeichen,
 Pfadschutz) bleiben **unabhängig** vom Modus in Kraft: `offen` erlaubt mehr
 Ziele, nicht mehr Programme.
+
+**Der eine Weg, auf dem der Agent mitreden darf — und was er dort nicht kann**
+(gebaut 14.11.2026). Er bekommt genau **eine** Operation,
+`freigabe_vorschlag` (Werkzeug `freigabe_vorschlag`), und die darf nur in die
+Liste `vorschlaege` schreiben:
+
+```json
+"run_command": {
+  "modus": "offen_nach_vorschlag",
+  "positiv": ["ls"],
+  "vorschlaege": [{"ziel": "df", "herkunft": "agent", "seit": 1794676000,
+                   "notiz": "Platz auf der Karte"}]
+}
+```
+
+- **Ein Vorschlag ist keine Freigabe.** Er steht in `vorschlaege`, nicht in
+  `positiv`; `pruefen` liest ihn nie. Erst `annehmen` (Nutzer, über dieselbe
+  `freigabe_setzen`) trägt das Ziel in `positiv` ein und entfernt den
+  Vorschlag. `verwerfen` entfernt ihn, ohne das Ziel zu sperren — ein
+  abgelehnter Vorschlag kommt **nicht** auf die Negativliste, das wäre eine
+  Entscheidung, die niemand getroffen hat.
+- **Nur im dritten Modus.** In `positivliste` und `offen` kann aus einem
+  Vorschlag nichts werden; das Gateway sagt das (`modus_keine_vorschlaege`),
+  statt den Agenten ins Leere laufen zu lassen.
+- **Die Negativliste gewinnt, auch hier.** Ein Vorschlag auf ein gesperrtes
+  Ziel wird abgelehnt; kommt das Ziel **nach** dem Vorschlag auf die
+  Negativliste, wird die Annahme abgelehnt und der Vorschlag fällt weg.
+- **Begrenzt:** höchstens `VORSCHLAEGE_MAX` (20) offene Vorschläge je
+  Werkzeug — eine Schleife im Agenten darf die Datei nicht vollschreiben.
+- **Ein Teilauftrag wirft sie nicht weg.** Wer nur den Modus umstellt, behält
+  die offenen Vorschläge (dieselbe Regel wie bei `positiv`).
 
 **Protokoll.** Jede Freigabe und jede Ablehnung kommt mit Zeitpunkt, Werkzeug
 und Grund in `state/log/freigabe.log` (eine Zeile je Entscheidung, rollierend
@@ -4285,9 +4319,12 @@ Dienstprotokoll gemeldet (die Entscheidung selbst dreht es nicht um).
 
 **Gegenprobe (Regel 9):** (a) `negativ` greift in `offen`. (b) Ein
 abgelaufener Zeitpunkt wirkt wie `positivliste`, ohne dass jemand die Datei
-anfasst. (c) Der Agent kann über kein Werkzeug einen Eintrag in
-`freigaben.json` schreiben. (d) Ein unbekannter Werkzeugname wird abgelehnt
-statt durchgelassen.
+anfasst. (c) Der Agent kann über kein Werkzeug einen **Freigabe**-Eintrag
+schreiben (Vorschläge sind keine). (d) Ein unbekannter Werkzeugname wird
+abgelehnt statt durchgelassen. (e) Ein Vorschlag allein öffnet nichts —
+`pruefen` sagt weiter nein, bis angenommen wurde. (f) `offen_nach_vorschlag`
+wird **nicht** wie `offen` behandelt. (g) Verwerfen sperrt das Ziel nicht.
+Gemessen: `rust/gegenprobe-freigaben.sh`, 16 Mutationen, jede wird rot.
 
 **Erste Stufe (gebaut 12.11.):** Zustand, Türen und Ablauf — siehe CHANGELOG.
 **Stufe 2 (gebaut 12.11.):** `web_abruf` fragt vor dem Verbinden — die

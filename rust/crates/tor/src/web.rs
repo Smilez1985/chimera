@@ -999,7 +999,15 @@ fn freigaben_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwor
             };
             let wert = v.get("wert").cloned().unwrap_or(Value::Null);
             // Dieselbe Regel wie ueberall: der Dienst entscheidet, was gilt.
-            let a2 = json!({"op": "freigabe_setzen", "werkzeug": name, "wert": wert});
+            // `annehmen`/`verwerfen` gehen mit -- ein Vorschlag wird ueber
+            // denselben Schreiber entschieden wie der Modus (14.11.).
+            let a2 = json!({
+                "op": "freigabe_setzen",
+                "werkzeug": name,
+                "wert": wert,
+                "annehmen": v.get("annehmen").cloned().unwrap_or(Value::Null),
+                "verwerfen": v.get("verwerfen").cloned().unwrap_or(Value::Null),
+            });
             let r = crate::dienst::antworten(&a2, &z.stand);
             if r["ok"] == true {
                 json_antwort(200, r)

@@ -31,7 +31,7 @@ EOF
 # 1. Negativliste wird im offenen Modus uebersehen.
 mut negativ-uebersehen "$F" '    if !z.is_empty() && e.negativ.iter().any(|n| n.to_lowercase() == z) {' '    if false {' 'freigaben::'
 # 2. Ablauf zaehlt nicht: eine Freigabe gilt fuer immer.
-mut ablauf-ignoriert "$F" '        self.modus_offen && self.bis.map(|b| b > jetzt).unwrap_or(true)' '        self.modus_offen' 'freigaben::'
+mut ablauf-ignoriert "$F" '        self.ist_modus("offen") && self.bis.map(|b| b > jetzt).unwrap_or(true)' '        self.ist_modus("offen")' 'freigaben::'
 # 3. Unbekanntes Werkzeug wird durchgelassen.
 mut werkzeug-offen "$F" '    if !WERKZEUGE.contains(&werkzeug) {
         return antwort(false,' '    if false {
@@ -48,6 +48,25 @@ mut erinnern-zu-kurz "$F" '            Some(s) if s >= ERINNERN_MIN => Some(s),'
 mut aus-schaltet-nicht "$T" '"aus" | "zu" | "positivliste" | "schliessen" | "schließen" => return Ok(Auftrag::Aus),' '"aus" | "zu" | "positivliste" | "schliessen" | "schließen" => return Ok(Auftrag::Immer),' 'telegram::'
 # 9. Eine Dauer wird still angenommen (der Nutzer glaubt an eine Frist, die es nicht gibt).
 mut dauer-angenommen "$T" '        if ["m", "h", "d"].contains(&einheit.as_str()) && ohne_einheit.parse::<u64>().is_ok() {' '        if false {' 'telegram::'
+
+# 10. Der dritte Modus gilt als "offen" (die gefaehrlichste Verwechslung).
+mut dritter-modus-offen "$F" '        self.ist_modus("offen") && self.bis.map(|b| b > jetzt).unwrap_or(true)' '        !self.ist_modus("positivliste") && self.bis.map(|b| b > jetzt).unwrap_or(true)' 'freigaben::'
+# 11. Ein Vorschlag wirkt sofort (er traegt sich selbst in die Positivliste).
+mut vorschlag-wirkt "$F" '        e.vorschlaege.push(Vorschlag { ziel: z.clone(), herkunft: "agent".into(), seit: jetzt, notiz: n.to_string() });' '        e.positiv.push(z.clone());
+        e.vorschlaege.push(Vorschlag { ziel: z.clone(), herkunft: "agent".into(), seit: jetzt, notiz: n.to_string() });' 'freigaben::'
+# 12. Vorschlaege sind in jedem Modus erlaubt (sie koennten nie etwas werden).
+mut vorschlag-immer "$F" '        if !e.ist_modus("offen_nach_vorschlag") {' '        if false {' 'freigaben::'
+# 13. Die Annahme uebersieht die Negativliste.
+mut annahme-ohne-negativ "$F" '    if vor.negativ.iter().any(|x| x.eq_ignore_ascii_case(&z)) {' '    if false {' 'freigaben::'
+# 14. Verwerfen raeumt den Vorschlag nicht weg.
+mut verwerfen-bleibt "$F" '        e.vorschlaege.remove(i);
+        Ok(format!("\"{z}\" verworfen"))' '        Ok(format!("\"{z}\" verworfen"))' 'freigaben::'
+# 15. Ein Zeitknopf wirft die offenen Vorschlaege weg.
+mut teilauftrag-vorschlaege "$F" '        "positiv": e.positiv, "negativ": e.negativ,
+        "vorschlaege": e.vorschlaege.iter().map(Vorschlag::als_json).collect::<Vec<_>>(),' '        "positiv": e.positiv, "negativ": e.negativ,
+        "vorschlaege": Vec::<Value>::new(),' 'freigaben::'
+# 16. Die Grenze fuer Vorschlaege fehlt (eine Schleife schreibt die Datei voll).
+mut vorschlag-grenze "$F" '        if e.vorschlaege.len() >= VORSCHLAEGE_MAX {' '        if false {' 'freigaben::'
 
 zurueck
 echo "== $gruen gruen =="

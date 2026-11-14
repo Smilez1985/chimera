@@ -1,9 +1,16 @@
 //! Freigabe je Werkzeug auf Zeit (DESIGN, Regel "Freigabe je Werkzeug auf
 //! Zeit").
 //!
-//! Der Nutzer entscheidet **je Werkzeug**, ob weiter einzeln gefragt wird
-//! (`positivliste`) oder ob alles durchgeht, was nicht auf der Negativliste
-//! steht (`offen`).
+//! Der Nutzer entscheidet **je Werkzeug**, in welchem der drei Modi es laeuft
+//! (Vorgabe smilez, 14.11.2026: "beide Modi, offen nach Vorschlag, und alles
+//! immer offen"):
+//!
+//! * `positivliste` -- nur Ziele in `positiv` (Vorgabe, vorsichtige Seite),
+//! * `offen` -- jedes Ziel ausser `negativ`,
+//! * `offen_nach_vorschlag` -- offen **nur fuer Ziele, die der Nutzer
+//!   angenommen hat**. Der Agent darf vorschlagen (`freigabe_vorschlag`),
+//!   ein Vorschlag wirkt nie von selbst: erst die Annahme traegt das Ziel in
+//!   `positiv` ein. Gegenprobe: ein Vorschlag allein oeffnet nichts.
 //!
 //! **Kein Ablauf mehr (Entscheidung smilez, 13.11.2026).** Eine Freigabe
 //! bleibt offen, bis der Nutzer sie schliesst. Ein Ton kann daran erinnern --
@@ -34,6 +41,15 @@ use std::io::Write;
 /// steht, laesst sich nicht freigeben. Neue Werkzeuge kommen mit ihrem
 /// Aufrufer dazu, nicht auf Verdacht.
 pub const WERKZEUGE: &[&str] = &["web_suche", "web_abruf", "ssh", "run_command", "tailscale"];
+
+/// Die drei Modi, in denen ein Werkzeug laufen kann. **Geschlossen**: ein
+/// unbekannter Modus wird abgelehnt, nicht auf die vorsichtige Seite gebogen --
+/// sonst faende niemand, warum seine Einstellung nicht wirkt.
+pub const MODI: &[&str] = &["positivliste", "offen", "offen_nach_vorschlag"];
+
+/// So viele Vorschlaege darf ein Werkzeug hoechstens offen haben. Ohne Grenze
+/// koennte eine Schleife im Agenten die Datei vollschreiben.
+pub const VORSCHLAEGE_MAX: usize = 20;
 
 /// Laenger als das Protokoll nicht, bevor es rotiert.
 const PROTOKOLL_MAX: u64 = 512 * 1024;
@@ -66,7 +82,9 @@ fn protokoll_datei(p: &Pfade) -> std::path::PathBuf {
 /// Vorgaben; die Vorgabe ist immer die vorsichtige Seite.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Eintrag {
-    pub modus_offen: bool,
+    /// Einer von [`MODI`]. Unbekannte Werte werden beim Lesen zu
+    /// `positivliste` -- die vorsichtige Seite.
+    pub modus: String,
     /// **Nur Altbestand.** Wann die Freigabe (frueher) ablief. Neue Eintraege
     /// schreiben kein `bis` mehr; gelesen wird es weiter, damit eine Frist von
     /// gestern nicht rueckwirkend aufgeht.
@@ -77,17 +95,50 @@ pub struct Eintrag {
     pub erinnern_alle: u64,
     pub positiv: Vec<String>,
     pub negativ: Vec<String>,
+    /// Vorschlaege des Agenten, die noch **nicht** angenommen sind. Sie
+    /// wirken nie von selbst; erst `annehmen` traegt das Ziel in `positiv`.
+    pub vorschlaege: Vec<Vorschlag>,
+}
+
+/// Ein Vorschlag des Agenten. `herkunft` steht dabei, damit die Oberflaeche
+/// ihn zeigen kann; er ist immer `agent` (der Nutzer schlaegt nichts vor).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Vorschlag {
+    pub ziel: String,
+    pub herkunft: String,
+    pub seit: u64,
+    pub notiz: String,
+}
+
+impl Vorschlag {
+    fn aus(v: &Value) -> Option<Vorschlag> {
+        let ziel = v.get("ziel")?.as_str()?.trim().to_string();
+        if ziel.is_empty() {
+            return None;
+        }
+        Some(Vorschlag {
+            ziel,
+            herkunft: v.get("herkunft").and_then(Value::as_str).unwrap_or("agent").trim().to_string(),
+            seit: v.get("seit").and_then(Value::as_u64).unwrap_or(0),
+            notiz: v.get("notiz").and_then(Value::as_str).unwrap_or("").trim().to_string(),
+        })
+    }
+
+    fn als_json(&self) -> Value {
+        json!({"ziel": self.ziel, "herkunft": self.herkunft, "seit": self.seit, "notiz": self.notiz})
+    }
 }
 
 impl Default for Eintrag {
     fn default() -> Self {
         Eintrag {
-            modus_offen: false,
+            modus: "positivliste".into(),
             bis: None,
             seit: None,
             erinnern_alle: ERINNERN_VORGABE,
             positiv: Vec::new(),
             negativ: Vec::new(),
+            vorschlaege: Vec::new(),
         }
     }
 }
@@ -109,21 +160,39 @@ impl Eintrag {
             .and_then(Value::as_u64)
             .filter(|s| *s == 0 || *s >= ERINNERN_MIN)
             .unwrap_or(ERINNERN_VORGABE);
+        let modus = match v.get("modus").and_then(Value::as_str) {
+            Some(m) if MODI.contains(&m) => m.to_string(),
+            _ => "positivliste".into(),
+        };
+        let vorschlaege = v
+            .get("vorschlaege")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Vorschlag::aus).collect())
+            .unwrap_or_default();
         Eintrag {
-            modus_offen: v.get("modus").and_then(Value::as_str) == Some("offen"),
+            modus,
             bis: v.get("bis").and_then(Value::as_u64),
             seit: v.get("seit").and_then(Value::as_u64),
             erinnern_alle,
             positiv: texte("positiv"),
             negativ: texte("negativ"),
+            vorschlaege,
         }
+    }
+
+    /// Heisst der Modus so? Kurzform fuer die Aufrufer.
+    pub fn ist_modus(&self, m: &str) -> bool {
+        self.modus == m
     }
 
     /// Steht die Freigabe offen? Ohne Frist (`bis` leer) heisst offen bis zum
     /// Schluss. Ein `bis` aus dem Altbestand zaehlt nur, solange es nicht
     /// vorbei ist -- eine alte Frist darf nicht rueckwirkend aufgehen.
     pub fn ist_offen(&self, jetzt: u64) -> bool {
-        self.modus_offen && self.bis.map(|b| b > jetzt).unwrap_or(true)
+        // Nur `offen` oeffnet alles. `offen_nach_vorschlag` heisst **nicht**
+        // "offen" -- es heisst "offen fuer Angenommenes", und das steht in
+        // `positiv`.
+        self.ist_modus("offen") && self.bis.map(|b| b > jetzt).unwrap_or(true)
     }
 }
 
@@ -155,10 +224,13 @@ fn aufraeumen(roh: &Value, jetzt: u64) -> Value {
         // Ein bis in der Vergangenheit bleibt stehen (der Aufrufer sieht so,
         // dass es abgelaufen ist), aber der Modus ist dann nicht mehr "offen".
         if !o.bis.map(|b| b > jetzt).unwrap_or(true) {
-            o.modus_offen = false;
+            o.modus = "positivliste".into();
         }
         if let Some(m) = e.as_object_mut() {
-            m.insert("modus".into(), json!(if o.modus_offen { "offen" } else { "positivliste" }));
+            m.insert("modus".into(), json!(o.modus));
+            // Vorschlaege immer als Liste zeigen -- die Oberflaeche soll nicht
+            // zwischen "kein Feld" und "leer" unterscheiden muessen.
+            m.insert("vorschlaege".into(), json!(o.vorschlaege.iter().map(Vorschlag::als_json).collect::<Vec<_>>()));
             m.entry("bis").or_insert(Value::Null);
             m.entry("seit").or_insert(o.seit.map(Value::from).unwrap_or(Value::Null));
             m.insert("erinnern_alle".into(), json!(o.erinnern_alle));
@@ -206,10 +278,15 @@ pub fn pruefen(p: &Pfade, werkzeug: &str, ziel: Option<&str>, jetzt: u64) -> Val
         return antwort(true, "Freigabe ist offen".into(), e.bis);
     }
     // 4. Sonst: fragen, also nicht erlaubt -- mit dem Grund.
-    let grund = if e.modus_offen {
+    let grund = if e.ist_modus("offen") {
         // Nur Altbestand kann hier landen: ein Eintrag mit `bis` in der
         // Vergangenheit. Neue Eintraege laufen nicht mehr ab.
         "Freigabe ist abgelaufen (Altbestand mit Frist)".to_string()
+    } else if e.ist_modus("offen_nach_vorschlag") {
+        // Der Modus oeffnet nicht alles -- er oeffnet, was angenommen wurde.
+        // Ohne diesen Satz saehe der Agent "keine Freigabe" und schluege
+        // nichts vor.
+        "nicht angenommen (Modus 'offen nach Vorschlag')".to_string()
     } else if let Some(b) = e.bis {
         format!("keine Freigabe; die letzte lief bis {b} ab")
     } else {
@@ -239,8 +316,11 @@ pub fn setzen(p: &Pfade, werkzeug: &str, wert: &Value, jetzt: u64) -> Result<Val
         ));
     }
     let modus = wert.get("modus").and_then(Value::as_str).unwrap_or("positivliste");
-    if modus != "offen" && modus != "positivliste" {
-        return Err(("wert_ungueltig", format!("Modus \"{modus}\" gibt es nicht (offen, positivliste).")));
+    if !MODI.contains(&modus) {
+        return Err((
+            "wert_ungueltig",
+            format!("Modus \"{modus}\" gibt es nicht ({}).", MODI.join(", ")),
+        ));
     }
     let erinnern_alle = match wert.get("erinnern_alle") {
         None | Some(Value::Null) => None,
@@ -299,8 +379,11 @@ pub fn setzen(p: &Pfade, werkzeug: &str, wert: &Value, jetzt: u64) -> Result<Val
     if notiz.chars().count() > 200 {
         return Err(("wert_ungueltig", "Die Notiz ist laenger als 200 Zeichen.".into()));
     }
+    // Vorschlaege bleiben stehen: ein Zeitknopf darf nicht die Liste der
+    // offenen Vorschlaege loeschen (dieselbe Ueberlegung wie bei `positiv`).
+    let vorschlaege: Vec<Value> = alt.vorschlaege.iter().map(Vorschlag::als_json).collect();
     let neu = json!({"modus": modus, "bis": Value::Null, "seit": seit, "erinnern_alle": erinnern_alle,
-        "positiv": positiv, "negativ": negativ, "notiz": notiz});
+        "positiv": positiv, "negativ": negativ, "vorschlaege": vorschlaege, "notiz": notiz});
     let mut ganz = laden(p);
     let Some(w) = ganz.get_mut("werkzeuge").and_then(|w| w.as_object_mut()) else {
         return Err(("wert_ungueltig", "Die Freigaben sind kein Objekt.".into()));
@@ -309,6 +392,159 @@ pub fn setzen(p: &Pfade, werkzeug: &str, wert: &Value, jetzt: u64) -> Result<Val
     schreiben(p, &ganz).map_err(|e| ("nicht_gespeichert", e))?;
     protokoll(p, jetzt, werkzeug, None, "gesetzt", &beschreibung(&neu));
     Ok(neu)
+}
+
+/// Ein Ziel, das ein Werkzeug als Ziel fuehren darf: kein Leerraum, nicht
+/// leer, nicht ueberlang. Dieselbe Form prueft `setzen` fuer die Listen --
+/// hier steht sie einmal fuer beide.
+fn ziel_pruefen(ziel: &str) -> Result<String, (&'static str, String)> {
+    let z = ziel.trim();
+    if z.is_empty() {
+        return Err(("wert_ungueltig", "Das Ziel ist leer.".into()));
+    }
+    if z.chars().any(char::is_whitespace) {
+        return Err(("wert_ungueltig", format!("Das Ziel \"{z}\" enthaelt Leerraum.")));
+    }
+    if z.chars().count() > 80 {
+        return Err(("wert_ungueltig", "Das Ziel ist laenger als 80 Zeichen.".into()));
+    }
+    Ok(z.to_string())
+}
+
+/// Einen Eintrag lesen, aendern, schreiben. Ein Ort fuer das Muster, damit
+/// die drei Wege (Vorschlag, annehmen, verwerfen) nicht dreimal verschieden
+/// pruefen (Regel 10g).
+fn aendern<F>(p: &Pfade, werkzeug: &str, f: F) -> Result<Value, (&'static str, String)>
+where
+    F: FnOnce(&mut Eintrag) -> Result<String, (&'static str, String)>,
+{
+    if !WERKZEUGE.contains(&werkzeug) {
+        return Err((
+            "werkzeug_unbekannt",
+            format!("Werkzeug \"{werkzeug}\" lasst sich nicht freigeben (bekannt: {}).", WERKZEUGE.join(", ")),
+        ));
+    }
+    let mut ganz = laden(p);
+    let alt = Eintrag::aus(&ganz["werkzeuge"][werkzeug]);
+    let mut e = alt.clone();
+    let meldung = f(&mut e)?;
+    if e == alt {
+        return Ok(json!({"ok": true, "meldung": meldung, "freigabe": ganz["werkzeuge"][werkzeug].clone()}));
+    }
+    let neu = json!({
+        "modus": e.modus, "bis": e.bis, "seit": e.seit, "erinnern_alle": e.erinnern_alle,
+        "positiv": e.positiv, "negativ": e.negativ,
+        "vorschlaege": e.vorschlaege.iter().map(Vorschlag::als_json).collect::<Vec<_>>(),
+        "notiz": ganz["werkzeuge"][werkzeug]["notiz"].as_str().unwrap_or("").trim().to_string(),
+    });
+    let Some(w) = ganz.get_mut("werkzeuge").and_then(|w| w.as_object_mut()) else {
+        return Err(("wert_ungueltig", "Die Freigaben sind kein Objekt.".into()));
+    };
+    w.insert(werkzeug.to_string(), neu.clone());
+    schreiben(p, &ganz).map_err(|err| ("nicht_gespeichert", err))?;
+    Ok(json!({"ok": true, "meldung": meldung, "freigabe": neu}))
+}
+
+/// Der Agent schlaegt ein Ziel vor. **Das ist keine Freigabe.** Der Vorschlag
+/// landet in `vorschlaege` und wirkt erst, wenn der Nutzer ihn annimmt --
+/// deshalb gibt es hier keinen Weg, `positiv` zu schreiben.
+///
+/// Nur im Modus `offen_nach_vorschlag`: in den anderen Modi kann ein
+/// Vorschlag nichts werden, und ein Werkzeug, das ins Leere schlaegt, ist
+/// schlimmer als eines, das den Grund nennt.
+pub fn vorschlag(p: &Pfade, werkzeug: &str, ziel: &str, notiz: &str, jetzt: u64) -> Result<Value, (&'static str, String)> {
+    let z = ziel_pruefen(ziel)?;
+    let n = notiz.trim();
+    if n.chars().count() > 200 {
+        return Err(("wert_ungueltig", "Die Notiz ist laenger als 200 Zeichen.".into()));
+    }
+    let r = aendern(p, werkzeug, |e| {
+        if !e.ist_modus("offen_nach_vorschlag") {
+            return Err((
+                "modus_keine_vorschlaege",
+                format!(
+                    "Dieses Werkzeug nimmt keine Vorschlaege an (Modus \"{}\"). Stell es erst auf \"offen_nach_vorschlag\".",
+                    e.modus
+                ),
+            ));
+        }
+        if e.negativ.iter().any(|x| x.eq_ignore_ascii_case(&z)) {
+            return Err(("abgelehnt", format!("\"{z}\" steht auf der Negativliste - ein Vorschlag aendert das nicht.")));
+        }
+        if e.positiv.iter().any(|x| x.eq_ignore_ascii_case(&z)) {
+            return Ok(format!("\"{z}\" steht schon auf der Positivliste"));
+        }
+        if e.vorschlaege.iter().any(|v| v.ziel.eq_ignore_ascii_case(&z)) {
+            return Ok(format!("\"{z}\" steht schon als Vorschlag"));
+        }
+        if e.vorschlaege.len() >= VORSCHLAEGE_MAX {
+            return Err((
+                "zu_viele_vorschlaege",
+                format!("Es liegen schon {VORSCHLAEGE_MAX} Vorschlaege; erst entscheiden, dann neue."),
+            ));
+        }
+        e.vorschlaege.push(Vorschlag { ziel: z.clone(), herkunft: "agent".into(), seit: jetzt, notiz: n.to_string() });
+        Ok(format!("\"{z}\" vorgeschlagen - wirkt erst nach deiner Annahme"))
+    })?;
+    protokoll(p, jetzt, werkzeug, Some(&z), "vorschlag", "vom Agenten");
+    Ok(r)
+}
+
+/// Der Nutzer nimmt einen Vorschlag an: das Ziel wandert in `positiv`, der
+/// Vorschlag verschwindet. Ab hier gilt es wie ein selbst eingetragenes Ziel.
+pub fn annehmen(p: &Pfade, werkzeug: &str, ziel: &str, jetzt: u64) -> Result<Value, (&'static str, String)> {
+    let z = ziel_pruefen(ziel)?;
+    if !WERKZEUGE.contains(&werkzeug) {
+        return Err((
+            "werkzeug_unbekannt",
+            format!("Werkzeug \"{werkzeug}\" gibt es nicht (bekannt: {}).", WERKZEUGE.join(", ")),
+        ));
+    }
+    // Die Negativliste gewinnt (Zusage seit 12.11.) -- auch gegen eine
+    // Annahme. Das Ziel kann **nach** dem Vorschlag dorthin gekommen sein;
+    // dann faellt der Vorschlag weg, statt liegen zu bleiben und spaeter zu
+    // wirken, wenn die Negativliste gelockert wird. Geschrieben wird hier
+    // trotzdem, deshalb steht der Fall vor `aendern` und nicht darin: `aendern`
+    // verwirft bei einem Fehler die Aenderung.
+    let vor = Eintrag::aus(&laden(p)["werkzeuge"][werkzeug]);
+    if vor.negativ.iter().any(|x| x.eq_ignore_ascii_case(&z)) {
+        let _ = aendern(p, werkzeug, |e| {
+            if let Some(i) = e.vorschlaege.iter().position(|v| v.ziel.eq_ignore_ascii_case(&z)) {
+                e.vorschlaege.remove(i);
+            }
+            Ok(String::new())
+        });
+        protokoll(p, jetzt, werkzeug, Some(&z), "abgelehnt", "Annahme: steht auf der Negativliste");
+        return Err(("abgelehnt", format!("\"{z}\" steht auf der Negativliste.")));
+    }
+    let r = aendern(p, werkzeug, |e| {
+        let Some(i) = e.vorschlaege.iter().position(|v| v.ziel.eq_ignore_ascii_case(&z)) else {
+            return Err(("vorschlag_unbekannt", format!("\"{z}\" steht nicht als Vorschlag.")));
+        };
+        e.vorschlaege.remove(i);
+        if !e.positiv.iter().any(|x| x.eq_ignore_ascii_case(&z)) {
+            e.positiv.push(z.clone());
+        }
+        Ok(format!("\"{z}\" angenommen"))
+    })?;
+    protokoll(p, jetzt, werkzeug, Some(&z), "angenommen", "durch den Nutzer");
+    Ok(r)
+}
+
+/// Der Nutzer lehnt ab: der Vorschlag faellt weg, sonst aendert sich nichts.
+/// Ein abgelehnter Vorschlag kommt **nicht** auf die Negativliste -- das waere
+/// eine Entscheidung, die niemand getroffen hat.
+pub fn verwerfen(p: &Pfade, werkzeug: &str, ziel: &str, jetzt: u64) -> Result<Value, (&'static str, String)> {
+    let z = ziel_pruefen(ziel)?;
+    let r = aendern(p, werkzeug, |e| {
+        let Some(i) = e.vorschlaege.iter().position(|v| v.ziel.eq_ignore_ascii_case(&z)) else {
+            return Err(("vorschlag_unbekannt", format!("\"{z}\" steht nicht als Vorschlag.")));
+        };
+        e.vorschlaege.remove(i);
+        Ok(format!("\"{z}\" verworfen"))
+    })?;
+    protokoll(p, jetzt, werkzeug, Some(&z), "verworfen", "durch den Nutzer");
+    Ok(r)
 }
 
 fn beschreibung(e: &Value) -> String {
@@ -523,6 +759,169 @@ mod tests {
         // Und ein ausdrueckliches Leeren geht weiter.
         setzen(&p, "ssh", &json!({"modus": "offen", "negativ": []}), 1000).expect("leeren");
         assert!(Eintrag::aus(&roh(&p)["werkzeuge"]["ssh"]).negativ.is_empty());
+    }
+
+    // --- Dritter Modus und Vorschlaege (14.11.2026) ---------------------
+
+    #[test]
+    fn drei_modi_werden_angenommen_und_gelesen() {
+        let p = p("drei_modi");
+        for m in MODI {
+            let neu = setzen(&p, "run_command", &json!({"modus": m}), 1000).expect("setzen");
+            assert_eq!(neu["modus"], *m, "{neu}");
+            let gelesen = laden(&p);
+            assert_eq!(gelesen["werkzeuge"]["run_command"]["modus"], *m, "{gelesen}");
+        }
+        // Ein vierter Modus ist ein Tippfehler und wird abgelehnt, nicht
+        // stillschweigend zur vorsichtigen Seite gebogen.
+        let e = setzen(&p, "run_command", &json!({"modus": "halb_offen"}), 1000).unwrap_err();
+        assert_eq!(e.0, "wert_ungueltig");
+        assert!(e.1.contains("offen_nach_vorschlag"), "{}", e.1);
+    }
+
+    /// Der dritte Modus ist **nicht** offen: er oeffnet nur, was angenommen
+    /// wurde. Das ist die Zusage, die den Modus von `offen` unterscheidet.
+    #[test]
+    fn offen_nach_vorschlag_oeffnet_nicht_alles() {
+        let p = p("dritter_modus");
+        setzen(&p, "run_command", &json!({"modus": "offen_nach_vorschlag"}), 1000).expect("setzen");
+        let a = pruefen(&p, "run_command", Some("curl"), 1500);
+        assert_eq!(a["erlaubt"], false, "{a}");
+        assert!(a["grund"].as_str().unwrap().contains("nicht angenommen"), "{a}");
+    }
+
+    /// Die Kernzusage: ein Vorschlag ist **keine** Freigabe.
+    #[test]
+    fn ein_vorschlag_wirkt_nicht_von_selbst() {
+        let p = p("vorschlag_wirkt_nicht");
+        setzen(&p, "run_command", &json!({"modus": "offen_nach_vorschlag"}), 1000).expect("setzen");
+        let r = vorschlag(&p, "run_command", "ls", "Verzeichnis lesen", 1100).expect("vorschlagen");
+        assert!(r["meldung"].as_str().unwrap().contains("ls"), "{r}");
+        let e = Eintrag::aus(&roh(&p)["werkzeuge"]["run_command"]);
+        assert!(e.positiv.is_empty(), "positiv bleibt leer: {:?}", e.positiv);
+        assert_eq!(e.vorschlaege.len(), 1);
+        assert_eq!(e.vorschlaege[0].ziel, "ls");
+        assert_eq!(e.vorschlaege[0].herkunft, "agent");
+        assert_eq!(pruefen(&p, "run_command", Some("ls"), 1200)["erlaubt"], false);
+        // Und das Protokoll nennt den Vorschlag als Vorschlag.
+        let text = std::fs::read_to_string(protokoll_datei(&p)).expect("protokoll");
+        assert!(text.contains("vorschlag"), "{text}");
+    }
+
+    #[test]
+    fn annahme_traegt_das_ziel_in_die_positivliste_und_raeumt_den_vorschlag() {
+        let p = p("annahme");
+        setzen(&p, "run_command", &json!({"modus": "offen_nach_vorschlag"}), 1000).expect("setzen");
+        vorschlag(&p, "run_command", "ls", "", 1100).expect("vorschlagen");
+        annehmen(&p, "run_command", "ls", 1200).expect("annehmen");
+        let e = Eintrag::aus(&roh(&p)["werkzeuge"]["run_command"]);
+        assert_eq!(e.positiv, vec!["ls"]);
+        assert!(e.vorschlaege.is_empty(), "{:?}", e.vorschlaege);
+        let a = pruefen(&p, "run_command", Some("ls"), 1300);
+        assert_eq!(a["erlaubt"], true, "{a}");
+        assert!(a["grund"].as_str().unwrap().contains("Positivliste"), "{a}");
+        // Zweimal annehmen ist kein Fehler, aber auch kein zweiter Eintrag.
+        assert_eq!(annehmen(&p, "run_command", "ls", 1400).unwrap_err().0, "vorschlag_unbekannt");
+    }
+
+    #[test]
+    fn verwerfen_laesst_alles_wie_es_war() {
+        let p = p("verwerfen");
+        setzen(&p, "run_command", &json!({"modus": "offen_nach_vorschlag"}), 1000).expect("setzen");
+        vorschlag(&p, "run_command", "df", "", 1100).expect("vorschlagen");
+        verwerfen(&p, "run_command", "df", 1200).expect("verwerfen");
+        let e = Eintrag::aus(&roh(&p)["werkzeuge"]["run_command"]);
+        assert!(e.vorschlaege.is_empty());
+        assert!(e.positiv.is_empty());
+        // Ein verworfener Vorschlag kommt **nicht** auf die Negativliste --
+        // das waere eine Entscheidung, die niemand getroffen hat.
+        assert!(e.negativ.is_empty());
+        assert_eq!(pruefen(&p, "run_command", Some("df"), 1300)["erlaubt"], false);
+    }
+
+    /// Kommt ein Ziel **nach** dem Vorschlag auf die Negativliste, gewinnt die
+    /// Negativliste -- das war ihre Zusage seit dem 12.11. Der Vorschlag
+    /// faellt dabei weg, statt liegen zu bleiben und spaeter zu wirken.
+    #[test]
+    fn eine_annahme_gegen_die_negativliste_wird_abgelehnt() {
+        let p = p("annahme_negativ");
+        setzen(&p, "run_command", &json!({"modus": "offen_nach_vorschlag"}), 1000).expect("setzen");
+        vorschlag(&p, "run_command", "nc", "", 1100).expect("vorschlagen");
+        setzen(&p, "run_command", &json!({"modus": "offen_nach_vorschlag", "negativ": ["nc"]}), 1150)
+            .expect("negativ");
+        let e = annehmen(&p, "run_command", "nc", 1200).unwrap_err();
+        assert_eq!(e.0, "abgelehnt");
+        let nach = Eintrag::aus(&roh(&p)["werkzeuge"]["run_command"]);
+        assert!(nach.positiv.is_empty(), "{:?}", nach.positiv);
+        assert!(nach.vorschlaege.is_empty(), "{:?}", nach.vorschlaege);
+        assert_eq!(pruefen(&p, "run_command", Some("nc"), 1300)["erlaubt"], false);
+    }
+
+    #[test]
+    fn vorschlaege_gibt_es_nur_im_dritten_modus() {
+        let p = p("vorschlag_modus");
+        setzen(&p, "run_command", &json!({"modus": "positivliste"}), 1000).expect("setzen");
+        let e = vorschlag(&p, "run_command", "ls", "", 1100).unwrap_err();
+        assert_eq!(e.0, "modus_keine_vorschlaege");
+        assert!(e.1.contains("positivliste"), "{}", e.1);
+    }
+
+    #[test]
+    fn ein_vorschlag_gegen_die_negativliste_wird_abgelehnt() {
+        let p = p("vorschlag_negativ");
+        setzen(&p, "run_command", &json!({"modus": "offen_nach_vorschlag", "negativ": ["nc"]}), 1000).expect("setzen");
+        let e = vorschlag(&p, "run_command", "nc", "", 1100).unwrap_err();
+        assert_eq!(e.0, "abgelehnt");
+        assert!(Eintrag::aus(&roh(&p)["werkzeuge"]["run_command"]).vorschlaege.is_empty());
+    }
+
+    #[test]
+    fn derselbe_vorschlag_kommt_nur_einmal() {
+        let p = p("vorschlag_doppelt");
+        setzen(&p, "run_command", &json!({"modus": "offen_nach_vorschlag"}), 1000).expect("setzen");
+        vorschlag(&p, "run_command", "ls", "", 1100).expect("erster");
+        let zweiter = vorschlag(&p, "run_command", "LS", "", 1200).expect("zweiter");
+        assert!(zweiter["meldung"].as_str().unwrap().contains("schon"), "{zweiter}");
+        assert_eq!(Eintrag::aus(&roh(&p)["werkzeuge"]["run_command"]).vorschlaege.len(), 1);
+    }
+
+    /// Ohne Grenze koennte eine Schleife im Agenten die Datei vollschreiben.
+    #[test]
+    fn zu_viele_vorschlaege_werden_abgelehnt() {
+        let p = p("vorschlag_grenze");
+        setzen(&p, "run_command", &json!({"modus": "offen_nach_vorschlag"}), 1000).expect("setzen");
+        for i in 0..VORSCHLAEGE_MAX {
+            vorschlag(&p, "run_command", &format!("prog{i}"), "", 1100).expect("vorschlagen");
+        }
+        let e = vorschlag(&p, "run_command", "einer_zuviel", "", 1200).unwrap_err();
+        assert_eq!(e.0, "zu_viele_vorschlaege");
+    }
+
+    /// Ein Zeitknopf (nur `modus`) darf die offenen Vorschlaege nicht mit
+    /// wegwerfen -- dieselbe Ueberlegung wie bei den Listen.
+    #[test]
+    fn ein_teilauftrag_behaelt_die_vorschlaege() {
+        let p = p("vorschlag_teil");
+        setzen(&p, "run_command", &json!({"modus": "offen_nach_vorschlag"}), 1000).expect("setzen");
+        vorschlag(&p, "run_command", "ls", "notiz", 1100).expect("vorschlagen");
+        setzen(&p, "run_command", &json!({"modus": "offen", "erinnern_alle": 120}), 1200).expect("oeffnen");
+        let e = Eintrag::aus(&roh(&p)["werkzeuge"]["run_command"]);
+        assert_eq!(e.vorschlaege.len(), 1);
+        assert_eq!(e.vorschlaege[0].ziel, "ls");
+        assert_eq!(e.vorschlaege[0].notiz, "notiz");
+    }
+
+    /// Ein Vorschlag ist ein Ziel wie jedes andere: Leerraum und Leeres
+    /// werden abgelehnt, bevor etwas in der Datei landet.
+    #[test]
+    fn kaputte_vorschlagsziele_werden_abgelehnt() {
+        let p = p("vorschlag_ziel");
+        setzen(&p, "run_command", &json!({"modus": "offen_nach_vorschlag"}), 1000).expect("setzen");
+        assert_eq!(vorschlag(&p, "run_command", "", "", 1100).unwrap_err().0, "wert_ungueltig");
+        assert_eq!(vorschlag(&p, "run_command", "mit leer", "", 1100).unwrap_err().0, "wert_ungueltig");
+        assert_eq!(vorschlag(&p, "run_command", &"x".repeat(81), "", 1100).unwrap_err().0, "wert_ungueltig");
+        assert_eq!(vorschlag(&p, "gibtesnicht", "ls", "", 1100).unwrap_err().0, "werkzeug_unbekannt");
+        assert!(Eintrag::aus(&roh(&p)["werkzeuge"]["run_command"]).vorschlaege.is_empty());
     }
 
     #[test]

@@ -185,6 +185,41 @@ wahlPruefen("Vorgabe ist ohne Ton", { modus: "offen", seit: J - 60 }, "0");
 wahlPruefen("bestellter Ton bleibt gewaehlt", { modus: "offen", seit: J - 60, erinnern_alle: 600 }, "600");
 wahlPruefen("Alteintrag mit 300 zeigt 5 Minuten", { modus: "offen", seit: J - 60, erinnern_alle: 300 }, "300");
 
+// --- Dritter Modus und Vorschlaege (14.11.2026) --------------------------
+// Der dritte Modus ist **nicht** offen: dort laeuft nur Angenommenes. Wer ihn
+// wie "offen" beschriftet, verspricht mehr als gilt.
+kartePruefen("dritter Modus nennt den Unterschied",
+  { modus: "offen_nach_vorschlag", positiv: ["ls"], seit: J - 60 }, J,
+  "offen nach Vorschlag (1 angenommen)");
+karteOhne("dritter Modus behauptet nicht offen",
+  { modus: "offen_nach_vorschlag", seit: J - 60 }, J, "offen — ");
+
+// Ein Vorschlag muss sichtbar sein -- sonst kann der Nutzer nicht entscheiden,
+// und der Agent wartet auf eine Antwort, die niemand geben kann.
+kartePruefen("Vorschlag steht mit Ziel und Notiz",
+  { modus: "offen_nach_vorschlag", vorschlaege: [{ ziel: "ls", notiz: "Verzeichnis" }] }, J,
+  "ls — Verzeichnis");
+
+function hatText(knoten, text) {
+  return sammleText(knoten, []).some((t) => t === text);
+}
+{
+  const mit = probe.karte("run_command", { modus: "offen_nach_vorschlag", vorschlaege: [{ ziel: "ls" }] }, J);
+  const ohne = probe.karte("run_command", { modus: "offen_nach_vorschlag" }, J);
+  const zu = probe.karte("run_command", { modus: "positivliste" }, J);
+  const faelle = [
+    ["Vorschlag bietet Annehmen", hatText(mit, "Annehmen"), true],
+    ["Vorschlag bietet Verwerfen", hatText(mit, "Verwerfen"), true],
+    ["ohne Vorschlag kein Annehmen", hatText(ohne, "Annehmen"), false],
+    ["Karte bietet den Vorschlag-Modus an", hatText(zu, "Offen nach Vorschlag"), true],
+    ["im Vorschlag-Modus ist der Knopf als aktiv erkennbar", hatText(ohne, "Vorschlag-Modus (an)"), true],
+  ];
+  for (const [name, ist, soll] of faelle) {
+    if (ist === soll) { pass += 1; console.log(`  ok    ${name}`); }
+    else { fail += 1; console.log(`  FAIL  ${name} -- erwartet ${soll}, bekam ${ist}`); }
+  }
+}
+
 // Keine Frist mehr im Text: weder "läuft ab" noch eine Dauerwahl.
 karteOhne("Karte nennt keinen Ablauf", { modus: "offen", seit: J - 60 }, J, "läuft ab");
 karteOhne("Karte bietet keine Dauer mehr an", { modus: "offen", seit: J - 60 }, J, "für immer");

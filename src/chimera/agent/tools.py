@@ -299,6 +299,32 @@ class Toolbox:
                 f":{anfrage.get('port', 22)}). Der Eintrag wirkt noch **nicht** — der Nutzer "
                 f"bestaetigt ihn im Modul \"Fernzugriff\" mit dem Hostschluessel.")
 
+    def _freigabe_vorschlag(self, werkzeug: str, ziel: str, notiz: str = "") -> str:
+        """Ein Ziel **vorschlagen**, das ein Werkzeug laufen soll.
+
+        Mehr darf der Agent nicht: ein Freigabe-Eintrag entsteht hier nie, der
+        Vorschlag steht mit `herkunft: agent` in der Freigabe-Datei und wirkt
+        erst, wenn der Nutzer ihn im Modul „Freigaben" annimmt (DESIGN, Regel
+        „Freigabe je Werkzeug auf Zeit"). Der Modus muss `offen_nach_vorschlag`
+        sein — sonst kann aus einem Vorschlag nichts werden, und das Gateway
+        sagt es statt zu schweigen.
+        """
+        from ..provider import gateway
+
+        anfrage = {"op": "freigabe_vorschlag", "werkzeug": str(werkzeug or "").strip(),
+                   "ziel": str(ziel or "").strip()}
+        if notiz:
+            anfrage["notiz"] = str(notiz).strip()
+        try:
+            a = gateway.anfragen(anfrage)
+        except Exception as exc:                      # nicht erreichbar ist eine Auskunft
+            return f"Der Vorschlag ist nicht erreichbar: {type(exc).__name__}: {exc}"
+        if not a.get("ok"):
+            grund = (a.get("fehler") or {}).get("text") or "ohne Grund"
+            return f"Vorschlag nicht moeglich: {grund}"
+        return (f"{a.get('meldung') or 'Vorschlag eingetragen'}. "
+                f"Er wirkt erst, wenn der Nutzer ihn im Modul \"Freigaben\" annimmt.")
+
     # --- Die Werkzeuge ----------------------------------------------------
 
     def _register_default(self) -> None:
@@ -372,6 +398,18 @@ class Toolbox:
              "notiz": "optional: wozu der Host gut ist"},
             ("host", "adresse", "nutzer"),
         ), self._ssh_vorschlag)
+
+        self.add(ToolSpec(
+            "freigabe_vorschlag",
+            "Ein Ziel vorschlagen, das ein Werkzeug laufen soll (z. B. das "
+            "Programm 'ls' fuer run_command). Der Vorschlag wirkt NICHT: der "
+            "Nutzer nimmt ihn im Modul \"Freigaben\" an. Nur im Modus "
+            "'offen_nach_vorschlag' moeglich.",
+            {"werkzeug": "Werkzeug aus der Freigabe-Liste (z. B. 'run_command')",
+             "ziel": "Das Ziel in der Form des Werkzeugs (z. B. 'ls')",
+             "notiz": "optional: wozu es gebraucht wird"},
+            ("werkzeug", "ziel"),
+        ), self._freigabe_vorschlag)
 
         self.add(ToolSpec(
             "guthaben",

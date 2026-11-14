@@ -1,6 +1,10 @@
 "use strict";
 // Modul Freigaben (DESIGN, Regel "Freigabe je Werkzeug auf Zeit").
-// Je Werkzeug: Positivliste (einzeln fragen) oder offen. **Kein Ablauf mehr**
+// Je Werkzeug drei Modi (Vorgabe smilez, 14.11.2026): **positivliste**
+// (einzeln fragen), **offen** (alles ausser Negativliste) und
+// **offen_nach_vorschlag** (offen nur fuer Ziele, die der Nutzer angenommen
+// hat -- der Agent darf sie vorschlagen, wirken tun sie erst durch die
+// Annahme). **Kein Ablauf mehr**
 // (Entscheidung smilez, 13.11.2026): eine Freigabe bleibt offen, bis der
 // Nutzer sie schliesst; statt still zuzumachen erinnert ein Ton alle
 // `erinnern_alle` Sekunden. Die Negativliste gilt immer. Der Agent kann hier
@@ -27,7 +31,7 @@ class ChimeraFreigaben extends HTMLElement {
         ul { margin:.3rem 0 0; padding-left:1.1rem; font-size:.9rem; }
       </style>
       <h3>Freigaben</h3>
-      <p class="klein">Je Werkzeug: <strong>einzeln fragen</strong> (nur Ziele auf der Positivliste) oder <strong>offen</strong> — dann geht alles durch, was nicht auf der Negativliste steht. Eine Freigabe <strong>läuft nicht mehr ab</strong>: sie bleibt offen, bis du sie schließt. Ein Ton kann daran erinnern, ist aber <strong>aus, solange du ihn nicht einschaltest</strong>. Die Negativliste gilt immer. Der Agent kann hier nichts ändern.</p>
+      <p class="klein">Je Werkzeug drei Modi: <strong>einzeln fragen</strong> (nur Ziele auf der Positivliste), <strong>offen</strong> (alles, was nicht auf der Negativliste steht) oder <strong>offen nach Vorschlag</strong> (der Agent schlägt Programme vor, du nimmst an — erst dann laufen sie). Eine Freigabe <strong>läuft nicht mehr ab</strong>: sie bleibt offen, bis du sie schließt. Ein Ton kann daran erinnern, ist aber <strong>aus, solange du ihn nicht einschaltest</strong>. Die Negativliste gilt immer. Der Agent kann hier nichts ändern.</p>
       <div id="liste"></div>
       <p id="meldung" class="fehler"></p>`;
     this.$ = (id) => this.shadowRoot.getElementById(id);
@@ -76,11 +80,20 @@ class ChimeraFreigaben extends HTMLElement {
     // Offen ist offen: kein Ablauf mehr. Ein `bis` aus dem Altbestand zaehlt
     // nur, solange es nicht vorbei ist (dieselbe Regel wie in Rust).
     const offen = e.modus === "offen" && (!e.bis || e.bis > jetzt);
+    const nachVorschlag = e.modus === "offen_nach_vorschlag";
+    const angenommen = (e.positiv || []).length;
     const k = this.el("div", undefined, "karte");
     const kopf = this.el("div", undefined, "kopf");
+    // Der dritte Modus ist **nicht** "offen": dort laeuft nur, was angenommen
+    // wurde. Wer ihn wie "offen" beschriftet, verspricht mehr, als gilt.
+    const zustand = offen
+      ? "offen — " + this.seitText(e.seit, jetzt)
+      : nachVorschlag
+        ? `offen nach Vorschlag (${angenommen} angenommen)`
+        : "fragt einzeln (Positivliste)";
     kopf.append(
       this.el("strong", name),
-      this.el("span", offen ? "offen — " + this.seitText(e.seit, jetzt) : "fragt einzeln (Positivliste)", offen ? "offen" : "zu")
+      this.el("span", zustand, offen || nachVorschlag ? "offen" : "zu")
     );
     k.append(kopf);
 
@@ -100,11 +113,12 @@ class ChimeraFreigaben extends HTMLElement {
     auswahl.value = String(e.erinnern_alle == null ? 0 : e.erinnern_alle);
     const frei = this.el("button", "Freigeben");
     const zu = this.el("button", offen ? "Freigabe beenden" : "Einzeln fragen", "stumm");
+    const vorschlag = this.el("button", nachVorschlag ? "Vorschlag-Modus (an)" : "Offen nach Vorschlag", "stumm");
     const aus = this.el("div", undefined, "klein");
-    const schicken = async (wert) => {
+    const schicken = async (wert, extra) => {
       aus.className = "klein";
       aus.textContent = "";
-      const a = await this.post("/api/freigaben/setzen", { werkzeug: name, wert });
+      const a = await this.post("/api/freigaben/setzen", { werkzeug: name, wert, ...(extra || {}) });
       if (!a.ok) {
         aus.className = "fehler";
         aus.textContent = (a.fehler && a.fehler.text) || a.fehler || "Fehler";
@@ -117,8 +131,28 @@ class ChimeraFreigaben extends HTMLElement {
       schicken({ modus: "offen", erinnern_alle: Number(auswahl.value), ...listen() });
     };
     zu.onclick = () => schicken({ modus: "positivliste", ...listen() });
-    zeile.append(auswahl, " ", frei, zu, aus);
+    vorschlag.onclick = () => schicken({ modus: "offen_nach_vorschlag", ...listen() });
+    zeile.append(auswahl, " ", frei, vorschlag, zu, aus);
     k.append(zeile);
+
+    // Vorschlaege des Agenten: annehmen oder verwerfen. Ein Vorschlag wirkt
+    // nie von selbst -- hier entscheidet der Nutzer, nicht der Agent.
+    const vor = e.vorschlaege || [];
+    if (vor.length) {
+      k.append(this.el("label", "Vorschläge des Agenten (wirken erst nach deiner Annahme)", "klein"));
+      const ul = this.el("ul");
+      for (const v of vor) {
+        const li = this.el("li");
+        li.append(this.el("span", v.ziel + (v.notiz ? " — " + v.notiz : "")));
+        const ja = this.el("button", "Annehmen");
+        ja.onclick = () => schicken(null, { annehmen: v.ziel });
+        const nein = this.el("button", "Verwerfen", "stumm");
+        nein.onclick = () => schicken(null, { verwerfen: v.ziel });
+        li.append(" ", ja, nein);
+        ul.appendChild(li);
+      }
+      k.append(ul);
+    }
 
     // Listen
     const lp = this.el("input");
@@ -131,7 +165,7 @@ class ChimeraFreigaben extends HTMLElement {
     speichern.onclick = () => {
       const teile = (t) => t.split(",").map((x) => x.trim()).filter((x) => x.length);
       schicken({
-        modus: e.modus === "offen" ? "offen" : "positivliste",
+        modus: e.modus || "positivliste",
         erinnern_alle: e.erinnern_alle == null ? 0 : e.erinnern_alle,
         positiv: teile(lp.value),
         negativ: teile(ln.value),

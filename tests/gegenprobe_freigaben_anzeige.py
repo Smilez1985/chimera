@@ -55,6 +55,18 @@ MUTATIONEN = [
         "Vorgabe ist ohne Ton",
     ),
     (
+        "dritter-modus-als-offen",
+        'const nachVorschlag = e.modus === "offen_nach_vorschlag";',
+        "const nachVorschlag = false;",
+        "dritter Modus nennt den Unterschied",
+    ),
+    (
+        "vorschlaege-versteckt",
+        "const vor = e.vorschlaege || [];",
+        "const vor = [];",
+        "Vorschlag steht mit Ziel und Notiz",
+    ),
+    (
         "altbestand-frist-ignoriert",
         'const offen = e.modus === "offen" && (!e.bis || e.bis > jetzt);',
         'const offen = e.modus === "offen";',

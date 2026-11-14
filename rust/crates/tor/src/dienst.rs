@@ -133,8 +133,37 @@ pub fn antworten(anfrage: &Value, stand: &Stand) -> Value {
         "freigabe_setzen" => {
             let name = anfrage.get("werkzeug").and_then(Value::as_str).unwrap_or("");
             let wert = anfrage.get("wert").cloned().unwrap_or(Value::Null);
-            match crate::freigaben::setzen(&stand.daten, name, &wert, jetzt_s()) {
+            let jetzt = jetzt_s();
+            // Ein Vorschlag wird **hier** angenommen oder verworfen -- derselbe
+            // Schreiber wie beim Modus (Regel 5t, ein Schreiber je Ablage).
+            // `annehmen`/`verwerfen` sind Ziele, keine Schalter: so kann ein
+            // Aufruf nicht versehentlich alle Vorschlaege durchwinken.
+            if let Some(z) = anfrage.get("annehmen").and_then(Value::as_str) {
+                if let Err((code, text)) = crate::freigaben::annehmen(&stand.daten, name, z, jetzt) {
+                    return zeile::fehlerantwort(code, &text);
+                }
+            }
+            if let Some(z) = anfrage.get("verwerfen").and_then(Value::as_str) {
+                if let Err((code, text)) = crate::freigaben::verwerfen(&stand.daten, name, z, jetzt) {
+                    return zeile::fehlerantwort(code, &text);
+                }
+            }
+            if wert.is_null() {
+                return json!({"ok": true, "freigabe": crate::freigaben::laden(&stand.daten)["werkzeuge"][name].clone()});
+            }
+            match crate::freigaben::setzen(&stand.daten, name, &wert, jetzt) {
                 Ok(v) => json!({"ok": true, "werkzeug": name, "freigabe": v}),
+                Err((code, text)) => zeile::fehlerantwort(code, &text),
+            }
+        }
+        // Ein Vorschlag des Agenten (14.11.): landet in `vorschlaege` und
+        // wirkt nie von selbst. Nur im Modus `offen_nach_vorschlag`.
+        "freigabe_vorschlag" => {
+            let name = anfrage.get("werkzeug").and_then(Value::as_str).unwrap_or("");
+            let ziel = anfrage.get("ziel").and_then(Value::as_str).unwrap_or("");
+            let notiz = anfrage.get("notiz").and_then(Value::as_str).unwrap_or("");
+            match crate::freigaben::vorschlag(&stand.daten, name, ziel, notiz, jetzt_s()) {
+                Ok(v) => v,
                 Err((code, text)) => zeile::fehlerantwort(code, &text),
             }
         }

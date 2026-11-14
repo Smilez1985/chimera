@@ -332,6 +332,45 @@ try:
 finally:
     _gw.anfragen = _echt
 
+print("== freigabe_vorschlag: ein Vorschlag ist keine Freigabe ==")
+_echt = _gw.anfragen
+try:
+    gesehen = []
+
+    def _fake_frei(anfrage, **kw):
+        gesehen.append(dict(anfrage))
+        return {"ok": True, "meldung": '"ls" vorgeschlagen - wirkt erst nach deiner Annahme'}
+
+    _gw.anfragen = _fake_frei
+    with tempfile.TemporaryDirectory() as td:
+        tb = Toolbox(td)
+        check("das Werkzeug ist angemeldet", "freigabe_vorschlag" in tb.names(), True)
+        text = tb.call("freigabe_vorschlag", {"werkzeug": "run_command", "ziel": "ls"})
+        check("Vorschlag geht als eigene Operation zum Gateway", gesehen[0]["op"], "freigabe_vorschlag")
+        check("Werkzeug und Ziel gehen mit",
+              (gesehen[0]["werkzeug"], gesehen[0]["ziel"]), ("run_command", "ls"))
+        check("ohne Notiz wird keine erfunden", "notiz" in gesehen[0], False)
+        check("der Agent sagt, dass er nichts freigibt",
+              "Freigaben" in text and "erst" in text, True)
+        # Ein Vorschlag kann kein Modus sein: das Feld gibt es am Werkzeug nicht.
+        check("der Agent kann keinen Modus setzen",
+              any("modus" in g for g in gesehen), False)
+
+        tb.call("freigabe_vorschlag", {"werkzeug": "run_command", "ziel": "df", "notiz": "Platz"})
+        check("eine Notiz geht mit", gesehen[1].get("notiz"), "Platz")
+
+    def _kein_modus(anfrage, **kw):
+        return {"ok": False, "fehler": {"code": "modus_keine_vorschlaege",
+                "text": 'Dieses Werkzeug nimmt keine Vorschlaege an (Modus "positivliste").'}}
+
+    _gw.anfragen = _kein_modus
+    with tempfile.TemporaryDirectory() as td:
+        text = Toolbox(td).call("freigabe_vorschlag", {"werkzeug": "run_command", "ziel": "ls"})
+        check("Ablehnung kommt mit Grund, nicht als Programmfehler",
+              "nimmt keine Vorschlaege an" in text and "Fehler in 'freigabe_vorschlag'" not in text, True)
+finally:
+    _gw.anfragen = _echt
+
 print("== Guthaben: ein natives Werkzeug, kein Text-Trick ==")
 from chimera.agent.tools import guthaben_als_text  # noqa: E402
 
