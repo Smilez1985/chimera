@@ -417,16 +417,26 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
   filtert `typ === "ollama"`); heute legt man ihn über
   `/api/anbieter/setzen` an.
 
-- [ ] **Passkey (WebAuthn) für die Web-Oberfläche** (Wunsch smilez,
-  14.11.): Registrierung eines Passkeys nach dem ersten Passwort, Anmeldung
-  damit (alternative zum Passwort). **Voraussetzung: TLS** — ein Browser
-  bietet WebAuthn nur im sicheren Kontext an (`https://` oder `localhost`);
-  über `http://<LAN-IP>` ist der Knopf wirkungslos. Reihenfolge: (1) TLS vor
-  die Oberfläche (eigenes Zertifikat, sichtbarer Import-Hinweis), (2)
-  Registrierung (`navigator.credentials.create`, ES256, `rpId` = Hostname,
-  Origin prüfen, Challenge je Versuch einmalig), (3) Anmeldung
-  (`navigator.credentials.get`), (4) Passkey löschen und Passwort-Rückfall.
-  Ablage: `state/web/passkeys.json` (öffentliche Schlüssel, nie private).
+- [ ] **Anmeldung ohne Zertifikate-Gefrickel** (Entscheidung smilez,
+  14.11.: „das ist alles zu kompliziert, das muss ein Dau-User
+  hinbekommen" — Passkeys/TLS **vertagt**, erst nur Passwort über HTTP).
+  **Die Sperre ist technisch, nicht Geschmack:** WebAuthn gibt es im Browser
+  nur im sicheren Kontext (`https://`, `http://localhost`, `file://` — MDN,
+  geprüft 14.11.). Über `http://<LAN-IP>:8080` existiert
+  `navigator.credentials` nicht. Gemessen am Pi: Tailscale läuft (1.104.7),
+  aber der Tailnet-Name ist `home.arpa`; `tailscale cert` antwortet
+  „your Tailscale account does not support getting TLS certs". Drei Wege
+  wurden durchgerechnet und **alle für zu aufwendig erklärt**:
+  (a) Tailscale auf `ts.net` umstellen + `tailscale serve` (echtes
+  Zertifikat, kein Import — aber Tailnet-weite Einstellung),
+  (b) eigene CA + stunnel (Import auf jedem Gerät),
+  (c) `ssh -L` auf `localhost` (Passkey nur im Tunnel).
+  **Offen ist die Frage, nicht der Weg:** Was ist für einen Endnutzer
+  wirklich einfach? Kandidaten: Zertifikat automatisch erzeugen und mit
+  **einer** Seite „installieren" (QR je Gerät), mDNS-Name + lokale CA, die
+  der Installer einmal einrichtet, oder die Oberfläche nur lokal am Gerät
+  (Display/Tasten) statt im Netz. Erst entscheiden, dann bauen — ein
+  Passkey-Knopf auf HTTP wäre eine Attrappe.
 - [ ] **Passwort in der Oberfläche zurücksetzen** (Wunsch smilez 14.11.:
   „zurücksetzen nur vorbereiten, bauen wir später"): heute nur auf dem Gerät
   (`sudo /opt/chimera/bin/web-passwort`), und die Login-Seite sagt das.
