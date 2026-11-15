@@ -25,7 +25,9 @@ const STIL = `
   h3 { margin:.2rem 0 .6rem; font:1rem/1.3 system-ui, sans-serif; }
   .karte { border:1px solid #2b2f3b; border-radius:.6rem; padding:.75rem;
            margin:0 0 .75rem; background:#1c1f28; }
-  .karte strong { display:block; margin:0 0 .4rem; }
+    /* Nur die Überschrift der Karte ist ein Block: ein <strong> mitten im
+     Satz („nur für die aktuelle Zone“) darf den Satz nicht zerreißen. */
+  .karte > strong { display:block; margin:0 0 .4rem; }
   .zeile { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; }
   .zeile .wert { color:#8a90a2; font-size:.85rem; margin-left:auto; }
   label { display:block; font-size:.85rem; color:#8a90a2; margin:.5rem 0 .2rem; }
