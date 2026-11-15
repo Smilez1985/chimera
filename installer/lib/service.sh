@@ -142,7 +142,7 @@ Environment=PYTHONUNBUFFERED=1
 # Deshalb eigene Blaetter fuer Lebenszeichen und Anzeigespiegel.
 #
 # `chimera/anzeige` gehoert dazu, weil der Spiegel dort seine Bilddatei
-# ablegt (DESIGN, Regel „Anzeigespiegel"). Ohne dieses Blatt gehoerte
+# ablegt (DESIGN, Regel "Anzeigespiegel"). Ohne dieses Blatt gehoerte
 # /run/chimera `root:root` 0755, und der Dienst koennte sein eigenes
 # Unterverzeichnis nicht anlegen -- der Spiegel waere still aus.
 # Ein Muster dafuer gibt es: `state/` wird genauso vom Dienst beschrieben.
