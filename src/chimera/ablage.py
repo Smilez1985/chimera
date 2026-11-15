@@ -80,7 +80,45 @@ def abspielen(eintraege: list[dict]) -> list[dict]:
             rest = fenster[-n:] if n > 0 else []
             z = e.get("zusammenfassung") or ""
             fenster = ([{"role": "user", "content": _mit_marke(z)}] if z else []) + rest
-    return fenster
+    return ohne_textaufrufe(fenster)
+
+#: Ein Textaufruf, wie ihn der Textweg schrieb (``TOOL: name {json}``). Er
+#: wird im Fenster entfernt: ein Verlauf aus der Textzeit lehrt genau den Weg,
+#: den die Schnittstelle verbietet (DESIGN, Regel „Aufrufe, nicht Text",
+#: Nachtrag 15.11.2026).
+TEXT_AUFRUF = re.compile(r"^\s*TOOL:\s*[a-z_]+\s*\{.*$", re.MULTILINE | re.DOTALL)
+
+#: Das Ergebnis, das der Textweg zu einem Aufruf zurückgab.
+TEXT_ERGEBNIS = re.compile(r"^\s*Ergebnis von\s+[A-Za-z0-9_.]+\s*:", re.UNICODE)
+
+def ohne_textaufrufe(fenster: list[dict]) -> list[dict]:
+    """Textaufrufe und ihre Ergebnisse aus dem Fenster nehmen.
+
+    Das **Protokoll** bleibt unangetastet (Regel 8d) — hier entsteht nur das,
+    was das Modell sieht. Ohne diese Bereinigung kopiert ein starkes Modell
+    seine eigene Vergangenheit und schreibt weiter `TOOL:` in den Text, statt
+    die Werkzeugschnittstelle zu benutzen (am Pi gemessen, 15.11.2026:
+    26 solche Zeilen im Verlauf, die Rüge half genau eine Runde).
+    """
+    sauber: list[dict] = []
+    getilgt = 0
+    for m in fenster:
+        rolle = m.get("role")
+        inhalt = m.get("content") or ""
+        if rolle != "assistant" and TEXT_ERGEBNIS.match(inhalt):
+            getilgt += 1                    # gehört zu einem Aufruf, der geht
+            continue
+        if rolle == "assistant" and TEXT_AUFRUF.search(inhalt):
+            rest = TEXT_AUFRUF.sub("", inhalt).strip()
+            getilgt += 1
+            if rest:
+                sauber.append({**m, "content": rest})
+            continue
+        sauber.append(m)
+    if getilgt:
+        log.info("Fenster bereinigt: %d Textaufruf-Nachrichten aus der "
+                 "Textzeit entfernt (Protokoll unveraendert).", getilgt)
+    return sauber
 
 class Ablage:
     def __init__(self, wurzel: str | Path, jetzt=time.time) -> None:

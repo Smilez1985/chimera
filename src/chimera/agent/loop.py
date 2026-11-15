@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time as _t
 from dataclasses import dataclass, field
 
 from .context import Action, estimate_tokens, policy_for
@@ -42,6 +43,21 @@ from .verdichten import schnittindex, verdichte
 MAX_WERKZEUGE_JE_RUNDE = 3
 
 log = logging.getLogger(__name__)
+
+#: Wie viel von Argumenten und Ergebnis ins Protokoll geht. Das Protokoll
+#: soll zeigen, *was* lief — es ist kein Verlaufsersatz (DESIGN 8d).
+PROTO_OK = 120
+
+def _kurz(text: str, grenze: int = PROTO_OK) -> str:
+    """Einen Wert einzeilig und kurz fürs Protokoll (Zeilenumbrüche raus)."""
+    s = " ".join(str(text or "").split())
+    return s if len(s) <= grenze else s[:grenze] + " …"
+
+def _args_kurz(args: dict | str) -> str:
+    """Die Argumente eines Aufrufs fürs Protokoll."""
+    if isinstance(args, dict):
+        return "{" + ", ".join(f"{k}={_kurz(v, 40)!r}" for k, v in args.items()) + "}"
+    return _kurz(args, 80)
 
 #: So ruft das Modell ein Werkzeug auf. Bewusst schlicht, damit auch
 #: kleine Modelle es treffen.
@@ -112,6 +128,12 @@ werden vorgelesen."""
 RUEGE_TEXT_AUFTRAG = """Du hast einen Werkzeugaufruf als TEXT geschrieben. Er wurde NICHT ausgeführt.
 Werkzeuge laufen über die Werkzeugschnittstelle (tool call), nicht über Text.
 Antworte erneut — mit einem echten Werkzeugaufruf oder mit deiner Antwort."""
+
+#: Was der Nutzer hoert, wenn das Modell auch nach der Ruege nur einen
+#: Textaufruf schreibt. Die Behauptung "ich habe X getan" waere gelogen.
+NICHT_AUSGEFUEHRT = ("Ich wollte gerade ein Werkzeug benutzen, aber der Aufruf "
+                     "kam nicht über die Werkzeugschnittstelle — es wurde "
+                     "nichts ausgeführt.")
 
 #: Der feste Teil der Gesichtsanweisung (smilez, 14.11.2026). Er gehört zum
 #: **stabilen** Anfang des Prompts: gleiche Werkzeuge, gleiche Reihenfolge,
@@ -317,6 +339,8 @@ class Agent:
             aufrufe_nativ = list(getattr(reply, "werkzeuge", ()) or [])
             if aufrufe_nativ:
                 aufrufe = aufrufe_nativ[:MAX_WERKZEUGE_JE_RUNDE]
+                log.info("Runde %d: %s/%s rief nativ %s", turn + 1, provider,
+                         model, ", ".join(a["name"] for a in aufrufe))
                 self.history.append({
                     "role": "assistant", "content": text,
                     # Ollama-Form; die Uebersetzung je Anbieter macht das
@@ -335,12 +359,16 @@ class Agent:
             # 15.11.2026). Er kostet Tokens in jeder Runde, kommt nie als
             # Werkzeugnachricht an (DeepSeek: HTTP 422 "missing field
             # tool_call_id") und tauescht eine Ausfuehrung vor, die es nicht
-            # gibt. Stattdessen eine Ruege und eine neue Runde; ein zweiter
-            # Textaufruf wird als Antwort durchgereicht, damit der Lauf endet.
+            # gibt. Stattdessen eine Ruege und eine neue Runde. Ein **zweiter**
+            # Textaufruf wird nicht mehr als Antwort durchgereicht (er
+            # behauptet eine Ausfuehrung, die es nicht gab) — der Aufruf fliegt
+            # aus dem Text, und der Nutzer hoert, dass es nicht ging.
             if self._nativ:
                 if CALL_RE.search(text):
                     if not geruegt:
                         geruegt = True
+                        log.warning("Textaufruf statt Werkzeugschnittstelle "
+                                    "(geruegt): %s", _kurz(text))
                         self.history.append({"role": "assistant",
                                              "content": text})
                         self.history.append({"role": "user",
@@ -348,6 +376,11 @@ class Agent:
                         steps.append(Step("error",
                                           "Werkzeugaufruf im Text — nicht ausgeführt"))
                         continue
+                    log.warning("Zweiter Textaufruf verworfen: %s", _kurz(text))
+                    reste = CALL_RE.sub("", text).strip()
+                    steps.append(Step("error",
+                                      "Werkzeugaufruf im Text — verworfen"))
+                    text = reste or NICHT_AUSGEFUEHRT
                 self.history.append({"role": "assistant", "content": text})
                 steps.append(Step("text", text[:80]))
                 self._state("spricht")
@@ -454,9 +487,15 @@ class Agent:
             steps.append(Step("warn", verdict.message, name))
 
         self._state("arbeitet")
+        start = _t.monotonic()
         out = self.tools.call(name, args)
         self.guard.record(name, args, out)
         steps.append(Step("tool", out[:80], name))
+        # Protokoll (DESIGN, Regel „Aufrufe, nicht Text", Nachtrag 15.11.2026):
+        # ohne diese Zeile war "es passiert nichts" nicht prüfbar.
+        log.info("Werkzeug %s %s -> %d Zeichen in %.2f s: %s",
+                 name, _args_kurz(args), len(out),
+                 _t.monotonic() - start, _kurz(out))
         return out
 
     def _compact(self) -> None:

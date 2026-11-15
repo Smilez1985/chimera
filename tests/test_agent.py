@@ -680,6 +680,19 @@ with tempfile.TemporaryDirectory() as td:
           any("als TEXT geschrieben" in str(m.get("content"))
               for m in reg.gesehen[1]["verlauf"]), True)
     check("Textaufruf: Lauf endet mit der Antwort", res.text, "Fertig.")
+
+    # (c) Auch nach der Rüge kein Textaufruf: er wird verworfen, nicht als
+    #     Antwort durchgereicht (smilez, 15.11.2026: "es sagt was es tut, aber
+    #     es passiert nichts").
+    reg2 = TextRegistry(["TOOL: write_file {\"path\": \"x.txt\"}",
+                         "TOOL: write_file {\"path\": \"x.txt\"}", "Fertig."])
+    res2 = Agent(reg2, tb).run("schreib was")
+    check("zweiter Textaufruf: kein TOOL im Antworttext",
+          "TOOL:" in res2.text, False)
+    check("zweiter Textaufruf: Antwort sagt, dass nichts lief",
+          res2.text.strip().startswith("Ich wollte gerade ein Werkzeug"), True)
+    check("zweiter Textaufruf: nichts ausgeführt",
+          any(s.kind == "tool" for s in res2.steps), False)
     check("Textaufruf: als Fehlschritt vermerkt",
           any(s.kind == "error" and "im Text" in s.detail for s in res.steps), True)
 

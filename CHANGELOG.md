@@ -20,6 +20,13 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Jeder Werkzeugaufruf steht im Protokoll** (15.11.2026, Auftrag smilez
+  „ein tooluse sollte geloggt werden"): Bis hierher stand im Dienstprotokoll
+  nichts darüber, ob ein Aufruf ausgeführt wurde — „es sagt was es tut, aber
+  nichts passiert" war nur durch Lesen der `verlauf.jsonl` zu prüfen. Die
+  Schleife loggt jetzt je Aufruf Werkzeug, Argumente (gekürzt), Dauer, Länge
+  und Anfang des Ergebnisses, dazu jede Runde mit nativen Aufrufen und jeden
+  verworfenen Textaufruf.
 - **Eigene Moods, die der Agent selbst anlegt** (DESIGN 3.3b, 14.11.2026):
   `src/chimera/mood/ablage.py` und die Werkzeuge `mood_anlegen` /
   `mood_entfernen`. Der Agent leitet einen Ausdruck von einem vorhandenen
@@ -1064,6 +1071,15 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **`wartet` führt auf das Agentengesicht zurück, nicht auf IDLE** (15.11.2026,
+  Fund am Pi): `set_face CHAOS` meldete „Ausdruck gesetzt", die nächste
+  Nachricht trug trotzdem `[Gesicht: active=mood_idle]` — `run()` meldet am
+  Turn-Ende `wartet`, und `wartet` setzte hart `IDLE`. Jedes vom Agenten
+  gesetzte Gesicht war damit nach Sekunden weg; auf dem Display war nichts zu
+  sehen, egal was der Agent setzte. `Face` merkt sich jetzt den zuletzt vom
+  Agenten gesetzten Ausdruck und `wartet` zeigt diesen, solange er noch in der
+  Bibliothek steht (sonst `IDLE`). Neu `tests/test_ruhegesicht.py` (10 ok) und
+  `tests/gegenprobe_gesicht_und_verlauf.py` (6/6 rot).
 - **Werkzeuge laufen über die Schnittstelle, nicht über Text** (15.11.2026,
   Auftrag smilez): Der Systemprompt lehrte weiter `TOOL: name {…}` und
   schickte zusätzlich die Werkzeugschemas mit — zwei Wege gleichzeitig, und
@@ -1670,6 +1686,20 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Ein Verlauf aus der Textzeit lehrte den verbotenen Weg** (15.11.2026, am
+  Pi gefunden): Das Modell schrieb `TOOL: set_face {…}` als Text, obwohl die
+  Werkzeugschnittstelle aktiv war und der Prompt sie verlangte — weil sein
+  eigener Verlauf 26 solche Zeilen samt „Ergebnis von …" enthielt und die
+  Rüge genau eine Runde half. Gegenprobe ohne Verlauf: dieselbe Frage direkt
+  ans Gateway ergab einen nativen Aufruf (`tool_calls` mit `id`) — das Modell
+  war in Ordnung, der Verlauf nicht. `ablage.abspielen()` entfernt Textaufrufe
+  und ihre Ergebnisse jetzt aus dem **Fenster**; das Protokoll bleibt
+  unangetastet (Regel 8d). Neu `tests/test_verlauf_saeubern.py` (6 ok).
+- **Ein zweiter Textaufruf wurde als Antwort durchgereicht** (15.11.2026):
+  Der Nutzer las „TOOL: set_face …" als Antwort, ohne dass etwas passierte.
+  Jetzt fliegt der Aufruf aus dem Text; bleibt nichts übrig, sagt der Harness
+  `NICHT_AUSGEFUEHRT` („es wurde nichts ausgeführt"). Mutation in
+  `gegenprobe_werkzeug_weg.py` (jetzt 5/5 rot).
 - **DeepSeek nahm keinen Verlauf mit Werkzeugaufrufen an** (15.11., am Pi
   gefunden): Die API antwortete auf jede weitere Runde mit **HTTP 422
   „missing field `tool_call_id`"** — der Chat war nach dem ersten

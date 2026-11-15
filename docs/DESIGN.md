@@ -416,6 +416,18 @@ nie gemeldet, das Gesicht blieb nach der ersten Antwort stehen.
    (Regel 4c, „Mundform zur Lautstärke“); die Phasen bleiben dieselben.
 5. **Jede Antwort endet mit `wartet`.** Wer `spricht` meldet, meldet danach
    `wartet`, auch bei Fehler (Regel 8a). Test mit Gegenprobe.
+6. **`wartet` führt auf das Agentengesicht zurück, nicht auf IDLE**
+   (smilez, 15.11.2026). Bis hierher überschrieb `wartet` jedes vom Agenten
+   per `set_face` gesetzte Gesicht, sobald der Turn endete: das Display sprang
+   am Turn-Ende auf IDLE, „setze das Gesicht auf X" war auf der Anzeige nicht
+   zu sehen (am Pi gemessen: `set_face` meldete Erfolg, die nächste Nachricht
+   trug `[Gesicht: active=mood_idle]`). Jetzt merkt sich `Face` den zuletzt
+   **vom Agenten** gesetzten Ausdruck (`_agent_mood`); `wartet` zeigt diesen,
+   solange er noch in der Bibliothek steht, und sonst `IDLE`. Ein Ausdruck
+   bleibt damit stehen, bis der Agent ihn ändert — die Ruhe ist seine Wahl,
+   nicht die des Zustands. `spricht`, `denkt`, `arbeitet` verhalten sich
+   unverändert: sie zeigen ihren eigenen Ausdruck und kehren über `wartet`
+   zum Agentengesicht zurück.
 
 #### Architekturregel 4c — Das Sprachmodell setzt Absicht, nicht Bilder
 
@@ -2329,10 +2341,44 @@ lehnte ihn mit HTTP 422 ab. Jetzt gilt strikt:
   keine Aufrufsyntax, **keine Werkzeugliste**. Die Beschreibungen gehen als
   Schemas mit — einmal statt zweimal, und in jeder Runde gespart.
 - Ein `TOOL:` im Text wird dann **nicht ausgeführt**. Es gibt eine Rüge
-  (`RUEGE_TEXT_AUFTRAG`) und eine neue Runde; ein zweiter Textaufruf wird
-  als Antwort durchgereicht, damit der Lauf endet statt zu schleifen.
+  (`RUEGE_TEXT_AUFTRAG`) und eine neue Runde.
+- **Geändert (smilez, 15.11.2026): der zweite Textaufruf wird nicht mehr als
+  Antwort durchgereicht.** Vorher endete der Lauf mit „TOOL: set_face …" als
+  Antworttext — der Nutzer las eine Ausführung, die nie stattfand („es sagt
+  was es tut, aber es passiert nichts"). Jetzt fliegt der Aufruf aus dem
+  Text; bleibt nichts übrig, antwortet der Harness mit `NICHT_AUSGEFUEHRT`.
+  Beides steht im Protokoll (Name/länge des verworfenen Aufrufs).
 - Der Textweg bleibt nur für Anbieter ohne Werkzeug-Schnittstelle
   (`_nativ = False`) — dort ist er der einzige Weg, nicht der bequemere.
+
+**Nachtrag (15.11.2026): ein Verlauf aus der Textzeit lehrt den verbotenen
+Weg.** Am Pi gemessen: Der Prompt sagte „nativ", der Verlauf der laufenden
+Sitzung enthielt 26 Zeilen `TOOL: …` samt „Ergebnis von …" darauf — das
+Modell kopierte seine eigene Vergangenheit und schrieb wieder Text; die Rüge
+half genau eine Runde, danach wiederholte es die Zeichenkette wörtlich.
+Gegenprobe, die den Prompt ausschließt: dieselbe Frage direkt ans Gateway
+mit Werkzeugen ergab einen **nativen** Aufruf (`set_face`/`moods`,
+`tool_calls` mit `id`). Das Modell ist brauchbar, der Verlauf war es nicht.
+
+Deshalb bereinigt `ablage.abspielen()` beim Laden das **Fenster**:
+
+- Ein `TOOL: …`-Aufruf fliegt aus der Assistant-Nachricht; bleibt kein Text
+  übrig, fällt die Nachricht weg.
+- Eine Ergebnisnachricht („Ergebnis von <name>: …") fällt weg — sie gehört zu
+  einem Aufruf, den das Fenster nicht mehr führt.
+- Das **Protokoll** (`verlauf.jsonl`) bleibt unangetastet (Regel 8d): es
+  zeigt, was war; das Fenster zeigt, was das Modell daraus lernen darf.
+- Folge, ehrlich benannt: Der Zeilenverweis der Verdichtung kann dadurch
+  etwas breiter ausfallen als das Fenster. Das ist eine Ungenauigkeit im
+  Verweis, kein Datenverlust — und für Sitzungen, die nach dieser Änderung
+  beginnen, gibt es nichts zu tilgen.
+
+**Jeder Werkzeugaufruf wird protokolliert.** Bis hierher stand im
+Dienstprotokoll nichts darüber, ob ein Aufruf ausgeführt wurde; „es sagt was
+es tut, aber nichts passiert" war damit nicht prüfbar, ohne den Verlauf von
+Hand zu lesen. Die Schleife loggt je Aufruf Name, Argumente (gekürzt), Dauer,
+Länge des Ergebnisses und dessen erste Zeichen — und ebenso einen Textaufruf,
+der gerügt wurde.
 
 Der Harness führt aus, das Modell triggert nur: Das ist der Sinn der
 Schnittstelle und der Grund, warum die Tokens dafür nicht im Prompt stehen.

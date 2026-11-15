@@ -51,6 +51,11 @@ MUTATIONEN = [
      '''            call = None
             if not call:''',
      "Rückfall: Textaufruf wird ausgeführt"),
+    ("zweiter-textaufruf-durchgereicht",
+     LOOP,
+     '''                    text = reste or NICHT_AUSGEFUEHRT''',
+     '''                    pass''',
+     "zweiter Textaufruf: kein TOOL im Antworttext"),
 ]
 
 

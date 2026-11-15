@@ -55,6 +55,10 @@ class Face:
         self.state = state
         self.ablage = ablage
         self._last_state: str | None = None
+        #: Der Ausdruck, den der **Agent** zuletzt bewusst gesetzt hat
+        #: (DESIGN, Regel „Sprechgesicht" 6). `wartet` kehrt dorthin zurück,
+        #: statt auf IDLE — sonst radiert jeder Turn das Gesicht aus.
+        self._agent_mood: str = ""
 
     # --- eigene Ausdrücke -----------------------------------------------
 
@@ -78,6 +82,9 @@ class Face:
         """Einen Ausdruck setzen. ``A+B`` mischt, ``A+B:0.3`` gewichtet."""
         mood = self._resolve(name)
         self.state.set_mood(mood, hard=hard)
+        # Der Agent hat hier bewusst gewählt — das ist der Ausdruck, zu dem
+        # `wartet` zurückkehrt (Regel „Sprechgesicht" 6).
+        self._agent_mood = str(mood.get("name") or "")
         return mood
 
     def _resolve(self, name: str) -> dict:
@@ -118,10 +125,17 @@ class Face:
 
         Kein Fehler, wenn nicht: Das Gesicht ist Beiwerk des Zustands,
         nicht umgekehrt.
+
+        ``wartet`` ist die Ausnahme (Regel „Sprechgesicht" 6): Der Ruhezustand
+        ist das **Agentengesicht**, nicht IDLE. Sonst wäre jedes `set_face`
+        am Turn-Ende vergessen — genau das war am Display zu sehen.
         """
         if what == self._last_state:
             return
         self._last_state = what
+
+        if what == "wartet" and self._ruhegesicht():
+            return
 
         for candidate in STATE_MOODS.get(what, ()):
             mood = self.moods.find(candidate)
@@ -130,3 +144,15 @@ class Face:
                                     hard=(what in HARD_STATES))
                 return
         log.debug("Kein Ausdruck für Zustand %r", what)
+
+    def _ruhegesicht(self) -> bool:
+        """Das vom Agenten gewählte Gesicht zeigen, wenn es noch existiert.
+
+        Rückgabe False, wenn es keines gibt — dann zeigt der Zustand wie
+        bisher `IDLE`.
+        """
+        name = self._agent_mood.strip().upper()
+        if not name or self.moods.find(name) is None:
+            return False
+        self.state.set_mood(self.moods.get(name), hard=False)
+        return True
