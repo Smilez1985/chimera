@@ -376,7 +376,18 @@ gateway_einrichten() {
 		fi
 		fi
 	elif [ "$_ge_neu" = 1 ]; then
-		systemctl restart "$CHIMERA_SITZUNG_SOCKETUNIT" >/dev/null 2>&1 || true
+		if [ "${CHIMERA_KLAMMER:-0}" = 1 ]; then
+			# Der Sitzungs-Socket traegt `Service=chimera.service`: Ein Start
+			# hier startet den AGENTEN -- mitten im Lauf, waehrend der
+			# Fortschrittsbalken die Anzeige haelt. Am Pi 15.11.2026 genau so
+			# passiert: "Leitung belegt auf /dev/gpiochip0: [27, 4]", Gesicht
+			# blind (nachgeholt wird es seit demselben Tag, aber die Ursache
+			# bleibt). Die Klammer startet die Sockets am Ende, wenn der
+			# Zeichner fertig ist.
+			info "Klammer laeuft -- Sitzungs-Socket wird am Ende gestartet, nicht jetzt."
+		else
+			systemctl restart "$CHIMERA_SITZUNG_SOCKETUNIT" >/dev/null 2>&1 || true
+		fi
 	fi
 	if [ "$CHIMERA_WEB_NEU" = 1 ] && [ "$_ge_neu" = 0 ] && [ "$_ge_tor_neu" = 0 ]; then
 		# Neuer Hash: das Gateway liest die .env nur beim Start.

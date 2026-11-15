@@ -1725,6 +1725,30 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Der Installer hielt das Panel, während er den Dienst startete**
+  (15.11.2026, Ursache des dunklen Displays am selben Tag): Der
+  Sitzungs-Socket trägt `Service=chimera.service` — schrieb eine geänderte
+  Unit den Socket neu, tat das Gateway-Modul `systemctl restart
+  chimera-sitzung.socket` **mitten im Lauf** und startete damit den Agenten,
+  während der Fortschrittsbalken die Leitungen 27/4 hielt (`[Errno 16]
+  Leitung belegt`, Gesicht blind). Unter der Klammer startet der Socket jetzt
+  nicht mehr im Modul, sondern am Ende (`klammer_aus`). Dazu rückt der
+  Abschluss des Zeichners (`fortschritt_abschluss`: Ergebnisbild, LED-Zeichen,
+  Anhalten) **vor** den Dienststart — erst zeichnen, dann die Anzeige
+  freigeben, dann starten; dasselbe gilt für den Abbruchpfad. Tests
+  `installer/tests/test-gateway.sh` (133, inkl. beider Richtungen),
+  Gegenprobe 33/33 rot.
+- **Ein gesetztes Gesicht war nur einen halben Sekundenblitz zu sehen**
+  (15.11.2026, smilez: „wird das so schnell abgespielt … kaum zu sehen und
+  sofort vorbei"): Nachgemessen statt geraten — die Bewegung der eingebauten
+  Moods ist in Ordnung (0,5 s bis 21 s je Periode), zu kurz war die
+  **Standzeit**: `set_face` setzte den Ausdruck, 0,45 s später blendete
+  `arbeitet` ihn weg. Neu `HALT_S` = 5 s in `agent/face.py`: ein vom Agenten
+  gesetztes Gesicht bleibt stehen, Zustände übernehmen erst danach. Ein
+  Reflex (`verwirrt`, `fehler`) bricht die Frist, `wartet` ist ausgenommen
+  (zeigt ohnehin das Agentengesicht, ein gelöschter Ausdruck muss auf IDLE
+  fallen). Tests `tests/test_gesicht_haltezeit.py` (13), Gegenprobe 6/6 rot;
+  `tests/test_ruhegesicht.py` auf den neuen Vertrag umgestellt.
 - **Das Panel blieb nach einem Installerlauf dunkel** (15.11.2026, smilez:
   „das chimera Display ist aktuell dunkel"): Der Installer startet den Dienst
   in `98-service`, während sein Fortschrittsbalken das Panel noch hält — der

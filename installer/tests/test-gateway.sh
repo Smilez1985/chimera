@@ -394,5 +394,40 @@ rm -f "$F/aus-chimera-tor.socket"
 lauf gateway_einrichten
 hat_nicht "Socket an: zweiter Lauf schaltet nichts neu ein" "$F/spur" "enable --now"
 
+# --- 10. Klammer: der Sitzungs-Socket startet NICHT im Modul ---------------
+# Der Socket traegt `Service=chimera.service`: Ein Start hier startet den
+# Agenten mid-install, waehrend der Fortschrittsbalken die Anzeige haelt --
+# am Pi (15.11.2026) bekam er "[Errno 16] Leitung belegt" und lief blind.
+feld klammer
+: >"$F/spur"
+CHIMERA_KLAMMER=1
+export CHIMERA_KLAMMER
+lauf gateway_einrichten
+check "Klammer, Erstlauf: rc 0" "$(cat "$F/rc")" 0
+hat "Klammer, Erstlauf: Grund steht da" "$F/aus" "Klammer laeuft -- Socket wird am Ende gestartet"
+hat_nicht "Klammer, Erstlauf: kein Start des Sitzungs-Sockets" "$F/spur" "enable --now chimera-sitzung.socket"
+
+# Zweiter Lauf mit geaenderter Unit: hier greift der andere Zweig
+# (Manifest kennt den Socket schon), der frueher unbedingt neu startete.
+printf '# alte Fassung\n' >"$R/$SOCK"
+: >"$F/spur"
+CHIMERA_KLAMMER=1
+export CHIMERA_KLAMMER
+lauf gateway_einrichten
+check "Klammer, neue Unit: rc 0" "$(cat "$F/rc")" 0
+hat_nicht "Klammer, neue Unit: kein Neustart des Sitzungs-Sockets" "$F/spur" \
+	"systemctl restart chimera-sitzung.socket"
+hat "Klammer, neue Unit: Grund steht da" "$F/aus" \
+	"Sitzungs-Socket wird am Ende gestartet"
+unset CHIMERA_KLAMMER
+
+# Gegenprobe in derselben Datei: ohne Klammer wird neu gestartet, sonst
+# misst der Test oben nur, dass nie etwas passiert.
+printf '# alte Fassung\n' >"$R/$SOCK"
+: >"$F/spur"
+lauf gateway_einrichten
+hat "ohne Klammer: Sitzungs-Socket wird neu gestartet" "$F/spur" \
+	"systemctl restart chimera-sitzung.socket"
+
 printf '\nErgebnis: %s ok, %s fehlgeschlagen\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

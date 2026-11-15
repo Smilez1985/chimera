@@ -63,6 +63,12 @@ mutation ohne-sitzungs-socket \
 	's|^Environment=CHIMERA_SITZUNG_SOCKET=.*$||' \
 	"Dienst: kennt den Sitzungs-Socket"
 
+# M-K1: Die Klammer wird ignoriert -- der Sitzungs-Socket startet den
+# Agenten mitten im Lauf (am Pi 15.11.2026: Leitung belegt, Gesicht blind).
+mutation klammer-ignoriert \
+	's|if \[ "${CHIMERA_KLAMMER:-0}" = 1 \]; then|if false; then|' \
+	"Klammer, neue Unit: Grund steht da"
+
 # M-W1: Klartext-Passwort landet in der .env statt des Hashs.
 mutation web-klartext \
 	's|printf .CHIMERA_WEB_PASSWORT_HASH=%s\\n. "$_wp_hash"|printf "CHIMERA_WEB_PASSWORT_HASH=%s\\n" "$CHIMERA_WEB_PASSWORT"|;s|HASH="$_wp_hash" awk|HASH="$CHIMERA_WEB_PASSWORT" awk|' \

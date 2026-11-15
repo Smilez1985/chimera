@@ -207,6 +207,33 @@ if [ "$_KLAMMER" = 1 ] && [ -z "$ONLY" ] && [ "$HARDWARE" != 1 ]; then
 	fortschritt_start "$_FORT_GESAMT_VORLAUF"
 fi
 
+# Ergebnis ans Abschlusszeichen und Zeichner anhalten -- **immer vor dem
+# Start der Dienste**. Am Pi (15.11.2026) hielt der Zeichner die Leitungen
+# 27/4, als der Dienst startete; der bekam "[Errno 16] Leitung belegt" und
+# lief blind (seit c00504b holt er es nach, aber die Ursache bleibt).
+# Reihenfolge deshalb: erst das Ergebnisbild zeichnen (dafuer braucht der
+# Zeichner die Anzeige), dann die Anzeige freigeben, dann Dienste starten.
+fortschritt_abschluss() {
+	[ "$_FORT_VORHANDEN" = 1 ] || return 0
+	_FORT_VORHANDEN=0
+	# Ergebnis ans Abschlusszeichen: gruen bei Erfolg, rot SOS bei Befund oder
+	# Fehler (Vorgabe smilez, 2.11.).
+	# Vier Ausgaenge, vier Bilder -- ein ausstehender Neustart ist kein
+	# Fehler, und ein Befund ist keiner (Vorgabe smilez, 3.11.).
+	if [ "$FAILED" -ne 0 ]; then
+		if [ "$FIRST_RC" -le 1 ]; then
+			fortschritt_ergebnis befund
+		else
+			fortschritt_ergebnis fehler
+		fi
+	elif [ "$NEUSTART" -eq 1 ]; then
+		fortschritt_ergebnis neustart
+	else
+		fortschritt_ergebnis ok
+	fi
+	fortschritt_stop
+}
+
 # Dauer je Modul (Regel "Warte-Schleife"): Ohne diese Zahlen ist keine
 # Aussage ueber den Netzanteil zu halten. BusyBox und GNU date koennen +%s.
 for mod in $(steps_list); do
@@ -324,6 +351,7 @@ for mod in $(steps_list); do
 		_log_raw "Modul $name: Exitcode $rc"
 		err "Modul $name bricht den Lauf ab (Exitcode $rc)."
 		if [ "$_KLAMMER" = 1 ]; then
+			fortschritt_abschluss
 			klammer_aus || true
 		fi
 		log_close "$rc"
@@ -346,24 +374,8 @@ if [ "$FIRST_RC" -ge 2 ] && [ -x "$(rootpath "$CHIMERA_OPT")/bin/chimera-tor" ];
 	fi
 fi
 
-if [ "$_FORT_VORHANDEN" = 1 ]; then
-	# Ergebnis ans Abschlusszeichen: gruen bei Erfolg, rot SOS bei Befund oder
-	# Fehler (Vorgabe smilez, 2.11.).
-	# Vier Ausgaenge, vier Bilder -- ein ausstehender Neustart ist kein
-	# Fehler, und ein Befund ist keiner (Vorgabe smilez, 3.11.).
-	if [ "$FAILED" -ne 0 ]; then
-		if [ "$FIRST_RC" -le 1 ]; then
-			fortschritt_ergebnis befund
-		else
-			fortschritt_ergebnis fehler
-		fi
-	elif [ "$NEUSTART" -eq 1 ]; then
-		fortschritt_ergebnis neustart
-	else
-		fortschritt_ergebnis ok
-	fi
-	fortschritt_stop
-fi
+# Zeichner anhalten, BEVOR die Dienste starten (siehe fortschritt_abschluss).
+fortschritt_abschluss
 
 _HATTE_KLAMMER="$_KLAMMER"
 if [ "$_KLAMMER" = 1 ]; then
