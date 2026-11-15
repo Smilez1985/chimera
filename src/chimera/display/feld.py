@@ -113,6 +113,10 @@ class Flaeche:
                 gross = mitte - 1
         return text[:klein].rstrip() + punkte
 
+    def passt(self, text: str, schrift) -> bool:
+        """Passt der Text in eine Zeile dieses Bandes?"""
+        return self._breite(text, schrift) <= self.breite - 2 * self.rand
+
     def umbrechen(self, text: str, schrift, *, zeilen: int = 2) -> list[str]:
         """Text auf höchstens ``zeilen`` Zeilen verteilen; die letzte kürzt.
 
@@ -138,12 +142,39 @@ class Flaeche:
                 break
         if rest:
             zeilen_liste.append(rest)
+        # Ein Wort ohne Leerzeichen (Modellname `anbieter/modell`) lässt sich
+        # nicht an Leerzeichen trennen -- es wird **hart** geteilt, statt
+        # gekürzt zu werden. Sonst blieb von einem langen Modellnamen eine
+        # Zeile mit „…" und der Anfang lief über den Rand (am Gerät gesehen,
+        # smilez 15.11.2026).
+        zeilen_liste = self._harte_teilung(zeilen_liste, schrift, zeilen)
         zeilen_liste = zeilen_liste[:zeilen]
         # Ist etwas übrig geblieben, sagt die letzte Zeile es — sonst
         # verschwände der Rest stumm.
         if len(zeilen_liste) == zeilen and " ".join(zeilen_liste) != " ".join(woerter):
             zeilen_liste[-1] = self.kuerzen(zeilen_liste[-1] + " …", schrift)
         return [self.kuerzen(z, schrift) for z in zeilen_liste]
+
+    def _harte_teilung(self, zeilen_liste: list[str], schrift,
+                       zeilen: int) -> list[str]:
+        """Zu breite Zeilen zeichenweise aufteilen, bis sie passen."""
+        platz = self.breite - 2 * self.rand
+        ergebnis: list[str] = []
+        for zeile in zeilen_liste:
+            if self._breite(zeile, schrift) <= platz:
+                ergebnis.append(zeile)
+                continue
+            while zeile and len(ergebnis) < zeilen:
+                klein, gross = 1, len(zeile)
+                while klein < gross:
+                    mitte = (klein + gross + 1) // 2
+                    if self._breite(zeile[:mitte], schrift) <= platz:
+                        klein = mitte
+                    else:
+                        gross = mitte - 1
+                ergebnis.append(zeile[:klein])
+                zeile = zeile[klein:]
+        return ergebnis
 
     # --- Zeichnen --------------------------------------------------------
 
@@ -212,8 +243,16 @@ class Feld:
     prioritaet: int
     zeichnen: Callable[[Flaeche, dict], None]
     ausrichtung: str = "mitte"
+    #: Wo das Feld sitzt: unten (Standard, wie bisher) oder oben. Die obere
+    #: Leiste traegt Kennwerte, die man im Vorbeigehen liest -- Temperatur
+    #: und die Sprachsymbole (smilez, 15.11.2026).
+    seite: str = "unten"
     farbe: tuple[int, int, int] = (230, 230, 230)
     hintergrund: tuple[int, int, int] | None = None
     #: Nur zur Anzeige/Prüfung: was dieses Feld braucht. Ein Feld ohne
     #: Quelle zeichnet nichts und kostet kein Band (siehe layout).
     sichtbar: Callable[[dict], bool] = field(default=lambda _k: True)
+    #: Wie hoch das Feld **in diesem Kontext** sein will (Pixel), wenn der
+    #: Wunsch nicht reicht. Ein langer Modellname braucht zwei Zeilen und
+    #: damit die doppelte Höhe (smilez, 15.11.2026); das weiß nur das Feld.
+    hoehe_fuer: Callable[..., int] | None = None

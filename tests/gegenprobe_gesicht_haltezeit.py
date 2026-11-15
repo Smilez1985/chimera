@@ -58,12 +58,17 @@ MUTATIONEN = [
      AVATAR,
      "    if jetzt < bis:\n        return False",
      "    if False:\n        return False"),
-    # 15.11.2026: Der Ablauf darf die Wahl nicht löschen (am Pi: IDLE statt
-    # WORK). Die Mutation stellt das alte Verhalten wieder her.
-    ("ablauf-loescht-die-wahl",
+    # 15.11.2026, zweiter Fund am Pi: Nach einem Zug stand wieder WORK.
+    # Die Mutation lässt den Tätigkeitsausdruck als stehendes Gesicht zu.
+    ("ablauf-setzt-taetigkeit",
      FACE,
-     '        self._agent_mood = name if name and self.moods.find(name) else ""',
-     '        self._agent_mood = ""'),
+     "        if name and self.moods.find(name) and name not in STATE_ANSPRUCH:",
+     "        if name and self.moods.find(name):"),
+    # Ohne Ruheausdruck bleibt das Gesicht auf dem abgelaufenen Zug stehen.
+    ("kein-ruhemood",
+     FACE,
+     '        for candidate in STATE_MOODS.get("wartet", ()):',
+     "        for candidate in ():"),
 ]
 
 

@@ -258,35 +258,90 @@ class StatusLine:
             self.ladeprobleme = []
 
         werte = self.kontext(jetzt_ms, kontext)
-        sichtbar = [f for f in self._felder if _sichtbar(f, werte)]
-        baender, weg = verteile_mit_befund(self.hoehe, sichtbar)
-        if weg:
-            log.info("Statusbereich: kein Platz für %s", ", ".join(weg))
-        if not baender:
-            return bild
+        unten_felder = [f for f in self._felder if _seite(f) == "unten"]
+        oben_felder = [f for f in self._felder if _seite(f) == "oben"]
+
+        unten_hoehe = max(self.hoehe, self._wunsch_hoehe(unten_felder, werte))
+        unten = self._zone(unten_felder, werte, unten_hoehe)
+        oben_hoehe = self._oben_hoehe(oben_felder, werte)
+        oben_zone = self._zone(oben_felder, werte, oben_hoehe)
 
         breite, hoehe = bild.size
-        oben = hoehe - self.hoehe
-
-        from PIL import Image
         schluessel = (
             bild.mode, breite, hoehe,
-            tuple((b.feld.name, b.oben, b.hoehe) for b in baender),
+            oben_hoehe, unten_hoehe,
+            tuple((b.feld.name, b.oben, b.hoehe) for b in unten),
+            tuple((b.feld.name, b.oben, b.hoehe) for b in oben_zone),
             tuple(sorted((k, str(v)) for k, v in werte.items())),
         )
         if self._streifen is None or self._streifen_schluessel != schluessel:
-            streifen = Image.new(bild.mode, (breite, self.hoehe), (0, 0, 0))
-            for band in baender:
-                flaeche = _flaeche(streifen, band)
-                try:
-                    band.feld.zeichnen(flaeche, werte)
-                except Exception:              # noqa: BLE001
-                    # Ein kaputtes Feld darf das Bild nicht anhalten --
-                    # aber es wird benannt, nicht verschluckt.
-                    log.exception("Feld %r konnte nicht zeichnen", band.feld.name)
-            self._streifen, self._streifen_schluessel = streifen, schluessel
-        bild.paste(self._streifen, (0, oben))
+            from PIL import Image
+            gestrichen: list[tuple] = []
+            for baender, hoehe_zone, seite in ((unten, unten_hoehe, "unten"),
+                                               (oben_zone, oben_hoehe, "oben")):
+                if not baender:
+                    continue
+                streifen = Image.new(bild.mode, (breite, hoehe_zone), (0, 0, 0))
+                for band in baender:
+                    flaeche = _flaeche(streifen, band)
+                    try:
+                        band.feld.zeichnen(flaeche, werte)
+                    except Exception:              # noqa: BLE001
+                        # Ein kaputtes Feld darf das Bild nicht anhalten --
+                        # aber es wird benannt, nicht verschluckt.
+                        log.exception("Feld %r konnte nicht zeichnen",
+                                      band.feld.name)
+                gestrichen.append((streifen, hoehe_zone, seite))
+            self._streifen, self._streifen_schluessel = gestrichen, schluessel
+        for streifen, hoehe_zone, seite in self._streifen or ():
+            # Unten wird am Bildrand verankert, oben an Zeile 0.
+            bild.paste(streifen, (0, 0 if seite == "oben" else hoehe - hoehe_zone))
         return bild
+
+    def _zone(self, felder, werte: dict, hoehe: int):
+        """Bänder einer Leiste — leere Leisten kosten nichts."""
+        sichtbar = [f for f in felder if _sichtbar(f, werte)]
+        if not sichtbar:
+            return []
+        baender, weg = verteile_mit_befund(hoehe, sichtbar)
+        if weg:
+            log.info("Statusbereich: kein Platz für %s", ", ".join(weg))
+        return baender
+
+    def _wunsch_hoehe(self, felder, werte: dict) -> int:
+        """Summe der Wünsche -- Felder dürfen ihren Platz begründen."""
+        summe = 0
+        for f in felder:
+            if not _sichtbar(f, werte):
+                continue
+            hoch = getattr(f, "hoehe_fuer", None)
+            hoehe = int(f.wunsch)
+            if callable(hoch):
+                try:
+                    hoehe = max(hoehe, int(hoch(werte)))
+                except Exception:              # noqa: BLE001
+                    log.exception("Feld %r: hoehe_fuer gescheitert", f.name)
+            summe += hoehe
+        return summe
+
+    def _oben_hoehe(self, felder, werte: dict) -> int:
+        """Wie hoch die obere Leiste wird: Summe der Wünsche, nichts verschenkt.
+
+        Eine feste Höhe wäre bequem, aber falsch: Ein Feld, das zwei Zeilen
+        braucht (ein langer Modellname), bekäme sonst dieselbe Höhe wie eines
+        mit einer (smilez, 15.11.2026).
+        """
+        sichtbar = [f for f in felder if _sichtbar(f, werte)]
+        if not sichtbar:
+            return 0
+        return max(int(getattr(f, "wunsch", 13)) for f in sichtbar)
+
+
+
+
+def _seite(feld) -> str:
+    """``oben`` oder ``unten`` -- ein unbekannter Wert gilt als unten."""
+    return "oben" if str(getattr(feld, "seite", "unten")) == "oben" else "unten"
 
 
 def _sichtbar(feld, werte: dict) -> bool:

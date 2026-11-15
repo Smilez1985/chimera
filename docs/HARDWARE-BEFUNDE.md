@@ -287,3 +287,25 @@ den Prozess auf dem Zielrechner.
   noch nicht nachgewiesen wurde — und ausgerechnet die, vor der die
   V1-Warnung steht (5 V auf der Tastenleitung). Solange die Revision
   nicht feststeht, wird er nicht gedrückt.
+
+## Mikrofon: das linke ist defekt (15.11.2026)
+
+smilez: *„unser linkes mic muss aber immer aus bleiben, das ist defekt und
+rauscht"*. Gemessen am Pi:
+
+```
+arecord -D plughw:0,0 -c 2 -r 16000 -f S16_LE -d 2 /tmp/probe.wav
+channels 2  rate 16000  frames 32000
+RMS links 665.4   rechts 881.9
+```
+
+- Die Aufnahme ist **stereo**, der einfache Mixer hat aber nur **einen**
+  Regler (`amixer -c whisplaysound scontrols` → `mic`, `speaker`; beide
+  `values=1`, nur Lautstärke, **kein Schalter**). Links lässt sich also
+  nicht per `amixer` abschalten.
+- Folge für den Bau: Aufnahme nimmt **nur den rechten Kanal**
+  (`chimera.audio_schalter.nur_rechter_kanal`, `MIKRO_KANAL = "rechts"`).
+  Wer die Sprachschicht baut (ROADMAP Phase 5), benutzt das — sonst rauscht
+  es auf einem Ohr dauerhaft mit.
+- „Aus" heißt am ganzen Gerät: Lautstärke 0 % (beide Regler). Es gibt keinen
+  Mute-Schalter, den man „hart" umlegen könnte.

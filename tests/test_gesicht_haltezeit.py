@@ -193,6 +193,19 @@ face.show_state("wartet")
 pruefe(aktuell(state), "ROCK",
        "und die Ruhe bleibt dort -- nicht IDLE")
 
+print("== 7e. Ein Tätigkeitsausdruck kommt nach dem Zug nicht zurück")
+# Zweiter Fund am Pi (15.11.2026, 05:50): set_face WORK -> set_face BONG
+# (13 s) -> nach dem Zug stand wieder WORK, und niemand meldete je wieder
+# 'wartet'. Das Display behauptete stundenlang Arbeit.
+face, state, uhr = bau()
+face.set_by_name("WORK")                  # Tätigkeitsausdruck, keine Frist
+face.set_by_name("BONG")                  # dauer_s = 13 s
+pruefe(aktuell(state), "BONG", "der Zug läuft")
+ablauf_pruefen(state, jetzt=uhr() + 13.5)
+pruefe(aktuell(state), "IDLE", "danach steht die Ruhe, nicht WORK")
+face.show_state("wartet")
+pruefe(aktuell(state), "IDLE", "und die Ruhe bleibt")
+
 print("== 8. Ein gelöschter Ausdruck fällt in der Ruhe auf IDLE zurück")
 face, state, uhr = bau()
 face.set_by_name("CHAOS")

@@ -203,14 +203,33 @@ class Face:
         if zurueck is None:
             zurueck = self.state.mood_zurueck
         name = str((zurueck or {}).get("name") or "").strip()
-        self._agent_mood = name if name and self.moods.find(name) else ""
+        # Kein Tätigkeitsausdruck als stehendes Gesicht (15.11.2026, zweiter
+        # Fund am Pi): set_face WORK -> set_face BONG 13 s -> nach dem Zug
+        # stand wieder WORK, und niemand meldete je wieder ``wartet``. Das
+        # Display behauptete stundenlang Arbeit, die nicht lief. Der
+        # vorherige Ausdruck darf zurückkommen, wenn er eine Stimmung ist;
+        # behauptet er eine Tätigkeit, gehört das Gesicht dem Ruhezustand.
+        if name and self.moods.find(name) and name not in STATE_ANSPRUCH:
+            self._agent_mood = name
+            zurueck_mood = zurueck
+        else:
+            self._agent_mood = ""
+            zurueck_mood = self._ruhemood()
         self._haelt_bis = 0.0
         self._last_state = ""
         self.state.mood_bis = None
         self.state.mood_ablauf = None
         self.state.mood_zurueck = None
-        if zurueck is not None:
-            self.state.set_mood(zurueck)
+        if zurueck_mood is not None:
+            self.state.set_mood(zurueck_mood)
+
+    def _ruhemood(self) -> dict | None:
+        """Der Ausdruck des Ruhezustands (``IDLE``), oder ``None``."""
+        for candidate in STATE_MOODS.get("wartet", ()):
+            mood = self.moods.find(candidate)
+            if mood is not None:
+                return self.moods.get(candidate)
+        return None
 
     def _resolve(self, name: str) -> dict:
         text = str(name).strip()

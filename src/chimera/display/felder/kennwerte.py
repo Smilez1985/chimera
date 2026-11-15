@@ -34,11 +34,46 @@ def _zeile(kontext: dict) -> str:
 
 
 def _zeichnen(flaeche, kontext: dict) -> None:
+    """Zentriert; reicht eine Zeile nicht, wird umgebrochen (zwei Zeilen).
+
+    smilez (15.11.2026): *„das Modell das in der Infoleiste angezeigt wird,
+    steht nur halb da, der erste Teil ist nicht auf dem Display, sitzt zu weit
+    links, müsste immer Center stehen und braucht Zeilenumbruch wenn zu lang
+    und dann auch doppelte höhe"*. Vorher: linksbündig, eine Zeile, und was
+    nicht passte, lief über den Rand (links abgeschnitten).
+    """
     text = _zeile(kontext)
     if not text:
         return
-    flaeche.text(text, groesse=max(10, int(flaeche.hoehe * 0.85)),
-                 farbe=FELD.farbe, ausrichtung="links", zeilen=1)
+    gross = max(10, int(flaeche.hoehe * 0.85))
+    schrift = flaeche.schrift(gross)
+    if schrift is not None and flaeche.passt(text, schrift):
+        flaeche.text(text, groesse=gross, farbe=FELD.farbe,
+                     ausrichtung="mitte", zeilen=1)
+        return
+    # Zwei Zeilen: die Schrift muss halb so hoch sein, sonst passen sie nicht.
+    klein = max(9, int(flaeche.hoehe * 0.5 * 0.92))
+    flaeche.text(text, groesse=klein, farbe=FELD.farbe,
+                 ausrichtung="mitte", zeilen=2)
+
+
+def _hoehe(kontext: dict) -> int:
+    """Zwei Zeilen, wenn der Text in eine nicht passt (smilez, 15.11.2026)."""
+    text = _zeile(kontext)
+    if not text:
+        return 13
+    from ..feld import Flaeche
+
+    schrift = Flaeche._laden(max(10, int(13 * 0.85)))
+    if schrift is None:
+        return 13
+    try:
+        from PIL import Image, ImageDraw
+        zeichner = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+        breite = zeichner.textlength(text, font=schrift)
+    except Exception:                          # noqa: BLE001
+        return 13
+    return 26 if breite > (240 - 4) else 13
 
 
 FELD = Feld(
@@ -48,8 +83,9 @@ FELD = Feld(
     mindestens=12,
     prioritaet=60,      # weicht zuerst, wenn der Platz knapp wird
     zeichnen=_zeichnen,
-    ausrichtung="links",
+    ausrichtung="mitte",
     farbe=(150, 150, 150),
     hintergrund=(20, 20, 20),
     sichtbar=lambda k: bool(_zeile(k)),
+    hoehe_fuer=_hoehe,
 )

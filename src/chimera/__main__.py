@@ -216,6 +216,16 @@ def dienst(chi, stop: threading.Event | None = None, env=None) -> int:
     waechter.start()
     waechter.fortschritt()
 
+    # Mikrofon und Lautsprecher hart aus, solange sie niemand braucht
+    # (smilez, 15.11.2026). Am HAT gibt es keinen Schalter -- „aus" heisst
+    # Lautstaerke 0, der gemerkte Wert kommt beim Einschalten zurueck.
+    schalter = getattr(chi, "audio", None)
+    if schalter is not None:
+        try:
+            schalter.alles_aus()
+        except Exception as exc:                  # noqa: BLE001
+            log.warning("Audio-Schalter: Ausschalten fehlgeschlagen: %s", exc)
+
     log.info("Dienst bereit.")
     # Anbieter regelmaessig pruefen und das Ergebnis an die Statuszeile geben
     # (Quelle anbieter_weg). Hier und nicht im Renderer: Die Pruefung kann ins

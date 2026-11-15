@@ -85,6 +85,9 @@ class Chimera:
     #: Die Entscheidung ist eine reine Funktion (``agent/ambiente.py``), der
     #: Dienst ruft sie in seinem 30-s-Takt. Kein zweiter Faden.
     ambiente: object = None
+    #: Mikrofon und Lautsprecher, hart geschaltet (smilez, 15.11.2026):
+    #: aus, solange nichts sie braucht. Die Symbole oben lesen hier.
+    audio: object = None
 
     # --- Auskunft ---------------------------------------------------------
 
@@ -195,7 +198,51 @@ class Chimera:
         letzter = (turns(limit=1) or [None])[0] if callable(turns) else None
         modell = getattr(letzter, "model", "") if letzter is not None else ""
         anbieter = getattr(letzter, "provider", "") if letzter is not None else ""
-        return {"modell": modell or "", "anbieter": anbieter or ""}
+        # Obere Leiste (smilez, 15.11.2026): Temperatur mit Ampel und die
+        # zwei Sprachsymbole. Die Temperatur wird **hier** gelesen und
+        # zwischengespeichert, nicht je Bild: ein Dateizugriff pro Bild
+        # waere auf dem Zero 2 W Messaufwand ohne Nutzen (30 s reichen).
+        return {"modell": modell or "", "anbieter": anbieter or "",
+                "temperatur": self._temperatur(),
+                # Echte Schalter, keine Platzhalter (smilez, 15.11.2026):
+                # aus, solange sie nichts braucht -- dann durchgestrichen.
+                **self._audio_zustand()}
+
+    def _audio_zustand(self) -> dict:
+        """Die zwei Sprachsymbole — aus dem Schalter, nicht geraten."""
+        schalter = self.audio
+        if schalter is None:
+            return {"mikrofon_an": False, "lautsprecher_an": False}
+        try:
+            return dict(schalter.zustand())
+        except Exception:                      # noqa: BLE001
+            log.exception("Audio-Zustand nicht lesbar")
+            return {"mikrofon_an": False, "lautsprecher_an": False}
+
+    #: Zwischenspeicher der Temperatur (Ablage `_temp_*`).
+    _temp_wert: float | None = None
+    _temp_zeit: float = 0.0
+
+    def _temperatur(self) -> float | None:
+        """Die CPU-Temperatur in Grad Celsius, höchstens alle 30 s gelesen.
+
+        Quelle ist die Thermosonde des SoC (`thermal_zone0`), nicht ein
+        Schätzwert. Fehlt sie (Sandkasten, anderes Gerät), gibt es ``None``
+        — dann zeigt die obere Leiste nur die Sprachsymbole, statt zu lügen.
+        """
+        import time as _uhr
+
+        jetzt = _uhr.monotonic()
+        if self._temp_wert is not None and jetzt - self._temp_zeit < 30.0:
+            return self._temp_wert
+        pfad = Path("/sys/class/thermal/thermal_zone0/temp")
+        try:
+            roh = pfad.read_text(encoding="ascii").strip()
+            self._temp_wert = round(float(roh) / 1000.0, 1)
+        except (OSError, ValueError):
+            self._temp_wert = None
+        self._temp_zeit = jetzt
+        return self._temp_wert
 
     #: Letzter Grund, aus dem der Verbrauch nicht abgelegt werden konnte —
     #: ein Merker, damit die Warnung nicht bei jedem Turn wiederholt wird.
@@ -484,6 +531,14 @@ def build(*, probe_network: bool = True, home: Path | None = None,
                   face=face, renderer=renderer, panel=panel,
                   statusline=statusline, led=led, notes=notes,
                   erinnerung=Erinnerung())
+    # Mikrofon und Lautsprecher (smilez, 15.11.2026): Es gibt am HAT keinen
+    # Schalter, nur Lautstaerken -- „aus" heisst 0 %, „an" der gemerkte Wert.
+    # Angelegt wird er hier, ausgeschaltet beim Dienststart (`alles_aus`).
+    try:
+        from .audio_schalter import AudioSchalter
+        chi.audio = AudioSchalter()
+    except Exception as exc:                      # noqa: BLE001
+        notes.append(f"Audio-Schalter: nicht aufsetzbar ({exc})")
     # Erst jetzt verdrahten: Der Agent meldet seinen Zustand ans Gesicht.
     agent.on_state = chi._on_state
     # Die Kennwerte des Statusbereichs (Modell, Anbieter) kommen aus der

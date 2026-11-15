@@ -20,6 +20,24 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Obere Infoleiste und ehrliche Kennwerte** (15.11.2026, Auftrag smilez):
+  neue Regel „Anzeigefelder" mit zwei Leisten — `seite="oben"` in
+  `display/feld.py`, `StatusLine` zeichnet beide (oben an Zeile 0, unten am
+  Rand) und die Höhe eines Bandes darf das Feld begründen (`hoehe_fuer`).
+  Neues Feld `display/felder/oben.py`: **Temperatur mit Ampelfarbe**
+  (grün < 50 °C, gelb ab 50, rot ab 65, Grenzen als reine Funktion
+  `farbe_fuer`) und die zwei **Sprachsymbole** (Mikrofon, Lautsprecher) —
+  durchgestrichen, solange aus. Der Modellname unten ist **zentriert,
+  bricht um und bekommt dann die doppelte Höhe**; ein Name ohne Leerzeichen
+  wird hart geteilt statt gekürzt (vorher lief er links über den Rand).
+- **`audio_schalter.py`** (15.11.2026, smilez: *„wir schalten einfach hart
+  per Software Mic und audio ab wenn unbenutzt und an wenn benutzt"*): am
+  Whisplay-HAT gibt es **keinen** Mute-Schalter (gemessen: nur `mic` und
+  `speaker`, beide nur Lautstärke) — „aus" heißt 0 %, „an" der gemerkte Wert
+  (`mit_lautsprecher` für den Erinnerungston, `alles_aus` beim Dienststart).
+  Fehler werden gesagt (`letzter_fehler`), nicht verschluckt.
+  **Das linke Mikrofon ist defekt**: Aufnahme nimmt nur den rechten Kanal
+  (`nur_rechter_kanal`, Befund in `docs/HARDWARE-BEFUNDE.md`).
 - **Selbsttätige Aktionen (Ambiente)** (15.11.2026, Auftrag smilez: *„ab und
   zu Bing rauchen oder Joint rauchen, morgens Kaffee trinken"*): neues Modul
   `agent/ambiente.py` — Fenster nach Tageszeit (06–10 Kaffee/Gähnen/Strecken,
