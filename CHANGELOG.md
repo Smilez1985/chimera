@@ -1101,6 +1101,15 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Die zwei offenen Aufträge vom 15.11. stehen jetzt im Design** (15.11.2026):
+  Design-Erst-Regel nachgezogen, bevor gebaut wird. `docs/DESIGN.md` 3.3b
+  „Nachtrag" hält „der Agent baut sein Gesicht selbst" fest (Werkzeug
+  `mood_anlegen` existiert, **niemand ruft es auf**; Kern ist `STATE_MOODS` in
+  `agent/face.py`, sonst zeigt niemand die gebauten Ausdrücke), die Regel
+  „Anzeigefelder" den Auftrag „zwei Infoleisten à 13 px" (bisher nur eine
+  Leiste unten, `FACE_CY` rechnet gegen die volle Höhe). Beide samt offenen
+  Entscheidungen auch in `docs/ROADMAP.md` (Betrieb), dazu der flaky
+  Socket-Test `dienst::tests::verwaister_socket_wird_ersetzt`.
 - **`wartet` führt auf das Agentengesicht zurück, nicht auf IDLE** (15.11.2026,
   Fund am Pi): `set_face CHAOS` meldete „Ausdruck gesetzt", die nächste
   Nachricht trug trotzdem `[Gesicht: active=mood_idle]` — `run()` meldet am

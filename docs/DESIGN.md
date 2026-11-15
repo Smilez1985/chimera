@@ -212,6 +212,28 @@ raten").
 **Löschen** darf der Agent nur, was er selbst angelegt hat (`origin !=
 builtin`); eingebaute Ausdrücke sind Beispiele, keine Kandidaten.
 
+**Nachtrag (15.11.2026) — der Auftrag „der Agent baut sein Gesicht selbst".**
+smilez am 15.11.: *„… der Agent baut sein Gesicht selbst."* Das README sagt
+„a face it builds itself"; gebaut ist davon bisher nur das **Werkzeug** —
+`mood_anlegen` existiert, **niemand ruft es auf**. Der Auftrag ist damit
+offen und hier festgehalten, nicht nur in einer Sitzungsübergabe.
+
+Was der Auftrag verlangt (Vorschlag, **noch nicht abgestimmt**):
+
+- Beim Dienststart prüfen, ob `<CHIMERA_HOME>/moods.json` fehlt oder leer
+  ist. Ist das der Fall, **einmal** einen Auftrag ans Modell geben (eigener
+  Kanal `gesicht`), höchstens fünf Ausdrücke, und das Ergebnis über
+  `mood_anlegen` ablegen. Merker in der Ablage, damit es **einmalig**
+  bleibt — ein Dienst, der bei jedem Start sein Gesicht neu erfindet, ist
+  eine Schleife, die Tokens verbrennt.
+- `STATE_MOODS` in `agent/face.py` muss selbst gebaute Namen annehmen,
+  sonst baut der Agent Ausdrücke, die niemand zeigt. Das ist der Kern: Ohne
+  diesen Punkt ist der ganze Vorgang wirkungslos.
+
+Zu entscheiden von smilez: Anzahl, Kanalname, ob ein Fehlschlag beim Bauen
+beim nächsten Start wiederholt wird, und ob der Agent auch später (etwa auf
+Zuruf) neue Ausdrücke bauen darf.
+
 ### Architekturregel 2 — Ein generierter Mood wird immer validiert
 
 Ein Mood geht direkt in den Renderer. Ohne Schranken bedeutet
@@ -2841,6 +2863,33 @@ Wie das aussieht:
 **Nicht Teil dieser Regel:** die Teilübertragung (nur die unteren Zeilen
 per SPI schicken). Sie bleibt offen (ROADMAP) — hier geht es nur darum, was
 in den Zeilen steht.
+
+**Nachtrag (15.11.2026) — zwei Infoleisten à 13 px.** Auftrag smilez: eine
+Leiste **oben** und eine **unten**, jede 13 px hoch; alles andere als die
+Felder gehört dazwischen. Bisher gibt es nur **eine** Leiste unten
+(`StatusLine` kennt nur `unten = hoehe - self.hoehe`,
+`app._try_zeile_und_led()` baut genau eine, der Renderer setzt sie unten
+fest), und das Gesicht rechnet mit `FACE_CY = 0.44` gegen die **volle**
+Höhe — bei zwei Leisten bekäme es 26 px zu viel Platz und würde in die
+obere Leiste hineinragen.
+
+Was dazu zu tun ist, bevor gebaut wird (Entwurf, mit smilez abzustimmen):
+
+- **Welche Felder gehören nach oben, welche nach unten?** Vorschlag:
+  unten weiterhin die Meldung (7c-Gewinner, mehrzeilig), oben die
+  Kennwerte (Ausdruck · Modell · Akku) — sie sind kurz und ändern sich
+  selten, oben fallen sie beim Blick aufs Gesicht zuerst auf.
+- `StatusLine` bekommt `seite: "oben" | "unten"`; die Höhe bleibt an einer
+  Stelle. Zwei Leisten heißt dann: zwei Exemplare, zwei Bänder, keine
+  zweite Rechnung.
+- Das Gesicht rechnet gegen `H - 26`, nicht gegen `H`; `FACE_CY` wandert
+  damit von einer Konstante zu einem Anteil der freien Fläche.
+- 13 px sind bei der Panelschale 240×280 eine Zeile in der kleinsten
+  Schrift — schmaler als die heutigen 40 px. Prüfen, ob der Text bei
+  „gequetscht"-Fällen noch lesbar ist, sonst die Regel „Text wird
+  angepasst, nicht beschnitten" verletzt.
+- Am Pi **ansehen**, nicht nur messen: Zwei Leisten verkleinern das
+  Gesicht; ob das Gesicht dabei verliert, entscheidet smilez am Gerät.
 
 ### Architekturregel 7c — Konkurrierende Anzeigequellen werden zentral aufgelöst
 

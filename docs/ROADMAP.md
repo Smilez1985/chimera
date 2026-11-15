@@ -175,6 +175,27 @@ Quelle ist PaKaChi-SM (privat); sie dient als Vorbild, hier wird nachgebaut, nic
 
 ## Betrieb — was am Gerät auffällt
 
+- [ ] **Der Agent baut sein Gesicht selbst** (Auftrag smilez 15.11.,
+      DESIGN 3.3b „Nachtrag"): `mood_anlegen` existiert, **niemand ruft es
+      auf**. Beim Dienststart prüfen, ob `moods.json` fehlt/leer ist → ein
+      Auftrag ans Modell (eigener Kanal, höchstens fünf Ausdrücke), ablegen,
+      Merker für einmalig. **Kern:** `STATE_MOODS` in `agent/face.py` muss
+      selbst gebaute Namen annehmen, sonst baut der Agent Ausdrücke, die
+      niemand zeigt. Offene Entscheidungen (Anzahl, Kanalname, Wiederholung
+      nach Fehlschlag) stehen im DESIGN und werden **vor** dem Bau von
+      smilez abgenommen.
+- [ ] **Zwei Infoleisten à 13 px** (Auftrag smilez 15.11., DESIGN Regel
+      „Anzeigefelder" „Nachtrag"): `StatusLine` kennt nur unten (`oben =
+      hoehe - self.hoehe`), `app._try_zeile_und_led()` baut **eine** Leiste,
+      das Gesicht rechnet `FACE_CY` gegen die volle Höhe. Zu tun: Design zu
+      erst (Feldverteilung oben/unten), dann `seite: "oben"|"unten"`, zwei
+      Leisten je 13 px, Gesichtsfläche gegen `H - 26`, und am Pi **ansehen**.
+- [ ] **Ein Test der Rust-Suite ist flaky** (15.11.2026):
+      `dienst::tests::verwaister_socket_wird_ersetzt` fällt im Gesamtlauf
+      gelegentlich, einzeln grün — Race auf einem Socket-Pfad in `/tmp`.
+      Nicht durch die Änderungen vom 15.11. verursacht, aber ein Test, der
+      manchmal rot ist, erzieht dazu, Rot zu ignorieren. Zu tun: Ursache
+      benennen (Reihenfolge von Binden/Aufräumen), nicht die Frist erhöhen.
 - [ ] **Der Installer hält das Panel, während er den Dienst startet**
       (15.11.2026, Ursache des dunklen Displays): `98-service` startet
       `chimera.service`, der Fortschrittsbalken (`fortschritt_start`) besitzt
