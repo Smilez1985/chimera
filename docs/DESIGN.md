@@ -487,8 +487,42 @@ nie gemeldet, das Gesicht blieb nach der ersten Antwort stehen.
    zurück, **und der wird zum Agentengesicht** (`_agent_mood =
    zurueck["name"]`). `IDLE` bleibt damit genau der Fall „der Agent hat noch
    nichts gewählt" — nicht der Standard nach jeder Animation.
-   Folge für `set_face` ohne `dauer`: unverändert bis zur Ablösung. Folge für
-   eine Dauer: nach Ablauf steht das Vorherige, nicht die Leere.
+
+9. **Ein endlicher Ausdruck läuft ganz und sperrt; ein endloser sperrt
+   nicht** (smilez, 15.11.2026: *„bong friert mitten in der mood Animation
+   ein, das muss ganz laufen, von Anfang bis Ende und darf nur durch
+   dringende Auslöser überschrieben werden, sonst muss es blocken … moods wie
+   Rock ohne feste Länge, weil endlos Loop, brauchen keine harte
+   Laufzeit"*). Bis hierher gab es nur „Frist läuft" oder „bis zur
+   Ablösung"; beides war falsch:
+
+   - **Modellangabe kürzt nie.** `set_face BONG dauer=4` bei einer
+     Animation von `TOKE_PERIOD` = 13 s nahm den Zug nach 4 s zurück — genau
+     das Einfrieren, das smilez gesehen hat. Jetzt gilt:
+     `dauer = max(Modellangabe, dauer_s des Ausdrucks)`. Verlängern ja,
+     abschneiden nein.
+   - **`dauer` 0/leer heißt bei einem endlichen Ausdruck „einmal ganz"**,
+     nicht „endlos": ein Zug ist eine Handlung mit Anfang und Ende.
+   - **Während ein solcher Ausdruck läuft, ist jeder Zustandswechsel
+     gesperrt** (`_haelt()`), nur ein Reflex (`verwirrt`, `fehler`) bricht
+     ihn. Sonst wäre die Animation weg, sobald der nächste Zustand meldet.
+   - **Ohne eigene Länge (etwa `ROCK`) sperrt nichts.** Ein endloser
+     Ausdruck ist das *stehende Gesicht*: Zustände lösen ihn ab, und
+     `wartet` zeigt ihn wieder. Vorher blockierte `_haelt_bis is None`
+     jeden Zustandswechsel für immer — nach einem `set_face ROCK` hätte das
+     Display nie wieder Arbeit gezeigt.
+
+10. **Das Gesicht behauptet keine Tätigkeit, die nicht läuft** (smilez,
+    15.11.2026: *„aktuell zeigt er Work und tippt eifrig, aber da das llm
+    momentan nicht arbeitet ist der Zustand gelogen. Das Display sollte per
+    Design und README immer den ehrlichen Zustand anzeigen"*). `WORK`,
+    `CURIOUS`, `SPEAK`, `LISTEN`, `CHAOS`, `SAD` gehören einem **Zustand**,
+    nicht dem Agenten (`STATE_ANSPRUCH` in `agent/face.py`). Setzt der Agent
+    einen davon von Hand, gilt er nur solange der Zustand läuft; in der Ruhe
+    wird er zurückgenommen, und das Ruhegesicht (`IDLE` oder das stehende
+    Gesicht) übernimmt. Stimmungen ohne Tätigkeitsanspruch (`BONG`, `ROCK`,
+    `COFFEE`, eigene) bleiben davon unberührt — sie berichten nichts über
+    Arbeit, sondern über Befinden.
 
 #### Architekturregel 4c — Das Sprachmodell setzt Absicht, nicht Bilder
 

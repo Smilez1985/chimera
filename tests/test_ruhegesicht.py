@@ -65,35 +65,45 @@ face, st, uhr = neues_face()
 face.show_state("wartet")
 check("frisch: wartet -> IDLE", st.mood_name, "IDLE")
 
-print("== ein gesetztes Gesicht überlebt den Turn ==")
+print("== ein stehendes Gesicht (endlos) überlebt den Turn ==")
 face, st, uhr = neues_face()
-# ``dauer=0`` heißt „bis zur Ablösung" — hier soll der Zustand aber wieder
-# drankommen, also mit Frist setzen (smilez, 15.11.2026: die Dauer entscheidet
-# der Aufruf oder der Ausdruck).
-face.set_by_name("CHAOS", hard=True, dauer=1)
-check("set_face zeigt CHAOS", st.mood_name, "CHAOS")
+# ROCK hat keine dauer_s: ein endloser Ausdruck ist das stehende Gesicht
+# und braucht keine harte Laufzeit (smilez, 15.11.2026).
+face.set_by_name("ROCK")
+check("set_face zeigt ROCK", st.mood_name, "ROCK")
 face.show_state("wartet")
-check("nach wartet steht weiter CHAOS", st.mood_name, "CHAOS")
+check("nach wartet steht weiter ROCK", st.mood_name, "ROCK")
 
-print("== der Zustand zeigt sich, die Ruhe kehrt zum Agenten zurück ==")
-# Seit 15.11.2026 hält ein gesetztes Gesicht HALT_S Sekunden, bevor ein
-# Zustand es übernimmt (sonst war der Befehl nicht zu sehen). Hier läuft
-# die Frist ab, danach zeigt der Zustand wieder seinen eigenen Ausdruck.
-uhr.vor(1.1)
+print("== ein Zustand löst das stehende Gesicht ab, danach kommt es zurück ==")
 face.show_state("denkt")
 check("denkt zeigt seinen Ausdruck", st.mood_name, "CURIOUS")
 face.show_state("wartet")
-check("danach wieder CHAOS", st.mood_name, "CHAOS")
-uhr.vor(1.1)
+check("danach wieder ROCK", st.mood_name, "ROCK")
 face.show_state("spricht")
 check("spricht zeigt SPEAK", st.mood_name, "SPEAK")
 face.show_state("wartet")
-check("danach wieder CHAOS", st.mood_name, "CHAOS")
+check("danach wieder ROCK", st.mood_name, "ROCK")
 
-print("== ein neuer set_face ersetzt das alte ==")
-face.set_by_name("ROCK", hard=True)
+print("== ein endlicher Ausdruck sperrt bis zu seinem Ende ==")
+# BONG bringt dauer_s = 13 s mit (ein Zug). Das Modell kann ihn verlängern,
+# aber nicht abschneiden — und bis dahin kommt kein Zustand dran.
+face, st, uhr = neues_face()
+face.set_by_name("BONG", dauer=2)
+check("set_face zeigt BONG", st.mood_name, "BONG")
+face.show_state("arbeitet")
+check("arbeitet kann BONG nicht ablösen", st.mood_name, "BONG")
+uhr.vor(13.5)
+face.show_state("arbeitet")
+check("nach dem Zug darf der Zustand ran", st.mood_name, "WORK")
+
+print("== ein Zustandsausdruck bleibt nicht in der Ruhe stehen ==")
+# WORK/CHAOS behaupten eine Tätigkeit. Steht der Agent still, wäre das eine
+# Lüge über den Zustand (smilez: „da das llm momentan nicht arbeitet ist der
+# Zustand gelogen").
+face, st, uhr = neues_face()
+face.set_by_name("CHAOS", hard=True)
 face.show_state("wartet")
-check("Ruhe folgt dem letzten set_face", st.mood_name, "ROCK")
+check("CHAOS behauptet 'verwirrt' -> Ruhe ist IDLE", st.mood_name, "IDLE")
 
 print("== ein gelöschter Ausdruck fällt auf IDLE zurück ==")
 face, st, uhr = neues_face()
@@ -109,9 +119,9 @@ check("gelöschter Ausdruck -> IDLE", ergebnis, "IDLE")
 
 print("== die Meldung, die das Modell sieht, nennt das Agentengesicht ==")
 face, st, uhr = neues_face()
-face.set_by_name("CHAOS", hard=True)
+face.set_by_name("ROCK")
 face.show_state("wartet")
-check("mood_name ist der Agentenausdruck", st.mood_name, "CHAOS")
+check("mood_name ist der Agentenausdruck", st.mood_name, "ROCK")
 
 if GEGENPROBE:
     # Die Gegenprobe verfälscht das Verhalten im Speicher: `wartet` fällt

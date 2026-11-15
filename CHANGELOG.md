@@ -1109,6 +1109,20 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Ein endlicher Ausdruck läuft ganz und sperrt, ein endloser sperrt nicht**
+  (15.11.2026, smilez: *„bong friert mitten in der mood Animation ein"*):
+  `Face._dauer_von` hebt die Modellangabe auf die eigene Länge des Ausdrucks
+  (`max(dauer, dauer_s)`) — vorher nahm `set_face BONG dauer=4` einen
+  13-Sekunden-Zug nach 4 s zurück. `dauer` 0 heißt bei endlichem Ausdruck
+  „einmal ganz". `Face._haelt` sperrt jetzt **nur** einen laufenden endlichen
+  Ausdruck; ein endloser (ROCK) ist das stehende Gesicht und wird von
+  Zuständen abgelöst, statt sie für immer zu blockieren.
+- **Das Gesicht behauptet keine Tätigkeit mehr, die nicht läuft**
+  (15.11.2026, smilez: *„zeigt er Work … aber da das llm nicht arbeitet ist
+  der Zustand gelogen"*): `STATE_ANSPRUCH` sammelt die Ausdrücke, die einem
+  Zustand gehören (WORK, CURIOUS, SPEAK, LISTEN, CHAOS, SAD); `_ruhegesicht`
+  nimmt sie in der Ruhe zurück. Stimmungen ohne Tätigkeitsanspruch (BONG,
+  ROCK, COFFEE, eigene Moods) bleiben stehen.
 - **Vier Regeln nachgezogen, bevor gebaut wird** (15.11.2026, nach dem
   Deploy am Pi): (1) „Aufrufe, nicht Text" — ein **nacktes** JSON-Objekt
   zählt als Werkzeugaufruf, wenn der Name ein bekanntes Werkzeug ist

@@ -80,14 +80,20 @@ face, state, uhr = bau()
 face.set_by_name("CHILL")
 pruefe(aktuell(state), "CHILL", "Gesicht nach set_face")
 
-print("== 2. Ohne Dauer gilt der Ausdruck bis zur Ablösung")
+print("== 2. Ohne Dauer ist der Ausdruck das stehende Gesicht (ohne Sperre)")
+# Seit 15.11.2026 sperrt nur ein Ausdruck mit fester Länge (smilez: „moods
+# wie Rock ohne feste länge … brauchen keine harte Laufzeit"). Ein endloser
+# Ausdruck ist das Gesicht der Ruhe, Zustände lösen ihn ab und danach gilt
+# er wieder.
 face.show_state("arbeitet")
-pruefe(aktuell(state), "CHILL", "nach 'arbeitet'")
-face.show_state("spricht")
-pruefe(aktuell(state), "CHILL", "nach 'spricht'")
+pruefe(aktuell(state), "WORK", "nach 'arbeitet' zeigt der Zustand")
+face.show_state("wartet")
+pruefe(aktuell(state), "CHILL", "in der Ruhe steht der Ausdruck wieder")
 uhr.vor(3600)
 face.show_state("denkt")
-pruefe(aktuell(state), "CHILL", "auch nach einer Stunde noch")
+pruefe(aktuell(state), "CURIOUS", "auch nach einer Stunde: Zustand zuerst")
+face.show_state("wartet")
+pruefe(aktuell(state), "CHILL", "danach wieder der Ausdruck")
 
 print("== 3. Mit Dauer übernimmt der Zustand nach Ablauf")
 face, state, uhr = bau()
@@ -103,7 +109,7 @@ pruefe(aktuell(state), "WORK", "nach Ablauf übernimmt 'arbeitet'")
 
 print("== 4. Ein Reflex bricht die Frist (Schreck blendet nicht ein)")
 face, state, uhr = bau()
-face.set_by_name("CHILL")
+face.set_by_name("CHILL", dauer=6)      # laufender Ausdruck mit Frist
 face.show_state("verwirrt")
 pruefe(aktuell(state), "CHAOS", "Reflex geht sofort durch")
 face.show_state("fehler")
@@ -130,7 +136,8 @@ face._haelt_bis = uhr() + 3.0
 face.state.mood_bis = uhr() + 3.0
 face.state.mood_zurueck = face.moods.get("IDLE")
 pruefe(round(face._dauer_von(bong, None)), 3, "dauer_s des Ausdrucks gilt")
-pruefe(round(face._dauer_von(bong, 0)), 0, "Modell kann 'bis Ablösung' sagen")
+pruefe(round(face._dauer_von(bong, 0)), 3,
+       "0 heißt bei endlichem Ausdruck: einmal ganz")
 pruefe(round(face._dauer_von(bong, 9)), 9, "Modell schlägt den Ausdruck")
 
 print("== 6. Am Turn-Ende steht wieder der Agentenausdruck")
@@ -154,8 +161,13 @@ face, state, uhr = bau()
 face.set_by_name("IDLE")
 face.set_by_name("BONG", dauer=3)
 pruefe(aktuell(state), "BONG", "Animation läuft")
+# BONG bringt dauer_s = 13 s mit: die Modellangabe 3 s verlängert nicht,
+# sondern wird auf die eigene Länge gehoben (smilez, 15.11.2026 — ein Zug
+# muss ganz laufen).
 pruefe(ablauf_pruefen(state, jetzt=uhr() + 1), False, "vor Ablauf nichts")
-pruefe(ablauf_pruefen(state, jetzt=uhr() + 3.5), True, "nach Ablauf zurückgenommen")
+pruefe(ablauf_pruefen(state, jetzt=uhr() + 3.5), False,
+       "die kurze Modellangabe kürzt den Zug nicht")
+pruefe(ablauf_pruefen(state, jetzt=uhr() + 13.5), True, "nach dem Zug zurückgenommen")
 pruefe(aktuell(state), "IDLE", "das vorherige Gesicht gilt wieder")
 pruefe(face.state.mood_bis, None, "keine Frist mehr gesetzt")
 face.show_state("arbeitet")
@@ -172,13 +184,13 @@ print("== 7d. Nach Ablauf bleibt der vorherige Ausdruck das Agentengesicht")
 # auf dem Display stand danach IDLE. Ursache war `_ablauf` -- es leerte
 # `_agent_mood`, und `wartet` fand dann kein Agentengesicht mehr.
 face, state, uhr = bau()
-face.set_by_name("WORK")
-face.set_by_name("BONG", dauer=3)
+face.set_by_name("ROCK")                 # endlos, kein Lauf, keine Sperre
+face.set_by_name("BONG")                 # dauer_s = 13 s
 pruefe(aktuell(state), "BONG", "Animation läuft")
-ablauf_pruefen(state, jetzt=uhr() + 3.5)
-pruefe(aktuell(state), "WORK", "nach Ablauf gilt der vorherige Ausdruck")
+ablauf_pruefen(state, jetzt=uhr() + 13.5)
+pruefe(aktuell(state), "ROCK", "nach Ablauf gilt der vorherige Ausdruck")
 face.show_state("wartet")
-pruefe(aktuell(state), "WORK",
+pruefe(aktuell(state), "ROCK",
        "und die Ruhe bleibt dort -- nicht IDLE")
 
 print("== 8. Ein gelöschter Ausdruck fällt in der Ruhe auf IDLE zurück")

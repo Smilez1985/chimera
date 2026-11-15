@@ -37,6 +37,21 @@ STATE_MOODS = {
     "fehler": ("SAD", "SCARED"),
 }
 
+#: Ausdrücke, die eine **Tätigkeit behaupten**. Sie gehören einem Zustand,
+#: nicht dem Agenten: „WORK" heißt „ich arbeite gerade". Steht der Agent
+#: still, darf das Gesicht das nicht weiter sagen (smilez, 15.11.2026:
+#: *„aktuell zeigt er Work … aber da das llm momentan nicht arbeitet ist der
+#: Zustand gelogen"*). Deshalb nimmt die Ruhe diese Ausdrücke zurück, auch
+#: wenn der Agent sie selbst gesetzt hat — ein ``set_face WORK`` von Hand ist
+#: kein Dauerzustand, sondern eine Aussage über einen Moment.
+#:
+#: Ausdrücke, die **keine** Tätigkeit behaupten (BONG, ROCK, COFFEE, eigene
+#: Moods), bleiben davon unberührt: sie sind Stimmung, nicht Arbeitsbericht.
+STATE_ANSPRUCH = frozenset(
+    name for zustand, namen in STATE_MOODS.items() if zustand != "wartet"
+    for name in namen
+)
+
 #: Zustände, die hart umschalten sollen — ein Schreck blendet nicht ein
 #: (Regel 6b).
 HARD_STATES = {"verwirrt", "fehler"}
@@ -140,17 +155,35 @@ class Face:
         return mood
 
     def _dauer_von(self, mood: dict, dauer: float | None) -> float:
-        """Die Standzeit in Sekunden: Modell → Ausdruck → Untergrenze."""
-        if dauer is not None:
-            try:
-                wert = float(dauer)
-            except (TypeError, ValueError):
-                return 0.0
-            return max(0.0, wert)
+        """Die Standzeit in Sekunden: Modell → Ausdruck → Untergrenze.
+
+        **Ein Ausdruck mit eigener Länge läuft ganz** (smilez, 15.11.2026:
+        *„bong friert mitten in der mood Animation ein, das muss ganz laufen,
+        von Anfang bis Ende"*). Am Pi gesehen: das Modell rief
+        ``set_face BONG dauer=4``, die Zug-Animation dauert aber
+        ``TOKE_PERIOD`` = 13 s — nach 4 s wurde mitten im Zug zurückgenommen.
+        Deshalb gilt für einen Ausdruck mit ``dauer_s``:
+
+        - ``dauer`` **verlängert** (größerer Wert), kürzt aber nie.
+        - ``dauer`` 0/leer heißt bei einem endlichen Ausdruck **einmal ganz**,
+          nicht „endlos": ein Zug ist eine Handlung mit Anfang und Ende, kein
+          Dauerzustand. Endlose Ausdrücke (etwa ``ROCK``) haben keine
+          ``dauer_s`` und bleiben bis zur Ablösung.
+        """
+        eigene = 0.0
         try:
-            return max(0.0, float(mood.get("dauer_s") or 0))
+            eigene = max(0.0, float(mood.get("dauer_s") or 0))
         except (TypeError, ValueError):
-            return 0.0
+            eigene = 0.0
+        if dauer is None:
+            return eigene
+        try:
+            wert = max(0.0, float(dauer))
+        except (TypeError, ValueError):
+            wert = 0.0
+        if eigene > 0:
+            return max(wert, eigene)
+        return wert
 
     def _ablauf(self, zurueck: dict | None = None) -> None:
         """Ein Ausdruck mit fester Dauer ist vorbei (gerufen vom Renderer).
@@ -253,25 +286,48 @@ class Face:
         log.debug("Kein Ausdruck für Zustand %r", what)
 
     def _haelt(self) -> bool:
-        """Steht ein gesetztes Gesicht noch?
+        """Steht ein gesetzter Ausdruck und **blockiert** er andere Zustände?
 
-        ``_haelt_bis is None`` heißt **bis zur Ablösung** (Ausdruck ohne
-        Dauer): Dann übernimmt kein Zustand. Sonst gilt die Frist.
+        Seit 15.11.2026 (smilez) gilt die Trennung nach Länge:
+
+        - **Endlicher Ausdruck** (``dauer`` am Aufruf oder ``dauer_s`` am
+          Ausdruck): Er läuft ganz und blockiert jeden Zustandswechsel bis zu
+          seinem Ende. Nur ein Reflex (``verwirrt``, ``fehler``) bricht ihn.
+          Grund: *„bong friert mitten in der mood Animation ein, das muss
+          ganz laufen, von Anfang bis Ende"*.
+        - **Endloser Ausdruck** (keine Dauer, etwa ``ROCK``): *„moods wie
+          Rock ohne feste länge weil endlos Loop brauchen keine harte
+          Laufzeit"* — er ist das **stehende Gesicht** und wird von
+          Zuständen ohne Sperre abgelöst; nach dem Zustand kommt er zurück.
+
+        ``_haelt_bis is None`` heißt also nicht mehr „für immer sperren",
+        sondern „kein Lauf, keine Sperre".
         """
         if not self._agent_mood:
             return False
         if self._haelt_bis is None:
-            return True
+            return False
         return self._uhr() < self._haelt_bis
 
     def _ruhegesicht(self) -> bool:
         """Das vom Agenten gewählte Gesicht zeigen, wenn es noch existiert.
+
+        **Kein Tätigkeitsausdruck** (siehe ``STATE_ANSPRUCH``): „WORK" in der
+        Ruhe wäre eine Lüge über den Zustand. Der Merker wird dabei geräumt,
+        damit die Ruhe nicht bei jedem Aufruf neu prüft.
 
         Rückgabe False, wenn es keines gibt — dann zeigt der Zustand wie
         bisher `IDLE`.
         """
         name = self._agent_mood.strip().upper()
         if not name or self.moods.find(name) is None:
+            return False
+        if name in STATE_ANSPRUCH:
+            # Der Ausdruck behauptet Arbeit, Zuhören, Denken oder Sprechen.
+            # Steht der Agent still, gehört das Gesicht dem Zustand.
+            log.debug("Ruhe: Ausdruck %r behauptet einen Zustand — "
+                      "zurück auf das Ruhegesicht", name)
+            self._agent_mood = ""
             return False
         self.state.set_mood(self.moods.get(name), hard=False)
         return True

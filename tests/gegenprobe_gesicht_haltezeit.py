@@ -22,32 +22,34 @@ FACE = "chimera/agent/face.py"
 AVATAR = "chimera/render/avatar.py"
 
 MUTATIONEN = [
-    ("dauer-ignoriert",
+    # 15.11.2026: Ein endlicher Ausdruck läuft ganz — die Modellangabe darf
+    # ihn verlängern, nie abschneiden (smilez: „bong friert mitten in der
+    # mood Animation ein, das muss ganz laufen").
+    ("modell-kuerzt-animation",
      FACE,
-     "            return max(0.0, wert)",
-     "            return 0.0"),
+     "            return max(wert, eigene)",
+     "            return wert"),
     ("dauer-des-moods-ignoriert",
      FACE,
-     '            return max(0.0, float(mood.get("dauer_s") or 0))',
-     "            return 0.0"),
+     "        if dauer is None:\n            return eigene",
+     "        if dauer is None:\n            return 0.0"),
+    # Endlose Ausdrücke sperren nicht: Zustände lösen sie ab, danach gelten
+    # sie wieder (smilez: „Rock … brauchen keine harte Laufzeit").
+    ("endlos-sperrt",
+     FACE,
+     "        if self._haelt_bis is None:\n            return False",
+     "        if self._haelt_bis is None:\n            return True"),
+    # Ein laufender Ausdruck muss Zustände abwehren, solange er läuft.
     ("frist-ignoriert",
      FACE,
      '        elif what != "wartet" and self._haelt():',
      "        elif False:"),
-    ("ablosung-ignoriert",
-     FACE,
-     "        if self._haelt_bis is None:\n            return True",
-     "        if self._haelt_bis is None:\n            return False"),
     ("reflex-gebremst",
      FACE,
      "        if what in HARD_STATES:\n"
      "            # Ein Schreck ist ein Reflex und bricht die Haltezeit.\n"
      "            self._haelt_bis = 0.0",
      "        if False:\n            pass"),
-    ("wartet-blockiert",
-     FACE,
-     '        elif what != "wartet" and self._haelt():',
-     "        elif self._haelt():"),
     ("ablauf-vergisst-zurueck",
      AVATAR,
      "            rueckruf(zurueck)",
