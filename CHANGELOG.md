@@ -1101,6 +1101,19 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Vier Regeln nachgezogen, bevor gebaut wird** (15.11.2026, nach dem
+  Deploy am Pi): (1) „Aufrufe, nicht Text" — ein **nacktes** JSON-Objekt
+  zählt als Werkzeugaufruf, wenn der Name ein bekanntes Werkzeug ist
+  (gesehen am Pi: das Modell schrieb den Aufruf ohne Codezaun, er landete als
+  Antwort beim Nutzer, nichts wurde ausgeführt); (2) dieselbe Regel — zwei
+  Rüge-Texte statt einem, weil `RUEGE_TEXT_AUFTRAG` „nicht ausgeführt" sagte,
+  während der Rückfall genau das tut; (3) „Sprechgesicht" Punkt 8 — der
+  Ablauf einer Frist setzt `_agent_mood` auf den **vorherigen** Ausdruck,
+  nicht auf leer (am Pi: `IDLE` statt WORK); (4) Muster 5 in „Übernommene
+  Muster aus OpenMinis" — `max_turns` von 8 auf 30 und eine **Wrap-up-Runde**
+  ohne Werkzeuge am Deckel, weil 8 Umläufe × 3 Werkzeuge die Schleifenbremse
+  (Warnung ab 10 gleichen Aufrufen) nie erreichen konnten. Der Bau steht in
+  `docs/ROADMAP.md`, „Aus dem Deploy vom 15.11.2026".
 - **Zwei Funktionen heißen jetzt verschieden** (15.11.2026): `ablage.ohne_textaufrufe`
   und `loop.ohne_textaufrufe` taten Verschiedenes (Nachrichtenliste beim
   Laden gegen Zeichenkette je Runde) — ein Name mit zwei Bedeutungen, beim

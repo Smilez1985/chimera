@@ -476,6 +476,20 @@ nie gemeldet, das Gesicht blieb nach der ersten Antwort stehen.
    sie neu. Tests `tests/test_gesicht_haltezeit.py` (25), Gegenprobe
    `tests/gegenprobe_gesicht_haltezeit.py` 8/8 rot.
 
+8. **Der Ablauf endet auf dem vorherigen Ausdruck — nicht auf IDLE**
+   (smilez, 15.11.2026, am Pi gesehen: das Modell sagte „das Gesicht bleibt
+   WORK", auf dem Display stand danach `IDLE`). Ursache war nicht der
+   Renderer, sondern `Face._ablauf`: es setzte `_agent_mood = ""`. Damit war
+   der Merker weg, `wartet` fand kein Agentengesicht mehr und fiel nach
+   Regel 6 auf `IDLE` zurück — obwohl der Ausdruck davor (WORK) weiter in der
+   Bibliothek stand. Der Ablauf einer Frist ist **kein Löschen der Wahl**,
+   sondern das Ende ihrer Dauer: Das Gesicht kehrt zum vorherigen Ausdruck
+   zurück, **und der wird zum Agentengesicht** (`_agent_mood =
+   zurueck["name"]`). `IDLE` bleibt damit genau der Fall „der Agent hat noch
+   nichts gewählt" — nicht der Standard nach jeder Animation.
+   Folge für `set_face` ohne `dauer`: unverändert bis zur Ablösung. Folge für
+   eine Dauer: nach Ablauf steht das Vorherige, nicht die Leere.
+
 #### Architekturregel 4c — Das Sprachmodell setzt Absicht, nicht Bilder
 
 Die Arbeitsteilung folgt derselben Staffelung wie beim Umgebungshören
@@ -2557,6 +2571,33 @@ lehnte ihn mit HTTP 422 ab. Jetzt gilt strikt:
   falsches Ergebnis. Umbenannt, weil ein Name zwei Bedeutungen nicht tragen
   kann.
 
+**Nachtrag (15.11.2026, 05:00): die Rückfall-Erkennung war zu eng — und die
+Rüge log.** Am Pi gemessen (Turn über den Sitzungs-Socket): Das Modell schrieb
+`{"name": "set_face", "arguments": {"mood": "BONG", "dauer": 4}}` — **ohne
+Codezaun** — als Antwort. `loop.TEXT_JSON_RE` verlangte aber einen
+eingezäunten Codeblock (drei Backticks um das JSON); die Zeichenkette passte
+nicht, `textaufrufe()` gab nichts zurück, und der Harness reichte sie als
+**Antwort an den Nutzer** durch. Nichts wurde ausgeführt, nichts ging als Ergebnis an das Modell
+zurück. Das ist genau der Fehler, den diese Regel verbieten soll, nur eine
+Ebene tiefer: die Erkennung war an die **Form** gebunden, die wir zufällig
+zuerst gesehen hatten. Zwei Entscheidungen daraus:
+
+- **Ein nacktes JSON-Objekt zählt auch.** Steht am Textanfang (oder als
+  ganzer Text) ein JSON-Objekt mit `name`/`arguments`, wird es wie ein
+  Codeblock behandelt. **Bedingung: der Name muss ein bekanntes Werkzeug
+  sein** (`tools.names()`). Grund: Fließtext-JSON ist auch legitime Ausgabe
+  (Beispiel, Datenstruktur) — ohne die Namensprüfung würde eine Antwort über
+  JSON als Werkzeugaufruf ausgeführt. Kein Raten bei fremden Namen: was nicht
+  in der Toolbox steht, bleibt Text und wird gerügt.
+- **Zwei Rüge-Texte statt einem.** `RUEGE_TEXT_AUFTRAG` sagte bisher in
+  beiden Fällen „Er wurde NICHT ausgeführt" — beim Rückfall ist das seit
+  `766f381` falsch: der Aufruf **wird** ausgeführt. Ein Satz, der über den
+  eigenen Code lügt, ist schlimmer als keine Rüge: er lehrt das Modell, dem
+  Harness zu misstrauen. Jetzt gibt es `RUEGE_AUSGEFUEHRT` („kam als Text,
+  wurde diesmal als Rückfall ausgeführt — nutze die Schnittstelle") und
+  `RUEGE_NICHT_AUSGEFUEHRT` (der alte Text, gilt nur, wenn wirklich nichts
+  lief).
+
 **Nachtrag (15.11.2026): ein Verlauf aus der Textzeit lehrt den verbotenen
 Weg.** Am Pi gemessen: Der Prompt sagte „nativ", der Verlauf der laufenden
 Sitzung enthielt 26 Zeilen `TOOL: …` samt „Ergebnis von …" darauf — das
@@ -3397,7 +3438,7 @@ Nebeneffekt.
 
 ## 8. Übernommene Muster aus OpenMinis (nachgebaut, nicht kopiert)
 
-Alle vier sind unabhängig voneinander und einzeln testbar.
+Alle fünf sind unabhängig voneinander und einzeln testbar.
 
 1. **Tool-Schleifen-Erkennung.** Tool-Name und Argumente hashen, Fenster
    der letzten 30 Aufrufe, gestaffelte Schwellen (warnen / blockieren /
@@ -3423,6 +3464,31 @@ Alle vier sind unabhängig voneinander und einzeln testbar.
    Beide werden mit der Ansage injiziert, dass es Hintergrundkontext ist
    und die letzte Nutzernachricht Vorrang hat — sonst nimmt das Modell
    abgeschlossene Aufgaben wieder auf.
+
+5. **Die Obergrenze ist der Deckel, die Schleifenerkennung die Bremse —
+   und die letzte Runde gehört dem Ergebnis** (smilez, 15.11.2026, nach
+   Nachlesen der OpenMinis-Schleife). OpenMinis fährt `maxAgentTurns = 200`
+   Umläufe je Auftrag und verlässt sich auf den `ToolLoopDetector`
+   (10 / 20 / 30); Chimera hatte **8** und damit ein Missverhältnis: 8
+   Umläufe × 3 Werkzeuge = höchstens 24 Aufrufe, während die Bremse erst bei
+   **10 gleichen** Aufrufen warnt. Die Warnung konnte im Normalfall nie
+   greifen — die Sicherung war toter Code, der Deckel hat die Arbeit
+   begrenzt.
+   - **`max_turns = 30`**, nicht 200: 200 Umläufe an einem bezahlten Modell
+     sind auf einem 462-MB-Gerät kein Sicherheitsnetz, sondern eine Rechnung
+     (Regel zur Kostenbremse). 30 gibt echter Arbeit Luft (Datei lesen,
+     ändern, prüfen, Dienst neu starten, nachsehen) und bleibt unter der
+     Block-Schwelle von 20 gleichen Aufrufen, sodass die Bremse überhaupt
+     erreichbar ist.
+   - **Wrap-up-Runde:** Ist der Deckel erreicht, bekommt das Modell **eine**
+     Runde ohne Werkzeuge mit der Ansage „Zeit ist um, schreib zusammen, was
+     du hast" — nach dem Vorbild von OpenMinis (`helperWrapUpPrompt`). Sonst
+     endet ein Lauf mitten in einem Werkzeugaufruf, und der Nutzer bekommt
+     „Ich komme hier nicht weiter." statt eines Ergebnisses. Der Harness
+     nimmt dafür `tools=[]` aus der Anfrage; die Runde zählt **nicht** als
+     weiterer Umlauf.
+   - **Beim Erschöpfen wird gesagt, was fehlt:** welche Werkzeuge zuletzt
+     liefen und dass der Deckel der Grund war. Kein stiller Abbruch.
 
 ---
 

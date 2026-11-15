@@ -233,6 +233,42 @@ Quelle ist PaKaChi-SM (privat); sie dient als Vorbild, hier wird nachgebaut, nic
       (z. B. `CHIMERA_HOME`) oder den Ordner für die Gruppe `chimera` öffnen
       — und **am Gerät** nachweisen, dass keine Warnung mehr kommt.
 
+### Aus dem Deploy vom 15.11.2026 (05:00) — Design steht, Bau offen
+
+Die vier Punkte sind im DESIGN entschieden (Regel „Aufrufe, nicht Text",
+Nachtrag 05:00; Regel „Sprechgesicht" Punkt 8; Muster 5 in „Übernommene
+Muster aus OpenMinis"). Am Pi sind drei davon **belegt fehlerhaft**:
+
+- [ ] **Nacktes JSON wird nicht als Werkzeugaufruf erkannt** (DESIGN, Nachtrag
+      05:00): `loop.TEXT_JSON_RE` verlangt einen Codezaun. Am Pi (05:00)
+      schrieb das Modell `{"name": "set_face", "arguments": {…}}` ohne Zaun —
+      es landete als **Antwort** beim Nutzer, nichts wurde ausgeführt, nichts
+      ging als Ergebnis zurück. Zu ändern: `textaufrufe()` erkennt zusätzlich
+      ein JSON-Objekt am Textanfang, **wenn der Name ein bekanntes Werkzeug
+      ist** (`tools.names()`); unbekannter Name bleibt Text. Tests:
+      `tests/test_agent.py` (nackt erkannt / Fremdname nicht erkannt /
+      Fließtext mit JSON bleibt Text) plus Gegenprobe.
+- [ ] **Die Rüge sagt das Gegenteil der Ausführung** (DESIGN, Nachtrag 05:00):
+      `RUEGE_TEXT_AUFTRAG` behauptet „Er wurde NICHT ausgeführt", während der
+      Rückfall seit `766f381` genau das tut. Zu trennen in
+      `RUEGE_AUSGEFUEHRT` und `RUEGE_NICHT_AUSGEFUEHRT`; der Verlauf bekommt
+      je Fall den passenden Satz. Gegenprobe: beide Texte müssen bei ihrer
+      Mutation fallen (sonst prüft die Mutation nur einen Wächter).
+- [ ] **Das Gesicht fällt nach einer Dauer auf IDLE** (DESIGN, Regel
+      „Sprechgesicht" Punkt 8): `Face._ablauf` räumt `_agent_mood`, der
+      Merker ist weg, `wartet` findet nichts. Am Pi gesehen: `set_face CHAOS
+      dauer=6` → nach Ablauf `IDLE`, obwohl vorher WORK stand. Zu ändern:
+      `_agent_mood = zurueck["name"]`. Tests `test_gesicht_haltezeit.py`
+      (Ablauf → vorheriger Ausdruck, `wartet` bleibt dort) mit Gegenprobe.
+- [ ] **Deckel 8 Umläufe, Bremse unerreichbar** (DESIGN, Muster 5):
+      `max_turns=8` × 3 Werkzeuge = höchstens 24 Aufrufe, die Warnschwelle
+      liegt bei 10 **gleichen** Aufrufen — die Sicherung ist im Normalfall
+      toter Code. Zu bauen: `max_turns = 30`, **Wrap-up-Runde** ohne Werkzeuge
+      am Deckel (Antwort statt „Ich komme hier nicht weiter."), und beim
+      Erschöpfen sagen, welche Werkzeuge zuletzt liefen. Tests: Deckel greift
+      genau einmal, Wrap-up bekommt `tools=[]`, Ergebnis ist Text; Gegenprobe
+      ohne Wrap-up muss rot werden.
+
 ## Phase Regelnamen — Nummern werden zu sprechenden Namen (DESIGN: Regel „Sprechende Namen“)
 
 Alle 74 nummerierten Architekturregeln und die rund 460 Verweise darauf in
@@ -967,7 +1003,7 @@ abends** (CHANGELOG: Host-Tabelle, `op: ssh`, Deskriptor-Übergabe, feste
 
 ## Phase 6 — Agent-Härtung
 
-Die vier Muster aus `docs/DESIGN.md`, Abschnitt „Übernommene Muster aus OpenMinis (nachgebaut, nicht kopiert)" sind gebaut und verdrahtet.
+Die fünf Muster aus `docs/DESIGN.md`, Abschnitt „Übernommene Muster aus OpenMinis (nachgebaut, nicht kopiert)" sind gebaut und verdrahtet; das fünfte (Obergrenze und Wrap-up-Runde) ist entschieden und steht unter „Betrieb" → „Aus dem Deploy vom 15.11.2026".
 Offen bleibt:
 
 - [ ] **Ausführer `chimera-sohelper` — Regeln und Socket gebaut** (11.11.;
