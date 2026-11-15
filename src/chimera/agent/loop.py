@@ -509,6 +509,12 @@ class Agent:
 
             # Die Wahl jeder Runde neu: sie gilt fuer den ganzen Auftrag.
             wahl = f"{anbieter}/{modell}" if anbieter and modell else (anbieter or "")
+            # Sichtbar machen, wann eine Runde beginnt: Ein Turn, der nach der
+            # Werkzeugausfuehrung verstummt, ist sonst nicht zu deuten
+            # (Fund 15.11.2026: Runde 2 sandte nichts, das Protokoll sagte
+            # nur "Runde 1").
+            log.info("Runde %d: Anfrage an %s (%d Nachrichten im Verlauf)",
+                     turn + 1, wahl or "die eingetragene Wahl", len(self.history))
             reply = self.registry.call(
                 self.task, "", self.history, system,
                 bevorzugt=wahl or None,

@@ -150,10 +150,17 @@ pub fn verlauf_formen(liste: &[Value]) -> Vec<Value> {
                 // antwortet die API mit 400, und der Agent faellt still auf
                 // einen anderen Anbieter zurueck. Wir fuehren ihn neutral als
                 // `gedacht` und uebersetzen ihn hier.
-                if let Some(g) = nachricht.get("gedacht").and_then(Value::as_str) {
-                    if !g.is_empty() {
-                        m["reasoning_content"] = json!(g);
-                    }
+                //
+                // **Auch ohne Denktext muss das Feld mit** (15.11.2026, am
+                // Pi gemessen): Ein Verlauf aus früheren Fassungen hat
+                // Assistenznachrichten mit Aufrufen, aber ohne Denktext.
+                // Fehlt `reasoning_content` dort ganz, antwortet die API
+                // weiterhin mit 400 — der Fehler verschwindet erst, wenn das
+                // Feld bei **jeder** Assistenznachricht mit Aufrufen steht.
+                let gedacht = nachricht.get("gedacht").and_then(Value::as_str)
+                    .unwrap_or("");
+                if !gedacht.is_empty() || nachricht.get("tool_calls").is_some() {
+                    m["reasoning_content"] = json!(gedacht);
                 }
                 if let Some(o) = m.as_object_mut() {
                     // `gedacht` ist unsere Form, nicht die der API.
@@ -978,9 +985,16 @@ mod tests {
         assert_eq!(raus[0]["reasoning_content"], "ich denke");
         // Unsere Form verlaesst das Haus nicht.
         assert!(raus[0].get("gedacht").is_none());
-        // Ohne Denktext bleibt das Feld ganz weg.
+        // Ohne Aufruf und ohne Denktext bleibt das Feld ganz weg (eine
+        // einfache Antwort braucht es nicht).
         let ohne = verlauf_formen(&[json!({"role": "assistant", "content": "hallo"})]);
         assert!(ohne[0].get("reasoning_content").is_none());
+        // **Mit** Aufruf muss es stehen, auch leer: Ein Verlauf aus einer
+        // aelteren Fassung hat keinen Denktext, und die API verlangt das Feld
+        // trotzdem (am Pi gemessen: ohne das Feld weiter 400).
+        let alt = verlauf_formen(&[json!({"role": "assistant", "content": "",
+            "tool_calls": [{"function": {"name": "ls", "arguments": {}}}]})]);
+        assert_eq!(alt[0]["reasoning_content"], "");
     }
 
     /// Die Antwort reicht den Denktext durch, damit der Agent ihn an die
