@@ -1148,6 +1148,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Bong, Joint und Kaffee sind zu Gast** (15.11.2026, smilez: *„warum hast
+  du die idle Animationen wie Joint, bong und Kaffee ignoriert?"*): Mit zehn
+  Musiknamen im Tagfenster kam keine Handlung mehr an die Reihe, obwohl sie
+  im Fenster stand. Neu `GAST` mit eigenem Gewicht — `BONG`, `JOINT`,
+  `COFFEE` erscheinen tagsüber mit 0,2–0,25 statt 1,0, also etwa einmal in
+  zwei Stunden statt nie. Die Wahl würfelt gewichtet (`gewicht(name, stunde)`),
+  nicht mehr gleichverteilt.
 - **Ambiente würfelt wieder, statt abzuspulen** (15.11.2026, smilez: *„jetzt
   steht da seit Stunden das face chill und die Wechsellogik scheint nicht zu
   greifen"*): Bei drei Namen im Fenster, 20 min Abstand und 90 min Sperre

@@ -253,19 +253,33 @@ dokumentiert ist.)
 
 ---
 
-### 3.4 Umgebungshören im Ruhezustand
+### 3.4 Umgebungshören im Ruhezustand — **zurückgestellt, opt-in** (15.11.2026)
 
-Chimera reagiert nicht nur auf Ansprache. **Wenn niemand mit ihm redet,
-hört es dem Raum zu** — damit es etwas tut, wenn der Raum lebt.
+**Entschieden von smilez am 15.11.2026: nicht jetzt, und nie als Vorgabe.**
+*„Umgebungshören ist ein ‚vielleicht später' opt-in Modul, das uns auf dem Pi
+aktuell zuviel Ressourcen frisst wegen dem kleinen Audiotransformer-LLM —
+verschoben und keine Prio."*
 
-Das ist ausdrücklich **nicht** Noisys Modell. Noisy bildet Geräusche fest
-auf Moods ab: `labels` im Mood-Dict, Label rein, Mood raus. Chimera behält
-die **Erkennung** und wirft die **Zuordnung** weg — welcher Ausdruck zu
-einem Geräusch passt, entscheidet das Sprachmodell, situationsabhängig.
+Damit gilt für Chimera:
 
-Derselbe Hundebellen-Reiz kann morgens „aufmerksam" bedeuten und nachts um
-drei „erschrocken". Eine Tabelle kann das nicht, ein Modell mit Kontext
-schon.
+- **Kein Dauerlauschen.** Mikrofon und Lautsprecher starten aus
+  (`audio_schalter`, 0 %), und niemand hört dem Raum zu. Ein Gerät, das
+  ungefragt mithört, ist keine gute Idee — auch nicht mit schönem Zweck.
+- **Ausgelöst wird durch Zeit und Wahl des Sprachmodells**, nicht durch
+  Geräusche: die Ambiente-Fenster (Regel „Ambiente") und `set_face` durch den
+  Agenten. Das ist der heutige Stand und bleibt es.
+- **Wenn überhaupt, dann opt-in:** eigenes Modul, ausgeschaltet in der
+  Vorgabe, mit ausdrücklichem Anschalten. Auf einem Pi Zero 2 W mit 462 MB
+  ist ein Audiotransformer neben Renderer und Gateway nicht bezahlbar; die
+  Messung dazu ist der Kern des Aufwands, nicht der Code.
+- **Keine Priorität.** Der Abschnitt steht in `docs/ROADMAP.md` (Phase 5a)
+  als „verschoben" und wird nicht begonnen, bevor nicht andere Punkte
+  erledigt sind.
+
+Der ursprüngliche Entwurf (Geräuscherkennung ohne feste Zuordnung, das
+Sprachmodell entscheidet situationsabhängig über den Ausdruck) bleibt als
+Idee stehen und ist unten in Architekturregel 3a skizziert — er beschreibt
+**was wäre, wenn**, nicht was gebaut wird.
 
 #### Architekturregel 3a — Das Modell wird nicht pro Geräusch gefragt
 
@@ -569,6 +583,14 @@ zwischen zwei Aufträgen steht dasselbe Gesicht stundenlang.
   gesehen: *„warum kommt yawn bei ‚Work auf Bing prüfen'?"*. Es wirkte
   unhöflich, nicht lebendig. Das ist dieselbe Bedingung
   wie beim ehrlichen Zustand — ein Gerät, das arbeitet, raucht nicht.
+- **Gäste: Handlungen dürfen überall vorkommen, aber selten** (15.11.2026,
+  smilez: *„warum hast du die idle Animationen wie Joint, bong und Kaffee
+  ignoriert?"*). Mit zehn Musiknamen im Tagfenster kam keine Handlung mehr
+  dran, obwohl sie im Fenster stand. Neu `GAST`: `BONG`, `JOINT`, `COFFEE`
+  sind tagsüber **Gäste** mit kleinem Gewicht (0,2–0,25 gegenüber 1,0). Sie
+  kommen vor — etwa einmal in zwei Stunden —, verdängen aber die
+  Grundstimmung nicht. Abends ist `BONG` kein Gast mehr, sondern gehört zum
+  Fenster.
 - **Was es nicht gibt, wird nicht gewählt.** Die Bibliothek darf kleiner
   sein als die Tabelle; fehlt ein Name, wird er übergangen, statt zu
   scheitern.

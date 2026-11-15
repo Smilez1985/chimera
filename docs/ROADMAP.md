@@ -833,9 +833,15 @@ eins nach dem anderen. Stand im Code (10.11. nachgesehen): Es gibt
 - [ ] Index `rusqlite` bundled FTS5 in `chimera-sitzung`, `--index-neu`,
       RSS am Pi messen.
 
-## Phase 5a — Umgebungshören im Ruhezustand
+## Phase 5a — Umgebungshören im Ruhezustand — **verschoben, keine Prio**
 
-Setzt Phase 5 voraus (Audioaufnahme läuft bereits). Details in
+**Zurückgestellt (smilez, 15.11.2026):** *„ein ‚vielleicht später' opt-in
+Modul, das uns auf dem Pi aktuell zuviel Ressourcen frisst wegen dem kleinen
+Audiotransformer-LLM — verschoben und keine Prio."* Nichts hier wird
+begonnen, bevor die Phasen „Echte Lücken" und „Web-Aufträge" stehen.
+Wenn überhaupt: eigenes Modul, **aus in der Vorgabe**.
+
+Der folgende Entwurf ist das Zielbild, nicht der nächste Schritt. Details in
 `docs/DESIGN.md`, Abschnitt „Umgebungshören im Ruhezustand".
 
 - [ ] Tagger-Schicht, die Zipformer und CED gleich aussehen lässt —

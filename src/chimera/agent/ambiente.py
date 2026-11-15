@@ -78,13 +78,49 @@ SPERRE_JE_AUSDRUCK_S = 35 * 60
 CHANCE = 0.35
 
 
-def kandidaten(stunde: int) -> tuple[str, ...]:
-    """Die Ausdruecke, die zu dieser Stunde passen (leer = Ruhe)."""
+#: Ausdruecke, die in einem Fenster nur **zu Gast** sind (15.11.2026, smilez:
+#: *„warum hast du die idle Animationen wie Joint, bong und Kaffee ignoriert?"*).
+#: Sie standen zwar im Fenster, aber mit zehn Musiknamen im Tag fenster kam
+#: keiner mehr dran. Ein Gast hat ein **kleines Gewicht**: er kommt vor, aber
+#: er verdraengt die Grundstimmung nicht.
+GAST = {
+    (6, 10): {"CHILL": 0.4},
+    (10, 18): {"BONG": 0.25, "JOINT": 0.25, "COFFEE": 0.2},
+    (18, 23): {"COFFEE": 0.2},
+}
+
+#: Gewicht eines Ausdrucks im Fenster. 1.0 = normal, kleiner = seltener.
+STANDARD_GEWICHT = 1.0
+
+
+def _fenster(stunde: int):
     h = int(stunde) % 24
     for von, bis, namen in FENSTER:
         if von <= h < bis:
-            return namen
-    return ()
+            return von, bis, namen
+    return None
+
+
+def kandidaten(stunde: int) -> tuple[str, ...]:
+    """Die Ausdruecke, die zu dieser Stunde passen (leer = Ruhe).
+
+    Gäste (``GAST``) stehen dahinter; ihr Gewicht sagt ``gewicht``.
+    """
+    f = _fenster(stunde)
+    if f is None:
+        return ()
+    von, bis, namen = f
+    gaeste = tuple(n for n in GAST.get((von, bis), {}) if n not in namen)
+    return tuple(namen) + gaeste
+
+
+def gewicht(name: str, stunde: int) -> float:
+    """Wie gern dieser Ausdruck zu dieser Stunde kommt (0 < g <= 1)."""
+    f = _fenster(stunde)
+    if f is None:
+        return 0.0
+    von, bis, _ = f
+    return GAST.get((von, bis), {}).get(name, STANDARD_GEWICHT)
 
 
 class Ambiente:
@@ -139,7 +175,15 @@ class Ambiente:
             erlaubt = sorted(namen, key=lambda n: alter[n], reverse=True)[:2]
         if self._zufall() > CHANCE:
             return None
-        wahl = erlaubt[min(len(erlaubt) - 1, int(self._zufall() * len(erlaubt)))]
+        # Gewichtet wuerfeln: Gaeste kommen seltener (siehe GAST).
+        gewichte = [gewicht(n, stunde) for n in erlaubt]
+        rest = self._zufall() * sum(gewichte)
+        wahl = erlaubt[-1]
+        for name, g in zip(erlaubt, gewichte):
+            rest -= g
+            if rest <= 0:
+                wahl = name
+                break
         self._letzter = jetzt
         self._letzter_name = wahl
         self._je[wahl] = jetzt

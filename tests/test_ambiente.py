@@ -281,6 +281,40 @@ pruefe(len(zahlen) >= 3, True, f"auch im duennen Fenster passiert etwas ({len(za
 pruefe(bool(zahlen) and min(zahlen) >= 2, True,
        f"immer zwei zur Wahl {sorted(set(zahlen))}")
 
+print("== 13. BONG, JOINT und COFFEE sind zu Gast, nicht verschwunden")
+# Fund smilez (15.11.2026): *"warum hast du die idle Animationen wie Joint,
+# bong und Kaffee ignoriert?"* -- sie standen im Fenster, kamen bei zehn
+# Musiknamen aber nie dran. Jetzt sind sie Gaeste mit kleinem Gewicht.
+from chimera.agent.ambiente import gewicht  # noqa: E402
+pruefe("BONG" in kandidaten(13), True, "BONG ist tagsueber im Fenster")
+pruefe("JOINT" in kandidaten(13), True, "JOINT ist tagsueber im Fenster")
+pruefe("COFFEE" in kandidaten(13), True, "COFFEE ist tagsueber im Fenster")
+pruefe(gewicht("BONG", 13) < gewicht("ROCK", 13), True,
+       f"BONG ist seltener als ROCK ({gewicht('BONG', 13)} < {gewicht('ROCK', 13)})")
+pruefe(gewicht("BONG", 2), 0.0, "nachts gibt es gar nichts")
+pruefe("BONG" in kandidaten(20), True, "abends bleibt BONG zu Hause")
+pruefe(gewicht("BONG", 20), 1.0, "abends ist BONG kein Gast mehr")
+
+# Ueber einen Tag gezaehlt: BONG kommt vor, aber deutlich seltener.
+uhr = Uhr()
+amb = Ambiente(uhr=uhr, zufall=__import__("random").Random(23).random)
+zaehler = {}
+mitschrift.zeilen.clear()
+logger.addHandler(mitschrift)
+try:
+    for _ in range(8 * 3600 // 30):           # 8 Stunden tagsueber
+        uhr.vor(30)
+        wahl = amb.tick(stunde=13, frei=True, haelt=False, vorhanden=ALLE)
+        if wahl:
+            zaehler[wahl] = zaehler.get(wahl, 0) + 1
+finally:
+    logger.removeHandler(mitschrift)
+gaeste = sum(zaehler.get(n, 0) for n in ("BONG", "JOINT", "COFFEE"))
+pruefe(gaeste > 0, True, f"die Gaeste kommen tagsueber vor ({gaeste}x)")
+pruefe(gaeste < zaehler.get("ROCK", 0) + zaehler.get("HOUSE", 0), True,
+       f"... aber seltener als die Musik ({gaeste} < "
+       f"{zaehler.get('ROCK', 0) + zaehler.get('HOUSE', 0)})")
+
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(0 if FAIL == 0 else 1)

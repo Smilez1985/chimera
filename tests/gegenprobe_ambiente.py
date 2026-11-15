@@ -47,6 +47,15 @@ MUTATIONEN = [
      AMB,
      "        if len(erlaubt) < 2 and len(namen) > 1:",
      "        if False:"),
+    ("gaeste-ignoriert",
+     AMB,
+     "    gaeste = tuple(n for n in GAST.get((von, bis), {}) if n not in namen)\n"
+     "    return tuple(namen) + gaeste",
+     "    return tuple(namen)"),
+    ("gewicht-ignoriert",
+     AMB,
+     "        gewichte = [gewicht(n, stunde) for n in erlaubt]",
+     "        gewichte = [1.0 for n in erlaubt]"),
     ("wiederholung-erlaubt",
      AMB,
      "        if len(namen) > 1 and self._letzter_name in namen:\n"
