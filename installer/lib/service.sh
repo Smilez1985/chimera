@@ -134,7 +134,13 @@ Environment=HOME=$CHIMERA_HOME_DIR
 Environment=LANG=C.UTF-8
 Environment=PYTHONUNBUFFERED=1
 # Protokolle erst in den Arbeitsspeicher (Regel 10r) ...
-RuntimeDirectory=chimera/logs/productive
+# Zwei Blaetter, keins davon `chimera` selbst: systemd uebergibt jedes
+# genannte Verzeichnis an den Dienstnutzer, und ein RuntimeDirectory wird
+# beim Stoppen **geloescht**. Mit `chimera` in der Liste raeumte ein
+# Neustart des Dienstes /run/chimera samt `tor.sock` und `sitzung.sock` weg
+# (15.11.2026 am Pi gesehen) -- die Sockets gehoeren anderen Einheiten.
+# Deshalb ein eigenes Blatt fuer das Lebenszeichen.
+RuntimeDirectory=chimera/logs/productive chimera/state
 Environment=CHIMERA_LOG_RAM=$SERVICE_LOG_RAM
 Environment=CHIMERA_LOG_KARTE=$CHIMERA_LOGS_PRODUCTIVE
 WorkingDirectory=$CHIMERA_DATA
@@ -155,7 +161,7 @@ RestartPreventExitStatus=2
 # ("[Errno 13] Permission denied", 24-mal in zehn Minuten am Pi). Unter dem
 # RuntimeDirectory gehoert das Verzeichnis dem Dienst selbst, und der Inhalt
 # ist ohnehin fluechtig: Er beschreibt eine laufende Frist dieser Instanz.
-Environment=CHIMERA_LEBENSZEICHEN=%t/chimera/lebenszeichen.json
+Environment=CHIMERA_LEBENSZEICHEN=%t/chimera/state/lebenszeichen.json
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=read-only

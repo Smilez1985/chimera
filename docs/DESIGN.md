@@ -4589,6 +4589,14 @@ Stunde Stille von einem gewollten Nichtstun nicht zu unterscheiden.
   **dieser** Instanz, nicht einen Zustand über Neustarts hinweg.
   Ein Fehlschlag wird **einmal** gemeldet, nicht im 10-s-Takt; erholt sich
   der Melder, wird das ebenfalls gesagt.
+  **Und ein eigenes Blatt, nicht `/run/chimera` selbst:** Ein
+  `RuntimeDirectory` wird beim Stoppen des Dienstes **gelöscht**. Stand
+  `chimera` mit in der Liste, räumte ein Neustart `/run/chimera` samt
+  `tor.sock` und `sitzung.sock` weg — die Sockets gehören anderen Einheiten
+  (15.11.2026 am Pi gesehen: nach einem Restart war der Sitzungs-Socket
+  weg). Deshalb `RuntimeDirectory=chimera/logs/productive chimera/state`:
+  jedes Blatt gehört dem Dienstnutzer, das Elternverzeichnis bleibt den
+  Sockets.
 - Fehlt `NOTIFY_SOCKET`, läuft der Dienst weiter und **meldet**, dass der
   Watchdog nicht greift.
 

@@ -1839,8 +1839,11 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   lag unter `state/` — `root:chimera-tor`, 0710, der Dienst läuft als
   `chimera`. Ergebnis: bei jedem Takt `[Errno 13] Permission denied`, am Pi
   24 Zeilen in zehn Minuten. Jetzt liegt sie im RuntimeDirectory
-  (`/run/chimera/lebenszeichen.json`), das dem Dienst gehört, und ein
-  Fehlschlag wird **einmal** gemeldet statt alle 10 s.
+  (`/run/chimera/state/lebenszeichen.json`), das dem Dienst gehört, und ein
+  Fehlschlag wird **einmal** gemeldet statt alle 10 s. Ein eigenes Blatt
+  musste es sein: ein `RuntimeDirectory` wird beim Stoppen gelöscht — mit
+  `/run/chimera` in der Liste räumte ein Neustart `tor.sock` und
+  `sitzung.sock` mit weg.
 - **`verlauf.jsonl` nannte keine Werkzeuge** (15.11.2026): `Verlauf.append`
   schrieb nur Rolle und Text. Neu stehen `werkzeuge` (Name + Argumente),
   `werkzeug` und `gedacht` in der Zeile und werden beim Abspielen
