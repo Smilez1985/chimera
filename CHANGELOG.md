@@ -20,6 +20,19 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Selbsttätige Aktionen (Ambiente)** (15.11.2026, Auftrag smilez: *„ab und
+  zu Bing rauchen oder Joint rauchen, morgens Kaffee trinken"*): neues Modul
+  `agent/ambiente.py` — Fenster nach Tageszeit (06–10 Kaffee/Gähnen/Strecken,
+  10–18 ROCK/MUSIC/CHILL, 18–23 BONG/JOINT/CHILL, 23–06 Ruhe), Mindestabstand
+  20 min, 90 min Sperre je Ausdruck, Auslösung mit 35 % je fälligem Takt.
+  Gewählt wird nur, wenn **nichts läuft** (`Session.busy`, `Face.laeuft`) und
+  nur, was die Bibliothek wirklich hat. Eingehängt in die bestehende 30-s-
+  Schleife von `__main__.dienst` — kein zweiter Faden. Unterschied zu Noisys
+  Vorbild (`noisy_orchestrator.py:712-772`) ist im DESIGN begründet: dort
+  kein Abstand, keine Sperre, keine Rücksicht auf laufende Ausdrücke.
+- **`Face.laeuft`** (15.11.2026): sagt von außen, ob ein endlicher Ausdruck
+  gerade Zustände sperrt — die Bedingung, an der Ambiente und ehrlicher
+  Zustand hängen.
 - **Wrap-up-Runde und Deckel 30** (15.11.2026, DESIGN Muster 5): `max_turns`
   stand auf 8 — 8 Umläufe × 3 Werkzeuge = höchstens 24 Aufrufe, während die
   Schleifenbremse erst ab 10 **gleichen** Aufrufen warnt: die Sicherung war

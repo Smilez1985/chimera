@@ -80,6 +80,11 @@ class Chimera:
     erinnerung: object = None
     #: Eigens gehaltener Tonpfad, damit nicht jeder Aufruf neu rechnet.
     ton_pfad: object = None
+    #: Selbsttaetige Aktionen (DESIGN, Regel „Ambiente"): ein Ausdruck, der
+    #: gelegentlich von selbst kommt -- morgens Kaffee, abends ein Zug.
+    #: Die Entscheidung ist eine reine Funktion (``agent/ambiente.py``), der
+    #: Dienst ruft sie in seinem 30-s-Takt. Kein zweiter Faden.
+    ambiente: object = None
 
     # --- Auskunft ---------------------------------------------------------
 
@@ -357,6 +362,42 @@ class Chimera:
                 self.panel.close()
             except Exception as exc:                  # noqa: BLE001
                 log.debug("Panel schliessen ging nicht: %s", exc)
+
+    def ambient_takt(self, jetzt: float | None = None) -> str | None:
+        """Gelegentlich von selbst etwas zeigen (DESIGN, Regel „Ambiente").
+
+        Laeuft im 30-s-Takt des Dienstes. Faellig ist etwas nur, wenn der
+        Agent **wirklich** nichts tut: kein laufender Auftrag, kein laufender
+        endlicher Ausdruck. Das ist dieselbe Bedingung wie beim ehrlichen
+        Zustand (Regel „Sprechgesicht" Punkt 10) -- das Display soll nicht
+        rauchen, waehrend es arbeitet.
+
+        Rueckgabe: der gezeigte Ausdruck oder ``None``.
+        """
+        import time as _zeit
+
+        from .agent.ambiente import Ambiente
+
+        if self.face is None:
+            return None
+        if self.session is not None and getattr(self.session, "busy", False):
+            return None
+        if self.ambiente is None:
+            self.ambiente = Ambiente()
+        wahl = self.ambiente.tick(
+            stunde=_zeit.localtime().tm_hour,
+            frei=True,
+            haelt=bool(getattr(self.face, "laeuft", False)),
+            vorhanden=set(self.face.moods.names()),
+        )
+        if wahl is None:
+            return None
+        try:
+            self.face.set_by_name(wahl)
+        except KeyError as exc:            # Bibliothek geaendert: kein Absturz
+            log.debug("Ambiente-Ausdruck %r nicht setzbar: %s", wahl, exc)
+            return None
+        return wahl
 
     def erinnere(self, jetzt: int | None = None) -> list[str]:
         """An offene Freigaben erinnern: fragen, entscheiden, einen Ton.

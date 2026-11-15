@@ -524,6 +524,47 @@ nie gemeldet, das Gesicht blieb nach der ersten Antwort stehen.
     `COFFEE`, eigene) bleiben davon unberührt — sie berichten nichts über
     Arbeit, sondern über Befinden.
 
+#### Regel „Ambiente“ — das Gerät tut auch ohne Ansprache etwas (smilez, 15.11.2026)
+
+*„ab und zu Bing rauchen oder Joint rauchen, morgens Kaffee trinken etc.
+automatisch ausführen"*. Ohne das wirkt Chimera tot: Es reagiert nur, und
+zwischen zwei Aufträgen steht dasselbe Gesicht stundenlang.
+
+**Entschieden: Fenster, Abstand, Ruhe — nicht ein freier Würfel.**
+
+| Zeit (lokal) | Ausdrücke | Charakter |
+|---|---|---|
+| 06–10 | `COFFEE`, `YAWN`, `STRETCH`, `CHILL` | aufwachen |
+| 10–18 | `ROCK`, `MUSIC`, `CHILL` | Grundstimmung, endlos |
+| 18–23 | `BONG`, `JOINT`, `CHILL` | Handlungen mit Ablauf |
+| 23–06 | — | Ruhe |
+
+- **Mindestabstand 20 min** zwischen zwei Aktionen, **90 min Sperre je
+  Ausdruck**. Ohne beides würfelt der Dienst im 30-s-Takt und das Gerät
+  raucht den ganzen Abend.
+- **Wahrscheinlichkeit `CHANCE = 0.35`** je fälligem Takt: lebendig, aber
+  nicht im Minutentakt.
+- **Nur wenn wirklich nichts läuft:** kein Auftrag (`Session.busy`), kein
+  laufender endlicher Ausdruck (`Face.laeuft`). Das ist dieselbe Bedingung
+  wie beim ehrlichen Zustand — ein Gerät, das arbeitet, raucht nicht.
+- **Was es nicht gibt, wird nicht gewählt.** Die Bibliothek darf kleiner
+  sein als die Tabelle; fehlt ein Name, wird er übergangen, statt zu
+  scheitern.
+- **Kein zweiter Faden.** Die Entscheidung ist eine reine Funktion
+  (`agent/ambiente.py`, `tick(stunde, frei, haelt, vorhanden)`); der Dienst
+  ruft sie in seiner bestehenden 30-s-Schleife, neben `melden` und
+  `erinnern`. Ein eigener Thread wäre auf einem 462-MB-Gerät teurer als der
+  Nutzen und würde denselben Zustand zweimal lesen.
+
+**Woher die Idee kommt und was nicht übernommen wurde.** Noisy wählt alle
+30–300 s per `random.choice` aus einem tageszeitlich gefilterten Idle-Pool
+(`noisy_orchestrator.py:712-772`, `get_time_biased_idle_pool`). Übernommen
+ist der Gedanke (Tageszeit bestimmt die Auswahl); **nicht** übernommen:
+keine Abklingzeit, keine Tageshöchstzahl, keine Rücksicht auf einen
+laufenden Ausdruck — in Noisy ersetzt der nächste Wurf den vorigen
+jederzeit, was hier die Regel „ein endlicher Ausdruck läuft ganz" brechen
+würde.
+
 #### Architekturregel 4c — Das Sprachmodell setzt Absicht, nicht Bilder
 
 Die Arbeitsteilung folgt derselben Staffelung wie beim Umgebungshören

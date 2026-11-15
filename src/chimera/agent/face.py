@@ -285,6 +285,15 @@ class Face:
                 return
         log.debug("Kein Ausdruck für Zustand %r", what)
 
+    @property
+    def laeuft(self) -> bool:
+        """Laeuft gerade ein endlicher Ausdruck, der Zustände sperrt?
+
+        Fuer aussen (Dienst, Ambiente): Wer etwas zeigen will, muss wissen,
+        ob es gerade blockiert (DESIGN, Regel „Sprechgesicht" Punkt 9).
+        """
+        return self._haelt()
+
     def _haelt(self) -> bool:
         """Steht ein gesetzter Ausdruck und **blockiert** er andere Zustände?
 

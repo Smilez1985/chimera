@@ -225,11 +225,16 @@ def dienst(chi, stop: threading.Event | None = None, env=None) -> int:
     # erinnert"). Im selben Takt wie die Anbieterpruefung: 30 s ist fein genug
     # fuer den kleinsten Abstand (60 s), und es braucht keinen zweiten Faden.
     erinnern = getattr(chi, "erinnere", None)
+    # Selbsttaetige Aktionen (DESIGN, Regel „Ambiente"): derselbe Takt, kein
+    # zweiter Faden. Der Agent tut dabei nichts -- er zeigt nur etwas.
+    ambiente = getattr(chi, "ambient_takt", None)
     try:
         if melden is not None:
             melden()
         if erinnern is not None:
             erinnern()
+        if ambiente is not None:
+            ambiente()
         while not stop.wait(ANBIETER_TAKT_S):
             # Ein Durchlauf ist ein Lebenszeichen: der Hauptfaden kommt herum.
             waechter.fortschritt()
@@ -237,6 +242,11 @@ def dienst(chi, stop: threading.Event | None = None, env=None) -> int:
                 melden()
             if erinnern is not None:
                 erinnern()
+            if ambiente is not None:
+                try:
+                    ambiente()
+                except Exception as exc:      # noqa: BLE001 — nie den Dienst reissen
+                    log.warning("Ambiente fehlgeschlagen: %s", exc)
     finally:
         setze_melder(None)
         waechter.stop()

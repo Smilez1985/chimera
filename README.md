@@ -35,10 +35,21 @@ show (`set_face`). **Inventing** new expressions — the task
 `mood_erfindung` exists in the planner — has no caller and no tool yet;
 that is the part that would let a repertoire nobody designed grow.
 
+**The face does not lie.** Whatever the screen shows is what is actually
+happening: expressions that claim an activity (`WORK`, `CURIOUS`, `SPEAK`,
+`LISTEN`) belong to a state and are taken back the moment it ends — an idle
+agent shows an idle face, never a busy one. An expression with a fixed
+length (`BONG`, `JOINT`, `COFFEE`) plays to the end and blocks state changes
+while it runs; only a reflex (`verwirrt`, `fehler`) may interrupt it.
+Endless expressions (`ROCK`) are the standing face and block nothing. And
+because a device that only reacts looks dead, it occasionally does something
+on its own — coffee in the morning, a toke in the evening — limited by time
+windows, a minimum gap and a per-expression cooldown, and only while it is
+genuinely idle (`agent/ambiente.py`).
+
 **What exists today:** the mood library — 43 expressions inherited from
 [Noisy](https://github.com/Smilez1985/Noisy) (`data/moods-builtin.json`),
-plus two Chimera's own (`SPEAK`, `UPDATE`) — the validator for invented
-shapes, the renderer, and the internal states (`wartet`, `hoert`, `denkt`,
+plus two Chimera's own (`SPEAK`, `UPDATE`) — the validator for inventedshapes, the renderer, and the internal states (`wartet`, `hoert`, `denkt`,
 `spricht`, `fehler`). **What is designed but not built:** the sources that
 set a mood from outside — an MQTT broker and an MCP route (DESIGN, rule
 "MQTT"). The expressions are there; the wires to a broker are not.
