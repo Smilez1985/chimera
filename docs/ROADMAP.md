@@ -175,6 +175,14 @@ Quelle ist PaKaChi-SM (privat); sie dient als Vorbild, hier wird nachgebaut, nic
 
 ## Betrieb — was am Gerät auffällt
 
+- [ ] **Die Werkzeugkennung steht nicht im Verlaufsprotokoll** (15.11.2026):
+      `Verlauf.append` schreibt nur `rolle` und `inhalt`, nicht `tool_calls`
+      und `tool_name`. Nach einem Neustart sieht das Fenster ein Ergebnis
+      (`role: tool`) ohne den Aufruf davor; `verlauf_formen` macht daraus eine
+      Nutzernachricht — mit DeepSeek funktioniert das (kein 422), aber die
+      Zuordnung Werkzeug↔Ergebnis ist weg. Zu schreiben: `tool_calls` (Namen)
+      und `tool_name` mit in die Zeile, beim Abspielen zurückgeben; ein Test
+      über Neustart (schreiben, `laden()`, Aufruf steht wieder am Ergebnis).
 - [ ] **Lebenszeichen-Zustandsdatei ist für den Dienst nicht schreibbar**
       (15.11.2026, beim Deploy aufgefallen): `/opt/chimera/state` gehört
       `root:chimera-tor` (0710), der Dienst läuft als `chimera` — bei jedem
