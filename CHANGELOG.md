@@ -36,8 +36,10 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   `speaker`, beide nur Lautstärke) — „aus" heißt 0 %, „an" der gemerkte Wert
   (`mit_lautsprecher` für den Erinnerungston, `alles_aus` beim Dienststart).
   Fehler werden gesagt (`letzter_fehler`), nicht verschluckt.
-  **Das linke Mikrofon ist defekt**: Aufnahme nimmt nur den rechten Kanal
-  (`nur_rechter_kanal`, Befund in `docs/HARDWARE-BEFUNDE.md`).
+  **Keine Kanalwahl in Software**: Das linke Mikro klirrt, aber das ist seit
+  11.10.2026 gemessen (`displays/mikro.py`, Modul 46) — auf dem Gerät liegt
+  dafür `chimera_mikro` mit nur dem guten Kanal. Aufnahme öffnet dieses Gerät
+  (`AUFNAHME_GERAET`), statt eine zweite Wahrheit zu pflegen.
 - **Selbsttätige Aktionen (Ambiente)** (15.11.2026, Auftrag smilez: *„ab und
   zu Bing rauchen oder Joint rauchen, morgens Kaffee trinken"*): neues Modul
   `agent/ambiente.py` — Fenster nach Tageszeit (06–10 Kaffee/Gähnen/Strecken,

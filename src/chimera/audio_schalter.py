@@ -10,12 +10,15 @@ nichts damit anfängt. Und ein Lautsprecher, der stumm geschaltet ist, während
 niemand etwas abspielt, ist die ehrlichere Grundstellung als einer, der
 „bereit" ist.
 
-**Wie hart ist hart? Am Whisplay-HAT gibt es keinen Schalter.** Am Pi
-gemessen (`amixer -c whisplaysound scontrols`): nur zwei Regler, `mic` und
-`speaker`, beide **nur Lautstärke** („Capabilities: volume volume-joined") —
-kein `pswitch`, kein `cswitch`. Es gibt also nichts zu „muten"; der einzige
-harte Weg ist **Lautstärke auf 0** (Aufnahmeverstärkung bzw. Ausgang), und
-beim Einschalten den vorher gemerkten Wert zurück (am Pi 80 %).
+**Wie hart ist hart — zwei Wege, einer davon ist besser.** Gibt es einen
+echten **Mute-Schalter** (`pswitch`/`cswitch` an der Kontrolle), wird der
+benutzt: Er ist der schnellere Weg *und* er lässt die Lautstärke stehen —
+beim Einschalten kommt also genau die eingestellte Lautstärke zurück, nicht
+„zu laut" oder „zu leise" (smilez, 15.11.2026). Gibt es keinen Schalter (am
+Whisplay-HAT: `amixer -c whisplaysound scontrols` kennt nur `mic` und
+`speaker`, beide **nur** `volume volume-joined`), fällt der Schalter auf
+**Lautstärke 0 %** zurück und merkt sich den vorherigen Wert (am Pi 80 %).
+Die Fähigkeit wird **einmal** gemessen und gemerkt, nicht bei jedem Schalten.
 
 **Der Zustand ist die Wahrheit, nicht die Absicht.** Nach jedem Schaltversuch
 wird der gemerkte Zustand gesetzt — auch wenn das Kommando scheitert, wird
@@ -51,26 +54,18 @@ REGLER = {"mikrofon": "mic", "lautsprecher": "speaker"}
 #: Vorgabe-Lautstärke, wenn vorher keine bekannt ist (am Pi 80 %).
 STANDARD_LAUTSTAERKE = "80%"
 
-#: **Das linke Mikrofon ist defekt und rauscht** (smilez, 15.11.2026). Der
-#: Codec liefert Stereo, der einfache Mixer hat aber nur **einen** Regler
-#: („mic", values=1, am Pi gemessen) — links lässt sich also nicht per
-#: `amixer` abschalten. Deshalb wird bei der Aufnahme **nur der rechte
-#: Kanal** genommen: `nur_rechter_kanal()` macht aus dem Stereo-Puffer die
-#: rechte Spur. Wer die Aufnahme baut (Phase 5), benutzt sie — sonst hört
-#: Chimera dauerhaft Rauschen auf einem Ohr.
-MIKRO_KANAL = "rechts"
-
-
-def nur_rechter_kanal(pcm: bytes) -> bytes:
-    """Aus interleaved Stereo (S16_LE) die **rechte** Spur allein.
-
-    ``pcm`` sind 2 Byte je Wert, abwechselnd links/rechts. Zurück kommen
-    die rechten Werte ohne Zwischenschritt über numpy: Auf dem Zero 2 W
-    zählt jedes Byte, und die Aufgabe ist ein Slicing.
-    """
-    if len(pcm) < 4:
-        return b""
-    return b"".join(pcm[i:i + 2] for i in range(2, len(pcm) - 1, 4))
+#: **Aufnahme läuft über das Gerät `chimera_mikro`, nicht über harte Kanäle.**
+#: Das linke Mikrofon dieses Boards klirrt (smilez, 15.11.2026: *„unser linkes
+#: mic muss aber immer aus bleiben, das ist defekt und rauscht"*). Das ist
+#: aber schon gemessen und eingerichtet: `chimera.displays.mikro` spielt
+#: Stufentöne und entscheidet je Gerät zwischen ``beide``/``links``/
+#: ``rechts``/``keins``; der Installer (Modul 46) schreibt daraus
+#: ``/etc/alsa/conf.d/50-chimera-mikro.conf``. Am chimera-pi steht dort seit
+#: 11.10.2026 „rechts" — `ttable.0.1 1` führt genau den guten Kanal als Mono.
+#: **Deshalb gibt es hier keine Kanalwahl in Software**: Wer aufnimmt, öffnet
+#: ``chimera_mikro``; eine zweite Auswahl im Code wäre eine zweite Wahrheit
+#: und würde bei einem anderen Gerät falsch liegen.
+AUFNAHME_GERAET = "chimera_mikro"
 
 
 class AudioSchalter:
@@ -88,6 +83,8 @@ class AudioSchalter:
         self._lautsprecher_an = False
         #: Zuletzt gesehene Lautstärke je Regler (für das Zurückschalten).
         self._lautstaerke: dict[str, str] = {}
+        #: Kann diese Kontrolle muten? Ergebnis der einmaligen Messung.
+        self._schalter: dict[str, bool] = {}
         #: Letzter Grund, aus dem ein Schalten nicht ging (für das Journal).
         self.letzter_fehler = ""
 
@@ -133,6 +130,34 @@ class AudioSchalter:
     # --- innen ------------------------------------------------------------
 
     def _schalte(self, was: str, an: bool) -> bool:
+        """Muten, wenn es einen Schalter gibt — sonst Lautstärke 0 %."""
+        regler = REGLER[was]
+        if self._hat_schalter(regler):
+            rc, meldung = self._ausfuehren(
+                ["amixer", "-q", "-c", self.karte, "sset", regler,
+                 "unmute" if an else "mute"])
+            if rc == 0:
+                self.letzter_fehler = ""
+                log.info("Audio: %s %s (Schalter)", regler,
+                         "an" if an else "aus")
+                return an
+            # Ein vorhandener Schalter, der nicht will: benennen und den
+            # Lautstärke-Weg trotzdem versuchen, statt stumm zu bleiben.
+            log.warning("Audio: Schalter %s ging nicht (%s) — Lautstärke-Weg",
+                        regler, meldung or rc)
+        return self._ueber_lautstaerke(was, an)
+
+    def _hat_schalter(self, regler: str) -> bool:
+        """Hat diese Kontrolle einen Mute-Schalter? Einmal messen, dann merken."""
+        if regler in self._schalter:
+            return self._schalter[regler]
+        rc, text = self._ausfuehren(
+            ["amixer", "-q", "-c", self.karte, "sget", regler], lesen=True)
+        faehig = rc == 0 and ("pswitch" in (text or "") or "cswitch" in (text or ""))
+        self._schalter[regler] = faehig
+        return faehig
+
+    def _ueber_lautstaerke(self, was: str, an: bool) -> bool:
         """Lautstärke auf 0 (aus) oder auf den gemerkten Wert (an)."""
         regler = REGLER[was]
         if an:

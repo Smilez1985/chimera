@@ -288,24 +288,31 @@ den Prozess auf dem Zielrechner.
   V1-Warnung steht (5 V auf der Tastenleitung). Solange die Revision
   nicht feststeht, wird er nicht gedrückt.
 
-## Mikrofon: das linke ist defekt (15.11.2026)
+## Mikrofon: das linke ist defekt — und wird längst gemessen (15.11.2026)
 
 smilez: *„unser linkes mic muss aber immer aus bleiben, das ist defekt und
-rauscht"*. Gemessen am Pi:
+rauscht"*. **Das ist im Repo schon gelöst, nicht neu zu bauen:**
 
-```
-arecord -D plughw:0,0 -c 2 -r 16000 -f S16_LE -d 2 /tmp/probe.wav
-channels 2  rate 16000  frames 32000
-RMS links 665.4   rechts 881.9
-```
+- `src/chimera/displays/mikro.py` (11.10.2026) spielt Stufentöne (1/2/3 kHz)
+  über den eigenen Lautsprecher und nimmt beide Kanäle auf. Je Kanal und Ton
+  werden Grundton, **Oberwellen** und Rauschen bei derselben Frequenz
+  bestimmt; die Auswertung entscheidet ``beide``/``links``/``rechts``/``keins``
+  (reine Funktion, ohne Gerät prüfbar).
+- Befund am chimera-pi: rechts klirrt 23–33 dB **unter** dem Grundton, links
+  3 dB **darüber** (Grenze −10 dB) → **links untauglich**. Die Verzerrung
+  kommt vom Mikro, nicht vom Lautsprecher (nach Frequenzgangabzug 16–24 dB
+  mehr Oberwellen).
+- Der Installer (Modul 46) schreibt daraus
+  `/etc/alsa/conf.d/50-chimera-mikro.conf`; am Pi steht dort seit
+  11.10.2026 „rechts" mit `ttable.0.1 1` — das Gerät `chimera_mikro` liefert
+  also **nur den guten Kanal** als Mono.
 
-- Die Aufnahme ist **stereo**, der einfache Mixer hat aber nur **einen**
-  Regler (`amixer -c whisplaysound scontrols` → `mic`, `speaker`; beide
-  `values=1`, nur Lautstärke, **kein Schalter**). Links lässt sich also
-  nicht per `amixer` abschalten.
-- Folge für den Bau: Aufnahme nimmt **nur den rechten Kanal**
-  (`chimera.audio_schalter.nur_rechter_kanal`, `MIKRO_KANAL = "rechts"`).
-  Wer die Sprachschicht baut (ROADMAP Phase 5), benutzt das — sonst rauscht
-  es auf einem Ohr dauerhaft mit.
-- „Aus" heißt am ganzen Gerät: Lautstärke 0 % (beide Regler). Es gibt keinen
-  Mute-Schalter, den man „hart" umlegen könnte.
+**Nicht** in Software nachbauen: Eine zweite Kanalwahl im Code wäre eine
+zweite Wahrheitsquelle und läge auf einem anderen Board falsch. Wer aufnimmt,
+öffnet `chimera_mikro` (`chimera.audio_schalter.AUFNAHME_GERAET`).
+
+**Was hier neu gemessen wurde (15.11.2026):** Es gibt am HAT **keinen
+Mute-Schalter**. `amixer -c whisplaysound scontrols` kennt nur zwei Regler,
+`mic` und `speaker`, beide `values=1` und nur Lautstärke (0–100). „Aus"
+heißt deshalb Lautstärke 0 % — und für das defekte linke Mikro ist das gar
+nicht nötig, weil es über `chimera_mikro` gar nicht erst ankommt.

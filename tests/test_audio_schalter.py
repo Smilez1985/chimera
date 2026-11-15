@@ -41,11 +41,13 @@ def pruefe(ist, soll, was):
 
 
 class Attrappe:
+    """``schalter`` steuert, ob ``sget`` einen Mute-Schalter meldet."""
     """Merkt Aufrufe; beantwortet `sget` wie das Gerät (``Mono: 55 [55%]``)."""
 
-    def __init__(self, rc=0, lautstaerke=55):
+    def __init__(self, rc=0, lautstaerke=55, schalter=False):
         self.rc = rc
         self.lautstaerke = lautstaerke
+        self.schalter = schalter
         self.aufrufe: list[list[str]] = []
 
     def __call__(self, argv, *, lesen: bool = False):
@@ -53,7 +55,10 @@ class Attrappe:
         if self.rc != 0:
             return self.rc, "amixer: Fehler"
         if lesen:
-            return 0, f"Mono: {self.lautstaerke} [{self.lautstaerke}%]"
+            faehig = "volume volume-joined pswitch" if self.schalter \
+                else "volume volume-joined"
+            return 0, (f"Capabilities: {faehig}\n"
+                       f"  Mono: {self.lautstaerke} [{self.lautstaerke}%]")
         return 0, ""
 
     def letzter(self) -> list[str]:
@@ -108,13 +113,25 @@ sch.alles_aus()
 pruefe(sch.zustand(), {"mikrofon_an": False, "lautsprecher_an": False},
        "beide aus")
 
-print("== 7. Nur der rechte Mikrofonkanal (das linke Mikro ist defekt)")
-from chimera.audio_schalter import MIKRO_KANAL, nur_rechter_kanal  # noqa: E402
+print("== 6b. Mit Mute-Schalter: schalten statt Lautstärke")
+a = Attrappe(schalter=True)
+sch = AudioSchalter(ausfuehren=a)
+sch.lautsprecher(False)
+pruefe(a.letzter()[-2:], ["speaker", "mute"], "Schalter benutzt (aus)")
+sch.lautsprecher(True)
+pruefe(a.letzter()[-2:], ["speaker", "unmute"], "Schalter benutzt (an)")
+# Die Lautstärke bleibt unangetastet -- kein Sprung auf 80 %.
+pruefe(any("0%" in " ".join(x) for x in a.aufrufe), False,
+       "keine Lautstärke 0 % geschrieben")
 
-pruefe(MIKRO_KANAL, "rechts", "Vorgabe: rechter Kanal")
-pcm = bytes([1, 0, 2, 0, 3, 0, 4, 0])      # links 1/3, rechts 2/4
-pruefe(list(nur_rechter_kanal(pcm)), [2, 0, 4, 0], "nur die rechte Spur")
-pruefe(nur_rechter_kanal(b"\x01\x00"), b"", "kurzer Puffer: leer, kein Absturz")
+print("== 7. Die Aufnahme läuft über das gemessene Gerät, nicht über Kanäle")
+from chimera.audio_schalter import AUFNAHME_GERAET  # noqa: E402
+
+# Das linke Mikro klirrt; die Auswahl steckt in der ALSA-Konfiguration des
+# Installers (Modul 46, Messung `chimera.displays.mikro`) -- am chimera-pi
+# steht dort seit 11.10.2026 „rechts". Eine zweite Auswahl im Code wäre eine
+# zweite Wahrheit.
+pruefe(AUFNAHME_GERAET, "chimera_mikro", "Aufnahmegerät")
 
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
