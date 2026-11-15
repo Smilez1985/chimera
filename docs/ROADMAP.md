@@ -175,6 +175,20 @@ Quelle ist PaKaChi-SM (privat); sie dient als Vorbild, hier wird nachgebaut, nic
 
 ## Betrieb — was am Gerät auffällt
 
+- [ ] **Die Guthaben- und Verbrauchsanzeige ist nie im Browser angesehen
+      worden** (15.11.2026): am Pi belegt ist die **Op-Antwort** —
+      Kurse vom 13.11., DeepSeek 5,88 € + 6,32 € = 12,20 €, ein Verbrauch von
+      12 613 Eingabe/2 Ausgabe. Was **nicht** belegt ist, ist das, was smilez
+      sieht: `konten.js` (Kurszeile, „≈ €" in Klammern, „Gesamt", der Reiter
+      „Verbrauch" mit Tabelle und Balken) hat keinen JS-Test und lief nie in
+      einem Browser. Zu tun: Modul öffnen, alle drei Fälle ansehen (Anbieter
+      mit Pools, Ollama ohne Guthaben, Anbieter mit Fehler), und — wie bei
+      `freigaben_anzeige.mjs` — einen `node`-Test mit DOM-Ersatz dazulegen.
+- [ ] **Zwei Funktionen namens `ohne_textaufrufe`** (15.11.2026):
+      `ablage.ohne_textaufrufe(fenster)` (Liste, beim Laden) und
+      `loop.ohne_textaufrufe(text)` (Zeichenkette, je Runde). Kein Fehler,
+      nur ein falsches Ergebnis, wenn man sie verwechselt. Umbenennen in
+      `fenster_bereinigen` / `text_bereinigen` (DESIGN „Aufrufe, nicht Text").
 - [ ] **Werkzeugaufrufe als ausklappbare Zeile im Web-Chat** (Auftrag smilez
       15.11.2026, DESIGN „Werkzeugaufrufe im Chat"): Zugeklappt nur der
       Werkzeugname, aufgeklappt Argumente, Ergebnis-Kurzfassung, Dauer und ob

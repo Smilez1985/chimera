@@ -2078,7 +2078,12 @@ Beispiele, keine Vorgabe.
   **Wer eine neue Ablage baut, ändert beide Stellen** — sonst endet jeder
   Schreibversuch mit `Read-only file system`, und die Anzeige bleibt eine
   Anzeige (am Pi am 12.11. mit den Freigaben und am 15.11. mit dem Verbrauch
-  genau so passiert). Telegram-Token und Passwort-Hash ziehen aus der
+  genau so passiert).
+  Der Test meldet `ROT: <datei>:<zeile> spricht <ordner> an …` und rc 1 —
+  **nur** die Zeichenkette `ROT`, nicht `FAIL`. Wer die Suite mit
+  `grep -E 'FAIL|fehlgeschlagen'` auswertet, sieht ihn nicht (15.11.2026:
+  dem Verfasser genau so passiert, der Deploy lief trotzdem). Auswerten
+  heißt: den Exitcode oder die letzte Zeile **jedes** Tests ansehen. Telegram-Token und Passwort-Hash ziehen aus der
   `.env` nach `config/geheim/`; die `.env` bleibt für Adressen und Schalter
   und wird vom Gateway nur gelesen. Der Installer übernimmt den Umzug in
   `migrate_from()`.
@@ -2526,16 +2531,30 @@ lehnte ihn mit HTTP 422 ab. Jetzt gilt strikt:
 - Ist die Schnittstelle aktiv (`_nativ`), kommt `SYSTEM_TEMPLATE_NATIV`:
   keine Aufrufsyntax, **keine Werkzeugliste**. Die Beschreibungen gehen als
   Schemas mit — einmal statt zweimal, und in jeder Runde gespart.
-- Ein `TOOL:` im Text wird dann **nicht ausgeführt**. Es gibt eine Rüge
-  (`RUEGE_TEXT_AUFTRAG`) und eine neue Runde.
-- **Geändert (smilez, 15.11.2026): der zweite Textaufruf wird nicht mehr als
-  Antwort durchgereicht.** Vorher endete der Lauf mit „TOOL: set_face …" als
-  Antworttext — der Nutzer las eine Ausführung, die nie stattfand („es sagt
-  was es tut, aber es passiert nichts"). Jetzt fliegt der Aufruf aus dem
-  Text; bleibt nichts übrig, antwortet der Harness mit `NICHT_AUSGEFUEHRT`.
-  Beides steht im Protokoll (Name/länge des verworfenen Aufrufs).
-- Der Textweg bleibt nur für Anbieter ohne Werkzeug-Schnittstelle
-  (`_nativ = False`) — dort ist er der einzige Weg, nicht der bequemere.
+- **Ein Textaufruf wird erkannt und als Rückfall ausgeführt** (Stand
+  15.11.2026, 04:18: `766f381`). Der Weg dorthin in drei Schritten, weil
+  jeder Schritt eine andere Beobachtung war:
+  1. Zuerst galt: `TOOL:` im Text wird **nicht** ausgeführt, es gibt eine
+     Rüge (`RUEGE_TEXT_AUFTRAG`) und eine neue Runde.
+  2. Dann (smilez, „es sagt was es tut, aber es passiert nichts"): der
+     zweite Textaufruf wurde nicht mehr als Antwort **durchgereicht** — er
+     behauptete eine Ausführung, die es nicht gab.
+  3. Jetzt: das Modell schreibt den Aufruf als JSON-Codeblock
+     (`{"name": "set_face", "arguments": {…}}`, am Pi 04:07 gesehen) — das
+     ist kein nativer `tool_calls`, wurde also nie ausgeführt und stand als
+     Text in der Chatblase. `loop.textaufrufe()` erkennt **beide** Formen
+     (`TOOL: …` und den Codeblock), `ohne_textaufrufe()` nimmt sie aus dem
+     Text, und der Harness führt sie aus — mit Rüge im Protokoll, weil
+     native Aufrufe der Standard bleiben. Netto: der Nutzer sieht keine
+     erfundene Ausführung mehr, und ein Befehl wird nicht dadurch
+     unwirksam, dass das Modell das falsche Format trifft.
+- Der Textweg bleibt für Anbieter ohne Werkzeug-Schnittstelle
+  (`_nativ = False`) der einzige Weg, nicht der bequemere.
+- **Zwei Funktionen heißen gleich, tun aber Verschiedenes** —
+  `ablage.ohne_textaufrufe(fenster)` (Liste von Nachrichten, beim Laden) und
+  `loop.ohne_textaufrufe(text)` (eine Zeichenkette, je Runde). Wer sie
+  verwechselt, bekommt keinen Fehler, sondern ein falsches Ergebnis.
+  Rückstand: umbenennen (`fenster_bereinigen` / `text_bereinigen`).
 
 **Nachtrag (15.11.2026): ein Verlauf aus der Textzeit lehrt den verbotenen
 Weg.** Am Pi gemessen: Der Prompt sagte „nativ", der Verlauf der laufenden
