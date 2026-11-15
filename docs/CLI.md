@@ -251,6 +251,7 @@ Braucht `CHIMERA_LOG_RAM` und `CHIMERA_LOG_KARTE`. / Needs both variables.
 | `cd rust && cargo test --locked` | Rust-Tests. / Rust tests. |
 | `python3 tools/check-globals.py` | Namen finden, die gelesen, aber nie definiert werden. / Find names read as globals but never defined. |
 | `python3 tools/contact-sheet.py [ZIEL.png]` | Moods nebeneinander zeichnen. / Draw moods side by side. |
+| `python3 tools/vorschau.py --mood ROCK [--out vorschau.png] [--bilder 6]` | Einen Ausdruck ohne Gerät als PNG zeichnen; `--datei mood.json` prüft einen eigenen Ausdruck und zeigt ihn, `--liste` nennt alle Namen. / Draw one expression to a PNG without a device. |
 | `python3 tools/import-noisy-moods.py PFAD [ZIEL.json]` | Noisys 41 Moods als Startbestand übernehmen. / Import Noisy's 41 moods. |
 | `tools/binary-ablegen.sh BINARY --art tor|sohelper [--commit KURZ] [--ohne-probe]` | Ein gebautes Binary nach `gateway/` bzw. `sohelper/` legen, mit Prüfsumme und Stand. Prüft Lauf und Version. / Place a built binary in `gateway/` or `sohelper/` with checksum and stand. |
 | `tools/gateway-binary.sh BINARY [--commit KURZ] [--ohne-probe]` | Kurzform davon für das Gateway (`--art tor`). / Short form for the gateway (`--art tor`). |

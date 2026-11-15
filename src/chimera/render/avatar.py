@@ -2231,6 +2231,12 @@ class NoisyRenderer:
         cy = int(self.FACE_CY * self.HEIGHT)
         base_r = int(self.FACE_R * self.BASE)
 
+        # Erfundene Formen des Ausdrucks (Regel 1a, chimera.mood.draw). Bis
+        # 15.11.2026 wurden sie geprueft und abgelegt, aber **nie gezeichnet** --
+        # der Zeichner stand da und hatte keinen Aufrufer. Aufgefallen ist das
+        # erst mit der Vorschau ohne Geraet (tools/vorschau.py).
+        formen = self._mood().get("shapes") or []
+
         # --- BREATHING & SWAY ---
         # Ruhige Grundatmung, unabhaengig von der Lautstaerke: rund zehn
         # Sekunden pro Zug, gut zwei Pixel Ausschlag. Sie soll man kaum
@@ -2315,6 +2321,9 @@ class NoisyRenderer:
         # =======================================================
 
         # Layer 1: Glow
+        # Layer 0: erfundene Formen ganz hinten
+        self.draw_free_shapes(draw, formen, "behind", cx, cy, base_r)
+
         self.draw_glow(draw, cx, cy, r_w, r_h, self.current_glow_color, mood_id,
                        beat_pulse=beat_pulse, beat_strength=beat)
 
@@ -2340,6 +2349,9 @@ class NoisyRenderer:
 
         # Layer 5: Frisur
         self.draw_hair(draw, cx, cy, r_w, wirksame_physik, hair)
+
+        # Layer 5b: erfundene Formen am Koerper
+        self.draw_free_shapes(draw, formen, "body", cx, cy, base_r)
 
         # Layer 6: Accessoires hinter Augen und Mund
         # (headphones sind als Layer 2/4 schon gezeichnet)
@@ -2374,6 +2386,9 @@ class NoisyRenderer:
         # Layer 9: SAD Traene
         if mood_id == MOOD_SAD:
             self.draw_sad_tear(draw, cx, cy, base_r)
+
+        # Layer 9b: erfundene Formen im Gesicht
+        self.draw_free_shapes(draw, formen, "face", cx, cy, base_r)
 
         # Layer 10: Partikel
         p_type = particles.get("type")
@@ -2426,6 +2441,9 @@ class NoisyRenderer:
         # Layer 11: Night Gesture (Psst! Finger + Uhr, genervte Augen)
         if self.state.night_annoyed:
             self.draw_night_gesture(draw, cx, cy, base_r)
+
+        # Layer 11b: erfundene Formen ganz vorn
+        self.draw_free_shapes(draw, formen, "front", cx, cy, base_r)
 
         # Layer 12: Identity HUD Overlay (Taste Y Toggle)
         if self.state.show_identity:

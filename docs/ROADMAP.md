@@ -270,9 +270,6 @@ chimera an und verbessere sie"*.
       (`state/einstellungen/…` mit Eintrag in `ReadWritePaths`), und wie der
       Dienst sie liest (Ablage je Bild ist zu teuer — einmal beim Start plus
       Signal).
-- [ ] **Vorschau ohne Display** — Noisy rendert jeden Mood headless in ein
-      PNG (`noisy_preview.py:139`, `kontaktbogen()`): hoher Hebel beim Bauen
-      eigener Ausdrücke, in Chimera nicht vorhanden.
 - [ ] **Ambiente-Fenster und -Abstände einstellbar** machen, sobald es die
       Einstellungsseite gibt (`agent/ambiente.py`: `FENSTER`,
       `MIN_ABSTAND_S`, `SPERRE_JE_AUSDRUCK_S`, `CHANCE` stehen als

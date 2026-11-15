@@ -20,6 +20,25 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Vorschau ohne Gerät** (15.11.2026): `tools/vorschau.py` zeichnet einen
+  Ausdruck in Panelgröße als PNG — mit demselben `NoisyRenderer`, der auch
+  auf dem Pi zeichnet (`NullPanel` statt Whisplay), also kein zweiter
+  Zeichenweg. `--mood ROCK` nimmt einen Namen aus der Bibliothek
+  (Groß/klein egal), `--datei eigener-ausdruck.json` prüft einen eigenen
+  Ausdruck (`validate`) und zeigt ihn, `--liste` nennt alle Namen,
+  `--bilder N` ergibt einen Streifen für die Bewegung. `--seed` macht ihn
+  wiederholbar; `--breite/--hoehe` folgen der Panelregel (240×280 ist die
+  Whisplay-Vorgabe, nicht die Wahrheit). Unbekannter Name, kaputtes JSON
+  oder eine ungültige Datei enden mit **benanntem Grund** und ohne Datei.
+  Das Werkzeug steht in `docs/CLI.md`.
+  **Der Fund, den es gleich gefunden hat:** `draw_free_shapes` — der
+  Zeichner für die vom Modell erfundenen Formen (`mood/draw.py`, Regel 1a) —
+  war seit dem Einbau **nie aufgerufen** worden. Die Formen wurden geprüft,
+  in den Mood gelegt und dann nicht gezeichnet: „gültig" hieß nicht
+  „sichtbar". Jetzt zeichnet `render()` sie in vier Ebenen
+  (`behind`/`body`/`face`/`front`), an den Stellen, die `LAYERS` nennt.
+  Das ist der erste Fall, in dem die Vorschau ohne Gerät einen Fehler
+  gefunden hat, bevor ihn jemand auf dem Pi gesehen hätte.
 - **Anzeigespiegel** (15.11.2026, Auftrag smilez: *„das Gesicht … im
   Chatfenster oben rechts spiegeln"*): neue Regel „Anzeigespiegel" im DESIGN
   mit eigenem Entwurf, dazu die Umsetzung in drei Schichten.
