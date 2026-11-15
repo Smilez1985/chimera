@@ -115,7 +115,11 @@ class AudioSchalter:
             return
         for was, wert in (daten or {}).items():
             if was in REGLER and isinstance(wert, str) and wert.endswith("%"):
-                self._lautstaerke[was] = wert
+                # **0 % ist keine Einstellung, sondern unser eigenes „aus".**
+                # Wer sie übernimmt, macht aus einem Neustart im Aus ein
+                # Gerät, das beim Einschalten stumm bleibt (am Pi 15.11.).
+                if wert != "0%":
+                    self._lautstaerke[was] = wert
 
     def _sichern(self) -> None:
         """Lautstärken ablegen — atomar, damit ein Absturz keine halbe Datei lässt."""
@@ -153,8 +157,14 @@ class AudioSchalter:
         an = self._mikrofon_an if was == "mikrofon" else self._lautsprecher_an
         gespeichert = self._lautstaerke.get(was) or ""
         gemerkt = int(gespeichert.rstrip("%")) if gespeichert.endswith("%") else None
+        if gemerkt == 0:
+            # 0 % ist der Aus-Zustand, kein eingestellter Wert (s. `_laden`).
+            gemerkt = None
         if not an:
-            return gemerkt
+            # Ohne gemerkten Wert gilt die Vorgabe — genau die Zahl, die ein
+            # Einschalten jetzt anwenden würde. „Nicht messbar" wäre hier
+            # falsch: es gibt einen Wert, nur nicht am Regler.
+            return gemerkt if gemerkt is not None else int(STANDARD_LAUTSTAERKE.rstrip("%"))
         rc, text = self._ausfuehren(
             ["amixer", "-c", self.karte, "sget", REGLER[was]], lesen=True)
         if rc == 0:
@@ -288,7 +298,11 @@ class AudioSchalter:
                 ["amixer", "-c", self.karte, "sget", regler], lesen=True)
             if rc == 0:
                 gemessen = _prozent(jetzt)
-                if gemessen and self._lautstaerke.get(was) != gemessen:
+                # Nur einen **echten** Wert merken: Steht der Regler schon auf
+                # 0 % (weil wir selbst ausgeschaltet haben), ist das keine
+                # Einstellung — sie zu speichern verlöre die gewählte
+                # Lautstärke bei jedem Neustart im Aus.
+                if gemessen and gemessen != "0%" and self._lautstaerke.get(was) != gemessen:
                     self._lautstaerke[was] = gemessen
                     self._sichern()
             wert = "0%"

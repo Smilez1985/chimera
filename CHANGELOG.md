@@ -1962,6 +1962,15 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Eine gemessene 0 % wurde als „Einstellung“ gespeichert** (am Pi
+  15.11.2026): Beim Ausschalten merkt sich der Schalter die Lautstärke —
+  stand der Regler aber schon auf 0 % (weil *wir* ihn ausgeschaltet
+  hatten), wurde diese 0 % zur Einstellung. Nach einem Neustart im Aus
+  blieb das Gerät beim Einschalten stumm und die gewählte Lautstärke war
+  weg. Jetzt gilt: **0 % ist der Aus-Zustand, keine Einstellung** — nicht
+  gemerkt, nicht aus der Ablage übernommen; ohne bekannten Wert zeigt die
+  Seite die Vorgabe, die ein Einschalten anwenden würde. Test 6g,
+  Gegenprobe 4/4.
 - **`_amixer` warf die Ausgabe weg** (am Pi gefunden, 15.11.2026): Der Helfer
   gab bei Erfolg `(0, "")` zurück statt `stdout`. Damit war **jede**
   Lautstärkemessung leer — `sget` antwortete sauber, `_prozent` fand nichts,

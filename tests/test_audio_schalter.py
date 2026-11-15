@@ -242,6 +242,27 @@ with _tf.TemporaryDirectory() as td:
         finally:
             _os.environ["PATH"] = alt_path
 
+print("== 6g. 0 % ist der Aus-Zustand, keine Einstellung (am Pi 15.11.)")
+# Wer beim Ausschalten eine gemessene 0 % als „Einstellung" speichert, verliert
+# die gewählte Lautstärke bei jedem Neustart im Aus -- und das Gerät bleibt
+# beim Einschalten stumm.
+with tempfile.TemporaryDirectory() as td:
+    pfad = _P(td) / "config" / "audio.json"
+    a = Attrappe(lautstaerke=0)              # Regler steht schon auf 0 %
+    sch = AudioSchalter(ausfuehren=a, ablage=pfad)
+    sch.lautsprecher(False)
+    pruefe(sch._lautstaerke.get("lautsprecher"), None,
+           "gemessene 0 % wird nicht als Einstellung gemerkt")
+    pruefe(sch.lautstaerke("lautsprecher"), 80,
+           "ohne bekannten Wert gilt die Vorgabe (was 'an' anwenden würde)")
+    sch.lautsprecher(True)
+    pruefe(a.letzter()[-2:], ["speaker", "80%"], "an wendet die Vorgabe an, nicht 0 %")
+    # Eine alte Ablage mit 0 % (Fassung vor dem Fix) wird nicht übernommen.
+    pfad.parent.mkdir(parents=True, exist_ok=True)
+    pfad.write_text('{"lautsprecher": "0%"}', encoding="utf-8")
+    neu = AudioSchalter(ausfuehren=Attrappe(lautstaerke=0), ablage=pfad)
+    pruefe(neu._lautstaerke.get("lautsprecher"), None, "0 % aus der Ablage ignoriert")
+
 print("== 7. Die Aufnahme läuft über das gemessene Gerät, nicht über Kanäle")
 from chimera.audio_schalter import AUFNAHME_GERAET  # noqa: E402
 

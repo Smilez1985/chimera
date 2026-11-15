@@ -41,6 +41,11 @@ VERFAELSCHUNGEN = [
         '    return 0, ""',
     ),
     (
+        "gemessene 0 % wird als Einstellung gemerkt",
+        '                if gemessen and gemessen != "0%" and self._lautstaerke.get(was) != gemessen:',
+        '                if gemessen and self._lautstaerke.get(was) != gemessen:',
+    ),
+    (
         "Einstellen schaltet ein",
         "        if not an:\n"
         "            return (True, f\"{was}: {zahl}% gemerkt (aus — gilt beim Einschalten)\")",

@@ -3400,6 +3400,13 @@ aus. Der Wert war damit still leer — die Lautstärke stand als „nicht
 messbar" in der Oberfläche und die Ablage blieb leer. Alle lesenden Aufrufe
 kommen deshalb ohne `-q`; die Testattrappe bildet das nach.
 
+**0 % ist der Aus-Zustand, keine Einstellung.** Beim Ausschalten merkt
+sich der Schalter die Lautstärke; stand der Regler aber schon auf 0 % (weil
+*wir* ihn ausgeschaltet hatten), wird die 0 **nicht** übernommen — sonst
+verliert ein Neustart im Aus die gewählte Lautstärke und das Gerät bleibt
+beim Einschalten stumm (am Pi 15.11. gesehen). Ohne bekannten Wert zeigt
+die Seite die Vorgabe (80 %), weil genau die ein Einschalten anwenden würde.
+
 **Und `_amixer` gab die Ausgabe gar nicht zurück** — derselbe Befund, eine
 Ebene tiefer: der Helfer lieferte bei Erfolg `(0, "")` statt `stdout`. Beide
 Fehler zusammen machten jede Messung leer. Deshalb prüft der Test den
