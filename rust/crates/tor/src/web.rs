@@ -857,8 +857,11 @@ fn anzeige_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort 
             // dort, wo gezeichnet wird (eine Positivliste, eine Stelle). Das
             // Gateway prueft nur die Form.
             let wert = match v.get("wert") {
-                Some(w) if w.is_string() || w.is_number() => w.clone(),
-                _ => return fehler(400, "Feld \"wert\" fehlt (Text oder Zahl)"),
+                // Auch Wahrheitswerte: Das Nachtfenster ist ein Schalter,
+                // und ein Schalter als Zeichenkette "true" waere eine
+                // Uebersetzung, die nur schiefgehen kann.
+                Some(w) if w.is_string() || w.is_number() || w.is_boolean() => w.clone(),
+                _ => return fehler(400, "Feld \"wert\" fehlt (Text, Zahl oder Wahrheitswert)"),
             };
             let anfrage = json!({"op": "avatar_setzen", "feld": feld, "wert": wert});
             match sitzung::anfragen(&z.sitzung_socket, &anfrage) {

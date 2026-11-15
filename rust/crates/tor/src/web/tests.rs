@@ -1309,10 +1309,17 @@ fn avatar_einstellungen_gehen_nur_mit_recht_und_ueber_den_dienst() {
     assert_eq!(r.status, 400);
     let r = behandle(&z, &a("POST", "/api/anzeige/einstellung", &c, br#"{"wert":"zopf"}"#));
     assert_eq!(r.status, 400);
-    // Objekt, aber ohne Zeichenkette/Zahl als Wert: abgelehnt, nicht geraten.
+    // Objekt, aber ohne Zeichenkette/Zahl/Wahrheitswert als Wert: abgelehnt,
+    // nicht geraten.
     let r = behandle(&z, &a("POST", "/api/anzeige/einstellung", &c,
                            br#"{"feld":"frisur","wert":{"x":1}}"#));
     assert_eq!(r.status, 400);
+    // Ein Wahrheitswert ist ein gültiger Wert (der Schalter "Nachtfenster"):
+    // die Form ist in Ordnung, also geht es bis zum Socket -- und ohne
+    // Dienst kommt der Grund, nicht ein 400.
+    let r = behandle(&z, &a("POST", "/api/anzeige/einstellung", &c,
+                           br#"{"feld":"nacht_dimmen","wert":true}"#));
+    assert_eq!(r.status, 502);
 
     // Lesend gibt es kein Schreiben und umgekehrt.
     let r = behandle(&z, &a("POST", "/api/anzeige/ausdruecke", &c, b"{}"));

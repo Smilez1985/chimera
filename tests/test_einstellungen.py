@@ -129,6 +129,71 @@ check("einzelne kaputte Felder fallen auf die Vorgabe",
 check("jedes kaputte Feld wird einzeln genannt",
       len([h for h in e.als_json()["hinweise"] if "ungültig" in h]), 2)
 
+reg, _ = mood_laden(BUILTIN, ordner() / "eigene-moods.json")
+mood = reg.get("IDLE")
+
+# --- 3b. Helligkeit und Nachtfenster ------------------------------------
+
+print("== Nachtfenster ==")
+check("Helligkeit: 0 und 255 sind gültig",
+      (E.helligkeit_pruefen(0), E.helligkeit_pruefen(255)), (0, 255))
+for schlecht in [-1, 256, "hell", None, True]:
+    check(f"Helligkeit abgelehnt: {schlecht!r}", E.helligkeit_pruefen(schlecht), None)
+for gut in ["00:00", "06:30", "23:59"]:
+    check(f"Uhrzeit angenommen: {gut}", E.uhrzeit_pruefen(gut), gut)
+for schlecht in ["24:00", "6:30", "0630", "06:60", "", None, 630]:
+    check(f"Uhrzeit abgelehnt: {schlecht!r}", E.uhrzeit_pruefen(schlecht), None)
+check("Schalter: Wahrheitswert, Zahl, Wort",
+      (E.schalter_pruefen(True), E.schalter_pruefen(0), E.schalter_pruefen("an"),
+       E.schalter_pruefen("AUS")), (True, False, True, False))
+check("Schalter: Unsinn ist kein 'aus'", E.schalter_pruefen("vielleicht"), None)
+
+d5 = ordner()
+n = E.Avatar(d5 / "avatar.json")
+# Vorgabe: dimmen AUS -- sonst würde das Gerät über Nacht ungefragt dunkler.
+check("Nachtfenster ist standardmäßig aus", n.get_display()["auto_dim"], False)
+check("Helligkeiten und Zeiten haben Vorgaben",
+      (n.get_display()["brightness_day"], n.get_display()["brightness_night"],
+       n.get_display()["night_mode_start"], n.get_display()["night_mode_end"]),
+      (255, 80, "22:00", "06:00"))
+ok_setzen, _ = n.setzen("nacht_dimmen", True)
+check("Schalter lässt sich setzen", (ok_setzen, n.get_display()["auto_dim"]), (True, True))
+ok_setzen, _ = n.setzen("nacht_von", "21:15")
+check("Startzeit gesetzt", (ok_setzen, n.get_display()["night_mode_start"]), (True, "21:15"))
+ok_setzen, meldung = n.setzen("nacht_von", "25:00")
+check("kaputte Uhrzeit abgelehnt", ok_setzen, False)
+check("nach der Ablehnung steht die alte Zeit",
+      n.get_display()["night_mode_start"], "21:15")
+ok_setzen, _ = n.setzen("helligkeit_nacht", 60)
+check("Nacht-Helligkeit gesetzt", (ok_setzen, n.get_display()["brightness_night"]), (True, 60))
+# Der Renderer liest die Schlüssel, die `_apply_brightness` fragt.
+check("get_display nennt genau die Schlüssel des Renderers",
+      sorted(n.get_display()), sorted(["auto_dim", "brightness_day",
+                                       "brightness_night", "night_mode_start",
+                                       "night_mode_end"]))
+
+# Der Renderer wirklich: mit Nachtfenster über "jetzt" wird das Bild dunkler.
+from datetime import datetime as _dt
+jetzt = _dt.now().strftime("%H:%M")
+frueher, spaeter = ("00:00", "23:59") if jetzt != "00:00" else ("00:01", "23:59")
+
+def bild_mit_display(auto_dim: bool):
+    abl = E.Avatar(ordner() / "avatar.json")
+    abl.setzen("nacht_dimmen", auto_dim)
+    abl.setzen("helligkeit_nacht", 40)
+    abl.setzen("nacht_von", frueher)
+    abl.setzen("nacht_bis", spaeter)
+    st = State()
+    st.rt = abl
+    st.mood, st.mood_name = mood, "IDLE"
+    r = NoisyRenderer(st, NullPanel())
+    r.frame = 3.0
+    img = r.render()
+    return sum(sum(p) for p in img.getdata()) / (img.size[0] * img.size[1])
+
+check("Nachtfenster macht das Bild dunkler (der Renderer liest get_display)",
+      bild_mit_display(True) < bild_mit_display(False), True)
+
 # --- 4. Vorschau-Rechnung ------------------------------------------------
 
 print("== Vorschau ==")
@@ -147,8 +212,6 @@ check("negative Dauer zählt nicht als eigene",
 # --- 5. Der Renderer liest die Werte wirklich ----------------------------
 
 print("== Renderer ==")
-reg, _ = mood_laden(BUILTIN, ordner() / "eigene-moods.json")
-mood = reg.get("IDLE")
 
 def bild(frisur: str, farbe: str):
     abl = E.Avatar(ordner() / "avatar.json")

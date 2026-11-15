@@ -41,11 +41,23 @@ KONTRAST_MAX = 100
 #: 15.11.2026: „moods ohne feste Laufzeit laufen für 30 Sekunden").
 VORSCHAU_SEKUNDEN = 30.0
 
+#: Helligkeit und Nachtfenster (wie bei Noisy: `display` in der
+#: RuntimeConfig). **Standardmäßig aus** — `nacht_dimmen` ist ein Schalter,
+#: den der Nutzer umlegt. Ein Gerät, das über Nacht von selbst dunkler wird,
+#: ohne dass es jemand bestellt hat, sieht wie ein Defekt aus.
+STANDARD_HELLIGKEIT_TAG = 255
+STANDARD_HELLIGKEIT_NACHT = 80
+STANDARD_NACHT_VON = "22:00"
+STANDARD_NACHT_BIS = "06:00"
+STANDARD_NACHT_DIMMEN = False
+
 #: Felder, die die Ablage kennt. Alles andere wird abgewiesen, nicht
 #: gespeichert -- ein Tippfehler soll nicht als Leiche in der Datei liegen.
-FELDER = ("frisur", "farbe", "kontrast")
+FELDER = ("frisur", "farbe", "kontrast", "helligkeit_tag",
+          "helligkeit_nacht", "nacht_von", "nacht_bis", "nacht_dimmen")
 
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+_UHRZEIT = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
 def farbe_pruefen(wert) -> str | None:
@@ -75,6 +87,40 @@ def kontrast_pruefen(wert) -> int | None:
     if zahl < 0 or zahl > KONTRAST_MAX:
         return None
     return zahl
+
+
+def helligkeit_pruefen(wert) -> int | None:
+    """0..255 als ganze Zahl, oder ``None``."""
+    if isinstance(wert, bool):
+        return None
+    try:
+        zahl = int(str(wert).strip())
+    except (TypeError, ValueError):
+        return None
+    return zahl if 0 <= zahl <= 255 else None
+
+
+def uhrzeit_pruefen(wert) -> str | None:
+    """``HH:MM`` (00:00..23:59), oder ``None``."""
+    if not isinstance(wert, str):
+        return None
+    text = wert.strip()
+    return text if _UHRZEIT.match(text) else None
+
+
+def schalter_pruefen(wert) -> bool | None:
+    """Wahrheitswert. ``None`` heißt: kein gültiger Wert (nicht: falsch)."""
+    if isinstance(wert, bool):
+        return wert
+    if isinstance(wert, (int, float)) and wert in (0, 1):
+        return bool(wert)
+    if isinstance(wert, str):
+        text = wert.strip().lower()
+        if text in ("an", "ein", "ja", "true", "1"):
+            return True
+        if text in ("aus", "nein", "false", "0"):
+            return False
+    return None
 
 
 def frisur_pruefen(wert) -> str | None:
@@ -128,12 +174,23 @@ class Avatar:
     # --- Lesen ---------------------------------------------------------
 
     def _vorgaben(self) -> dict:
+        v = self._vorgabe
+        tage = schalter_pruefen(v.get("nacht_dimmen"))
         return {
-            "frisur": frisur_pruefen(self._vorgabe.get("frisur")) or STANDARD_FRISUR,
-            "farbe": farbe_pruefen(self._vorgabe.get("farbe")) or STANDARD_FARBE,
-            "kontrast": (kontrast_pruefen(self._vorgabe.get("kontrast"))
-                         if self._vorgabe.get("kontrast") is not None
+            "frisur": frisur_pruefen(v.get("frisur")) or STANDARD_FRISUR,
+            "farbe": farbe_pruefen(v.get("farbe")) or STANDARD_FARBE,
+            "kontrast": (kontrast_pruefen(v.get("kontrast"))
+                         if v.get("kontrast") is not None
                          else STANDARD_KONTRAST),
+            "helligkeit_tag": (helligkeit_pruefen(v.get("helligkeit_tag"))
+                               if v.get("helligkeit_tag") is not None
+                               else STANDARD_HELLIGKEIT_TAG),
+            "helligkeit_nacht": (helligkeit_pruefen(v.get("helligkeit_nacht"))
+                                 if v.get("helligkeit_nacht") is not None
+                                 else STANDARD_HELLIGKEIT_NACHT),
+            "nacht_von": uhrzeit_pruefen(v.get("nacht_von")) or STANDARD_NACHT_VON,
+            "nacht_bis": uhrzeit_pruefen(v.get("nacht_bis")) or STANDARD_NACHT_BIS,
+            "nacht_dimmen": (STANDARD_NACHT_DIMMEN if tage is None else tage),
         }
 
     def laden(self) -> dict:
@@ -175,6 +232,12 @@ class Avatar:
             return farbe_pruefen(wert)
         if feld == "kontrast":
             return kontrast_pruefen(wert)
+        if feld in ("helligkeit_tag", "helligkeit_nacht"):
+            return helligkeit_pruefen(wert)
+        if feld in ("nacht_von", "nacht_bis"):
+            return uhrzeit_pruefen(wert)
+        if feld == "nacht_dimmen":
+            return schalter_pruefen(wert)
         return None
 
     def setzen(self, feld: str, wert) -> tuple[bool, str]:
@@ -225,6 +288,24 @@ class Avatar:
     def get_contrast(self) -> int:
         return int(self._werte.get("kontrast") or 0)
 
+    def get_display(self) -> dict:
+        """Helligkeit und Nachtfenster in der Form, die der Renderer liest.
+
+        ``_apply_brightness`` fragt genau diese Schlüssel (``auto_dim``,
+        ``brightness_day``, ``brightness_night``, ``night_mode_start``,
+        ``night_mode_end``) — hier entsteht keine zweite Rechnung, nur die
+        Ablage davor.
+        """
+        return {
+            "auto_dim": bool(self._werte.get("nacht_dimmen")),
+            "brightness_day": int(self._werte.get("helligkeit_tag")
+                                  or STANDARD_HELLIGKEIT_TAG),
+            "brightness_night": int(self._werte.get("helligkeit_nacht")
+                                    or STANDARD_HELLIGKEIT_NACHT),
+            "night_mode_start": self._werte.get("nacht_von") or STANDARD_NACHT_VON,
+            "night_mode_end": self._werte.get("nacht_bis") or STANDARD_NACHT_BIS,
+        }
+
     # --- Was die Weboberfläche liest ------------------------------------
 
     def als_json(self) -> dict:
@@ -233,6 +314,13 @@ class Avatar:
             "frisur": self.get_hair_style(),
             "farbe": self._werte.get("farbe") or STANDARD_FARBE,
             "kontrast": self.get_contrast(),
+            "helligkeit_tag": int(self._werte.get("helligkeit_tag")
+                                  or STANDARD_HELLIGKEIT_TAG),
+            "helligkeit_nacht": int(self._werte.get("helligkeit_nacht")
+                                    or STANDARD_HELLIGKEIT_NACHT),
+            "nacht_von": self._werte.get("nacht_von") or STANDARD_NACHT_VON,
+            "nacht_bis": self._werte.get("nacht_bis") or STANDARD_NACHT_BIS,
+            "nacht_dimmen": bool(self._werte.get("nacht_dimmen")),
             "frisuren": list(FRISUREN),
             "kontrast_max": KONTRAST_MAX,
             "vorschau_sekunden": VORSCHAU_SEKUNDEN,

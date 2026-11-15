@@ -43,6 +43,15 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   **Der Renderer liest nachsichtig** (`_rt_wert`): `rt` ist nicht mehr Noisys
   volle `RuntimeConfig`, und ein fehlendes `get_speed()` darf bei zwei Bildern
   je Sekunde nicht zum Ausfall werden.
+- **Nachtfenster und Helligkeit** (15.11.2026, Nachtrag auf smilez' Hinweis
+  *„Einstellmöglichkeiten … wie Haare, Tag/Nacht Zeit"*): `helligkeit_tag`
+  (0..255, Vorgabe 255), `helligkeit_nacht` (Vorgabe 80), `nacht_von` /
+  `nacht_bis` (`HH:MM`, Vorgabe 22:00/06:00) und der Schalter `nacht_dimmen`.
+  Der Schalter ist **standardmäßig aus** — ein Gerät, das über Nacht von
+  selbst dunkler wird, ohne dass es jemand bestellt hat, sieht wie ein Defekt
+  aus. Der Renderer liest die Werte über `get_display()`, das
+  `_apply_brightness` schon immer fragte; das Gateway reicht dafür auch
+  Wahrheitswerte durch.
 - **Vorschau eines Ausdrucks aus dem Browser** (15.11.2026): `POST
   /api/anzeige/vorschau {name}` und `GET /api/anzeige/ausdruecke`. Die Dauer
   entscheidet eine reine Funktion (`render/einstellungen.py`): ein Ausdruck

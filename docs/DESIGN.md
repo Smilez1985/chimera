@@ -3214,6 +3214,7 @@ liest sie über `state.rt`:
 | `get_hair_style()` | Name aus der Positivliste; steuert `draw_hair_<name>` |
 | `get_hair_color()` | `(r, g, b)`; gilt, solange der Ausdruck keine eigene Frisur nennt |
 | `get_contrast()` | 0..100 (Vorgabe **45**, das ist die bisherige Anhebung 0.45), hebt alle Farben gemeinsam an |
+| `get_display()` | Helligkeit und Nachtfenster: `auto_dim`, `brightness_day`, `brightness_night`, `night_mode_start`, `night_mode_end` |
 
 Nur angeschlossen war das nie — `state.rt` blieb leer, der Renderer fiel auf
 seine Vorgaben zurück. Diese Regel schließt genau diese Lücke und baut nichts
@@ -3249,8 +3250,16 @@ Fehler ergibt die Vorgabe, und der Renderer rechnet sichtbar damit weiter.
 (`os.replace`, 0644, Vorgaben bei fehlender oder kaputter Datei):
 
 ```json
-{"frisur": "mochi", "farbe": "#8B5A2B", "kontrast": 45}
+{"frisur": "mochi", "farbe": "#8B5A2B", "kontrast": 45,
+ "helligkeit_tag": 255, "helligkeit_nacht": 80,
+ "nacht_von": "22:00", "nacht_bis": "06:00", "nacht_dimmen": false}
 ```
+
+**Das Nachtfenster ist standardmäßig aus.** Ein Gerät, das über Nacht von
+selbst dunkler wird, ohne dass es jemand bestellt hat, sieht wie ein Defekt
+aus — der Schalter wird umgelegt, die Zeiten und beide Helligkeiten stehen
+daneben. Der Renderer liest genau diese fünf Schlüssel in
+`_apply_brightness`; hier entsteht keine zweite Rechnung.
 
 **Die Vorgabe des Kontrasts ist 45, nicht 0.** Der Renderer hob bisher ohne
 Einstellung um `DEFAULT_CONTRAST_BOOST` = 0.45 an (helle Räume, kein

@@ -275,6 +275,11 @@ const STIL_SEITE = `
            border-radius:.4rem; border:1px solid #2b2f3b; background:#12141a; color:#e6e8ee; }
   input[type=color] { height:2.6rem; padding:.15rem; cursor:pointer; }
   input[type=range] { width:100%; }
+  input[type=time] { width:100%; font:inherit; padding:.35rem; border-radius:.4rem;
+           border:1px solid #2b2f3b; background:#12141a; color:#e6e8ee; }
+  label.schalter { display:flex; align-items:center; gap:.45rem; color:#e6e8ee;
+           font-size:.9rem; margin:.35rem 0 .6rem; }
+  label.schalter input { width:1.1rem; height:1.1rem; }
   button { background:#7aa2ff; color:#0b0d12; border:0; border-radius:.4rem;
            padding:.4rem .9rem; font:inherit; cursor:pointer; }
   button:disabled { opacity:.6; cursor:default; }
@@ -303,6 +308,19 @@ class ChimeraAnzeigeSeite extends HTMLElement {
             Grundfarbe ab — eine Farbe genügt.</p>
             <label for="kontrast">Kontrast für helle Räume: <span id="kwert">0</span> %</label>
             <input type="range" id="kontrast" min="0" max="100" step="5" value="0">
+          </div>
+          <div class="karte">
+            <strong>Nachtfenster</strong>
+            <label class="schalter"><input type="checkbox" id="nacht_dimmen">
+            Nachts von selbst dunkler</label>
+            <label for="nacht_von">Dunkel ab</label>
+            <input type="time" id="nacht_von" value="22:00">
+            <label for="nacht_bis">Wieder hell ab</label>
+            <input type="time" id="nacht_bis" value="06:00">
+            <label for="helligkeit_nacht">Helligkeit nachts: <span id="nwert">80</span> von 255</label>
+            <input type="range" id="helligkeit_nacht" min="20" max="255" step="5" value="80">
+            <label for="helligkeit_tag">Helligkeit tags: <span id="twert">255</span> von 255</label>
+            <input type="range" id="helligkeit_tag" min="20" max="255" step="5" value="255">
           </div>
           <div class="karte">
             <strong>Vorschau</strong>
@@ -369,6 +387,29 @@ class ChimeraAnzeigeSeite extends HTMLElement {
     // Erst beim Loslassen senden: jede Zwischenstufe zu schreiben hieße,
     // bei jedem Pixel eine Datei zu ersetzen.
     kontrast.onchange = () => this.setzen("kontrast", Number(kontrast.value));
+
+    // Nachtfenster und Helligkeit. Der Schalter ist die Vorgabe "aus":
+    // kein Gerät wird von selbst dunkler, ohne dass es jemand bestellt hat.
+    const dimmen = this.$("nacht_dimmen");
+    dimmen.checked = !!w.nacht_dimmen;
+    dimmen.onchange = () => this.setzen("nacht_dimmen", dimmen.checked);
+    const von = this.$("nacht_von");
+    von.value = w.nacht_von || "22:00";
+    von.onchange = () => this.setzen("nacht_von", von.value);
+    const bis = this.$("nacht_bis");
+    bis.value = w.nacht_bis || "06:00";
+    bis.onchange = () => this.setzen("nacht_bis", bis.value);
+    const nacht = this.$("helligkeit_nacht");
+    nacht.value = String(w.helligkeit_nacht ?? 80);
+    this.$("nwert").textContent = nacht.value;
+    nacht.oninput = () => { this.$("nwert").textContent = nacht.value; };
+    nacht.onchange = () => this.setzen("helligkeit_nacht", Number(nacht.value));
+    const tag = this.$("helligkeit_tag");
+    tag.value = String(w.helligkeit_tag ?? 255);
+    this.$("twert").textContent = tag.value;
+    tag.oninput = () => { this.$("twert").textContent = tag.value; };
+    tag.onchange = () => this.setzen("helligkeit_tag", Number(tag.value));
+
     for (const h of w.hinweise || []) this._melden(h, "meldung");
   }
 
