@@ -545,7 +545,11 @@ zwischen zwei Aufträgen steht dasselbe Gesicht stundenlang.
 - **Wahrscheinlichkeit `CHANCE = 0.35`** je fälligem Takt: lebendig, aber
   nicht im Minutentakt.
 - **Nur wenn wirklich nichts läuft:** kein Auftrag (`Session.busy`), kein
-  laufender endlicher Ausdruck (`Face.laeuft`). Das ist dieselbe Bedingung
+  laufender endlicher Ausdruck (`Face.laeuft`) und **mindestens fünf
+  Minuten** seit der letzten Frage (`RUHE_NACH_TURN_S`, `app.py`). Ohne die
+  letzte Bedingung gähnt das Gerät direkt nach einer Antwort — am 15.11.2026
+  gesehen: *„warum kommt yawn bei ‚Work auf Bing prüfen'?"*. Es wirkte
+  unhöflich, nicht lebendig. Das ist dieselbe Bedingung
   wie beim ehrlichen Zustand — ein Gerät, das arbeitet, raucht nicht.
 - **Was es nicht gibt, wird nicht gewählt.** Die Bibliothek darf kleiner
   sein als die Tabelle; fehlt ein Name, wird er übergangen, statt zu
@@ -555,6 +559,15 @@ zwischen zwei Aufträgen steht dasselbe Gesicht stundenlang.
   ruft sie in seiner bestehenden 30-s-Schleife, neben `melden` und
   `erinnern`. Ein eigener Thread wäre auf einem 462-MB-Gerät teurer als der
   Nutzen und würde denselben Zustand zweimal lesen.
+
+**Ein Gähnen ist eine Handlung, kein Dauerzustand.** `mouth.style = "yawn"`
+zeichnete ein **festes** großes Oval und YAWN hatte keine `dauer_s` — der
+Mund stand offen, bis etwas anderes kam (*„sieht aus als wolle er mich
+fressen"*, smilez 15.11.2026). Jetzt: `gaehn_mund(phase)` rechnet die
+Mundgröße (zu → offen → zu), `Renderer.einmal_zyklus()` schiebt die Phase
+gedeckelt wie beim Zug-Zyklus, aber **ohne Modulo** — sie endet bei 1.0 und
+bleibt dort. YAWN bringt `dauer_s = 2.4` mit und ist damit ein endlicher
+Ausdruck nach Regel 9: einmal ganz, dann zurück.
 
 **Woher die Idee kommt und was nicht übernommen wurde.** Noisy wählt alle
 30–300 s per `random.choice` aus einem tageszeitlich gefilterten Idle-Pool

@@ -2586,7 +2586,8 @@
    },
    "name": "YAWN",
    "priority": 5,
-   "fast_track": false
+   "fast_track": false,
+   "dauer_s": 2.4
   },
   {
    "body": {

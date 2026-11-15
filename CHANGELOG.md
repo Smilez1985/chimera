@@ -1148,6 +1148,17 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Ein Gähnen öffnet und schließt den Mund** (15.11.2026, smilez: *„die
+  Animation yawn dauert zu lange, sieht aus als wolle er mich fressen"*):
+  `mouth.style == "yawn"` war ein festes Oval ohne Bewegung. Neu
+  `gaehn_mund(phase)` (zu → offen → zu, reine Rechnung) und
+  `Renderer.einmal_zyklus()` — gedeckelte Phase wie beim Zug-Zyklus, aber
+  **ohne Modulo**: sie läuft einmal und bleibt am Ende. `YAWN` bekommt
+  `dauer_s = 2.4`.
+- **Die Umgebung handelt erst nach echter Ruhe** (15.11.2026, smilez: *„warum
+  kommt yawn bei ‚Work auf Bing prüfen'?"*): `RUHE_NACH_TURN_S` = 5 min seit
+  der letzten Frage, sonst kein selbsttätiger Ausdruck. Direkt nach einer
+  Antwort zu gähnen wirkt unhöflich, nicht lebendig.
 - **Ein endlicher Ausdruck läuft ganz und sperrt, ein endloser sperrt nicht**
   (15.11.2026, smilez: *„bong friert mitten in der mood Animation ein"*):
   `Face._dauer_von` hebt die Modellangabe auf die eigene Länge des Ausdrucks

@@ -97,6 +97,18 @@ BLINK_DAUER_MAX = 0.47
 BLINK_VORLAUF = 0.02
 
 
+def gaehn_mund(phase: float) -> tuple[int, int]:
+    """Mundgröße beim Gähnen: (halbe Breite, Höhe) für eine Phase 0..1.
+
+    Reine Rechnung, ohne Pillow — damit die Form prüfbar ist, ohne ein Bild
+    zu malen. Bei 0 und 1 ist der Mund fast zu, in der Mitte weit offen:
+    Ein Gähnen **öffnet** und **schließt** wieder, es steht nicht offen.
+    """
+    p = max(0.0, min(1.0, float(phase)))
+    auf = math.sin(math.pi * p)
+    return 4 + int(9 * auf), 2 + int(26 * (auf ** 0.7))
+
+
 def ablauf_pruefen(state, *, jetzt=None) -> bool:
     """Steht ein Ausdruck mit fester Dauer abgelaufen? Dann zurücknehmen.
 
@@ -564,6 +576,13 @@ class NoisyRenderer:
         self.toke_high = 0.0         # 0..1 wie stark die Wirkung gerade ist
         self.toke_phase = 0.0
         self.toke_mood = None
+        #: Einmalige Mundbewegungen (Gähnen): Phase 0..1, laeuft genau einmal.
+        #: Vorher war „yawn" ein fester, weit offener Mund -- keine Handlung,
+        #: sondern ein Dauerzustand (smilez, 15.11.2026: *„er hat den Mund viel
+        #: zu lange offen … sieht aus als wolle er mich fressen"*).
+        self.einmal_phase = 0.0
+        self.einmal_mood = None
+        self.einmal_letzte_zeit = None
         self.toke_letzte_zeit = None
 
         self.smooth_loud = 0.0
@@ -573,6 +592,27 @@ class NoisyRenderer:
     # ----------------------------------------------------------
     # Thermal
     # ----------------------------------------------------------
+    def einmal_zyklus(self, mood_id: str, sekunden: float,
+                      speed: float = 1.0, jetzt: float | None = None) -> float:
+        """Phase 0..1 fuer eine **einmalige** Handlung (Gaehnen).
+
+        Wie der Zug-Zyklus: gedeckelte Bildzeit, Neustart beim Moodwechsel,
+        kein freier Zaehler. Anders als dort laeuft die Phase **nicht**
+        modulo -- sie bleibt am Ende stehen. Genau das ist der Unterschied
+        zwischen einer Handlung und einem Dauerzustand.
+        """
+        jetzt = time.monotonic() if jetzt is None else float(jetzt)
+        if self.einmal_mood != mood_id:
+            self.einmal_mood = mood_id
+            self.einmal_phase = 0.0
+            self.einmal_letzte_zeit = jetzt
+        letzte = self.einmal_letzte_zeit or jetzt
+        self.einmal_letzte_zeit = jetzt
+        dt = min(TOKE_MAX_SCHRITT, max(0.0, jetzt - letzte))
+        dauer = max(0.3, float(sekunden))
+        self.einmal_phase = min(1.0, self.einmal_phase + dt * max(0.1, speed) / dauer)
+        return self.einmal_phase
+
     def toke_cycle(self, mood_id, zieht, speed=1.0):
         """
         Zug-Zyklus - gemeinsames Verhalten aller Rauch-Moods.
@@ -1160,7 +1200,17 @@ class NoisyRenderer:
             draw.arc([cx - 10, my, cx + 10, my + 12], 0, 180, fill=EYE_COLOR, width=3)
             draw.line([cx + 12, my + 4, cx + 18, my + 2], fill=(255, 100, 200), width=2)
         elif style == "yawn":
-            draw.ellipse([cx - 12, my, cx + 12, my + 28], fill=EYE_COLOR)
+            # Ein Gaehnen ist eine Bewegung: auf, kurz halten, zu. Der Mund
+            # steht nicht offen, er oeffnet sich (smilez: „sieht aus als wolle
+            # er mich fressen"). Die Phase laeuft einmal und endet bei 0 --
+            # danach ist der Mund zu, auch wenn der Ausdruck noch steht.
+            breite, hoehe = gaehn_mund(self.einmal_phase)
+            if hoehe > 3:
+                draw.ellipse([cx - breite, my + 8 - hoehe,
+                              cx + breite, my + 8 + hoehe // 3], fill=EYE_COLOR)
+            else:
+                draw.line([cx - 8, my + 8, cx + 8, my + 8], fill=EYE_COLOR,
+                          width=3)
         elif style == "tongue":
             draw.arc([cx - 15, my, cx + 15, my + 20], 0, 180, fill=EYE_COLOR, width=4)
             draw.ellipse([cx - 6, my + 12, cx + 6, my + 24], fill=(220, 80, 80))
@@ -2197,6 +2247,16 @@ class NoisyRenderer:
         zieht = bool(physics.get("toke"))
         self.toke_inflate, self.toke_ember, self.toke_exhaling = \
             self.toke_cycle(mood_id, zieht, speed)
+
+        # --- EINMALIGE MUNDBEWEGUNG (GAEHNEN) ---
+        # Eine Handlung, kein Dauerzustand: laeuft genau einmal, so lange wie
+        # der Ausdruck es sagt (`dauer_s`, Vorgabe 2,4 s).
+        if str((mouth or {}).get("style")) == "yawn":
+            try:
+                dauer = float(rd.get("dauer_s") or 2.4)
+            except (TypeError, ValueError):
+                dauer = 2.4
+            self.einmal_zyklus(mood_id, dauer, speed)
         if zieht:
             # Waehrend des Zuges die normale Atmung herausnehmen - sonst
             # ueberlagern sich zwei Rhythmen und es sieht aus, als wuerde

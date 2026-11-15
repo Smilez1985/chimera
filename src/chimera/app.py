@@ -44,6 +44,13 @@ TASTE_QUITTUNG_MS = 720
 def _home() -> Path:
     return Path(os.environ.get("CHIMERA_HOME", Path.home() / ".chimera"))
 
+#: So lange muss es still sein, bevor die Umgebung von selbst etwas tut.
+#: Direkt nach einer Frage zu gähnen fällt auf -- es wirkt unhöflich, nicht
+#: lebendig (smilez, 15.11.2026: „warum kommt yawn bei ‚Work auf Bing
+#: prüfen'?").
+RUHE_NACH_TURN_S = 300.0
+
+
 @dataclass
 class Chimera:
     """Das zusammengebaute Gerät."""
@@ -135,8 +142,17 @@ class Chimera:
         ausdrückliche Wahl fällt dort nicht auf einen anderen Anbieter
         zurück.
         """
-        return self.session.ask(prompt, channel, anbieter=anbieter,
-                                modell=modell, denken=denken)
+        # Jede Frage gilt als Anwesenheit: Solange jemand mit dem Gerät
+        # spricht, soll es nicht von selbst gähnen (smilez, 15.11.2026:
+        # *„warum kommt yawn bei ‚Work auf Bing prüfen'?"* — die Frage war
+        # gerade beendet, die Umgebung sah „still" und würfelte).
+        import time as _zeit
+        self._letzte_aktivitaet = _zeit.monotonic()
+        try:
+            return self.session.ask(prompt, channel, anbieter=anbieter,
+                                    modell=modell, denken=denken)
+        finally:
+            self._letzte_aktivitaet = _zeit.monotonic()
 
     def telegram(self):
         """Die Telegram-Tür öffnen — in *diese* Sitzung (Regel 5d)."""
@@ -243,6 +259,10 @@ class Chimera:
             self._temp_wert = None
         self._temp_zeit = jetzt
         return self._temp_wert
+
+    #: Wann zuletzt jemand etwas gefragt hat (monotone Uhr). Die Umgebung
+    #: handelt erst, wenn das eine Weile her ist (RUHE_NACH_TURN_S).
+    _letzte_aktivitaet: float = 0.0
 
     #: Letzter Grund, aus dem der Verbrauch nicht abgelegt werden konnte —
     #: ein Merker, damit die Warnung nicht bei jedem Turn wiederholt wird.
@@ -428,6 +448,11 @@ class Chimera:
         if self.face is None:
             return None
         if self.session is not None and getattr(self.session, "busy", False):
+            return None
+        # Erst wenn eine Weile niemand etwas wollte. Ein Gerät, das mitten im
+        # Gespräch gähnt, ist nicht lebendig, sondern unhöflich.
+        jetzt = _zeit.monotonic()
+        if self._letzte_aktivitaet and jetzt - self._letzte_aktivitaet < RUHE_NACH_TURN_S:
             return None
         if self.ambiente is None:
             self.ambiente = Ambiente()
