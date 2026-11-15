@@ -2354,6 +2354,7 @@
     ]
    },
    "name": "JOINT",
+   "dauer_s": 13,
    "priority": 5,
    "fast_track": false
   },
@@ -2431,6 +2432,7 @@
     ]
    },
    "name": "BONG",
+   "dauer_s": 13,
    "priority": 5,
    "fast_track": false
   },

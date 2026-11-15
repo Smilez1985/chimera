@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(os.environ.get("CHIMERA_SRC") or ROOT / "src")))
 
 from chimera.agent.face import HALT_S, Face  # noqa: E402
-from chimera.render.avatar import State  # noqa: E402
+from chimera.render.avatar import State, ablauf_pruefen  # noqa: E402
 
 BUILTIN = ROOT / "data" / "moods-builtin.json"
 PASS = FAIL = 0
@@ -80,19 +80,26 @@ face, state, uhr = bau()
 face.set_by_name("CHILL")
 pruefe(aktuell(state), "CHILL", "Gesicht nach set_face")
 
-print("== 2. Der nächste Zustand übernimmt ihn NICHT (Haltezeit)")
+print("== 2. Ohne Dauer gilt der Ausdruck bis zur Ablösung")
 face.show_state("arbeitet")
-pruefe(aktuell(state), "CHILL", f"nach 'arbeitet' ({HALT_S:.0f} s Haltezeit)")
+pruefe(aktuell(state), "CHILL", "nach 'arbeitet'")
 face.show_state("spricht")
 pruefe(aktuell(state), "CHILL", "nach 'spricht'")
-uhr.vor(HALT_S - 0.5)
+uhr.vor(3600)
 face.show_state("denkt")
-pruefe(aktuell(state), "CHILL", "kurz vor Ablauf der Frist")
+pruefe(aktuell(state), "CHILL", "auch nach einer Stunde noch")
 
-print("== 3. Nach Ablauf der Frist gilt der Zustand wieder")
-uhr.vor(1.0)
+print("== 3. Mit Dauer übernimmt der Zustand nach Ablauf")
+face, state, uhr = bau()
+face.set_by_name("CHILL", dauer=4)
 face.show_state("arbeitet")
-pruefe(aktuell(state), "WORK", "nach der Frist übernimmt 'arbeitet'")
+pruefe(aktuell(state), "CHILL", "während der Frist")
+uhr.vor(3.5)
+face.show_state("spricht")
+pruefe(aktuell(state), "CHILL", "kurz vor Ablauf")
+uhr.vor(0.6)
+face.show_state("arbeitet")
+pruefe(aktuell(state), "WORK", "nach Ablauf übernimmt 'arbeitet'")
 
 print("== 4. Ein Reflex bricht die Frist (Schreck blendet nicht ein)")
 face, state, uhr = bau()
@@ -102,19 +109,34 @@ pruefe(aktuell(state), "CHAOS", "Reflex geht sofort durch")
 face.show_state("fehler")
 pruefe(aktuell(state), "SAD", "auch 'fehler'")
 
-print("== 5. Ein neuer Befehl verlängert die Frist")
+print("== 5. Ein neuer Befehl setzt die Frist neu")
 face, state, uhr = bau()
-face.set_by_name("CHILL")
-uhr.vor(4.0)
-face.set_by_name("ROCK")
-uhr.vor(4.0)
+face.set_by_name("CHILL", dauer=4)
+uhr.vor(3.0)
+face.set_by_name("ROCK", dauer=4)
+uhr.vor(3.0)
 face.show_state("arbeitet")
 pruefe(aktuell(state), "ROCK", "zweiter Befehl setzt die Frist neu")
 
+print("== 5b. Der Ausdruck bringt seine Dauer selbst mit (Animation mit Ablauf)")
+from chimera.mood.blend import mix  # noqa: E402
+face, state, uhr = bau()
+bong = face.moods.get("BONG")
+bong = dict(bong, dauer_s=3.0)
+face.state.set_mood(face.moods.get("IDLE"))
+face.state.set_mood(bong)
+face._agent_mood = "BONG"
+face._haelt_bis = uhr() + 3.0
+face.state.mood_bis = uhr() + 3.0
+face.state.mood_zurueck = face.moods.get("IDLE")
+pruefe(round(face._dauer_von(bong, None)), 3, "dauer_s des Ausdrucks gilt")
+pruefe(round(face._dauer_von(bong, 0)), 0, "Modell kann 'bis Ablösung' sagen")
+pruefe(round(face._dauer_von(bong, 9)), 9, "Modell schlägt den Ausdruck")
+
 print("== 6. Am Turn-Ende steht wieder der Agentenausdruck")
 face, state, uhr = bau()
-face.set_by_name("ROCK")
-uhr.vor(HALT_S + 1)
+face.set_by_name("ROCK", dauer=2)
+uhr.vor(3)
 face.show_state("spricht")
 pruefe(aktuell(state), "SPEAK", "während des Sprechens")
 face.show_state("wartet")
@@ -126,6 +148,24 @@ face.show_state("hoert")
 pruefe(aktuell(state), "LISTEN", "'hoert'")
 face.show_state("wartet")
 pruefe(aktuell(state), "IDLE", "'wartet' ohne Agentengesicht → IDLE")
+
+print("== 7b. Nach Ablauf der Dauer kehrt das Gesicht von selbst zurück")
+face, state, uhr = bau()
+face.set_by_name("IDLE")
+face.set_by_name("BONG", dauer=3)
+pruefe(aktuell(state), "BONG", "Animation läuft")
+pruefe(ablauf_pruefen(state, jetzt=uhr() + 1), False, "vor Ablauf nichts")
+pruefe(ablauf_pruefen(state, jetzt=uhr() + 3.5), True, "nach Ablauf zurückgenommen")
+pruefe(aktuell(state), "IDLE", "das vorherige Gesicht gilt wieder")
+pruefe(face.state.mood_bis, None, "keine Frist mehr gesetzt")
+face.show_state("arbeitet")
+pruefe(aktuell(state), "WORK", "danach darf der Zustand wieder ran")
+
+print("== 7c. Der Ausdruck selbst bringt seine Dauer mit")
+face, state, uhr = bau()
+bong = face.moods.get("BONG")
+pruefe(round(float(bong.get("dauer_s") or 0)), 13,
+       "BONG hat dauer_s (ein Zug dauert 13 s)")
 
 print("== 8. Ein gelöschter Ausdruck fällt in der Ruhe auf IDLE zurück")
 face, state, uhr = bau()

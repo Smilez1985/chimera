@@ -450,22 +450,31 @@ nie gemeldet, das Gesicht blieb nach der ersten Antwort stehen.
    nicht die des Zustands. `spricht`, `denkt`, `arbeitet` verhalten sich
    unverändert: sie zeigen ihren eigenen Ausdruck und kehren über `wartet`
    zum Agentengesicht zurück.
-7. **Ein gesetztes Gesicht hat eine Haltezeit von 5 Sekunden** (smilez,
-   15.11.2026). Punkt 6 machte den Ausdruck dauerhaft — zu sehen war er
-   trotzdem nicht: `set_face` setzte ihn, 0,45 s später meldete die
-   Schleife `arbeitet` und die Übergangsdauer blendete ihn weg. smilez am
-   Gerät: *„wird das so schnell abgespielt … das es kaum zu sehen und sofort
-   vorbei ist"*. **Nachgemessen, bevor geändert wurde:** Die Bewegung der
-   eingebauten Moods ist in Ordnung (Schwingungen zwischen 0,5 s und 21 s je
-   Periode) — zu kurz war die **Standzeit**, nicht die Animation. Also hält
-   `Face.set_by_name` den Ausdruck `HALT_S` = 5 s (`agent/face.py`); solange
-   diese Frist läuft, übernehmen `arbeitet`, `denkt` und `spricht` nicht.
-   Ausnahmen: ein **Reflex** (`verwirrt`, `fehler`) bricht die Frist (Regel
-   6b — ein Schreck blendet nicht ein), und `wartet` ist ausgenommen, weil es
-   ohnehin den Agentenausdruck zeigt und ein inzwischen gelöschter auf IDLE
-   zurückfallen muss. Ein neuer `set_face` setzt die Frist neu.
-   Tests `tests/test_gesicht_haltezeit.py` (13), Gegenprobe
-   `tests/gegenprobe_gesicht_haltezeit.py` 6/6 rot.
+7. **Die Standzeit entscheidet der Aufruf oder der Ausdruck** (smilez,
+   15.11.2026: *„muss das mood (bei Animationen wie bong rauchen, die einen
+   festen Ablauf und feste Dauer haben) oder das llm entscheiden (bis
+   Ablösung, oder x Sekunden/Minuten)"*). Drei Quellen, in dieser
+   Reihenfolge:
+
+   - **Das Modell** nennt `dauer` in Sekunden am Werkzeug `set_face`.
+     `0`/leer heißt ausdrücklich **bis zur Ablösung**.
+   - **Der Ausdruck** bringt seine eigene Dauer mit: neues Feld `dauer_s`
+     in der Mood-Definition (`schema.DAUER`, 0…600 s, Vorgabe 0). Gedacht
+     für Animationen mit Anfang und Ende — ein Zug an der Bong dauert
+     `TOKE_PERIOD` = 13 s, so steht es bei `BONG` und `JOINT`.
+   - **Ohne beides gilt: bis zur Ablösung.** Der Ausdruck bleibt, bis der
+     Agent oder ein Zustand ihn ersetzt.
+
+   Damit fällt die pauschale Haltezeit weg (sie war der erste Fix am
+   selben Tag: *„wird das so schnell abgespielt … kaum zu sehen"* — die
+   Bewegung der Moods war in Ordnung, nur 0,45 s Übergang zu kurz). Läuft
+   eine Frist ab, nimmt der **Renderer** den Ausdruck zurück
+   (`render/avatar.py: ablauf_pruefen(state)`, geprüft je Bild, kein
+   zweiter Faden); das Gesicht kehrt zum vorherigen Ausdruck zurück und
+   `Face._ablauf` gibt dem Zustand wieder Raum. Ein **Reflex**
+   (`verwirrt`, `fehler`) bricht jede Frist, ein neuer `set_face` setzt
+   sie neu. Tests `tests/test_gesicht_haltezeit.py` (25), Gegenprobe
+   `tests/gegenprobe_gesicht_haltezeit.py` 8/8 rot.
 
 #### Architekturregel 4c — Das Sprachmodell setzt Absicht, nicht Bilder
 

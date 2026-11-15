@@ -41,8 +41,11 @@ STATE_MOODS = {
 #: (Regel 6b).
 HARD_STATES = {"verwirrt", "fehler"}
 
-#: Wie lange ein vom **Agenten** gesetztes Gesicht stehen bleibt, bevor ein
-#: Zustand (``arbeitet``, ``spricht``) es übernehmen darf — in Sekunden.
+#: Veraltet: Die Standzeit kommt aus dem Aufruf oder aus dem Ausdruck.
+#: Ohne beides gilt ein Ausdruck **bis zur Ablösung** (smilez, 15.11.2026:
+#: „muss das mood … oder das llm entscheiden — bis Ablösung oder x
+#: Sekunden"). Die Zahl bleibt als benannter Wert stehen, damit niemand
+#: eine alte 5 aus dem Code fischen muss.
 #:
 #: Fund am Gerät (15.11.2026, smilez): *„wird das so schnell abgespielt … das
 #: es kaum zu sehen und sofort vorbei ist"*. Nachgemessen: Die Bewegung eines
@@ -50,6 +53,11 @@ HARD_STATES = {"verwirrt", "fehler"}
 #: 21 s je Periode), aber der Ausdruck war nur **0,45 s** zu sehen — die
 #: Übergangsdauer. Danach meldete die Schleife ``arbeitet`` und blendete ihn
 #: weg. Ein Befehl, dessen Ergebnis man nicht sieht, ist kein Befehl.
+#:
+#: Seit derselben Nacht entscheidet die Dauer der Aufruf selbst (smilez:
+#: „muss das mood … oder das llm entscheiden — bis Ablösung oder x
+#: Sekunden"): ``dauer`` am Werkzeug, sonst ``dauer_s`` des Ausdrucks,
+#: sonst diese Zahl.
 HALT_S = 5.0
 
 
@@ -71,8 +79,9 @@ class Face:
         #: (DESIGN, Regel „Sprechgesicht" 6). `wartet` kehrt dorthin zurück,
         #: statt auf IDLE — sonst radiert jeder Turn das Gesicht aus.
         self._agent_mood: str = ""
-        #: Bis wann der Agentenausdruck stehen bleibt (``HALT_S``).
-        self._haelt_bis: float = 0.0
+        #: Bis wann der Agentenausdruck steht: ``None`` = bis zur Ablösung
+        #: (niemand übernimmt ihn), eine Zahl = Zeitpunkt auf der Uhr.
+        self._haelt_bis: float | None = None
         #: Einsetzbare Uhr — die Haltezeit wird ohne Warten geprüft.
         self._uhr = clock
 
@@ -94,18 +103,72 @@ class Face:
 
     # --- vom Agenten ------------------------------------------------------
 
-    def set_by_name(self, name: str, *, hard: bool = False) -> dict:
-        """Einen Ausdruck setzen. ``A+B`` mischt, ``A+B:0.3`` gewichtet."""
+    def set_by_name(self, name: str, *, hard: bool = False,
+                    dauer: float | None = None) -> dict:
+        """Einen Ausdruck setzen. ``A+B`` mischt, ``A+B:0.3`` gewichtet.
+
+        ``dauer`` (Sekunden) entscheidet, wie lange er steht — smilez,
+        15.11.2026: *„muss das mood (bei Animationen mit festem Ablauf) oder
+        das llm entscheiden (bis Ablösung, oder x Sekunden/Minuten)"*. Die
+        Reihenfolge ist: was das Modell sagt → was der Ausdruck selbst
+        mitbringt (``dauer_s``) → ``HALT_S`` als Untergrenze. ``0`` heißt
+        **bis zur Ablösung**: der Ausdruck bleibt, bis jemand anders ihn
+        ersetzt.
+        """
         mood = self._resolve(name)
+        vorher = self.state.mood
         self.state.set_mood(mood, hard=hard)
         # Der Agent hat hier bewusst gewählt — das ist der Ausdruck, zu dem
         # `wartet` zurückkehrt (Regel „Sprechgesicht" 6).
         self._agent_mood = str(mood.get("name") or "")
-        # … und er bleibt erst einmal stehen (HALT_S), sonst sieht niemand
-        # das Ergebnis des Werkzeugaufrufs.
-        self._haelt_bis = self._uhr() + HALT_S
         self._last_state = ""
+        # … und er bleibt stehen, sonst sieht niemand das Ergebnis des
+        # Werkzeugaufrufs.
+        sekunden = self._dauer_von(mood, dauer)
+        if sekunden <= 0:
+            self._haelt_bis = None                 # bis zur Ablösung
+            self.state.mood_bis = None
+            self.state.mood_zurueck = None
+            self.state.mood_ablauf = None
+            return mood
+        self._haelt_bis = self._uhr() + sekunden
+        self.state.mood_bis = self._uhr() + sekunden
+        self.state.mood_zurueck = vorher
+        # Der Renderer ruft das nach Ablauf auf — er läuft ohnehin im Takt,
+        # ein zweiter Faden wäre teurer als der Nutzen.
+        self.state.mood_ablauf = self._ablauf
         return mood
+
+    def _dauer_von(self, mood: dict, dauer: float | None) -> float:
+        """Die Standzeit in Sekunden: Modell → Ausdruck → Untergrenze."""
+        if dauer is not None:
+            try:
+                wert = float(dauer)
+            except (TypeError, ValueError):
+                return 0.0
+            return max(0.0, wert)
+        try:
+            return max(0.0, float(mood.get("dauer_s") or 0))
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _ablauf(self, zurueck: dict | None = None) -> None:
+        """Ein Ausdruck mit fester Dauer ist vorbei (gerufen vom Renderer).
+
+        ``zurueck`` ist der Ausdruck, der vor dem gesetzten galt — der
+        Renderer übergibt ihn, damit das Zurücknehmen nicht davon abhängt,
+        in welcher Reihenfolge die Felder geräumt werden.
+        """
+        if zurueck is None:
+            zurueck = self.state.mood_zurueck
+        self._agent_mood = ""
+        self._haelt_bis = 0.0
+        self._last_state = ""
+        self.state.mood_bis = None
+        self.state.mood_ablauf = None
+        self.state.mood_zurueck = None
+        if zurueck is not None:
+            self.state.set_mood(zurueck)
 
     def _resolve(self, name: str) -> dict:
         text = str(name).strip()
@@ -155,15 +218,17 @@ class Face:
         if what in HARD_STATES:
             # Ein Schreck ist ein Reflex und bricht die Haltezeit.
             self._haelt_bis = 0.0
-        elif what != "wartet" and self._uhr() < self._haelt_bis:
+        elif what != "wartet" and self._haelt():
             # Der Agent hat gerade ein Gesicht gesetzt: Es bleibt stehen,
             # statt im nächsten Zustand zu verschwinden. ``_last_state``
             # wird absichtlich NICHT gesetzt — derselbe Zustand darf es
             # nach Ablauf der Frist erneut versuchen. ``wartet`` ist
             # ausgenommen: Es zeigt ohnehin den Agentenausdruck, und ein
             # inzwischen gelöschter muss auf IDLE zurückfallen können.
-            log.debug("Zustand %r wartet: Ausdruck %r hält noch %.1f s",
-                      what, self._agent_mood, self._haelt_bis - self._uhr())
+            rest = ("bis zur Ablösung" if self._haelt_bis is None
+                    else f"{self._haelt_bis - self._uhr():.1f} s")
+            log.debug("Zustand %r wartet: Ausdruck %r hält noch (%s)",
+                      what, self._agent_mood, rest)
             return
         self._last_state = what
 
@@ -177,6 +242,18 @@ class Face:
                                     hard=(what in HARD_STATES))
                 return
         log.debug("Kein Ausdruck für Zustand %r", what)
+
+    def _haelt(self) -> bool:
+        """Steht ein gesetztes Gesicht noch?
+
+        ``_haelt_bis is None`` heißt **bis zur Ablösung** (Ausdruck ohne
+        Dauer): Dann übernimmt kein Zustand. Sonst gilt die Frist.
+        """
+        if not self._agent_mood:
+            return False
+        if self._haelt_bis is None:
+            return True
+        return self._uhr() < self._haelt_bis
 
     def _ruhegesicht(self) -> bool:
         """Das vom Agenten gewählte Gesicht zeigen, wenn es noch existiert.

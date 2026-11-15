@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # echten Quellbaum anzufassen (Muster aus test_freigabe_erinnerung.py).
 sys.path.insert(0, str(Path(os.environ.get("CHIMERA_SRC") or ROOT / "src")))
 
-from chimera.agent.face import HALT_S, Face  # noqa: E402
+from chimera.agent.face import Face  # noqa: E402
 from chimera.mood.registry import Registry  # noqa: E402
 from chimera.render.avatar import State  # noqa: E402
 
@@ -67,7 +67,10 @@ check("frisch: wartet -> IDLE", st.mood_name, "IDLE")
 
 print("== ein gesetztes Gesicht überlebt den Turn ==")
 face, st, uhr = neues_face()
-face.set_by_name("CHAOS", hard=True)
+# ``dauer=0`` heißt „bis zur Ablösung" — hier soll der Zustand aber wieder
+# drankommen, also mit Frist setzen (smilez, 15.11.2026: die Dauer entscheidet
+# der Aufruf oder der Ausdruck).
+face.set_by_name("CHAOS", hard=True, dauer=1)
 check("set_face zeigt CHAOS", st.mood_name, "CHAOS")
 face.show_state("wartet")
 check("nach wartet steht weiter CHAOS", st.mood_name, "CHAOS")
@@ -76,12 +79,12 @@ print("== der Zustand zeigt sich, die Ruhe kehrt zum Agenten zurück ==")
 # Seit 15.11.2026 hält ein gesetztes Gesicht HALT_S Sekunden, bevor ein
 # Zustand es übernimmt (sonst war der Befehl nicht zu sehen). Hier läuft
 # die Frist ab, danach zeigt der Zustand wieder seinen eigenen Ausdruck.
-uhr.vor(HALT_S + 0.1)
+uhr.vor(1.1)
 face.show_state("denkt")
 check("denkt zeigt seinen Ausdruck", st.mood_name, "CURIOUS")
 face.show_state("wartet")
 check("danach wieder CHAOS", st.mood_name, "CHAOS")
-uhr.vor(HALT_S + 0.1)
+uhr.vor(1.1)
 face.show_state("spricht")
 check("spricht zeigt SPEAK", st.mood_name, "SPEAK")
 face.show_state("wartet")

@@ -70,6 +70,9 @@ def mix(a: dict, b: dict, t: float = 0.5, *, name: str | None = None) -> dict:
         "name": name or f"{a['name']}~{b['name']}",
         "priority": round(a.get("priority", 30) + (b.get("priority", 30) - a.get("priority", 30)) * t),
         "fast_track": a.get("fast_track", False) if t < 0.5 else b.get("fast_track", False),
+        # Die Dauer gehört dem Ausdruck, nicht der Mischung: zwei
+        # Animationen mit verschiedenem Ablauf ergeben keinen gemeinsamen.
+        "dauer_s": a.get("dauer_s", 0) if t < 0.5 else b.get("dauer_s", 0),
     }
 
     for sname, slot in SLOTS.items():
@@ -151,6 +154,7 @@ def vary(mood: dict, *, seed=None, strength: float = 0.15,
         "name": name or f"{mood['name']}'",
         "priority": mood.get("priority", 30),
         "fast_track": mood.get("fast_track", False),
+        "dauer_s": mood.get("dauer_s", 0),
     }
 
     for sname, slot in SLOTS.items():

@@ -1743,12 +1743,28 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   sofort vorbei"): Nachgemessen statt geraten — die Bewegung der eingebauten
   Moods ist in Ordnung (0,5 s bis 21 s je Periode), zu kurz war die
   **Standzeit**: `set_face` setzte den Ausdruck, 0,45 s später blendete
-  `arbeitet` ihn weg. Neu `HALT_S` = 5 s in `agent/face.py`: ein vom Agenten
-  gesetztes Gesicht bleibt stehen, Zustände übernehmen erst danach. Ein
-  Reflex (`verwirrt`, `fehler`) bricht die Frist, `wartet` ist ausgenommen
-  (zeigt ohnehin das Agentengesicht, ein gelöschter Ausdruck muss auf IDLE
-  fallen). Tests `tests/test_gesicht_haltezeit.py` (13), Gegenprobe 6/6 rot;
-  `tests/test_ruhegesicht.py` auf den neuen Vertrag umgestellt.
+  `arbeitet` ihn weg. Die Dauer entscheidet jetzt der Aufruf oder der
+  Ausdruck (smilez: „bis Ablösung, oder x Sekunden/Minuten"): neues Feld
+  `dauer_s` in der Mood-Definition (Vorgabe 0 = bis zur Ablösung; `BONG` und
+  `JOINT` tragen 13 s = ein Zug), neuer Parameter `dauer` am Werkzeug
+  `set_face` (0/leer = bis zur Ablösung, sonst Sekunden). Ohne Angabe bleibt
+  der Ausdruck stehen, bis ihn jemand ablöst; mit Frist nimmt der Renderer
+  ihn nach Ablauf zurück (`ablauf_pruefen`, je Bild, kein zweiter Faden) und
+  das Gesicht kehrt zum vorherigen Ausdruck zurück. Ein Reflex (`verwirrt`,
+  `fehler`) bricht jede Frist. Tests `tests/test_gesicht_haltezeit.py` (25),
+  Gegenprobe 8/8 rot, `tests/test_ruhegesicht.py` und `test_mood_ablage.py`
+  auf den neuen Vertrag umgestellt.
+- **Ein Werkzeugaufruf im Fließtext wird ausgeführt, nicht nur gerügt**
+  (15.11.2026, im Chatverlauf am Pi gefunden): Das Modell schrieb den Aufruf
+  als JSON-Codeblock in die Antwort (`{"name": "set_face", "arguments":
+  {"mood": "BONG"}}`) — das ist **kein** nativer `tool_calls`, wurde deshalb
+  nicht ausgeführt und stand als Text in der Chatblase; die Antwort behauptete
+  eine Ausführung, die es nicht gab. `agent/loop.py: textaufrufe()` erkennt
+  jetzt beide Textformen (`TOOL: name {…}` und das JSON-Objekt im Codeblock),
+  führt sie als **Rückfall** aus und nimmt das JSON aus der Antwort. Native
+  Aufrufe bleiben der Standard; gerügt wird weiterhin einmal je Auftrag, damit
+  das Modell zur Schnittstelle zurückfindet. Tests in `tests/test_agent.py`
+  (179, drei neue Fälle).
 - **Das Panel blieb nach einem Installerlauf dunkel** (15.11.2026, smilez:
   „das chimera Display ist aktuell dunkel"): Der Installer startet den Dienst
   in `98-service`, während sein Fortschrittsbalken das Panel noch hält — der

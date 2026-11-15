@@ -97,6 +97,38 @@ BLINK_DAUER_MAX = 0.47
 BLINK_VORLAUF = 0.02
 
 
+def ablauf_pruefen(state, *, jetzt=None) -> bool:
+    """Steht ein Ausdruck mit fester Dauer abgelaufen? Dann zurücknehmen.
+
+    Läuft im Renderertakt und damit auch bei 2 Bildern/s in der Ruhe — die
+    Abweichung beträgt dort höchstens eine halbe Sekunde. Ein eigener Faden
+    wäre teurer als der Nutzen (462-MB-Gerät).
+
+    Rückgabe: ob etwas abgelaufen ist (für Tests und Protokoll).
+    """
+    bis = getattr(state, "mood_bis", None)
+    if bis is None:
+        return False
+    jetzt = time.monotonic() if jetzt is None else jetzt
+    if jetzt < bis:
+        return False
+    state.mood_bis = None
+    zurueck = getattr(state, "mood_zurueck", None)
+    state.mood_zurueck = None
+    rueckruf = getattr(state, "mood_ablauf", None)
+    if rueckruf is not None:
+        try:
+            # Der Rückruf bekommt den vorherigen Ausdruck mit — er darf
+            # nicht davon abhängen, ob hier schon geräumt wurde.
+            rueckruf(zurueck)
+            return True
+        except Exception:           # noqa: BLE001 — das Gesicht darf nie stören
+            log.exception("Ablauf des Ausdrucks konnte nicht gemeldet werden")
+    if zurueck is not None:
+        state.set_mood(zurueck)
+    return True
+
+
 class State:
     """Was der Renderer von aussen braucht.
 
@@ -122,6 +154,14 @@ class State:
         self.favorite_playing = False
         self.cube_mode = False
         self.speaking = False        # neu: spricht gerade (SS4.1)
+        #: Ein Ausdruck mit fester Dauer läuft ab (smilez, 15.11.2026):
+        #: ``mood_bis`` ist der Zeitpunkt (monotone Uhr), ``mood_zurueck``
+        #: der Ausdruck, zu dem es danach zurückgeht, ``mood_ablauf`` die
+        #: Rückmeldung an den Agenten (setzt dort das Agentengesicht zurück).
+        #: Der Renderer prüft es je Bild — kein zweiter Faden, kein Timer.
+        self.mood_bis: float | None = None
+        self.mood_zurueck: dict | None = None
+        self.mood_ablauf = None
 
     # Moods werden ueber diese Eigenschaft gesetzt, damit der Uebergang
     # automatisch mitlaeuft. Wer hart wechseln will, ruft set_mood(hard=True).
@@ -473,6 +513,10 @@ class NoisyRenderer:
         d = defaults()
         d["name"] = self.state.mood_name or "IDLE"
         return d
+
+    def _mood_ablauf_pruefen(self) -> None:
+        """Einen Ausdruck mit fester Dauer nach Ablauf zurücknehmen."""
+        ablauf_pruefen(self.state)
 
     def _init_zustand(self):
         """Alles, was unabhaengig vom Ausgabeweg initialisiert wird."""
@@ -1983,6 +2027,7 @@ class NoisyRenderer:
     # RENDER
     # ----------------------------------------------------------
     def render(self):
+        self._mood_ablauf_pruefen()
         self.read_temperature()
 
         # Laufzeit-Parameter (Speed) vom Orchestrator

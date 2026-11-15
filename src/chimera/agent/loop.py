@@ -86,6 +86,94 @@ CALL_RE = re.compile(
     re.MULTILINE | re.DOTALL,
 )
 
+#: Der **Fallback**, den Modelle von selbst erfinden: ein JSON-Objekt mit
+#: ``name`` und ``arguments``, oft in einem Codeblock. Am Pi (15.11.2026,
+#: 04:07) genau so gesehen::
+#:
+#:     ```json
+#:     { "name": "set_face", "arguments": { "mood": "BONG" } }
+#:     ```
+#:
+#: Das ist **kein** nativer Aufruf (keine ``tool_calls``), wurde deshalb
+#: nicht ausgeführt und stand als Text in der Chatblase — die Antwort
+#: behauptete eine Ausführung, die es nicht gab. Jetzt wird es erkannt und
+#: als Rückfall ausgeführt; die Rüge im Protokoll bleibt (native Aufrufe
+#: sind der Standard, nicht das Ziel-Schema im Fließtext).
+TEXT_JSON_RE = re.compile(
+    r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL | re.IGNORECASE)
+
+
+def textaufrufe(text: str) -> list[dict]:
+    """Werkzeugaufrufe, die das Modell **in den Text** geschrieben hat.
+
+    Zwei Formen: ``TOOL: name {json}`` und ein Codeblock mit
+    ``{"name": …, "arguments": {…}}``. Rückgabe ist eine Liste
+    ``[{"name": …, "argumente": {…}}]``; was sich nicht als Aufruf lesen
+    lässt, wird übergangen (kein Raten).
+    """
+    if not text:
+        return []
+    gefunden: list[dict] = []
+
+    m = CALL_RE.search(text)
+    if m:
+        name, rest = m.group(1), m.group(2)
+        argumente = _json_objekt(rest)
+        if argumente is not None:
+            gefunden.append({"name": name, "argumente": argumente})
+
+    for treffer in TEXT_JSON_RE.finditer(text):
+        roh = treffer.group(1)
+        if not roh.strip():
+            continue
+        try:
+            daten = json.loads(roh)
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(daten, dict):
+            continue
+        name = daten.get("name") or daten.get("tool") or daten.get("werkzeug")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        argumente = daten.get("arguments", daten.get("argumente", {}))
+        if isinstance(argumente, str):
+            argumente = _json_objekt(argumente) or {}
+        if not isinstance(argumente, dict):
+            argumente = {}
+        eintrag = {"name": name.strip(), "argumente": argumente}
+        if eintrag not in gefunden:
+            gefunden.append(eintrag)
+    return gefunden
+
+
+def ohne_textaufrufe(text: str) -> str:
+    """Den Text ohne die Aufrufe — damit kein JSON in der Antwort steht."""
+    if not text:
+        return ""
+    rest = TEXT_JSON_RE.sub("", text)
+    rest = CALL_RE.sub("", rest)
+    return rest.strip()
+
+
+def _json_objekt(text: str) -> dict | None:
+    """Das erste JSON-Objekt im Text, oder ``None``."""
+    t = (text or "").strip()
+    if not t.startswith("{"):
+        return None
+    tiefe = 0
+    for i, zeichen in enumerate(t):
+        if zeichen == "{":
+            tiefe += 1
+        elif zeichen == "}":
+            tiefe -= 1
+            if tiefe == 0:
+                try:
+                    wert = json.loads(t[:i + 1])
+                except ValueError:
+                    return None
+                return wert if isinstance(wert, dict) else None
+    return None
+
 SYSTEM_TEMPLATE = """Du bist Chimera, ein Gerät mit einem Gesicht auf einem kleinen Bildschirm.
 
 Du kannst Werkzeuge benutzen. Dafür schreibst du eine Zeile in genau dieser Form:
@@ -391,23 +479,40 @@ class Agent:
             # behauptet eine Ausfuehrung, die es nicht gab) — der Aufruf fliegt
             # aus dem Text, und der Nutzer hoert, dass es nicht ging.
             if self._nativ:
-                if CALL_RE.search(text):
+                # Rückfall: Das Modell hat den Aufruf **in den Text**
+                # geschrieben (JSON im Codeblock, ``TOOL: …``). Am Pi
+                # (15.11.2026, 04:07) stand so ein Aufruf als Text in der
+                # Chatblase und wurde nie ausgeführt — die Antwort behauptete
+                # eine Ausführung, die es nicht gab. Native Aufrufe sind der
+                # Standard; wenn das Modell sie nicht trifft, wird der
+                # Textaufruf ausgeführt, damit aus dem Befehl ein Ergebnis
+                # wird. Die Rüge bleibt (Protokoll + Hinweis an das Modell,
+                # einmal je Auftrag).
+                aufrufe = textaufrufe(text)
+                if aufrufe:
+                    reste = ohne_textaufrufe(text)
+                    log.warning("Textaufruf statt Werkzeugschnittstelle "
+                                "(ausgeführt): %s", _kurz(text))
                     if not geruegt:
                         geruegt = True
-                        log.warning("Textaufruf statt Werkzeugschnittstelle "
-                                    "(geruegt): %s", _kurz(text))
+                        steps.append(Step("error",
+                                          "Werkzeugaufruf im Text — als Rückfall ausgeführt"))
+                        # Den Verlauf säubern: ein Textaufruf im Fenster
+                        # lehrt das Modell, es wieder so zu tun.
                         self.history.append({"role": "assistant",
-                                             "content": text})
+                                             "content": reste})
                         self.history.append({"role": "user",
                                              "content": RUEGE_TEXT_AUFTRAG})
-                        steps.append(Step("error",
-                                          "Werkzeugaufruf im Text — nicht ausgeführt"))
-                        continue
-                    log.warning("Zweiter Textaufruf verworfen: %s", _kurz(text))
-                    reste = CALL_RE.sub("", text).strip()
-                    steps.append(Step("error",
-                                      "Werkzeugaufruf im Text — verworfen"))
-                    text = reste or NICHT_AUSGEFUEHRT
+                    else:
+                        self.history.append({"role": "assistant",
+                                             "content": reste})
+                    for aufruf in aufrufe[:MAX_WERKZEUGE_JE_RUNDE]:
+                        out = self._fuehre_aus(aufruf["name"],
+                                               aufruf.get("argumente") or {},
+                                               steps)
+                        self.history.append({"role": "tool", "content": out,
+                                             "tool_name": aufruf["name"]})
+                    continue
                 self.history.append({"role": "assistant", "content": text})
                 steps.append(Step("text", text[:80]))
                 self._state("spricht")

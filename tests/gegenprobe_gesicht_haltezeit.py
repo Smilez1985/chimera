@@ -19,34 +19,43 @@ ROOT = HIER.parent
 SRC = ROOT / "src"
 TEST = HIER / "test_gesicht_haltezeit.py"
 FACE = "chimera/agent/face.py"
+AVATAR = "chimera/render/avatar.py"
 
 MUTATIONEN = [
-    ("keine-haltezeit",
+    ("dauer-ignoriert",
      FACE,
-     "        self._haelt_bis = self._uhr() + HALT_S",
-     "        self._haelt_bis = self._uhr()"),
+     "            return max(0.0, wert)",
+     "            return 0.0"),
+    ("dauer-des-moods-ignoriert",
+     FACE,
+     '            return max(0.0, float(mood.get("dauer_s") or 0))',
+     "            return 0.0"),
     ("frist-ignoriert",
      FACE,
-     '        elif what != "wartet" and self._uhr() < self._haelt_bis:',
+     '        elif what != "wartet" and self._haelt():',
      "        elif False:"),
+    ("ablosung-ignoriert",
+     FACE,
+     "        if self._haelt_bis is None:\n            return True",
+     "        if self._haelt_bis is None:\n            return False"),
     ("reflex-gebremst",
      FACE,
      "        if what in HARD_STATES:\n"
      "            # Ein Schreck ist ein Reflex und bricht die Haltezeit.\n"
      "            self._haelt_bis = 0.0",
      "        if False:\n            pass"),
-    ("frist-verlaengert-nicht",
-     FACE,
-     "        self._haelt_bis = self._uhr() + HALT_S",
-     "        self._haelt_bis = self._haelt_bis or (self._uhr() + HALT_S)"),
     ("wartet-blockiert",
      FACE,
-     '        elif what != "wartet" and self._uhr() < self._haelt_bis:',
-     "        elif self._uhr() < self._haelt_bis:"),
-    ("haltedauer-null",
-     FACE,
-     "HALT_S = 5.0",
-     "HALT_S = 0.0"),
+     '        elif what != "wartet" and self._haelt():',
+     "        elif self._haelt():"),
+    ("ablauf-vergisst-zurueck",
+     AVATAR,
+     "            rueckruf(zurueck)",
+     "            rueckruf(None)"),
+    ("ablauf-prueft-nicht",
+     AVATAR,
+     "    if jetzt < bis:\n        return False",
+     "    if False:\n        return False"),
 ]
 
 

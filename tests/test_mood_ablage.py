@@ -147,7 +147,7 @@ with tempfile.TemporaryDirectory() as td:
     check("eingebauter Name: Auskunft", "ist eingebaut" in text, True)
 
     text = toolbox.call("set_face", {"mood": "ZORN"})
-    check("neuer Ausdruck setzbar", text, "Ausdruck gesetzt: ZORN")
+    check("neuer Ausdruck setzbar", text, "Ausdruck gesetzt: ZORN — gilt bis zur Ablösung")
     text = toolbox.call("mood_entfernen", {"name": "zorn"})
     check("Werkzeug loescht", text.startswith("Geloescht: ZORN"), True)
     check("nach Loeschen weg", reg2.find("ZORN") is None, True)

@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 
 from .schema import (
     SLOTS,
+    DAUER,
     PRIORITY,
     BoolField,
     ColorField,
@@ -145,6 +146,16 @@ def validate(raw: dict, *, name: str | None = None) -> tuple[dict, Report]:
     mood["priority"] = clamped
 
     mood["fast_track"] = bool(_as_bool(raw.get("fast_track", False)))
+
+    # --- Dauer ------------------------------------------------------------
+    dauer = _as_number(raw.get("dauer_s", DAUER.default))
+    if dauer is None:
+        rep.fixes.append(f"dauer_s unlesbar → {DAUER.default}")
+        dauer = DAUER.default
+    geklemmt = DAUER.clamp(dauer)
+    if geklemmt != dauer:
+        rep.fixes.append(f"dauer_s {dauer:g} → {geklemmt}")
+    mood["dauer_s"] = geklemmt
 
     # --- Slots ------------------------------------------------------------
     for sname, slot in SLOTS.items():

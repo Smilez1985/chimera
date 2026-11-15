@@ -208,6 +208,14 @@ SLOTS: dict[str, Slot] = {
 
 PRIORITY = NumField(30, 0, 100, integer=True, doc="Höher verdrängt Niedrigeres")
 
+#: Wie lange dieser Ausdruck **von selbst** stehen bleibt, in Sekunden
+#: (smilez, 15.11.2026: „… die einen festen Ablauf und feste Dauer haben").
+#: Gedacht für Animationen mit Anfang und Ende — ein Zug an der Bong dauert
+#: ein paar Sekunden, danach kehrt das Gesicht zum vorherigen Ausdruck
+#: zurück. ``0`` heißt: bis zur Ablösung (Vorgabe), der Ausdruck bleibt, bis
+#: der Agent oder ein Zustand ihn ersetzt.
+DAUER = NumField(0, 0, 600, doc="Sekunden, 0 = bis zur Ablösung")
+
 #: Zusätzliche, frei erfundene Formen. Hier entsteht alles, wofür es
 #: keinen fertigen Baustein gibt.
 SHAPES_DOC = (

@@ -681,34 +681,34 @@ with tempfile.TemporaryDirectory() as td:
     check("nativ: keine Werkzeugliste", "- list_dir(" in sysp, False)
     check("nativ: Schnittstelle genannt", "Werkzeugschnitt" in sysp, True)
 
-    # (b) Ein Textaufruf wird NICHT ausgeführt, sondern gerügt.
+    # (b) Ein Textaufruf ist der **Rückfall**: er wird ausgeführt, damit aus
+    #     dem Befehl ein Ergebnis wird (smilez, 15.11.2026 — am Pi stand der
+    #     JSON-Aufruf als Text in der Chatblase und passiert ist nichts).
+    #     Gerügt wird er trotzdem: native Aufrufe sind der Standard.
     reg = TextRegistry(["Ich lege das an.\nTOOL: write_file {\"path\": \"x.txt\", "
                         "\"content\": \"hallo\"}", "Fertig."])
     res = Agent(reg, tb).run("schreib was")
-    check("Textaufruf: nichts ausgeführt",
-          any(s.kind == "tool" for s in res.steps), False)
-    check("Textaufruf: kein Ergebnis im Verlauf",
-          any(str(m.get("content", "")).startswith("Ergebnis von")
-              for m in reg.gesehen[-1]["verlauf"]), False)
+    check("Textaufruf: als Rückfall ausgeführt",
+          any(s.kind == "tool" for s in res.steps), True)
+    check("Textaufruf: Ergebnis im Verlauf",
+          any(m.get("role") == "tool" for m in reg.gesehen[-1]["verlauf"]), True)
     check("Textaufruf: Rüge im Verlauf",
           any("als TEXT geschrieben" in str(m.get("content"))
               for m in reg.gesehen[1]["verlauf"]), True)
     check("Textaufruf: Lauf endet mit der Antwort", res.text, "Fertig.")
 
-    # (c) Auch nach der Rüge kein Textaufruf: er wird verworfen, nicht als
-    #     Antwort durchgereicht (smilez, 15.11.2026: "es sagt was es tut, aber
-    #     es passiert nichts").
-    reg2 = TextRegistry(["TOOL: write_file {\"path\": \"x.txt\"}",
-                         "TOOL: write_file {\"path\": \"x.txt\"}", "Fertig."])
-    res2 = Agent(reg2, tb).run("schreib was")
-    check("zweiter Textaufruf: kein TOOL im Antworttext",
-          "TOOL:" in res2.text, False)
-    check("zweiter Textaufruf: Antwort sagt, dass nichts lief",
-          res2.text.strip().startswith("Ich wollte gerade ein Werkzeug"), True)
-    check("zweiter Textaufruf: nichts ausgeführt",
-          any(s.kind == "tool" for s in res2.steps), False)
-    check("Textaufruf: als Fehlschritt vermerkt",
-          any(s.kind == "error" and "im Text" in s.detail for s in res.steps), True)
+    # (d) Die Form, die das Modell am Pi von selbst erfand: ein JSON-Objekt
+    #     im Codeblock. Sie muss ebenso erkannt UND ausgeführt werden, und
+    #     das JSON darf nicht in der Antwort stehen.
+    reg3 = TextRegistry(["```json\n{\"name\": \"write_file\", "
+                         "\"arguments\": {\"path\": \"y.txt\", "
+                         "\"content\": \"hallo\"}}\n```", "Fertig."])
+    res3 = Agent(reg3, tb).run("schreib was")
+    check("JSON-Textaufruf: ausgeführt",
+          any(s.kind == "tool" and s.tool == "write_file" for s in res3.steps), True)
+    check("JSON-Textaufruf: kein JSON in der Antwort",
+          "arguments" in res3.text or "```json" in res3.text, False)
+    check("JSON-Textaufruf: Antwort ist der Text", res3.text.strip(), "Fertig.")
 
     # (c) Der Textweg bleibt für Anbieter ohne Schnittstelle.
     reg2 = TextRegistry(["TOOL: list_dir {}", "Fertig."])

@@ -571,9 +571,14 @@ class Toolbox:
         self.add(ToolSpec(
             "set_face",
             "Den Gesichtsausdruck setzen. Entweder ein bekannter "
-            "Mood-Name oder eine Mischung wie 'CHILL+ROCK'.",
+            "Mood-Name oder eine Mischung wie 'CHILL+ROCK'. Wie lange er "
+            "steht, sagt 'dauer' in Sekunden; ohne Angabe gilt der Ausdruck "
+            "bis zur Ablösung.",
             {"mood": "Name des Ausdrucks",
-             "hard": "'ja' für sofortigen Wechsel (Schreck), sonst weich"},
+             "hard": "'ja' für sofortigen Wechsel (Schreck), sonst weich",
+             "dauer": "Sekunden, die der Ausdruck steht; leer/0 = bis zur "
+                      "Ablösung. Für Animationen mit festem Ablauf (z. B. "
+                      "BONG) genügt der Mood selbst — er bringt seine Dauer mit."},
             ("mood",),
         ), self._set_face)
 
@@ -688,7 +693,7 @@ class Toolbox:
         return (f"Geloescht: {weg} ({len(self.face.moods)} Ausdruecke "
                 "bleiben).")
 
-    def _set_face(self, mood: str, hard: str = "") -> str:
+    def _set_face(self, mood: str, hard: str = "", dauer: str = "") -> str:
         """Den Ausdruck setzen — das ist `FACE:` aus openclawgotchi.
 
         Die Steuerbefehle bleiben erhalten, nur das Ziel wechselt
@@ -697,8 +702,24 @@ class Toolbox:
         if self.face is None:
             return "Keine Anzeige angeschlossen."
         want_hard = str(hard).strip().lower() in ("ja", "yes", "true", "1", "hart")
+        sekunden = None
+        roh = str(dauer).strip()
+        if roh:
+            try:
+                sekunden = float(roh.replace(",", "."))
+            except ValueError:
+                return (f"Dauer {roh!r} ist keine Zahl in Sekunden — "
+                        "nichts gesetzt.")
         try:
-            self.face.set_by_name(mood, hard=want_hard)
+            gesetzt = self.face.set_by_name(mood, hard=want_hard, dauer=sekunden)
         except KeyError as exc:
             return f"Unbekannter Ausdruck: {exc}"
-        return f"Ausdruck gesetzt: {mood}" + (" (sofort)" if want_hard else "")
+        # Was wirklich gilt, sagen — nicht was gewünscht war (Regel 8a):
+        # die Dauer kann aus dem Ausdruck kommen oder unbegrenzt sein.
+        bis = getattr(self.face.state, "mood_bis", None)
+        if bis is None:
+            wie_lange = "bis zur Ablösung"
+        else:
+            wie_lange = f"{max(0.0, bis - self.face._uhr()):.0f} s"
+        return (f"Ausdruck gesetzt: {gesetzt.get('name', mood)}"
+                + (" (sofort)" if want_hard else "") + f" — gilt {wie_lange}")
