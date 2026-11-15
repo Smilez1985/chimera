@@ -20,6 +20,13 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Systemtext im Chat ein-/ausblendbar** (Befund smilez 16.11.: *„in der
+  chatbubble wieder die system Nachrichten … die sollten ein-/ausblendbar
+  sein“*): Der Dienst stellt jedem Auftrag den Kanalhinweis voran und hängt
+  den Gesichtsausdruck an — beides steht so im Verlauf. Jetzt trennt
+  `zerlegen()` die `[…]`-Blöcke vom eigenen Text; sie sind **standardmäßig
+  aus** und lassen sich über „Systemtext“ in der Kopfzeile zeigen (Merker je
+  Gerät). Reine Funktion, an der echten Datei geprüft (7 Fälle).
 - **Sprache Deutsch/Englisch** im Reiter Einstellungen (smilez 15.11.):
   Die Wahl liegt in `localStorage` (`chimera.sprache`), übersetzt sind die
   **Hülle** (Anmeldung, Abmelden, Warnstreifen) und die Reiterbeschriftung

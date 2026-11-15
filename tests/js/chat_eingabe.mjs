@@ -72,5 +72,22 @@ check("ziehen ueber die Grenze", g(300, -400, MIN, 400), 400);
 check("ziehen unter das Minimum", g(80, 400, MIN, 400), MIN);
 check("kaputtes dy bleibt beim Startwert", g(100, NaN, MIN, 400), 100);
 
+// --- Systemtext im Verlauf trennen --------------------------------------
+// Befund smilez 16.11.: „in der chatbubble wieder die system Nachrichten …
+// die sollten ein-/ausblendbar sein". Getrennt wird an der echten Datei.
+const z = klasse.zerlegen;
+const ohne = z("einfach nur text");
+check("ohne Systemblock bleibt alles Text", `${ohne.meta}|${ohne.text}`, "|einfach nur text");
+const teile = z("[Kanal: web] Du antwortest im Chat.\nAbsätze sind erlaubt.\n\nhallo\n\n[Gesicht: active=mood_idle]");
+check("Kanal- und Gesichtsblock landen im Systemtext",
+      teile.meta.includes("[Kanal: web]") && teile.meta.includes("[Gesicht:"), true);
+check("der eigene Text bleibt allein stehen", teile.text, "hallo");
+const leer = z("");
+check("leerer Inhalt stürzt nicht ab", `${leer.meta}|${leer.text}`, "|");
+check("Klammern mitten im Text sind kein Systemtext",
+      z("das [ist] normal").meta, "");
+check("nur Systemtext: leerer Rest", z("[Gesicht: active=idle]").text, "");
+check("mehrere Blöcke werden getrennt", z("[Kanal: a]\n\n[Gesicht: b]\n\nrichtig").text, "richtig");
+
 console.log(`\nErgebnis: ${pass} ok, ${fail} fehlgeschlagen`);
 process.exit(fail ? 1 : 0);

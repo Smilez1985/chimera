@@ -13,6 +13,31 @@ function weichtAus(blase, gesicht, rechts) {
   return rechts ? blase.rechts > gesicht.links : blase.links < gesicht.rechts;
 }
 
+/// Zerlegt einen gespeicherten Prompt in **Systemtext** und das, was der
+/// Nutzer geschrieben hat (Befund smilez 16.11.: „in der chatbubble wieder die
+/// system Nachrichten … die sollten ein-/ausblendbar sein").
+///
+/// Der Dienst stellt jedem Auftrag den Kanalhinweis voran (`[Kanal: web] …`)
+/// und hängt den Gesichtsausdruck an (`[Gesicht: …]`). Beides landet so im
+/// Verlauf. Reine Funktion, damit `tests/js/chat_eingabe.mjs` sie an der
+/// ECHTEN Datei prüfen kann.
+function zerlegen(text) {
+  const roh = String(text || "");
+  const meta = [];
+  const rest = [];
+  // Blöcke sind durch Leerzeilen getrennt; ein Block, der mit "[" beginnt und
+  // mit "]" endet (über mehrere Zeilen erlaubt), ist Systemtext.
+  for (const block of roh.split(/\n\s*\n/)) {
+    const kern = block.trim();
+    if (!kern) continue;
+    if (kern.startsWith("[") && kern.includes("]")) meta.push(kern);
+    else rest.push(kern);
+  }
+  // Kein Systemblock: nichts zu tun (der Text bleibt, wie er ist).
+  if (!meta.length) return { meta: "", text: roh };
+  return { meta: meta.join("\n"), text: rest.join("\n\n") };
+}
+
 /// Kleinste Höhe der Eingabe: zwei Zeilen (die Vorgabe aus `rows="2"`).
 const EINGABE_MIN = 42;
 /// Gemerkte Höhe je Gerät (Ansichtssache, keine Geräteeinstellung).
@@ -70,6 +95,10 @@ class ChimeraChat extends HTMLElement {
         .sie { margin-right:auto; background:#2b2f3b; }
         .sys { margin:.25rem auto; color:#8a90a2; font-size:.85rem; }
         .tuer { display:block; font-size:.7rem; opacity:.6; }
+        /* Systemtext im Verlauf: standardmäßig **aus**, umschaltbar. */
+        .meta { display:none; white-space:pre-wrap; font-size:.8rem; opacity:.65;
+                border-left:2px solid #3d4354; padding-left:.45rem; margin-bottom:.35rem; }
+        :host([meta]) .meta { display:block; }
         /* Griff über der Eingabe (Auftrag smilez, 15.11.: „den prompt Bereich
            manipulierbar, dynamisch nach oben vergrösserbar machen"). Ziehen
            nach oben macht die Eingabe höher, der Verlauf gibt den Platz ab. */
@@ -94,6 +123,7 @@ class ChimeraChat extends HTMLElement {
         <label>Modell: <select id="m-wahl"></select></label>
         <label>Denken: <select id="d-wahl"></select></label>
         <label title="Gesicht im Chat zeigen (verschiebbar)"><input type="checkbox" id="gesicht"> Gesicht</label>
+        <label title="Systemtext im Verlauf zeigen"><input type="checkbox" id="meta"> Systemtext</label>
       </div>
       <div id="flaeche">
         <div id="liste"></div>
@@ -116,6 +146,14 @@ class ChimeraChat extends HTMLElement {
     // Gesicht im Chat (DESIGN, Regel „Anzeigespiegel"). Die Wahl ist eine
     // Ansichtseinstellung je Geraet, keine Geraeteeinstellung -- deshalb im
     // Browser gemerkt und nicht in einer Gateway-Ablage.
+    // Systemtext an/aus (Ansichtssache je Gerät, wie das Gesicht).
+    this.metaWahl = this.shadowRoot.getElementById("meta");
+    this.metaWahl.checked = this.metaGemocht();
+    this.toggleAttribute("meta", this.metaWahl.checked);
+    this.metaWahl.addEventListener("change", () => {
+      this.toggleAttribute("meta", this.metaWahl.checked);
+      try { localStorage.setItem("chimera.meta", this.metaWahl.checked ? "1" : "0"); } catch (_) {}
+    });
     this.gesichtWahl = this.shadowRoot.getElementById("gesicht");
     this.gesichtWahl.checked = this.gesichtGemocht();
     this.gesichtWahl.addEventListener("change", () => this.gesichtSetzen(this.gesichtWahl.checked));
@@ -142,6 +180,11 @@ class ChimeraChat extends HTMLElement {
     this.hoeren();
   }
   disconnectedCallback() { this.laeuft = false; }
+
+  /// Systemtext zeigen? Vorgabe: **aus** — er ist Beiwerk, nicht der Verlauf.
+  metaGemocht() {
+    try { return localStorage.getItem("chimera.meta") === "1"; } catch (_) { return false; }
+  }
 
   /// Ist das Gesicht eingeschaltet? Vorgabe: an -- wer die Oberflaeche
   /// oeffnet, will sehen, was das Geraet gerade zeigt.
@@ -416,7 +459,14 @@ class ChimeraChat extends HTMLElement {
     }
     if (e.art !== "nachricht") return null;
     d.className = "m " + (e.rolle === "user" ? "ich" : "sie");
-    d.appendChild(document.createTextNode(e.inhalt || ""));
+    const teile = zerlegen(e.inhalt || "");
+    if (teile.meta) {
+      const m = document.createElement("span");
+      m.className = "meta";
+      m.textContent = teile.meta;
+      d.appendChild(m);
+    }
+    d.appendChild(document.createTextNode(teile.text));
     return d;
   }
 
@@ -567,6 +617,7 @@ class ChimeraChat extends HTMLElement {
 }
 // An der Klasse, damit der Node-Test sie ohne DOM erreicht.
 ChimeraChat.weichtAus = weichtAus;
+ChimeraChat.zerlegen = zerlegen;
 ChimeraChat.eingabeHoehe = eingabeHoehe;
 ChimeraChat.griffHoehe = griffHoehe;
 ChimeraChat.EINGABE_MIN = EINGABE_MIN;
