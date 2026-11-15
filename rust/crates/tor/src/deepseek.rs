@@ -184,8 +184,16 @@ pub fn verlauf_formen(liste: &[Value]) -> Vec<Value> {
                     // `tool_name` kennt die OpenAI-Form nicht.
                     o.remove("tool_name");
                 }
-                if let Some(id) = offen.pop_front() {
-                    m["tool_call_id"] = Value::String(id);
+                match offen.pop_front() {
+                    Some(id) => m["tool_call_id"] = Value::String(id),
+                    // Ein Ergebnis **ohne** Aufruf davor: Das ist das
+                    // Text-Protokoll (``TOOL: name {…}``), kein nativer
+                    // Aufruf. Die OpenAI-Form kennt keine Ergebnisnachricht
+                    // ohne Aufruf — sie wird zu einer Nutzernachricht mit
+                    // demselben Wortlaut. Sonst antwortet die API mit 422
+                    // (am Pi gemessen, 15.11.2026: `messages[9]: missing
+                    // field tool_call_id`, obwohl die Umformung sonst lief).
+                    None => m["role"] = Value::String("user".into()),
                 }
                 raus.push(m);
             }
@@ -938,6 +946,26 @@ mod tests {
     fn einfacher_verlauf_bleibt_unveraendert() {
         let verlauf = vec![json!({"role": "user", "content": "hallo"})];
         assert_eq!(verlauf_formen(&verlauf), verlauf);
+    }
+
+    /// Ein Ergebnis **ohne** Aufruf davor (Text-Protokoll `TOOL: …`) darf
+    /// nicht als `tool` rausgehen — genau daran scheiterte der Chat am Pi
+    /// noch nach der ersten Umformung (`messages[9]: missing field
+    /// tool_call_id`).
+    #[test]
+    fn ergebnis_ohne_aufruf_wird_nutzernachricht() {
+        let verlauf = vec![
+            json!({"role": "assistant", "content": "TOOL: set_face {\"mood\": \"T\"}"}),
+            json!({"role": "tool", "content": "Ausdruck gesetzt: T",
+                   "tool_name": "set_face"}),
+        ];
+        let raus = verlauf_formen(&verlauf);
+        assert_eq!(raus[1]["role"], "user");
+        assert!(raus[1].get("tool_call_id").is_none());
+        assert!(raus[1].get("tool_name").is_none());
+        assert_eq!(raus[1]["content"], "Ausdruck gesetzt: T");
+        // Der Text der Assistant-Nachricht bleibt unberuehrt.
+        assert_eq!(raus[0]["content"], "TOOL: set_face {\"mood\": \"T\"}");
     }
 
     /// Der Körper geht wirklich durch die Umformung (Verdrahtung, nicht nur

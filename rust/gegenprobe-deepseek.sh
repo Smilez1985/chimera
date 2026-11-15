@@ -121,12 +121,14 @@ mut schluesselrest-im-text \
 #     "missing field tool_call_id" -- der Chat war am Pi nach dem ersten
 #     Werkzeugaufruf dauerhaft blockiert (gemessen 15.11.2026).
 mut ohne-tool-call-id \
-	'                if let Some(id) = offen.pop_front() {
-                    m["tool_call_id"] = Value::String(id);
-                }' \
-	'                if false {
-                    m["tool_call_id"] = Value::String("x".into());
-                }'
+	'                    Some(id) => m["tool_call_id"] = Value::String(id),' \
+	'                    Some(id) => { let _ = id; }'
+
+# 12b. Ergebnis ohne Aufruf bleibt "tool" -- der 422 vom Pi kaeme zurueck,
+#      obwohl die Umformung sonst laeuft (am Pi nachgemessen 15.11.).
+mut ergebnis-ohne-aufruf-bleibt-tool \
+	'                    None => m["role"] = Value::String("user".into()),' \
+	'                    None => {}'
 
 # 13. Ohne `id` am Aufruf ebenso (die API verlangt sie auch dort).
 mut ohne-aufruf-id \
