@@ -226,6 +226,11 @@ def dienst(chi, stop: threading.Event | None = None, env=None) -> int:
         except Exception as exc:                  # noqa: BLE001
             log.warning("Audio-Schalter: Ausschalten fehlgeschlagen: %s", exc)
 
+    # Nach dem Start gilt erst einmal Ruhe: Sonst waehlt die Umgebung im
+    # ersten Takt (30 s) sofort etwas, und der Neustart sieht aus wie ein
+    # Gaehnen zur Begruessung. Fuenf Minuten wie nach jeder Frage.
+    chi._letzte_aktivitaet = __import__("time").monotonic()
+
     log.info("Dienst bereit.")
     # Anbieter regelmaessig pruefen und das Ergebnis an die Statuszeile geben
     # (Quelle anbieter_weg). Hier und nicht im Renderer: Die Pruefung kann ins
