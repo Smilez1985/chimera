@@ -23,7 +23,15 @@
   nav button, button.knopf { background: var(--rd); color: var(--tx); border: 0; border-radius: .5rem;
                              padding: .45rem .8rem; font: inherit; cursor: pointer; }
   nav button[aria-current="true"] { background: var(--ak); color: #0b0d12; }
-  main { flex: 1; min-height: 0; overflow: auto; }
+  main { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+  /* Die Modulfläche muss die Höhe von <main> **bekommen**, sonst löst ein
+     `height:100%` im Modul gegen `auto` auf — und ein Chatfenster, dessen
+     Verlauf absolut in der Fläche liegt, ist dann null Pixel hoch (Befund
+     smilez, 15.11.: „die prompt Eingabe klebt oben, den Text kann man nicht
+     mehr lesen"). `flex:1` gibt ihr eine definite Größe, `min-height:0`
+     erlaubt ihr, kleiner als der Inhalt zu werden. */
+  #buehne { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  #buehne > * { flex: 1; min-height: 0; overflow: auto; }
   #warnung { background: #4a3a12; color: #ffd989; padding: .35rem .75rem; font-size: .85rem; display: none; }
   /* Die Modulfläche ist ein eigenes Element: Anmeldung und Einrichtung sind
      GESCHWISTER, nicht Kinder. Vorher ersetzte ein Modulwechsel alles in

@@ -3283,6 +3283,12 @@ es dem Farbwähler angesehen.
 - **Kein Neustart nötig:** Der Dienst setzt die Werte im laufenden Betrieb;
   der Renderer liest sie über `state.rt` beim nächsten Bild.
 
+**Nachtrag 15.11.2026 (Abend):** Diese Werte sind aus dem Avatar-Reiter in den
+Reiter **Einstellungen** umgezogen (Regel „Einstellungen am Gerät"). Die
+Ablage, der Schreiber und die Op bleiben dieselben — nur die Tür, an der der
+Nutzer dreht, ist eine andere, und es gibt sie **einmal**. Der Avatar zeigt
+Frisur, Farbe und Vorschau.
+
 #### Vorschau: einmal ganz, sonst 30 Sekunden
 
 `POST /api/anzeige/vorschau {name}` → Op `vorschau` → `Face.set_by_name`.
@@ -3335,6 +3341,124 @@ Datei wäre ein 404 im Netzprotokoll, und ein Favicon ist kein Modul.
   Anmeldemaske nach einem 401 wieder **im Dokument** hängt.
 - Routen: jeder neue Aufruf aus `anzeige.js` steht in `web.rs`
   (`tests/test_web_routen.py`).
+
+### Regel „Einstellungen am Gerät" — Bildschirm, Audio und Kennwort in einem eigenen Reiter
+
+Auftrag smilez (15.11.2026, 23:08): *„Kontrast und Helligkeit des Displays
+sowie jeweilige Lautstärke + mute / unmute von Mic und Soundausgabe würde ich
+gerne in einem eigenen Reiter ‚Einstellungen' (ganz rechts, als vorletztes,
+vor ausloggen, mit einem Zahnrad als Symbol) justieren können. dort soll auch
+ein ‚Kennwort ändern' Button sein."*
+
+Dazu im selben Zug der gemeldete Defekt: *„die letzte Version hat das Chat
+Fenster kaputt gemacht, die prompt Eingabe klebt oben, den Text kann man nicht
+mehr lesen … den prompt Bereich manipulierbar, dynamisch nach oben
+vergrösserbar machen."* (Ursache und Behebung: „Höhenkette" unten.)
+
+#### Ein Reiter, zwei vorhandene Ablagen — keine dritte
+
+Der Reiter heißt `einstellungen` (Zahnrad ⚙️, `reihenfolge` 95) und steht
+damit **vor dem Abmelden-Knopf**, der im Rahmen hinter der Navigation liegt.
+Er bringt keine eigene Ablage mit:
+
+| Wert | Besitzer | Weg |
+|---|---|---|
+| Kontrast, Helligkeit tags/nachts, Nachtfenster | Dienst (`einstellungen/avatar.json`, bereits vorhanden) | `POST /api/einstellungen/display` → Op `avatar_setzen` |
+| Mikrofon/Tonausgabe an-aus, Lautstärke | Dienst (`AudioSchalter`, `config/audio.json`) | `POST /api/einstellungen/audio` → Op `audio_setzen` |
+| Kennwort der Oberfläche | Gateway (`state/web/passwort-hash`) | `POST /api/einstellungen/passwort` |
+
+**Die Bildschirmwerte sind aus dem Avatar-Reiter umgezogen**, nicht kopiert.
+Zwei Bedienstellen für denselben Wert wären zwei Wahrheiten: Wer den Kontrast
+an einer Stelle ändert, sieht an der anderen einen alten Stand und glaubt der
+falschen. Der Avatar zeigt weiter Frisur, Farbe und Vorschau — das ist das
+Gesicht, nicht der Bildschirm.
+
+Rechte: `einstellungen-lesen` (Seite lesen) und `einstellungen-schreiben`
+(ändern), beide in `web::RECHTE`. Die Prüfung der Werte bleibt dort, wo sie
+hingehört: der Dienst prüft Frisur/Kontrast/Helligkeit
+(`render/einstellungen.py`), der `AudioSchalter` prüft 0..100 und die zwei
+Reglernamen. Das Gateway prüft nur die Form (Feld da, Wert ein Skalar).
+
+#### Lautstärke ist eine Einstellung, „aus" ein Zustand
+
+Am Whisplay-HAT gibt es keinen Mute-Schalter — „aus" heißt dort Lautstärke
+0 %. Deshalb gilt: **Im Aus bleibt die eingestellte Lautstärke gemerkt und
+sichtbar** („aus · 80 % gilt beim Einschalten"). Eine Anzeige „aus · 0 %"
+wäre gelogen (der Regler steht auf 80), ein blosses „aus" verschwiege, was
+beim Einschalten kommt. Ein Einstellen im Aus schaltet **nicht** ein — der
+Wert wird nur gemerkt, sonst machte ein Regler den stummen Lautsprecher
+hörbar, ohne dass es jemand bestellt hat.
+
+Ist der Kanal an, wird **gemessen** (`amixer sget`), nicht aus der Ablage
+geraten: Wer am Gerät mit `alsamixer` gedreht hat, findet das im Browser
+wieder. Ist nichts messbar (fremdes Gerät, Sandkasten), sagt die Seite
+„nicht messbar" statt einer erfundenen 80.
+
+#### Kennwort ändern
+
+Drei Dinge müssen stimmen, sonst bleibt alles: das **alte** Kennwort, die
+Länge (≥ 8 Zeichen) und die Gleichheit der beiden neuen Eingaben. Zusätzlich
+wird abgelehnt, wenn das neue gleich dem alten ist. Danach wird der Hash
+abgelegt und **nachgeprüft** — was in der Datei steht, muss der neue sein;
+ein stiller Fehlschlag wäre hier besonders teuer, weil der Nutzer glaubte,
+ein neues Kennwort zu haben.
+
+- **Steht der Hash in der `.env`** (`CHIMERA_WEB_PASSWORT_HASH`, vom Installer
+  gesetzt), gewinnt er beim nächsten Start. Ein Wechsel hier wäre nach dem
+  Neustart weg — also 409 mit dem Weg: `sudo /opt/chimera/bin/web-passwort`.
+- **Andere offene Anmeldungen werden abgemeldet**, die eigene bleibt. Ein
+  Wechsel, der die eigene Sitzung mitzieht, wirft den Nutzer aus genau der
+  Seite heraus, auf der er steht.
+- Die Vorprüfung im Browser (leer, zu kurz, nicht gleich) ist Bequemlichkeit,
+  nicht die Entscheidung — sie nennt **denselben** Grund wie das Gateway.
+
+#### Höhenkette: warum die Eingabe oben klebte
+
+`ddaf8d0` legte die Module in `<div id="buehne">` (damit Anmeldemaske und
+Einrichtung Geschwister sind). Das Chat-Modul setzt `:host { height:100% }`;
+gegen ein Elternteil **ohne definite Höhe** löst Prozent auf `auto` auf. Dann
+wird `#flaeche` (flex:1, absolut liegende Kinder) null Pixel hoch: der
+Verlauf unsichtbar, das Formular direkt unter der Kopfzeile. Deshalb gilt im
+Rahmen eine Kette, und jedes Glied wird geprüft
+(`tests/test_rahmen_hoehe.py`, Gegenprobe 3/3):
+
+```
+html, body  height:100%
+#app        display:flex; flex-direction:column; height:100%
+main        flex:1; min-height:0; display:flex; flex-direction:column
+#buehne     flex:1; min-height:0; display:flex; flex-direction:column
+#buehne > * flex:1; min-height:0; overflow:auto
+```
+
+#### Die Eingabe wächst nach oben
+
+- **Griff** über dem Formular (12 px, `cursor:ns-resize`): Ziehen nach oben
+  macht die Eingabe höher, der Verlauf gibt den Platz ab. Die Höhe wird je
+  Gerät im Browser gemerkt (`chimera.eingabe.hoehe`) — eine Ansichtssache,
+  keine Geräteeinstellung.
+- **Mitwachsen**: Wird der Text länger als der Kasten, wächst er mit
+  (`eingabeHoehe`), höchstens 60 % des Fensters — eine Eingabe, die alles
+  einnimmt, ist kein Chatfenster mehr.
+- **Nie unter die gezogene Höhe**, auch nicht bei kurzem Text; nach dem
+  Senden geht es auf die eingestellte Höhe zurück.
+- Beide Rechnungen (`eingabeHoehe`, `griffHoehe`) sind rein und werden an der
+  echten `chat.js` geprüft (`tests/js/chat_eingabe.mjs`, Gegenprobe 2/2:
+  Inhalt ignorieren bzw. Ziehrichtung umdrehen wird rot).
+
+#### Tests und Gegenproben
+
+- Routen: Recht, Methode und der ehrliche Grund ohne Dienst (502) — je Weg.
+  Vier Rust-Tests: `einstellungen_tuer_prueft_recht_methode_und_nennt_den_grund`,
+  `einstellungen_ohne_recht_sind_zu`, `kennwortwechsel_lehnt_alles_ab_was_nicht_stimmt`,
+  `kennwortwechsel_schreibt_und_meldet_andere_ab`.
+- Audio: `tests/test_audio_schalter.py` (Einstellen im Aus/Aan, Grenzen,
+  Ablage, `als_json`), `tests/test_audio_socket.py` (Op-Namen, fehlende
+  Brücke, ganzer Weg durch den echten Socket), Gegenprobe 4/4.
+- Seite: `tests/test_einstellungen_seite_js.py` (`audioText`,
+  `passwortFehler`), Gegenprobe 2/2.
+- Höhenkette und Eingabe: `tests/test_rahmen_hoehe.py` und
+  `tests/test_chat_eingabe_js.py`, Gegenproben 3/3 bzw. 2/2.
+- `tests/test_web_routen.py` nimmt die neuen Aufrufe automatisch mit.
 
 ### Architekturregel 7 — Ein Prozess, ein Framebuffer
 

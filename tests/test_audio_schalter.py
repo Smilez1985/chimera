@@ -59,6 +59,15 @@ class Attrappe:
                 else "volume volume-joined"
             return 0, (f"Capabilities: {faehig}\n"
                        f"  Mono: {self.lautstaerke} [{self.lautstaerke}%]")
+        # `sset <regler> <wert>` wirkt wie am Gerät: Der nächste `sget` liest
+        # den neuen Wert. Ohne das bildet die Attrappe das Verhalten nicht
+        # nach -- ein Test, der 60 setzt und 55 zurückbekommt, prüft nur sich
+        # selbst.
+        if "sset" in argv and argv[-1].endswith("%"):
+            try:
+                self.lautstaerke = int(argv[-1].rstrip("%"))
+            except ValueError:
+                pass
         return 0, ""
 
     def letzter(self) -> list[str]:
@@ -141,6 +150,49 @@ with tempfile.TemporaryDirectory() as td:
     neu.lautsprecher(True)
     pruefe(a2.letzter()[-2:], ["speaker", "62%"],
            "nach dem Neustart gilt die eingestellte Lautstärke, nicht 80 %")
+
+print("== 6d. Lautstärke einstellen (Reiter Einstellungen, 15.11.)")
+# Einstellen ist nicht Schalten: Ist der Kanal aus, bleibt er aus und der Wert
+# wird nur gemerkt -- ein Regler, der den stummen Lautsprecher hörbar macht,
+# wäre ein Nebeneffekt, den niemand bestellt hat.
+with tempfile.TemporaryDirectory() as td:
+    pfad = _P(td) / "config" / "audio.json"
+    a = Attrappe(lautstaerke=80)
+    sch = AudioSchalter(ausfuehren=a, ablage=pfad)
+    sch.lautsprecher(False)                  # aus, merkt 80 %
+    vorher = len(a.aufrufe)
+    okk, meldung = sch.lautstaerke_setzen("lautsprecher", 35)
+    pruefe(okk, True, "setzen im Aus gemeldet")
+    pruefe("35" in meldung, True, "Meldung nennt den Wert")
+    pruefe(len(a.aufrufe), vorher, "kein amixer-Aufruf, solange aus")
+    pruefe(sch.lautstaerke("lautsprecher"), 35,
+           "eingestellte Lautstärke bleibt sichtbar, obwohl aus")
+    pruefe(pfad.is_file() and "35%" in pfad.read_text(encoding="utf-8"), True,
+           "Wert liegt in der Ablage")
+    # Einschalten wendet genau diesen Wert an -- nicht 80 %.
+    sch.lautsprecher(True)
+    pruefe(a.letzter()[-2:], ["speaker", "35%"], "an wendet den eingestellten Wert an")
+    # Jetzt greift amixer wirklich.
+    okk, _ = sch.lautstaerke_setzen("lautsprecher", 60)
+    pruefe((okk, a.letzter()[-2:]), (True, ["speaker", "60%"]), "setzen im An schreibt")
+    # Grenzen und Unsinn: abgelehnt, nichts geändert.
+    for wert in (-1, 101, "laut", None, True):
+        okk, _ = sch.lautstaerke_setzen("lautsprecher", wert)
+        pruefe(okk, False, f"{wert!r} abgelehnt")
+    pruefe(sch.lautstaerke("lautsprecher"), 60, "nach Ablehnungen unverändert")
+    okk, _ = sch.lautstaerke_setzen("subwoofer", 50)
+    pruefe(okk, False, "unbekannter Regler abgelehnt")
+    # als_json: was die Seite braucht, in einem Stück.
+    j = sch.als_json()
+    pruefe(sorted(j), sorted(["mikrofon_an", "lautsprecher_an",
+                              "lautstaerke_mikrofon", "lautstaerke_lautsprecher",
+                              "karte", "letzter_fehler"]), "als_json nennt alle Felder")
+    pruefe(j["lautstaerke_lautsprecher"], 60, "als_json: Lautstärke")
+    # Ist der Kanal an und amixer scheitert, wird der Fehler nicht verschluckt.
+    a.rc = 1
+    okk, meldung = sch.lautstaerke_setzen("lautsprecher", 40)
+    pruefe(okk, False, "scheiterndes amixer wird gemeldet")
+    pruefe(bool(sch.letzter_fehler), True, "letzter_fehler gesetzt")
 
 print("== 7. Die Aufnahme läuft über das gemessene Gerät, nicht über Kanäle")
 from chimera.audio_schalter import AUFNAHME_GERAET  # noqa: E402

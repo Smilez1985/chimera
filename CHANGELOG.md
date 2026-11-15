@@ -20,6 +20,32 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Reiter „Einstellungen" (⚙️, vor „Abmelden")** (15.11.2026, Auftrag smilez:
+  *„Kontrast und Helligkeit des Displays sowie jeweilige Lautstärke + mute /
+  unmute von Mic und Soundausgabe … in einem eigenen Reiter ‚Einstellungen'
+  … dort soll auch ein ‚Kennwort ändern' Button sein"*): Bildschirm (Kontrast,
+  Helligkeit tags/nachts, Nachtfenster), Mikrofon und Tonausgabe (an/aus,
+  Lautstärke 0..100) und Kennwortwechsel in einem Modul. **Keine dritte
+  Ablage:** Die Bildschirmwerte gehen über dieselbe Op `avatar_setzen` in
+  `einstellungen/avatar.json` (sie sind aus dem Avatar-Reiter **umgezogen**,
+  nicht kopiert), Audio über die neue Op `audio_setzen` an den `AudioSchalter`
+  des Dienstes, das Kennwort schreibt das Gateway selbst. Neue Rechte
+  `einstellungen-lesen`/`-schreiben`, Routen `GET /api/einstellungen/stand`
+  und `POST /api/einstellungen/{display,audio,passwort}`.
+  **Lautstärke einstellen ist nicht schalten:** Im Aus bleibt der eingestellte
+  Wert gemerkt und sichtbar („aus · 80 % gilt beim Einschalten"); im An wird
+  am Regler gemessen, nicht aus der Ablage geraten.
+  **Kennwortwechsel** prüft altes Kennwort, Länge (≥ 8) und Gleichheit, legt
+  den neuen Hash ab und **prüft nach**, was in der Datei steht; andere offene
+  Anmeldungen werden abgemeldet, die eigene bleibt. Steht der Hash in der
+  `.env`, wird mit 409 auf `web-passwort` verwiesen (er gewänne beim Neustart).
+  **`AudioSchalter`**: `lautstaerke()`, `lautstaerke_setzen()`, `als_json()`.
+- **Eingabe im Chat ist ziehbar und wächst mit** (Auftrag smilez: *„den
+  prompt Bereich manipulierbar, dynamisch nach oben vergrösserbar machen"*):
+  Griff über dem Formular (Ziehen nach oben macht die Eingabe höher), Text
+  wächst mit bis 60 % der Fensterhöhe, nie unter die gezogene Höhe; die Höhe
+  wird je Gerät im Browser gemerkt. Reine Rechnungen `eingabeHoehe` und
+  `griffHoehe` in `chat.js`.
 - **Modul „Avatar" mit Frisur, Haarfarbe und Kontrast** (15.11.2026, Auftrag
   smilez: *„Feld ‚Anzeige' in ‚Avatar' umbenennen … die Auswahl der Haare
   (von noisy übernehmen was geht) … manuelle Vorschau"*): Die Kennung bleibt
@@ -1936,6 +1962,14 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Chatfenster war nach `ddaf8d0` kaputt** (Befund smilez 15.11.:
+  *„die prompt Eingabe klebt oben, den Text kann man nicht mehr lesen"*): Die
+  Module liegen seit dem Umbau in `#buehne`, das keine definite Höhe hatte —
+  `:host { height:100% }` löste auf `auto` auf, `#flaeche` wurde null Pixel
+  hoch. Jetzt trägt der Rahmen eine **Höhenkette** (`main` und `#buehne` als
+  Flex-Spalten mit `min-height:0`, Modul mit `flex:1`), und
+  `tests/test_rahmen_hoehe.py` hält sie mit Gegenprobe (3/3) fest.
+
 - **Das Lebenszeichen schrieb ins Nichts** (15.11.2026): Die Zustandsdatei
   lag unter `state/` — `root:chimera-tor`, 0710, der Dienst läuft als
   `chimera`. Ergebnis: bei jedem Takt `[Errno 13] Permission denied`, am Pi

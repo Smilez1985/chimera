@@ -261,6 +261,22 @@ class SitzungsServer:
                         antwort({"ok": ok, "meldung": meldung,
                                  "avatar": bruecke.avatar_lesen()
                                  if ok else None})
+                elif op in ("audio_lesen", "audio_setzen"):
+                    # Audio-Einstellungen (DESIGN, Regel „Einstellungen am
+                    # Gerät"): Mikrofon und Lautsprecher samt Lautstärke.
+                    # Geschaltet wird beim Dienst, der den Schalter besitzt.
+                    bruecke = getattr(self.session, "audio_bruecke", None)
+                    if bruecke is None:
+                        antwort({"ok": False,
+                                 "fehler": "keine Audio-Bruecke — ohne Dienst "
+                                           "keine Audio-Einstellungen"})
+                        continue
+                    if op == "audio_lesen":
+                        antwort({"ok": True, "audio": bruecke.audio_lesen()})
+                    else:
+                        feld = str(q.get("feld") or "").strip()
+                        antwort(bruecke.audio_setzen(
+                            feld, q.get("wert"), str(q.get("was") or "")))
                 elif op == "led":
                     # Abschluss des Installers auf die LED legen. Der Dienst
                     # haelt die Pins -- der Installer kann das Panel nicht

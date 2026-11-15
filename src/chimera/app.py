@@ -305,6 +305,48 @@ class Chimera:
             log.exception("Audio-Zustand nicht lesbar")
             return {"mikrofon_an": False, "lautsprecher_an": False}
 
+    # --- Audio-Einstellungen (Reiter „Einstellungen", 15.11.) -------------
+    #
+    # Dieselbe Brücke wie beim Avatar: Das Gateway fragt hier, geschaltet
+    # wird hier (DESIGN, Regel „Einstellungen am Gerät"). Der Dienst besitzt
+    # den Schalter — ein zweiter am Gateway wäre ein zweiter Zustand.
+
+    def audio_lesen(self) -> dict | None:
+        """Zustand und Lautstärken für die Seite (``None`` = kein Schalter)."""
+        schalter = self.audio
+        if schalter is None:
+            return None
+        return schalter.als_json()
+
+    def audio_setzen(self, feld: str, wert, was: str = "") -> dict:
+        """``mikrofon``/``lautsprecher`` schalten, ``lautstaerke`` einstellen.
+
+        Der Wert wird hier geprüft, nicht im Gateway: Die Grenzen (0..100,
+        zwei Regler) stehen dort, wo das Kommando läuft.
+        """
+        schalter = self.audio
+        if schalter is None:
+            return {"ok": False, "fehler": "kein Audio-Schalter — ohne Gerät "
+                                           "gibt es nichts zu schalten"}
+        if feld in ("mikrofon", "lautsprecher"):
+            an = wert if isinstance(wert, bool) else None
+            if an is None:
+                return {"ok": False, "fehler": f"{feld}: erwartet an/aus "
+                                               f"(Wahrheitswert), bekam {wert!r}"}
+            gilt = schalter.mikrofon(an) if feld == "mikrofon" else schalter.lautsprecher(an)
+            return {"ok": True, "meldung": f"{feld} {'an' if gilt else 'aus'}",
+                    "audio": schalter.als_json()}
+        if feld == "lautstaerke":
+            regler = str(was or "").strip().lower()
+            if regler not in ("mikrofon", "lautsprecher"):
+                return {"ok": False, "fehler": "lautstaerke braucht was=mikrofon "
+                                               "oder was=lautsprecher"}
+            ok, meldung = schalter.lautstaerke_setzen(regler, wert)
+            return {"ok": ok, "meldung": meldung,
+                    "audio": schalter.als_json()}
+        return {"ok": False, "fehler": f"unbekanntes Feld {feld!r} — erlaubt: "
+                                       "mikrofon, lautsprecher, lautstaerke"}
+
     #: Zwischenspeicher der Temperatur (Ablage `_temp_*`).
     _temp_wert: float | None = None
     _temp_zeit: float = 0.0
@@ -651,6 +693,9 @@ def build(*, probe_network: bool = True, home: Path | None = None,
     # Browser kommt nur über das Gateway herein, geschrieben wird hier
     # (DESIGN, Regel „Avatar-Einstellungen").
     session.avatar_bruecke = chi
+    # Und die Audio-Einstellungen (Operationen `audio_lesen`, `audio_setzen`):
+    # Der Schalter gehoert dem Dienst, das Gateway reicht nur durch.
+    session.audio_bruecke = chi
     # Und der Verbrauch jedes Umlaufs geht ans Gateway, das die Ablage
     # fuehrt (state/ gehoert chimera-tor, DESIGN „Verbrauch" 15.11.2026).
     session.verbrauch_melden = chi._verbrauch_melden

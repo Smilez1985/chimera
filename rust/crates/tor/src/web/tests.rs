@@ -167,7 +167,7 @@ fn ok_manifest(n: &str) -> String {
 fn das_eingebaute_chatmodul_ist_gueltig_und_erkannt() {
     let (m, f) = module_erkennen(None);
     assert!(f.is_empty(), "{f:?}");
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "anzeige", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "anzeige", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status", "einstellungen"]);
     assert!(m.iter().all(|x| x.eingebaut));
 }
 
@@ -178,13 +178,13 @@ fn ein_neues_verzeichnis_erscheint_im_menue_ohne_codeaenderung() {
     std::fs::write(d.join("zusatz/manifest.json"), ok_manifest("zusatz")).unwrap();
     let (m, f) = module_erkennen(Some(&d));
     assert!(f.is_empty(), "{f:?}");
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "anzeige", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status", "zusatz"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "anzeige", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status", "einstellungen", "zusatz"]);
     let z = zustand(Some(d), "/x".into());
     let c = anmelden(&z);
     let r = behandle(&z, &a("GET", "/api/module", &c, b""));
     let v: Value = serde_json::from_slice(&r.body).unwrap();
-    // Elf eingebaute plus das nachgelegte "zusatz".
-    assert_eq!(v["module"].as_array().unwrap().len(), 12);
+    // Zwoelf eingebaute plus das nachgelegte "zusatz".
+    assert_eq!(v["module"].as_array().unwrap().len(), 13);
 }
 
 #[test]
@@ -198,7 +198,7 @@ fn ein_kaputtes_manifest_verwirft_nur_dieses_modul_und_wird_gemeldet() {
     std::fs::create_dir_all(d.join("leer")).unwrap(); // Verzeichnis ohne Manifest
     let (m, f) = module_erkennen(Some(&d));
     let namen: Vec<_> = m.iter().map(|x| x.name.as_str()).collect();
-    assert_eq!(namen, vec!["chat", "anzeige", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status", "gut"]);
+    assert_eq!(namen, vec!["chat", "anzeige", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status", "einstellungen", "gut"]);
     assert_eq!(f.len(), 4, "{f:?}");
 }
 
@@ -208,7 +208,7 @@ fn ein_nachgelegtes_modul_ersetzt_kein_eingebautes() {
     std::fs::create_dir_all(d.join("chat")).unwrap();
     std::fs::write(d.join("chat/manifest.json"), ok_manifest("chat")).unwrap();
     let (m, f) = module_erkennen(Some(&d));
-    assert_eq!(m.len(), 11);
+    assert_eq!(m.len(), 12);
     assert!(m.iter().all(|x| x.eingebaut));
     assert_eq!(f.len(), 1);
 }
@@ -222,7 +222,7 @@ fn die_reihenfolge_kommt_aus_dem_manifest() {
             format!(r#"{{"name":"{n}","titel":"T","element":"x-{n}","einstieg":"a.js","rechte":[],"reihenfolge":{r}}}"#)).unwrap();
     }
     let (m, _) = module_erkennen(Some(&d));
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["b-zuerst", "chat", "anzeige", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status", "a-zuletzt"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["b-zuerst", "chat", "anzeige", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status", "einstellungen", "a-zuletzt"]);
 }
 
 #[test]
@@ -1372,4 +1372,155 @@ fn ein_modul_ohne_schreibrecht_darf_keine_frisur_setzen() {
     let r = anzeige_antwort(&z, &a("GET", "/api/anzeige/einstellung", &c, b""),
                             "einstellung", &alle);
     assert_eq!(r.status, 502);
+}
+
+// --- Einstellungen: Bildschirm, Audio, Kennwort (DESIGN, Regel „Einstellungen am Gerät") ---
+
+#[test]
+fn einstellungen_tuer_prueft_recht_methode_und_nennt_den_grund() {
+    let z = zustand(None, tmp("ein-sock").join("s.sock"));
+    let c = anmelden(&z);
+
+    // Ohne Dienst gibt es keine Werte -- 502 mit Grund, keine Vorgaben.
+    let r = behandle(&z, &a("GET", "/api/einstellungen/stand", &c, b""));
+    assert_eq!(r.status, 502);
+    let v: Value = serde_json::from_slice(&r.body).unwrap();
+    assert!(v["fehler"].as_str().unwrap_or("").contains("Dienst"), "{v}");
+
+    // Lesen ist GET, Schreiben ist POST -- vertauscht wird abgewiesen.
+    let r = behandle(&z, &a("POST", "/api/einstellungen/stand", &c, b"{}"));
+    assert_eq!(r.status, 405);
+    let r = behandle(&z, &a("GET", "/api/einstellungen/display", &c, b""));
+    assert_eq!(r.status, 405);
+    let r = behandle(&z, &a("GET", "/api/einstellungen/audio", &c, b""));
+    assert_eq!(r.status, 405);
+    let r = behandle(&z, &a("GET", "/api/einstellungen/passwort", &c, b""));
+    assert_eq!(r.status, 405);
+
+    // Formfehler werden benannt, nicht durchgereicht.
+    let r = behandle(&z, &a("POST", "/api/einstellungen/display", &c, br#"{"feld":"kontrast"}"#));
+    assert_eq!(r.status, 400);
+    let r = behandle(&z, &a("POST", "/api/einstellungen/display", &c,
+                           br#"{"feld":"kontrast","wert":{"x":1}}"#));
+    assert_eq!(r.status, 400);
+    let r = behandle(&z, &a("POST", "/api/einstellungen/audio", &c, br#"{"feld":"lautstaerke"}"#));
+    assert_eq!(r.status, 400);
+
+    // Gueltige Form, aber kein Dienst: 502 (nicht 400, nicht 200).
+    let r = behandle(&z, &a("POST", "/api/einstellungen/display", &c,
+                           br#"{"feld":"kontrast","wert":70}"#));
+    assert_eq!(r.status, 502);
+    let r = behandle(&z, &a("POST", "/api/einstellungen/audio", &c,
+                           br#"{"feld":"mikrofon","wert":true}"#));
+    assert_eq!(r.status, 502);
+
+    // Unbekannter Weg und ohne Anmeldung.
+    let r = behandle(&z, &a("GET", "/api/einstellungen/gibtsnicht", &c, b""));
+    assert_eq!(r.status, 404);
+    let r = behandle(&z, &a("GET", "/api/einstellungen/stand", "", b""));
+    assert_eq!(r.status, 401);
+}
+
+#[test]
+fn einstellungen_ohne_recht_sind_zu() {
+    let z = zustand(None, tmp("ein-rechte-sock").join("s.sock"));
+    let c = anmelden(&z);
+    let (alle, _) = module_erkennen(None);
+    let ohne: Vec<Modul> = alle.into_iter().filter(|m| m.name != "einstellungen").collect();
+
+    // Schreiben: 403 mit dem Namen des Rechts.
+    let r = einstellungen_antwort(&z, &a("POST", "/api/einstellungen/display", &c,
+                                         br#"{"feld":"kontrast","wert":70}"#),
+                                  "display", &ohne);
+    assert_eq!(r.status, 403);
+    let v: Value = serde_json::from_slice(&r.body).unwrap();
+    assert!(v["fehler"].as_str().unwrap_or("").contains("einstellungen-schreiben"));
+
+    // Lesen haengt am Modul selbst.
+    let r = einstellungen_antwort(&z, &a("GET", "/api/einstellungen/stand", &c, b""),
+                                  "stand", &ohne);
+    assert_eq!(r.status, 403);
+
+    // Mit Modul, aber ohne Dienst: 502.
+    let (alle, _) = module_erkennen(None);
+    let r = einstellungen_antwort(&z, &a("GET", "/api/einstellungen/stand", &c, b""),
+                                  "stand", &alle);
+    assert_eq!(r.status, 502);
+}
+
+/// Ein Zustand mit Ablagen in einem temporaeren Verzeichnis -- fuer den
+/// Kennwortwechsel, der wirklich eine Datei schreibt.
+fn zustand_mit_ablage(n: &str) -> Zustand {
+    let d = tmp(n);
+    let mut z = zustand(None, d.join("s.sock"));
+    z.stand = crate::dienst::Stand::mit(
+        None,
+        crate::daten::Pfade::neu(d.join("config"), d.join("state")),
+    );
+    z
+}
+
+#[test]
+fn kennwortwechsel_lehnt_alles_ab_was_nicht_stimmt() {
+    let z = zustand_mit_ablage("ein-pw");
+    let c = anmelden(&z);
+    let alt_hash = z.hash_kopie();
+
+    // Falsches altes Kennwort.
+    let r = behandle(&z, &a("POST", "/api/einstellungen/passwort", &c,
+                           br#"{"alt":"falsch-123","neu":"neues-pw-1","wiederholung":"neues-pw-1"}"#));
+    assert_eq!(r.status, 403);
+    assert_eq!(z.hash_kopie(), alt_hash, "nichts geaendert");
+
+    // Zu kurz.
+    let r = behandle(&z, &a("POST", "/api/einstellungen/passwort", &c,
+                           br#"{"alt":"geheim-pw-1","neu":"kurz","wiederholung":"kurz"}"#));
+    assert_eq!(r.status, 400);
+
+    // Nicht gleich.
+    let r = behandle(&z, &a("POST", "/api/einstellungen/passwort", &c,
+                           br#"{"alt":"geheim-pw-1","neu":"neues-pw-1","wiederholung":"neues-pw-2"}"#));
+    assert_eq!(r.status, 400);
+
+    // Das alte als neues.
+    let r = behandle(&z, &a("POST", "/api/einstellungen/passwort", &c,
+                           br#"{"alt":"geheim-pw-1","neu":"geheim-pw-1","wiederholung":"geheim-pw-1"}"#));
+    assert_eq!(r.status, 400);
+
+    assert_eq!(z.hash_kopie(), alt_hash, "kein abgelehnter Fall darf schreiben");
+}
+
+#[test]
+fn kennwortwechsel_schreibt_und_meldet_andere_ab() {
+    // Steht der Hash in der .env, ist hier nichts zu aendern (er gewaenne
+    // beim naechsten Start). Derselbe Aufruf muss dann 409 sagen.
+    if std::env::var("CHIMERA_WEB_PASSWORT_HASH").map(|s| !s.trim().is_empty()).unwrap_or(false) {
+        let z = zustand_mit_ablage("ein-pw-env");
+        let c = anmelden(&z);
+        let r = behandle(&z, &a("POST", "/api/einstellungen/passwort", &c,
+                               br#"{"alt":"geheim-pw-1","neu":"neues-pw-1","wiederholung":"neues-pw-1"}"#));
+        assert_eq!(r.status, 409, "aus der .env geerbt: Aenderung muss abgelehnt werden");
+        return;
+    }
+    let z = zustand_mit_ablage("ein-pw-ok");
+    let c = anmelden(&z);
+    // Eine zweite Anmeldung (anderes Geraet) -- die muss danach weg sein.
+    let zweite = {
+        let r = behandle(&z, &a("POST", "/api/login", "", br#"{"passwort":"geheim-pw-1"}"#));
+        r.cookie.unwrap().split(';').next().unwrap().to_string()
+    };
+    let r = behandle(&z, &a("POST", "/api/einstellungen/passwort", &c,
+                           br#"{"alt":"geheim-pw-1","neu":"neues-pw-1","wiederholung":"neues-pw-1"}"#));
+    assert_eq!(r.status, 200, "{:?}", String::from_utf8_lossy(&r.body));
+    // Der neue Hash gilt -- nicht nur behauptet, sondern geprueft.
+    assert!(hash_pruefen(&z.hash_kopie(), "neues-pw-1"));
+    assert!(!hash_pruefen(&z.hash_kopie(), "geheim-pw-1"));
+    // Und er steht in der Datei (nach einem Neustart gilt derselbe).
+    assert_eq!(gespeicherter_hash(&z.stand.daten).as_deref(), Some(z.hash_kopie().as_str()));
+    // Eigene Sitzung bleibt, die zweite ist abgemeldet.
+    assert_eq!(behandle(&z, &a("GET", "/api/module", &c, b"")).status, 200);
+    assert_eq!(behandle(&z, &a("GET", "/api/module", &zweite, b"")).status, 401);
+    // Mit dem neuen Kennwort kommt man wieder herein, mit dem alten nicht.
+    assert_eq!(behandle(&z, &a("POST", "/api/login", "", br#"{"passwort":"neues-pw-1"}"#)).status, 200);
+    assert_eq!(behandle(&z, &a("POST", "/api/login", "", br#"{"passwort":"geheim-pw-1"}"#)).status, 401);
 }

@@ -1,0 +1,9 @@
+{
+  "name": "einstellungen",
+  "titel": {"de": "Einstellungen", "en": "Settings"},
+  "symbol": "⚙️",
+  "reihenfolge": 95,
+  "einstieg": "einstellungen.js",
+  "element": "chimera-einstellungen",
+  "rechte": ["einstellungen-lesen", "einstellungen-schreiben"]
+}

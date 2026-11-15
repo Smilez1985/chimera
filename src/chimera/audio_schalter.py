@@ -137,6 +137,83 @@ class AudioSchalter:
         return {"mikrofon_an": self._mikrofon_an,
                 "lautsprecher_an": self._lautsprecher_an}
 
+    def lautstaerke(self, was: str) -> int | None:
+        """Eingestellte Lautstärke in Prozent (``None`` = nicht messbar).
+
+        **Ist der Kanal aus, gilt der gemerkte Wert.** „Aus" heißt hier
+        Lautstärke 0 %; wer die 0 als Einstellung anzeigt, behauptet, der
+        Nutzer hätte den Regler zugezogen. Gemessen wird deshalb nur, solange
+        der Kanal an ist — dann zählt, was wirklich am Regler steht (auch
+        wenn jemand mit ``alsamixer`` gedreht hat). Ist das Kommando nicht da
+        (Sandkasten, fremdes Gerät), gilt der gemerkte Wert, und wenn auch
+        der fehlt: ``None`` statt einer erfundenen Zahl.
+        """
+        if was not in REGLER:
+            return None
+        an = self._mikrofon_an if was == "mikrofon" else self._lautsprecher_an
+        gespeichert = self._lautstaerke.get(was) or ""
+        gemerkt = int(gespeichert.rstrip("%")) if gespeichert.endswith("%") else None
+        if not an:
+            return gemerkt
+        rc, text = self._ausfuehren(
+            ["amixer", "-q", "-c", self.karte, "sget", REGLER[was]], lesen=True)
+        if rc == 0:
+            gemessen = _prozent(text)
+            if gemessen:
+                self._lautstaerke[was] = gemessen
+                return int(gemessen.rstrip("%"))
+        return gemerkt
+
+    def lautstaerke_setzen(self, was: str, prozent) -> tuple[bool, str]:
+        """Eine Lautstärke **einstellen** (0..100), nicht schalten.
+
+        Ist der Kanal aus, bleibt er aus: Der Wert wird gemerkt und beim
+        nächsten Einschalten angewendet. Ein Einstellen, das den stummen
+        Lautsprecher hörbar macht, wäre ein Nebeneffekt, den niemand bestellt
+        hat (smilez: „Set and forget" — die Lautstärke ist eine Einstellung,
+        der Zustand ein anderer).
+        """
+        if was not in REGLER:
+            return (False, f"unbekannter Regler {was!r} — erlaubt: "
+                           + ", ".join(REGLER))
+        if isinstance(prozent, bool):
+            return (False, f"{was}: {prozent!r} ist keine Zahl")
+        try:
+            zahl = int(str(prozent).strip())
+        except (TypeError, ValueError):
+            return (False, f"{was}: {prozent!r} ist keine Zahl 0..100")
+        if zahl < 0 or zahl > 100:
+            return (False, f"{was}: {zahl} liegt außerhalb 0..100 — nichts geändert")
+        wert = f"{zahl}%"
+        an = self._mikrofon_an if was == "mikrofon" else self._lautsprecher_an
+        self._lautstaerke[was] = wert
+        self._sichern()
+        if not an:
+            return (True, f"{was}: {zahl}% gemerkt (aus — gilt beim Einschalten)")
+        rc, meldung = self._ausfuehren(
+            ["amixer", "-q", "-c", self.karte, "sset", REGLER[was], wert])
+        if rc != 0:
+            self.letzter_fehler = meldung or f"rc={rc}"
+            log.warning("Audio: %s auf %s ging nicht: %s", was, wert,
+                        self.letzter_fehler)
+            return (False, f"{was}: {zahl}% nicht gesetzt ({self.letzter_fehler})")
+        self.letzter_fehler = ""
+        log.info("Audio: %s auf %s", was, wert)
+        return (True, f"{was}: {zahl}%")
+
+    def als_json(self) -> dict:
+        """Was die Einstellungsseite braucht — Zustand **und** Lautstärken.
+
+        ``lautstaerke_*`` ist ``None``, wenn sie nicht messbar ist; die Seite
+        zeigt dann „nicht messbar" statt einer erfundenen 80.
+        """
+        return {"mikrofon_an": self._mikrofon_an,
+                "lautsprecher_an": self._lautsprecher_an,
+                "lautstaerke_mikrofon": self.lautstaerke("mikrofon"),
+                "lautstaerke_lautsprecher": self.lautstaerke("lautsprecher"),
+                "karte": self.karte,
+                "letzter_fehler": self.letzter_fehler}
+
     # --- Schalten ---------------------------------------------------------
 
     def mikrofon(self, an: bool) -> bool:

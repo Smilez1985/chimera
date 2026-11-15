@@ -100,6 +100,13 @@ const EINGEBAUT: &[Eingebaut] = &[
         manifest: include_str!("../web/module/netz/manifest.json"),
         dateien: &[("netz.js", "text/javascript; charset=utf-8", include_str!("../web/module/netz/netz.js"))],
     },
+    // Letzter Reiter vor „Abmelden" (Auftrag smilez, 15.11.2026: „ganz rechts,
+    // als vorletztes, vor ausloggen, mit einem Zahnrad als Symbol").
+    Eingebaut {
+        name: "einstellungen",
+        manifest: include_str!("../web/module/einstellungen/manifest.json"),
+        dateien: &[("einstellungen.js", "text/javascript; charset=utf-8", include_str!("../web/module/einstellungen/einstellungen.js"))],
+    },
 ];
 
 
@@ -178,7 +185,7 @@ pub struct Modul {
 /// eintragen**, wenn das Gateway ein neues Recht kennt. Ein Recht, das nicht in
 /// dieser Liste steht, verwirft das Modul -- sonst wuerde ein Tippfehler im
 /// Manifest still ein wirkungsloses Recht verlangen.
-pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben", "wahl-lesen", "wahl-schreiben", "freigaben-lesen", "freigaben-schreiben", "ssh-lesen", "ssh-schreiben", "telegram-lesen", "telegram-schreiben", "netz-lesen", "netz-schreiben", "anzeige-lesen", "anzeige-schreiben"];
+pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben", "wahl-lesen", "wahl-schreiben", "freigaben-lesen", "freigaben-schreiben", "ssh-lesen", "ssh-schreiben", "telegram-lesen", "telegram-schreiben", "netz-lesen", "netz-schreiben", "anzeige-lesen", "anzeige-schreiben", "einstellungen-lesen", "einstellungen-schreiben"];
 
 fn name_ok(s: &str) -> bool {
     !s.is_empty() && s.len() <= 32 && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
@@ -533,6 +540,7 @@ pub fn behandle(z: &Zustand, a: &Anfrage) -> Antwort {
         (_, p) if p.starts_with("/api/telegram/") => telegram_api(z, a, &p["/api/telegram/".len()..]),
         (_, p) if p.starts_with("/api/netz/") => netz_api(z, a, &p["/api/netz/".len()..]),
         (_, p) if p.starts_with("/api/anzeige/") => anzeige_api(z, a, &p["/api/anzeige/".len()..]),
+        (_, p) if p.starts_with("/api/einstellungen/") => einstellungen_api(z, a, &p["/api/einstellungen/".len()..]),
         (_, p) if p.starts_with("/api/quota/") => quota_api(z, a, &p["/api/quota/".len()..]),
         ("GET", "/api/verbrauch") => verbrauch_api(z, a),
         _ => fehler(404, "nicht gefunden"),
@@ -889,6 +897,184 @@ fn anzeige_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort 
         }
         _ => fehler(404, "nicht gefunden"),
     }
+}
+
+/// Die Einstellungsseite (DESIGN, Regel „Einstellungen am Gerät").
+///
+/// **Keine eigene Ablage.** Kontrast und Helligkeit sind Avatar-Werte
+/// (`avatar_setzen`), Mikrofon und Tonausgabe gehören dem `AudioSchalter` des
+/// Dienstes (`audio_setzen`), das Kennwort dem Gateway selbst. Diese Routen
+/// sind eine zweite Tuer zu denselben Werten — eine zweite Wahrheit waere ein
+/// Wettlauf, den niemand bemerkt, bis am Gerät etwas anderes steht als im
+/// Browser.
+fn einstellungen_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
+    let (m, _) = module_erkennen(z.modul_dir.as_deref());
+    einstellungen_antwort(z, a, was, &m)
+}
+
+/// Wie `einstellungen_api`, mit der Modulliste von aussen (Tests pruefen die
+/// Rechte, ohne ein Verzeichnis anzulegen).
+fn einstellungen_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort {
+    let post = a.methode == "POST";
+    let nur_post = match was {
+        "stand" => false,
+        "display" | "audio" | "passwort" => true,
+        _ => return fehler(404, "nicht gefunden"),
+    };
+    if post != nur_post {
+        return fehler(405, "Methode nicht erlaubt");
+    }
+    if post {
+        if !schreibrecht_vergeben(m, "einstellungen-schreiben") {
+            return fehler(403, "kein Modul hat das Recht 'einstellungen-schreiben'");
+        }
+    } else if !hat_recht(m, "einstellungen", "einstellungen-lesen") {
+        return fehler(403, "Modul einstellungen hat das Recht 'einstellungen-lesen' nicht");
+    }
+    match was {
+        // Bildschirm und Audio in **einer** Antwort: Die Seite zeigt beides
+        // zusammen, und zwei Abrufe hiessen zwei Momente (halb geladen).
+        "stand" => {
+            let bild = match sitzung::anfragen(&z.sitzung_socket, &json!({"op": "avatar_lesen"})) {
+                Ok(r) => r,
+                Err(e) => return fehler(502, &format!("Dienst nicht erreichbar: {e}")),
+            };
+            let ton = match sitzung::anfragen(&z.sitzung_socket, &json!({"op": "audio_lesen"})) {
+                Ok(r) => r,
+                Err(e) => return fehler(502, &format!("Dienst nicht erreichbar: {e}")),
+            };
+            let audio_fehler = if ton["ok"] == true { Value::Null } else { ton["fehler"].clone() };
+            json_antwort(
+                200,
+                json!({
+                    "ok": true,
+                    "display": if bild["ok"] == true { bild["avatar"].clone() } else { Value::Null },
+                    "display_fehler": if bild["ok"] == true { Value::Null } else { bild["fehler"].clone() },
+                    "audio": if ton["ok"] == true { ton["audio"].clone() } else { Value::Null },
+                    "audio_fehler": audio_fehler,
+                }),
+            )
+        }
+        "display" => {
+            let v: Value = match serde_json::from_slice(a.body) {
+                Ok(v @ Value::Object(_)) => v,
+                _ => return fehler(400, "kein JSON-Objekt"),
+            };
+            let feld = match v["feld"].as_str().map(str::trim) {
+                Some(f) if !f.is_empty() => f.to_string(),
+                _ => return fehler(400, "Feld \"feld\" fehlt"),
+            };
+            let wert = match v.get("wert") {
+                Some(w) if w.is_string() || w.is_number() || w.is_boolean() => w.clone(),
+                _ => return fehler(400, "Feld \"wert\" fehlt (Text, Zahl oder Wahrheitswert)"),
+            };
+            // Weiterreichen und pruefen laesst der Dienst (die Positivliste
+            // der Felder steht dort, wo gezeichnet wird).
+            match sitzung::anfragen(&z.sitzung_socket,
+                                    &json!({"op": "avatar_setzen", "feld": feld, "wert": wert})) {
+                Ok(r) if r["ok"] == true => json_antwort(200, json!({
+                    "ok": true,
+                    "meldung": r["meldung"],
+                    "display": r["avatar"],
+                })),
+                Ok(r) => fehler(400, r["fehler"].as_str().unwrap_or("abgelehnt")),
+                Err(e) => fehler(502, &format!("Dienst nicht erreichbar: {e}")),
+            }
+        }
+        "audio" => {
+            let v: Value = match serde_json::from_slice(a.body) {
+                Ok(v @ Value::Object(_)) => v,
+                _ => return fehler(400, "kein JSON-Objekt"),
+            };
+            let feld = match v["feld"].as_str().map(str::trim) {
+                Some(f) if !f.is_empty() => f.to_string(),
+                _ => return fehler(400, "Feld \"feld\" fehlt"),
+            };
+            let wert = match v.get("wert") {
+                Some(w) if w.is_string() || w.is_number() || w.is_boolean() => w.clone(),
+                _ => return fehler(400, "Feld \"wert\" fehlt (Text, Zahl oder Wahrheitswert)"),
+            };
+            let was = v["was"].as_str().unwrap_or("").to_string();
+            match sitzung::anfragen(&z.sitzung_socket,
+                                    &json!({"op": "audio_setzen", "feld": feld, "wert": wert, "was": was})) {
+                Ok(r) if r["ok"] == true => json_antwort(200, json!({
+                    "ok": true,
+                    "meldung": r["meldung"],
+                    "audio": r["audio"],
+                })),
+                Ok(r) => fehler(400, r["fehler"].as_str().unwrap_or("abgelehnt")),
+                Err(e) => fehler(502, &format!("Dienst nicht erreichbar: {e}")),
+            }
+        }
+        "passwort" => passwort_aendern(z, a),
+        _ => fehler(404, "nicht gefunden"),
+    }
+}
+
+/// `POST /api/einstellungen/passwort {alt, neu, wiederholung}` — das Kennwort
+/// der Oberflaeche aendern.
+///
+/// Drei Dinge muessen stimmen, sonst bleibt alles, wie es war:
+/// das **alte** Passwort, die Laenge und die Gleichheit der beiden neuen
+/// Eingaben. Danach wird der neue Hash abgelegt und **nachgeprueft** (was in
+/// der Datei steht, muss der neue sein) — ein stiller Fehlschlag waere hier
+/// besonders teuer: Der Nutzer glaubte, ein neues Kennwort zu haben.
+///
+/// Andere offene Anmeldungen werden abgemeldet; die eigene bleibt. Ein
+/// Passwortwechsel, der die eigene Sitzung mitzieht, wirft den Nutzer aus
+/// genau der Seite heraus, auf der er gerade steht.
+fn passwort_aendern(z: &Zustand, a: &Anfrage) -> Antwort {
+    if !z.versuch_frei() {
+        return fehler(429, "zu viele Fehlversuche, bitte eine Minute warten");
+    }
+    // Die `.env` gewinnt beim Start (Installer). Ein hier abgelegter Hash
+    // waere nach dem naechsten Neustart wieder weg — das zu verschweigen
+    // hiesse, eine Aenderung zu bestaetigen, die nicht haelt.
+    let aus_env = std::env::var("CHIMERA_WEB_PASSWORT_HASH").map(|s| !s.trim().is_empty()).unwrap_or(false);
+    if aus_env {
+        return fehler(409, "Das Kennwort steht in der .env (CHIMERA_WEB_PASSWORT_HASH). \
+                            Aendern mit: sudo /opt/chimera/bin/web-passwort");
+    }
+    let v: Value = match serde_json::from_slice(a.body) {
+        Ok(v) => v,
+        Err(_) => return fehler(400, "kein JSON"),
+    };
+    let alt = v["alt"].as_str().unwrap_or("");
+    let neu = v["neu"].as_str().unwrap_or("");
+    let neu2 = v["wiederholung"].as_str().unwrap_or("");
+    if alt.is_empty() || !hash_pruefen(&z.hash_kopie(), alt) {
+        z.fehlversuch();
+        melden(Stufe::Warnung, "Web: Kennwortwechsel mit falschem alten Kennwort.");
+        return fehler(403, "Das bisherige Kennwort ist falsch.");
+    }
+    if neu.chars().count() < 8 {
+        return fehler(400, "Das Passwort braucht mindestens 8 Zeichen.");
+    }
+    if neu != neu2 {
+        return fehler(400, "Die beiden Eingaben sind nicht gleich.");
+    }
+    if neu == alt {
+        return fehler(400, "Das neue Kennwort ist das alte — bitte ein anderes waehlen.");
+    }
+    let hash = match hash_erzeugen(neu) {
+        Ok(h) => h,
+        Err(e) => return fehler(500, &format!("Hash nicht erzeugt: {e}")),
+    };
+    if let Err(e) = hash_ablegen(&z.stand.daten, &hash) {
+        return fehler(500, &format!("Passwort nicht abgelegt: {e}"));
+    }
+    if gespeicherter_hash(&z.stand.daten).as_deref() != Some(hash.as_str()) {
+        return fehler(500, "Passwort nicht abgelegt (Eintrag stimmt nicht)");
+    }
+    *z.hash.lock().unwrap() = hash;
+    // Eigene Sitzung behalten, alle anderen verwerfen.
+    let eigen = cookie_wert(a.cookie, COOKIE).unwrap_or_default();
+    z.angemeldet.lock().unwrap().retain(|t, _| *t == eigen);
+    melden(Stufe::Info, "Web: Kennwort geaendert (andere Anmeldungen abgemeldet).");
+    json_antwort(
+        200,
+        json!({"ok": true, "meldung": "Kennwort geaendert — andere Anmeldungen sind abgemeldet."}),
+    )
 }
 
 fn netz_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {

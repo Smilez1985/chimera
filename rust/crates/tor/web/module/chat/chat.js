@@ -13,6 +13,36 @@ function weichtAus(blase, gesicht, rechts) {
   return rechts ? blase.rechts > gesicht.links : blase.links < gesicht.rechts;
 }
 
+/// Kleinste Höhe der Eingabe: zwei Zeilen (die Vorgabe aus `rows="2"`).
+const EINGABE_MIN = 42;
+/// Gemerkte Höhe je Gerät (Ansichtssache, keine Geräteeinstellung).
+const EINGABE_SCHLUESSEL = "chimera.eingabe.hoehe";
+
+/// Wie hoch das Eingabefeld wird. Reine Rechnung, damit
+/// `tests/js/chat_eingabe.mjs` sie an der ECHTEN Datei prüfen kann.
+///
+/// `fest` ist die vom Nutzer gezogene Höhe, `inhalt` was der Text braucht,
+/// `hoechst` die Grenze (60 % des Fensters). Es gilt: **nie unter die gezogene
+/// Höhe**, nie über die Grenze — und wächst der Text darüber hinaus, wird das
+/// Feld größer, statt den Text abzuschneiden.
+function eingabeHoehe(fest, inhalt, hoechst) {
+  const unten = Number.isFinite(fest) && fest > 0 ? fest : EINGABE_MIN;
+  const grenze = Number.isFinite(hoechst) && hoechst > unten ? hoechst : unten;
+  const braucht = Number.isFinite(inhalt) && inhalt > 0 ? inhalt : 0;
+  return Math.round(Math.min(Math.max(unten, braucht), grenze));
+}
+
+/// Höhe beim Ziehen am Griff: nach oben (negatives `dy`) wird höher,
+/// begrenzt auf `min`/`max`. Auch das ist eine Rechnung, kein Zustand.
+function griffHoehe(start, dy, min, max) {
+  const unten = Number.isFinite(min) && min > 0 ? min : EINGABE_MIN;
+  const oben = Number.isFinite(max) && max > unten ? max : unten;
+  if (!Number.isFinite(start)) return unten;
+  // Ein kaputtes `dy` heisst „nicht gezogen", nicht „auf Minimum springen".
+  const roh = start - (Number.isFinite(dy) ? dy : 0);
+  return Math.round(Math.min(Math.max(roh, unten), oben));
+}
+
 class ChimeraChat extends HTMLElement {
   connectedCallback() {
     this.seit = 0;
@@ -40,9 +70,18 @@ class ChimeraChat extends HTMLElement {
         .sie { margin-right:auto; background:#2b2f3b; }
         .sys { margin:.25rem auto; color:#8a90a2; font-size:.85rem; }
         .tuer { display:block; font-size:.7rem; opacity:.6; }
+        /* Griff über der Eingabe (Auftrag smilez, 15.11.: „den prompt Bereich
+           manipulierbar, dynamisch nach oben vergrösserbar machen"). Ziehen
+           nach oben macht die Eingabe höher, der Verlauf gibt den Platz ab. */
+        #griff { height:12px; border-top:1px solid #2b2f3b; cursor:ns-resize;
+                 touch-action:none; background:transparent; }
+        #griff::after { content:""; display:block; width:3rem; height:3px; margin:4px auto 0;
+                        border-radius:2px; background:#3d4354; }
+        #griff:hover::after, #griff:active::after { background:#7aa2ff; }
         form { display:flex; gap:.5rem; padding:.5rem; border-top:1px solid #2b2f3b; }
         textarea { flex:1; resize:none; padding:.5rem; border-radius:.5rem; border:1px solid #2b2f3b;
-                   background:#1c1f28; color:#e6e8ee; font:inherit; }
+                   background:#1c1f28; color:#e6e8ee; font:inherit; min-height:2.6rem;
+                   max-height:60vh; overflow:auto; }
         button { background:#7aa2ff; color:#0b0d12; border:0; border-radius:.5rem; padding:.5rem 1rem; font:inherit; }
         #denkt { color:#8a90a2; padding:0 .75rem; min-height:1.2em; font-size:.85rem; }
         #alt { padding:.25rem .75rem; font-size:.85rem; display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; }
@@ -61,6 +100,7 @@ class ChimeraChat extends HTMLElement {
         <div id="buehne"></div>
       </div>
       <div id="denkt"></div>
+      <div id="griff" title="Ziehen: Eingabe höher"></div>
       <form><textarea id="eingabe" rows="2" placeholder="Nachricht"></textarea><button type="submit">Senden</button></form>`;
     this.liste = this.shadowRoot.getElementById("liste");
     this.buehne = this.shadowRoot.getElementById("buehne");
@@ -85,6 +125,7 @@ class ChimeraChat extends HTMLElement {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); this.senden(); }
     });
     this.wahl.addEventListener("change", () => this.sitzungWechseln());
+    this.eingabeEinrichten();
     // Beim Hochscrollen rueckwaerts nachladen (Nutzerbefund 14.11.: nach
     // einem Neuladen war der Verlauf weg).
     this.liste.addEventListener("scroll", () => {
@@ -201,11 +242,77 @@ class ChimeraChat extends HTMLElement {
     return d;
   }
 
+  /// Eingabe ziehbar und mitwachsend (Auftrag smilez, 15.11.2026: „den prompt
+  /// Bereich manipulierbar, dynamisch nach oben vergrösserbar machen").
+  ///
+  /// Zwei Wege, ein Wert: Der Griff über dem Kasten setzt `eingabeFest` per
+  /// Ziehen, der Text zieht die Höhe bei Bedarf darüber (`eingabeHoehe`). Der
+  /// gemerkte Wert liegt im Browser — das ist eine Ansichtssache dieses
+  /// Geräts, keine Geräteeinstellung wie Helligkeit oder Lautstärke.
+  eingabeEinrichten() {
+    this.eingabe = this.shadowRoot.getElementById("eingabe");
+    this.griff = this.shadowRoot.getElementById("griff");
+    this.eingabeFest = this.hoeheLesen();
+    this.eingabeNachziehen();
+    this.eingabe.addEventListener("input", () => this.eingabeNachziehen());
+    this.griff.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      const start = e.clientY;
+      const von = this.eingabe.offsetHeight || EINGABE_MIN;
+      try { this.griff.setPointerCapture(e.pointerId); } catch (_) { /* ohne ist es auch bedienbar */ }
+      const bewegen = (ev) => {
+        this.eingabeFest = griffHoehe(von, ev.clientY - start, EINGABE_MIN, this.eingabeHoechst());
+        this.eingabe.style.height = `${this.eingabeFest}px`;
+      };
+      const ende = () => {
+        this.griff.removeEventListener("pointermove", bewegen);
+        this.griff.removeEventListener("pointerup", ende);
+        this.griff.removeEventListener("pointercancel", ende);
+        this.hoeheMerken();
+      };
+      this.griff.addEventListener("pointermove", bewegen);
+      this.griff.addEventListener("pointerup", ende);
+      this.griff.addEventListener("pointercancel", ende);
+    });
+  }
+
+  /// Höchstens 60 % des Fensters: Der Verlauf muss sichtbar bleiben — eine
+  /// Eingabe, die alles einnimmt, ist kein Chatfenster mehr.
+  eingabeHoechst() {
+    return Math.max(EINGABE_MIN, Math.round((window.innerHeight || 600) * 0.6));
+  }
+
+  /// Höhe an den Inhalt anpassen, ohne unter die gezogene Höhe zu gehen.
+  eingabeNachziehen() {
+    if (!this.eingabe) return;
+    this.eingabe.style.height = "auto";
+    const inhalt = this.eingabe.scrollHeight || 0;
+    this.eingabe.style.height = `${eingabeHoehe(this.eingabeFest, inhalt, this.eingabeHoechst())}px`;
+  }
+
+  hoeheLesen() {
+    try {
+      const roh = Number(localStorage.getItem(EINGABE_SCHLUESSEL) || 0);
+      // Eine gemerkte Höhe aus einem großen Fenster darf ein kleines nicht
+      // sprengen — deshalb gegen die aktuelle Grenze begrenzen.
+      return roh > 0 ? griffHoehe(roh, 0, EINGABE_MIN, this.eingabeHoechst()) : EINGABE_MIN;
+    } catch (_) {
+      return EINGABE_MIN;
+    }
+  }
+
+  hoeheMerken() {
+    try { localStorage.setItem(EINGABE_SCHLUESSEL, String(this.eingabeFest)); } catch (_) { /* egal */ }
+  }
+
   async senden() {
     const feld = this.shadowRoot.getElementById("eingabe");
     const text = feld.value.trim();
     if (!text || this.schreibgeschuetzt) return;
     feld.value = "";
+    // Auf die eingestellte Höhe zurück: Ein geleerter Kasten, der 12 Zeilen
+    // hoch bleibt, nimmt dem Verlauf den Platz weg (smilez, 15.11.).
+    this.eingabeNachziehen();
     const auftrag = { text };
     // Die Wahl gilt fuer die Sitzung, nicht nur fuer dieses Fenster: sie geht
     // mit jeder Frage mit. Leer heisst "der Anbieter entscheidet" (5h).
@@ -445,5 +552,8 @@ class ChimeraChat extends HTMLElement {
 }
 // An der Klasse, damit der Node-Test sie ohne DOM erreicht.
 ChimeraChat.weichtAus = weichtAus;
+ChimeraChat.eingabeHoehe = eingabeHoehe;
+ChimeraChat.griffHoehe = griffHoehe;
+ChimeraChat.EINGABE_MIN = EINGABE_MIN;
 
 customElements.define("chimera-chat", ChimeraChat);
