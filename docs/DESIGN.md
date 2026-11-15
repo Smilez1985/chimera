@@ -1586,14 +1586,22 @@ vor einer erfundenen Zahl. Der Grund bleibt gültig, die Anzeige ändert sich:
    die Summe erlaubt, weil dort beide Währungen dasselbe Konto bezahlen —
    genau so hat es smilez begründet.
 
-**Kurse:** `https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR,CNY`
-(und einmal `base=CNY`), EZB-Referenzkurse, kein Schlüssel, tagesaktuell.
-Ablage `state/quota/kurse.json` (0600, atomar) mit `geholt`, `datum` (das
-Datum, das die Quelle nennt — EZB aktualisiert nur werktags) und
-`kurse: {USD: {EUR: 0.90481, …}}`. Frische `KURS_FRISCHE_S` = 12 h; ein
-Abruffehler überschreibt einen vorhandenen Stand **nicht**, er setzt nur
-`fehler` und `geholt` bleibt stehen. Abgerufen wird im **Gateway** (Regel
-5n), nie aus dem Browser oder aus Python.
+**Kurse:** `https://api.frankfurter.dev/v1/latest?base=EUR&symbols=USD,CNY`
+(EZB-Referenzkurse, kein Schlüssel, tagesaktuell — `rates` nennt Einheiten
+**je Euro**, `kurse_aus` dreht das genau einmal um). Ablage
+`state/quota/kurse.json` (0600, atomar) mit `geholt`, `datum` (das Datum, das
+die Quelle nennt — EZB aktualisiert nur werktags) und `kurse: {USD: 0.904814,
+CNY: 0.135615}` (Euro je Einheit).
+
+**Abfragerhythmus (smilez, 15.11.2026: „1 bis 2 mal am Tag reicht, bevor uns
+die Quelle blockt"):** `KURS_FRISCHE_S` = **12 h**, also höchstens zweimal am
+Tag und nur, wenn jemand `quota_lesen` aufruft. Ein **erzwungener** Abruf
+(Knopf „Neu holen") hält zusätzlich `KURS_MINDESTABSTAND_S` = **10 min** ein —
+der Knopf wirkt, aber hämmert nicht. Ein Abruffehler überschreibt einen
+vorhandenen Stand **nicht**, er setzt nur `fehler`; `geholt` bleibt stehen,
+der alte Kurs wird **mit Datum** gezeigt. Abgerufen wird im **Gateway**
+(Regel 5n), nie aus dem Browser oder aus Python; ohne Anbieter mit Beträgen
+wird die Quelle gar nicht erst gefragt.
 
 **Wo die Zahlen entstehen:** `quota::eintrag` bleibt die einzige Stelle, die
 Pools baut; es setzt je Pool `euro` (Zahl oder `null`) und je Anbieter
@@ -1628,6 +1636,31 @@ abgreifen und vergleichen — ohne schwere Abhängigkeit wie Grafana."
 ein Balken je Tag in reinem CSS (Breite in Prozent) — keine Bibliothek, kein
 zusätzlicher Dienst. Das Konten-Modul bekommt dafür einen zweiten Reiter
 „Verbrauch".
+
+**Gebaut (15.11.2026):** `rust/crates/tor/src/verbrauch.rs` mit
+`op: verbrauch_notieren` / `op: verbrauch_lesen`; der **Tag kommt vom Dienst**
+(seine Ortszeit), nicht vom Gateway — ein Server rechnet keine Zeitzone aus
+einer Ziffernfolge. Python reicht den Block jetzt durch (`Reply.verbrauch` →
+`Result.verbrauch` → `Turn.verbrauch` → `app._verbrauch_melden`);
+`Session.verbrauch_melden` ist der Haken, den der Dienst einhängt — ohne ihn
+wird nichts gezählt, und das ist im Protokoll zu sehen. Python schreibt
+**nicht selbst**, weil `state/` dem Gateway gehört (Regel 5t) und
+`CHIMERA_HOME` (0700 `chimera`) für `chimera-tor` nicht lesbar ist.
+Abrechnungsseite: `quota::verlauf_notieren` (Ringpuffer 500, `VERLAUF_MAX`)
+und `quota::veraenderung` (je Währung, Vorzeichen: negativ = verbraucht);
+`GET /api/verbrauch?tage=N` liefert beides. Am Pi belegt: ein Aufruf,
+12 613 Eingabe, 2 Ausgabe, 12 416 Cache-Treffer.
+
+> **Lehre vom Pi (15.11.2026): ein gesendetes Op ist kein abgelegter Wert.**
+> Der Verbrauch lief zuerst vollständig ins Leere. `state/verbrauch` stand
+> nicht in `ReadWritePaths` der Gateway-Unit, das Gateway antwortete ehrlich
+> `{"ok": false, "fehler": "Read-only file system"}` — und der Aufrufer sah
+> nur das **gesendete** Op und schwieg. Zwei Konsequenzen: (a) `app.py` prüft
+> die Antwort und warnt einmal je Ursache (`_verbrauch_fehler`), (b) ein neues
+> `state/`-Unterverzeichnis braucht **zwei** Stellen in
+> `installer/lib/gateway.sh` (`ReadWritePaths` und `gateway_ablagen`) — der
+> Test `tests/test_ablagen_wirksam.py` hält seither Code und Unit gegeneinander
+> und hätte den Fall benannt.
 
 **Entschieden (smilez, 10.11.2026):**
 
@@ -2034,11 +2067,18 @@ Beispiele, keine Vorgabe.
 - **Format JSON-Dateien**, kein SQLite: kleiner Bestand, von Hand lesbar.
   SQLite bleibt dem Gedächtnisindex (8h).
 - **Kleinste Schreibrechte:** `ReadWritePaths` nennt je Ablage einen Ordner
-  (nie `config/` als Ganzes). Stand 14.11.2026 neun Pfade, wie die Unit sie
+  (nie `config/` als Ganzes). Stand 15.11.2026 zehn Pfade, wie die Unit sie
   setzt (`installer/lib/gateway.sh`): `config/anbieter`, `config/geheim`,
   `config/wahl`, `config/freigaben`, `config/ssh`, `state/katalog`,
-  `state/log` (Protokoll der Freigaben), `state/quota`, `state/web`.
-  Der Test `tests/test_ablagen_wirksam.py` hält Code und Unit gegeneinander. Telegram-Token und Passwort-Hash ziehen aus der
+  `state/log` (Protokoll der Freigaben), `state/quota`, `state/web`,
+  `state/verbrauch` (Verbrauch je Tag, 15.11.).
+  Der Test `tests/test_ablagen_wirksam.py` hält Code und Unit gegeneinander:
+  er liest jedes `.state.join("…")`/`.config.join("…")` im Gateway-Code und
+  verlangt den Ordner in `ReadWritePaths` **und** in `gateway_ablagen`.
+  **Wer eine neue Ablage baut, ändert beide Stellen** — sonst endet jeder
+  Schreibversuch mit `Read-only file system`, und die Anzeige bleibt eine
+  Anzeige (am Pi am 12.11. mit den Freigaben und am 15.11. mit dem Verbrauch
+  genau so passiert). Telegram-Token und Passwort-Hash ziehen aus der
   `.env` nach `config/geheim/`; die `.env` bleibt für Adressen und Schalter
   und wird vom Gateway nur gelesen. Der Installer übernimmt den Umzug in
   `migrate_from()`.
