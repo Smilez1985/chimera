@@ -329,4 +329,8 @@ def _amixer(argv: list[str], *, lesen: bool = False) -> tuple[int, str]:
         return 127, f"{type(exc).__name__}: {exc}"
     if p.returncode != 0:
         return p.returncode, (p.stderr or p.stdout or "").strip()[:200]
-    return 0, ""
+    # **Die Ausgabe zurückgeben** (15.11.2026, am Pi gefunden): Hier stand
+    # `return 0, ""` — damit war `sget` immer leer, `_prozent` fand nichts,
+    # und die Lautstärke blieb „nicht messbar", obwohl das Kommando sauber
+    # antwortete. Ein stiller Erfolg an der gefährlichsten Stelle.
+    return 0, (p.stdout or "")

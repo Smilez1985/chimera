@@ -209,6 +209,39 @@ pruefe(sch.lautstaerke("lautsprecher"), 73,
 pruefe("-q" not in a.letzter(), True,
        "lesender Aufruf kommt ohne -q (sonst leere Ausgabe, stiller Erfolg)")
 
+print("== 6f. _amixer gibt die Ausgabe zurück (sonst ist jede Messung leer)")
+import os as _os  # noqa: E402
+import stat as _stat  # noqa: E402
+import tempfile as _tf  # noqa: E402
+from chimera.audio_schalter import _amixer  # noqa: E402
+
+with _tf.TemporaryDirectory() as td:
+    # Eine Attrappe als ausführbare Datei im PATH: So läuft der ECHTE
+    # Kindprozess-Weg (subprocess), nicht eine eingesetzte Funktion -- nur der
+    # tut weh, wenn die Ausgabe verworfen wird.
+    schein = _P(td) / "amixer"
+    schein.write_text("#!/bin/sh\necho '  Mono: 55 [55%]'\nexit 0\n", encoding="utf-8")
+    schein.chmod(schein.stat().st_mode | _stat.S_IEXEC)
+    alt_path = _os.environ.get("PATH", "")
+    _os.environ["PATH"] = f"{td}:{alt_path}"
+    try:
+        rc, text = _amixer(["amixer", "-c", "whisplaysound", "sget", "speaker"],
+                           lesen=True)
+    finally:
+        _os.environ["PATH"] = alt_path
+    pruefe(rc, 0, "Kindprozess-rc")
+    pruefe("55%" in text, True, "Ausgabe des Kommandos kommt zurück")
+    # Und der Wert, den der Schalter daraus liest.
+    with _tf.TemporaryDirectory() as td2:
+        _os.environ["PATH"] = f"{td}:{alt_path}"
+        try:
+            sch2 = AudioSchalter()
+            sch2._lautsprecher_an = True
+            pruefe(sch2.lautstaerke("lautsprecher"), 55,
+                   "gemessene Lautstärke aus echter Prozessausgabe")
+        finally:
+            _os.environ["PATH"] = alt_path
+
 print("== 7. Die Aufnahme läuft über das gemessene Gerät, nicht über Kanäle")
 from chimera.audio_schalter import AUFNAHME_GERAET  # noqa: E402
 

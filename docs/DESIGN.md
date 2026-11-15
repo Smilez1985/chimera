@@ -3400,6 +3400,13 @@ aus. Der Wert war damit still leer — die Lautstärke stand als „nicht
 messbar" in der Oberfläche und die Ablage blieb leer. Alle lesenden Aufrufe
 kommen deshalb ohne `-q`; die Testattrappe bildet das nach.
 
+**Und `_amixer` gab die Ausgabe gar nicht zurück** — derselbe Befund, eine
+Ebene tiefer: der Helfer lieferte bei Erfolg `(0, "")` statt `stdout`. Beide
+Fehler zusammen machten jede Messung leer. Deshalb prüft der Test den
+**echten Kindprozess** (eine `amixer`-Attrappe im `PATH`), nicht nur die
+eingesetzte Funktion — eine eingesetzte Funktion kann einen verworfenen
+`stdout` nicht aufdecken.
+
 #### Kennwort ändern
 
 Drei Dinge müssen stimmen, sonst bleibt alles: das **alte** Kennwort, die

@@ -1,13 +1,15 @@
-"""Gegenprobe: Der Audio-Schalter verliert zwei Zusagen.
+"""Gegenprobe: Der Audio-Schalter verliert drei Zusagen.
 
-Zwei Verfälschungen an einer Baumkopie (`CHIMERA_SRC`), jede bricht eine
+Drei Verfälschungen an einer Baumkopie (`CHIMERA_SRC`), jede bricht eine
 andere Zusage aus `tests/test_audio_schalter.py`:
 
 1. **`-q` kommt an die lesenden Aufrufe zurück.** Am Pi gemessen (15.11.2026):
    `amixer -q … sget` endet mit rc 0 und gibt **nichts** aus — die Lautstärke
    wäre still „nicht messbar" und die Ablage bliebe leer. Genau dieser Fehler
    war am Gerät, deshalb steht er hier.
-2. **Einstellen schaltet ein** — ein Regler, der den stummen Lautsprecher
+2. **`_amixer` verwirft die Ausgabe** — `sget` antwortet, der Wert
+   kommt aber nie an: jede Messung ist leer (am Pi genau so gefunden).
+3. **Einstellen schaltet ein** — ein Regler, der den stummen Lautsprecher
    hörbar macht, wäre ein Nebeneffekt, den niemand bestellt hat.
 
 Aufruf: python3 tests/gegenprobe_audio_schalter.py
@@ -32,6 +34,11 @@ VERFAELSCHUNGEN = [
         "-q an den lesenden Aufrufen (leere Ausgabe)",
         '["amixer", "-c", self.karte, "sget", REGLER[was]], lesen=True)',
         '["amixer", "-q", "-c", self.karte, "sget", REGLER[was]], lesen=True)',
+    ),
+    (
+        "_amixer verwirft die Ausgabe (jede Messung leer)",
+        '    return 0, (p.stdout or "")',
+        '    return 0, ""',
     ),
     (
         "Einstellen schaltet ein",

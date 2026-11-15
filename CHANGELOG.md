@@ -1962,6 +1962,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **`_amixer` warf die Ausgabe weg** (am Pi gefunden, 15.11.2026): Der Helfer
+  gab bei Erfolg `(0, "")` zurück statt `stdout`. Damit war **jede**
+  Lautstärkemessung leer — `sget` antwortete sauber, `_prozent` fand nichts,
+  die Oberfläche sagte „nicht messbar" und die Ablage blieb leer. Ein
+  stiller Erfolg an der gefährlichsten Stelle. Jetzt kommt `p.stdout`
+  zurück; Test 6f fährt dafür den **echten** Kindprozess mit einer
+  `amixer`-Attrappe im PATH, Gegenprobe 3/3.
 - **`amixer -q … sget` schweigt — die Lautstärke war „nicht messbar“**
   (am Pi gemessen 15.11.2026): `-q` gehört nur ans Schreiben. Lesende
   Aufrufe kamen mit rc 0 und **leerer** Ausgabe zurück, `_prozent` fand
