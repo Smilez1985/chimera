@@ -536,7 +536,9 @@ def build(*, probe_network: bool = True, home: Path | None = None,
     # Angelegt wird er hier, ausgeschaltet beim Dienststart (`alles_aus`).
     try:
         from .audio_schalter import AudioSchalter
-        chi.audio = AudioSchalter()
+        # „Set and forget": Die Lautstärke liegt in `config/audio.json` und
+        # überlebt Neustarts; geschaltet wird danach nur noch an/aus.
+        chi.audio = AudioSchalter(ablage=root / "config" / "audio.json")
     except Exception as exc:                      # noqa: BLE001
         notes.append(f"Audio-Schalter: nicht aufsetzbar ({exc})")
     # Erst jetzt verdrahten: Der Agent meldet seinen Zustand ans Gesicht.

@@ -124,6 +124,24 @@ pruefe(a.letzter()[-2:], ["speaker", "unmute"], "Schalter benutzt (an)")
 pruefe(any("0%" in " ".join(x) for x in a.aufrufe), False,
        "keine Lautstärke 0 % geschrieben")
 
+print("== 6c. Set and forget: die Lautstärke überlebt den Neustart")
+import tempfile  # noqa: E402
+
+from pathlib import Path as _P  # noqa: E402
+
+with tempfile.TemporaryDirectory() as td:
+    pfad = _P(td) / "config" / "audio.json"
+    a = Attrappe(lautstaerke=62)
+    sch = AudioSchalter(ausfuehren=a, ablage=pfad)
+    sch.lautsprecher(False)                 # merkt 62 % und legt es ab
+    pruefe(pfad.is_file(), True, "Ablage geschrieben")
+    # Neustart: neuer Schalter, kein gemessener Wert mehr in der Attrappe
+    a2 = Attrappe(rc=1)                     # sget scheitert
+    neu = AudioSchalter(ausfuehren=a2, ablage=pfad)
+    neu.lautsprecher(True)
+    pruefe(a2.letzter()[-2:], ["speaker", "62%"],
+           "nach dem Neustart gilt die eingestellte Lautstärke, nicht 80 %")
+
 print("== 7. Die Aufnahme läuft über das gemessene Gerät, nicht über Kanäle")
 from chimera.audio_schalter import AUFNAHME_GERAET  # noqa: E402
 

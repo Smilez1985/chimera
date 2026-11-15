@@ -35,6 +35,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Whisplay-HAT gibt es **keinen** Mute-Schalter (gemessen: nur `mic` und
   `speaker`, beide nur Lautstärke) — „aus" heißt 0 %, „an" der gemerkte Wert
   (`mit_lautsprecher` für den Erinnerungston, `alles_aus` beim Dienststart).
+  Gibt es einen echten Mute-Schalter (`pswitch`/`cswitch`), wird der benutzt
+  — er ist schneller und lässt die Lautstärke stehen; sonst fällt der
+  Schalter auf Lautstärke 0 % zurück. **„Set and forget"** (smilez,
+  15.11.2026): Die Lautstärke wird einmal eingestellt und liegt in
+  `config/audio.json`; geschaltet wird danach nur noch an/aus, damit nach
+  einem Neustart nicht auf einen Vorgabewert gesprungen wird.
   Fehler werden gesagt (`letzter_fehler`), nicht verschluckt.
   **Keine Kanalwahl in Software**: Das linke Mikro klirrt, aber das ist seit
   11.10.2026 gemessen (`displays/mikro.py`, Modul 46) — auf dem Gerät liegt

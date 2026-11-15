@@ -26,6 +26,13 @@ das **gesagt** (`letzter_fehler`), nicht verschluckt. Ohne Karte (Sandkasten,
 fremdes Gerät) bleibt der Zustand trotzdem richtig: Es gibt dann nichts
 abzuschalten, und das Symbol lügt nicht.
 
+**Einmal einstellen, dann nur noch schalten** (smilez, 15.11.2026:
+*„Set and forget"*). Die Lautstärke ist eine Einstellung, kein Zustand: Sie
+wird **einmal** gewählt und in ``config/audio.json`` abgelegt; geschaltet wird
+danach nur noch an/aus. Ohne Ablage (oder bei Neustart mitten im Aus) würde
+sonst nach einem Neustart auf einen Vorgabewert gesprungen — genau das „zu
+laut oder zu leise", das niemand eingestellt hat.
+
 **Lautsprecher und die Erinnerung.** Der Freigabeton läuft über `aplay`. Ist
 die Wiedergabe aus, wäre er stumm — deshalb gibt es
 :meth:`AudioSchalter.mit_lautsprecher`: schaltet für die Dauer eines Tons an
@@ -37,6 +44,7 @@ offen steht).
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 import subprocess
 from contextlib import contextmanager
 
@@ -76,8 +84,11 @@ class AudioSchalter:
     ``amixer`` als Kindprozess mit fester Argumentliste (keine Shell).
     """
 
-    def __init__(self, *, karte: str = KARTE, ausfuehren=None):
+    def __init__(self, *, karte: str = KARTE, ausfuehren=None, ablage=None):
         self.karte = karte
+        #: Wo die eingestellten Lautstärken liegen (``config/audio.json``).
+        #: Ohne Ablage bleibt es beim Merken im Prozess (Tests, Sandkasten).
+        self.ablage = ablage
         self._ausfuehren = ausfuehren or _amixer
         self._mikrofon_an = False
         self._lautsprecher_an = False
@@ -85,10 +96,41 @@ class AudioSchalter:
         self._lautstaerke: dict[str, str] = {}
         #: Kann diese Kontrolle muten? Ergebnis der einmaligen Messung.
         self._schalter: dict[str, bool] = {}
+        self._laden()
         #: Letzter Grund, aus dem ein Schalten nicht ging (für das Journal).
         self.letzter_fehler = ""
 
     # --- Auskunft ---------------------------------------------------------
+
+    # --- Ablage -----------------------------------------------------------
+
+    def _laden(self) -> None:
+        """Gespeicherte Lautstärken holen (``config/audio.json``)."""
+        if not self.ablage:
+            return
+        try:
+            import json
+            daten = json.loads(Path(self.ablage).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        for was, wert in (daten or {}).items():
+            if was in REGLER and isinstance(wert, str) and wert.endswith("%"):
+                self._lautstaerke[was] = wert
+
+    def _sichern(self) -> None:
+        """Lautstärken ablegen — atomar, damit ein Absturz keine halbe Datei lässt."""
+        if not self.ablage:
+            return
+        try:
+            import json
+            ziel = Path(self.ablage)
+            ziel.parent.mkdir(parents=True, exist_ok=True)
+            tmp = ziel.with_suffix(".neu")
+            tmp.write_text(json.dumps(self._lautstaerke, indent=2) + "\n",
+                           encoding="utf-8")
+            tmp.replace(ziel)
+        except OSError as exc:
+            log.warning("Audio-Lautstärke nicht ablegbar: %s", exc)
 
     def zustand(self) -> dict:
         """Was gerade gilt — die Quelle für die Symbole in der Anzeige."""
@@ -169,8 +211,9 @@ class AudioSchalter:
                 ["amixer", "-q", "-c", self.karte, "sget", regler], lesen=True)
             if rc == 0:
                 gemessen = _prozent(jetzt)
-                if gemessen:
+                if gemessen and self._lautstaerke.get(was) != gemessen:
                     self._lautstaerke[was] = gemessen
+                    self._sichern()
             wert = "0%"
         rc, meldung = self._ausfuehren(
             ["amixer", "-q", "-c", self.karte, "sset", regler, wert])
