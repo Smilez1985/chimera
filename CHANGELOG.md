@@ -20,6 +20,22 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Verbrauch: eigene Zählung und Abrechnung nebeneinander** (15.11.2026,
+  Auftrag smilez „ohne Grafana"): neues Modul `verbrauch.rs` —
+  `op: verbrauch_notieren` (der Dienst meldet je Umlauf Tokens, Tag kommt
+  aus seiner Ortszeit) und `op: verbrauch_lesen`, Ablage
+  `state/verbrauch/JJJJ-MM-TT.json` (je Tag und Modell, 0640, atomar).
+  Python reicht den `verbrauch`-Block jeder Antwort jetzt durch
+  (`Reply.verbrauch` → `Result.verbrauch` → `Turn.verbrauch`), statt ihn
+  wegzuwerfen. Die Abrechnungsseite kommt aus dem **Kontostand-Verlauf**
+  (`state/quota/<id>-verlauf.json`, Ringpuffer 500 Stände), weil DeepSeek
+  keinen Usage-Endpunkt hat; `quota::veraenderung` rechnet die Abnahme je
+  Währung. `/api/verbrauch` und ein Reiter „Verbrauch" im Modul „Konten"
+  zeigen beides nebeneinander — Tabelle plus CSS-Balken, keine Bibliothek.
+  Am Pi belegt: 1 Aufruf, 12 613 Eingabe / 2 Ausgabe, 12 416 Cache-Treffer.
+- **Kurse höchstens zweimal am Tag** (15.11.2026): `KURS_FRISCHE_S` = 12 h;
+  ein erzwungener Abruf (Knopf „Neu holen") hält zusätzlich
+  `KURS_MINDESTABSTAND_S` = 10 min ein — die Kursquelle ist fremd.
 - **Guthaben erscheint in Euro, Kurse stehen oben** (15.11.2026, Auftrag
   smilez): `quota::kurse` holt die EZB-Referenzkurse über
   `api.frankfurter.dev` (USD/CNY gegen EUR, kein Schlüssel), legt sie in

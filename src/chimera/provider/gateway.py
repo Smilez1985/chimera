@@ -265,6 +265,10 @@ class GatewayAnbieter(Connector):
         self.host = a.get("host", self.host)
         # Ein Aufruf ohne Text ist gueltig (DESIGN, Regel „Aufrufe, nicht Text“): die Liste traegt ihn.
         self.letzte_werkzeuge = list(a.get("werkzeuge") or [])
+        # Der Verbrauch stand bisher ungenutzt in der Antwort (DESIGN,
+        # „Verbrauch" 15.11.2026): er wird jetzt mitgezaehlt, nicht verworfen.
+        v = a.get("verbrauch")
+        self.letzte_verbrauch = dict(v) if isinstance(v, dict) else {}
         return a.get("text", "")
 
 

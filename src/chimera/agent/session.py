@@ -121,6 +121,9 @@ class Turn:
     tool_calls: int = 0
     fell_back: bool = False
     error: str = ""
+    #: Was dieser Umlauf laut Anbieter gekostet hat (DESIGN „Verbrauch"
+    #: 15.11.2026). Leer heisst: der Anbieter hat nichts gemeldet.
+    verbrauch: dict = field(default_factory=dict)
 
 @dataclass
 class Session:
@@ -147,6 +150,10 @@ class Session:
     #: Face-Bruecke ein; ohne sie kann die Anzeige nicht angesprochen werden,
     #: und das wird gemeldet statt verschwiegen (Regel 10h).
     gesicht_setzen: object = None
+    #: Wohin der Verbrauch eines Umlaufs gemeldet wird (DESIGN „Verbrauch"
+    #: 15.11.2026). Der Dienst haengt hier den Weg zum Gateway ein; ohne sie
+    #: wird nichts gezaehlt -- und das ist im Protokoll zu sehen, nicht still.
+    verbrauch_melden: object = None
 
     def gesicht(self, name: str) -> bool:
         """Einen Ausdruck setzen, etwa aus dem Installer (Update-Anzeige).
@@ -208,6 +215,21 @@ class Session:
         with self._lock:
             self.agent.history.clear()
         self.emit("neu", tuer, "Verlauf geleert")
+
+    def _verbrauch_melden(self, turn: "Turn") -> None:
+        """Den Verbrauch des Umlaufs nach draussen geben (Gateway-Ablage).
+
+        Best effort und **nie** im Weg eines Turns: ein Fehler hier ist ein
+        Protokolleintrag, keine kaputte Antwort. Ohne Verbrauch wird nichts
+        gemeldet -- eine Null waere eine erfundene Zahl.
+        """
+        if not turn.verbrauch or self.verbrauch_melden is None:
+            return
+        try:
+            self.verbrauch_melden(turn)
+        except Exception:                             # noqa: BLE001
+            log.exception("Verbrauch nicht gemeldet (%s/%s)",
+                          turn.provider, turn.model)
 
     def hauptsitzung(self) -> str:
         """Name der Sitzung hinter ``haupt`` (ohne Ablage: ``haupt``)."""
@@ -298,6 +320,7 @@ class Session:
                     model=getattr(result, "model", ""),
                     tool_calls=getattr(result, "tool_calls", 0),
                     fell_back=getattr(result, "fell_back", False),
+                    verbrauch=dict(getattr(result, "verbrauch", {}) or {}),
                 )
             except Exception as exc:                  # noqa: BLE001
                 log.exception("Umlauf auf Kanal %s gescheitert", channel.name)
@@ -311,6 +334,7 @@ class Session:
                 self._busy_channel = None
                 lebenszeichen.fortschritt()
 
+            self._verbrauch_melden(turn)
             self.emit("fehler" if turn.error else "antwort",
                       channel.name, turn.text, ref)
             self._turns.append(turn)

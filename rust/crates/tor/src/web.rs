@@ -528,6 +528,7 @@ pub fn behandle(z: &Zustand, a: &Anfrage) -> Antwort {
         (_, p) if p.starts_with("/api/telegram/") => telegram_api(z, a, &p["/api/telegram/".len()..]),
         (_, p) if p.starts_with("/api/netz/") => netz_api(z, a, &p["/api/netz/".len()..]),
         (_, p) if p.starts_with("/api/quota/") => quota_api(z, a, &p["/api/quota/".len()..]),
+        ("GET", "/api/verbrauch") => verbrauch_api(z, a),
         _ => fehler(404, "nicht gefunden"),
     }
 }
@@ -1032,6 +1033,24 @@ fn quota_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort {
         anfrage["id"] = json!(id);
     }
     json_antwort(200, crate::dienst::antworten(&anfrage, &z.stand))
+}
+
+/// Der eigene Verbrauch (DESIGN „Verbrauch" 15.11.2026). Lesen genuegt:
+/// geschrieben wird er vom Dienst ueber `op: verbrauch_notieren`.
+fn verbrauch_api(z: &Zustand, a: &Anfrage) -> Antwort {
+    let (m, _) = module_erkennen(z.modul_dir.as_deref());
+    if !schreibrecht_vergeben(&m, "anbieter-lesen") {
+        return fehler(403, "kein Modul hat das Recht 'anbieter-lesen'");
+    }
+    let tage = query_wert(a.query, "tage")
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(7);
+    let mut antwort = crate::verbrauch::lesen(&z.stand.daten, tage);
+    // Die Abrechnungsseite: der Kontostand-Verlauf, soweit vorhanden. Hier
+    // wird nichts verglichen und nichts umgerechnet -- beide Zahlen stehen
+    // mit ihrer Herkunft nebeneinander.
+    antwort["abrechnung"] = crate::quota::guthaben_verlauf(&z.stand.daten, tage);
+    json_antwort(200, antwort)
 }
 
 fn freigaben_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {

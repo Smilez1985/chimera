@@ -22,6 +22,7 @@ mod suche;
 mod tailscale;
 mod telegram;
 mod telegram_einstellung;
+mod verbrauch;
 mod wahl;
 mod web;
 

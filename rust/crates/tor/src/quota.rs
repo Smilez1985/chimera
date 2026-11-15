@@ -34,6 +34,10 @@ pub const VERBINDUNG: Duration = Duration::from_secs(5);
 /// Tageskurse der EZB; ein Wert vom Vortag ist am Wochenende normal und
 /// wird **mit Datum** gezeigt, nicht versteckt (DESIGN, Euro-Anzeige 15.11.).
 pub const KURS_FRISCHE_S: u64 = 12 * 3600;
+/// Mindestabstand **auch** fuer einen erzwungenen Abruf (10 min). Der Knopf
+/// "Kurs aktualisieren" soll wirken, aber nicht haemmern: die Quelle ist
+/// fremd und gibt uns nichts (DESIGN, Euro-Anzeige 15.11.2026).
+pub const KURS_MINDESTABSTAND_S: u64 = 600;
 /// Die Kursquelle: EZB-Referenzkurse, ohne Schluessel.
 pub const KURS_URL: &str = "https://api.frankfurter.dev/v1/latest?base=EUR&symbols=USD,CNY";
 
@@ -168,7 +172,17 @@ pub fn kurse_gespeichert(p: &crate::daten::Pfade) -> Value {
 pub fn kurse(p: &crate::daten::Pfade, jetzt: u64, neu: bool) -> Value {
     let alt = kurse_gespeichert(p);
     let geholt = alt["geholt"].as_u64().unwrap_or(0);
-    let faellig = neu || geholt == 0 || jetzt.saturating_sub(geholt) >= KURS_FRISCHE_S;
+    let alter = jetzt.saturating_sub(geholt);
+    // Zwei Gruende fuer einen Abruf: die Frist ist um (12 h = zweimal am Tag)
+    // oder jemand hat ausdruecklich darum gebeten -- aber nie oefter als der
+    // Mindestabstand erlaubt.
+    let faellig = if geholt == 0 {
+        true
+    } else if neu {
+        alter >= KURS_MINDESTABSTAND_S
+    } else {
+        alter >= KURS_FRISCHE_S
+    };
     let mut stand = alt.clone();
     if faellig {
         match agent()
@@ -360,6 +374,9 @@ pub fn eintrag(
                 Ok(r) => {
                     let roh = &r["roh"];
                     let pools = pools_deepseek(roh);
+                    // Der Stand gehoert in den Verlauf -- daraus entsteht die
+                    // Abrechnungsseite (DESIGN „Verbrauch" 15.11.2026).
+                    verlauf_notieren(p, id, jetzt, &pools);
                     e["pools"] = Value::Array(pools);
                     e["verfuegbar"] = roh["is_available"].clone();
                     e["zustand"] = json!("gut");
@@ -501,6 +518,121 @@ fn nicht_abrufbar_grund(typ: &str) -> String {
     }
 }
 
+// ------------------------------------------------- Kontostand-Verlauf
+
+/// So viele Staende werden behalten. Bei einem Abruf alle 10 Minuten sind
+/// das gut drei Tage im Minutenraster -- genug fuer einen Vergleich, klein
+/// genug fuer ein Geraet mit 462 MB.
+pub const VERLAUF_MAX: usize = 500;
+
+fn verlaufdatei(p: &crate::daten::Pfade, id: &str) -> std::path::PathBuf {
+    p.state.join("quota").join(format!("{id}-verlauf.json"))
+}
+
+/// Einen Kontostand an den Verlauf haengen (Ringpuffer, aeltestes faellt weg).
+///
+/// Ohne diesen Verlauf gibt es keine Abrechnungsseite: DeepSeek hat **keinen**
+/// Usage-Endpunkt, nur `/user/balance` (DESIGN „Verbrauch" 15.11.2026).
+pub fn verlauf_notieren(p: &crate::daten::Pfade, id: &str, jetzt: u64, pools: &[Value]) {
+    if !crate::daten::id_gueltig(id) || pools.is_empty() {
+        return;
+    }
+    let mut liste: Vec<Value> = std::fs::read_to_string(verlaufdatei(p, id))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .and_then(|v| v.as_array().cloned())
+        .unwrap_or_default();
+    let betraege: Vec<Value> = pools
+        .iter()
+        .map(|b| json!({"waehrung": b["waehrung"], "gesamt": b["gesamt"]}))
+        .collect();
+    liste.push(json!({"zeit": jetzt, "pools": betraege}));
+    if liste.len() > VERLAUF_MAX {
+        let weg = liste.len() - VERLAUF_MAX;
+        liste.drain(0..weg);
+    }
+    let d = p.state.join("quota");
+    if std::fs::create_dir_all(&d).is_err() {
+        return;
+    }
+    if let Ok(text) = serde_json::to_vec(&Value::Array(liste)) {
+        // Der Verlauf ist Beiwerk: ein Schreibfehler darf den Abruf nicht
+        // kippen, aber er wird auch nicht als Erfolg ausgegeben.
+        let _ = crate::daten::atomar_schreiben(&verlaufdatei(p, id), &text, 0o600);
+    }
+}
+
+/// Die Aenderung je Waehrung zwischen dem aeltesten und dem neuesten Stand
+/// eines Anbieters (positiv = mehr Guthaben). Je Waehrung getrennt -- die
+/// Waehrungen werden hier nicht vermischt (Regel der Guthaben-Anzeige).
+pub fn veraenderung(staende: &[Value]) -> Value {
+    let mut raus = serde_json::Map::new();
+    // Ohne zwei Staende gibt es keine Veraenderung -- 0.0 waere die
+    // Behauptung "nichts verbraucht", und die ist nicht gemessen.
+    if staende.len() < 2 {
+        return Value::Object(raus);
+    }
+    let (Some(erst), Some(letzt)) = (staende.first(), staende.last()) else {
+        return Value::Object(raus);
+    };
+    let leer = Vec::new();
+    let a = erst["pools"].as_array().unwrap_or(&leer);
+    let b = letzt["pools"].as_array().unwrap_or(&leer);
+    for e in a {
+        let w = e["waehrung"].as_str().unwrap_or("");
+        let alt = e["gesamt"].as_str().and_then(|s| s.trim().parse::<f64>().ok());
+        let neu = b
+            .iter()
+            .find(|x| x["waehrung"].as_str() == Some(w))
+            .and_then(|x| x["gesamt"].as_str())
+            .and_then(|s| s.trim().parse::<f64>().ok());
+        if let (Some(alt), Some(neu)) = (alt, neu) {
+            raus.insert(w.to_string(), json!(((neu - alt) * 100.0).round() / 100.0));
+        }
+    }
+    Value::Object(raus)
+}
+
+/// `abrechnung` fuer die Verbrauchsseite: je Anbieter die Staende und die
+/// Veraenderung ueber den Zeitraum. `tage` begrenzt die Zahl der Staende
+/// nicht (der Verlauf ist schon ein Ringpuffer), sondern nur die Auswahl.
+pub fn guthaben_verlauf(p: &crate::daten::Pfade, _tage: usize) -> Value {
+    let (liste, _) = crate::daten::anbieter_laden(p);
+    let mut raus = Vec::new();
+    for (id, a) in &liste {
+        if a.get("an").and_then(Value::as_bool) == Some(false) {
+            continue;
+        }
+        if art_von(a["typ"].as_str().unwrap_or("")) != Art::Abrufbar {
+            continue;
+        }
+        let staende: Vec<Value> = std::fs::read_to_string(verlaufdatei(p, id))
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            .and_then(|v| v.as_array().cloned())
+            .unwrap_or_default();
+        let mut e = json!({
+            "id": id,
+            "bezeichnung": a["bezeichnung"].as_str().unwrap_or(id),
+            "staende": staende,
+            "anzahl": staende.len(),
+            "veraenderung": veraenderung(&staende),
+        });
+        if staende.len() < 2 {
+            e["hinweis"] = json!(concat!(
+                "Noch kein Verlauf: die Abrechnung braucht mindestens zwei ",
+                "Kontostaende. Der Anbieter hat keinen Usage-Endpunkt, ",
+                "deshalb wird der Kontostand mitgeschrieben."
+            ));
+        }
+        raus.push(e);
+    }
+    json!({
+        "anbieter": raus,
+        "hinweis": "Abrechnung laut Anbieter (Kontostand-Verlauf). Tokens zaehlt Chimera selbst -- beides steht nebeneinander, umgerechnet wird nichts.",
+    })
+}
+
 // ------------------------------------------------------------- Op
 
 /// `op: quota_lesen`. `{ "neu": true }` erzwingt einen Abruf (Knopf),
@@ -541,7 +673,9 @@ pub fn op_lesen(p: &crate::daten::Pfade, anfrage: &Value, jetzt: u64) -> Value {
         e["pools"].as_array().map(|a| !a.is_empty()).unwrap_or(false)
     });
     if braucht {
-        let frisch = kurse(p, jetzt, false);
+        // `neu` heisst: der Nutzer hat den Knopf gedrueckt. Dann darf auch
+        // der Kurs nachgeladen werden -- hoechstens alle 10 Minuten.
+        let frisch = kurse(p, jetzt, neu);
         if frisch["kurse"].is_object() {
             kursstand = frisch;
             for e in &mut raus {
@@ -912,5 +1046,65 @@ mod tests {
         // Ein leerer Pfad ergibt einen leeren Stand, keinen Fehler.
         let leer = p("keine-kurse");
         assert!(kurse_gespeichert(&leer)["kurse"].is_null());
+    }
+
+    // -------------------------------------------------- Kontostand-Verlauf
+
+    #[test]
+    fn verlauf_haengt_an_und_kippt_das_aelteste() {
+        let pf = p("verlauf");
+        for i in 0..3u64 {
+            verlauf_notieren(&pf, "ds", 1000 + i,
+                             &[json!({"waehrung": "USD", "gesamt": format!("{}.00", 10 - i)})]);
+        }
+        let st: Vec<Value> = serde_json::from_str(
+            &std::fs::read_to_string(pf.state.join("quota").join("ds-verlauf.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(st.len(), 3);
+        assert_eq!(st[2]["pools"][0]["gesamt"], "8.00");
+    }
+
+    #[test]
+    fn veraenderung_ist_je_waehrung_und_mit_vorzeichen() {
+        let staende = vec![
+            json!({"zeit": 1, "pools": [{"waehrung": "USD", "gesamt": "10.00"},
+                                        {"waehrung": "CNY", "gesamt": "50.00"}]}),
+            json!({"zeit": 2, "pools": [{"waehrung": "USD", "gesamt": "7.50"},
+                                        {"waehrung": "CNY", "gesamt": "50.00"}]}),
+        ];
+        let v = veraenderung(&staende);
+        // Abnahme ist negativ: verbraucht heisst weniger Guthaben.
+        assert_eq!(v["USD"], -2.5);
+        assert_eq!(v["CNY"], 0.0);
+        // Ein einzelner Stand ergibt keine Veraenderung, keine Null.
+        assert_eq!(veraenderung(&staende[..1]), json!({}));
+        assert_eq!(veraenderung(&[]), json!({}));
+    }
+
+    #[test]
+    fn ohne_verlauf_keine_zahlen_sondern_ein_hinweis() {
+        let pf = p("kein-verlauf");
+        crate::daten::anbieter_speichern(&pf, "ds", &json!({"typ": "deepseek", "bezeichnung": "D"})).unwrap();
+        let a = guthaben_verlauf(&pf, 7);
+        let e = &a["anbieter"][0];
+        assert_eq!(e["anzahl"], 0);
+        assert!(e["hinweis"].as_str().unwrap().contains("Kontostaende"), "{e}");
+    }
+
+    #[test]
+    fn ein_erzwungener_kursabruf_haelt_den_mindestabstand_ein() {
+        let pf = p("kursabstand");
+        let d = pf.state.join("quota");
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("kurse.json"),
+            json!({"geholt": 1000, "datum": "2026-11-13",
+                   "kurse": {"USD": 0.9}}).to_string()).unwrap();
+        // Frisch genug: auch `neu` loest keinen zweiten Abruf aus.
+        let k = kurse(&pf, 1000 + 60, true);
+        assert_eq!(k["geholt"], 1000, "{k}");
+        // Nach dem Mindestabstand darf `neu` wieder -- der Stand kommt dann
+        // aus dem Netz oder, ohne Netz, bleibt der alte mit Fehlertext.
+        assert!(KURS_MINDESTABSTAND_S < KURS_FRISCHE_S);
     }
 }

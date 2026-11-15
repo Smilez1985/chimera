@@ -84,6 +84,10 @@ class Reply:
     #: Werkzeugaufrufe der Antwort (DESIGN, Regel „Aufrufe, nicht Text“), neutral:
     #: ``[{"name": ..., "argumente": {...}, "id": ...}]``. Leer heißt: keiner.
     werkzeuge: list[dict] = field(default_factory=list)
+    #: Was der Anbieter für diese Antwort gemeldet hat (`eingabe`, `ausgabe`,
+    #: `cache_neu`, `cache_treffer`, `denken`). Leer heißt: er hat nichts
+    #: gesagt — dann wird auch nichts gezaehlt (DESIGN, „Verbrauch" 15.11.).
+    verbrauch: dict = field(default_factory=dict)
 
     def __str__(self) -> str:
         return self.text
@@ -119,6 +123,9 @@ class Connector(ABC):
 
     #: Werkzeugaufrufe der letzten Antwort, gesetzt von ``call`` (Regel „Aufrufe, nicht Text“).
     letzte_werkzeuge: list[dict] = ()
+
+    #: Verbrauch der letzten Antwort (Token je Art), gesetzt von ``call``.
+    letzte_verbrauch: dict = {}
 
     @abstractmethod
     def call(self, prompt: str, history: list[dict],

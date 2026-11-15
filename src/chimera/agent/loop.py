@@ -53,6 +53,26 @@ def _kurz(text: str, grenze: int = PROTO_OK) -> str:
     s = " ".join(str(text or "").split())
     return s if len(s) <= grenze else s[:grenze] + " …"
 
+#: Die Felder, die ein Anbieter-Verbrauch traegt. Alles andere wird nicht
+#: gezaehlt -- ein unbekanntes Feld waere eine Zahl ohne Bedeutung.
+VERBRAUCH_FELDER = ("eingabe", "ausgabe", "cache_neu", "cache_treffer", "denken")
+
+def _verbrauch_addieren(summe: dict, meldung: dict) -> dict:
+    """Verbrauch einer Runde auf die Summe des Auftrags addieren.
+
+    Nur ganze Zahlen zaehlen; fehlt ein Feld, bleibt die Summe gleich (kein
+    ``0`` vortaeuschen, Regel „nichts erfinden"). Ohne Meldung passiert
+    nichts -- ein Anbieter, der keinen Verbrauch nennt, wird nicht geschaetzt.
+    """
+    if not isinstance(meldung, dict) or not meldung:
+        return summe
+    for feld in VERBRAUCH_FELDER:
+        wert = meldung.get(feld)
+        if isinstance(wert, bool) or not isinstance(wert, int):
+            continue
+        summe[feld] = summe.get(feld, 0) + wert
+    return summe
+
 def _args_kurz(args: dict | str) -> str:
     """Die Argumente eines Aufrufs fürs Protokoll."""
     if isinstance(args, dict):
@@ -172,6 +192,9 @@ class Result:
     model: str = ""
     fell_back: bool = False
     tool_calls: int = 0
+    #: Was dieser Auftrag laut Anbietern gekostet hat (Summe aller Runden,
+    #: DESIGN „Verbrauch" 15.11.2026). Leer heißt: niemand hat es gesagt.
+    verbrauch: dict = field(default_factory=dict)
 
 
 class Agent:
@@ -305,6 +328,9 @@ class Agent:
         fell_back = False
         text = ""
         geruegt = False          # ein Textaufruf wird einmal geruegt, nicht oefter
+        # Was dieser Auftrag gekostet hat: je Runde addiert (DESIGN
+        # „Verbrauch" 15.11.2026). Leere Meldung des Anbieters zaehlt nicht.
+        kosten: dict = {}
 
         for turn in range(self.max_turns):
             self._state("denkt")
@@ -332,6 +358,7 @@ class Agent:
             provider, model = reply.provider, reply.model
             fell_back = fell_back or reply.fell_back
             text = reply.text
+            _verbrauch_addieren(kosten, getattr(reply, "verbrauch", {}))
 
             # 1. Nativ: das Modell hat Werkzeuge aufgerufen (DESIGN, Regel „Aufrufe, nicht Text“).
             #    Ein Aufruf ohne Text ist gueltig -- hier wird nicht auf
@@ -385,7 +412,7 @@ class Agent:
                 steps.append(Step("text", text[:80]))
                 self._state("spricht")
                 return Result(text, steps, provider, model, fell_back,
-                              self.guard.calls)
+                              self.guard.calls, dict(kosten))
 
             call = CALL_RE.search(text)
             if not call:
@@ -393,7 +420,7 @@ class Agent:
                 steps.append(Step("text", text[:80]))
                 self._state("spricht")
                 return Result(text, steps, provider, model, fell_back,
-                              self.guard.calls)
+                              self.guard.calls, dict(kosten))
 
             name, raw_args = call.group(1), call.group(2)
             before = text[: call.start()].strip()
@@ -410,7 +437,7 @@ class Agent:
                     steps.append(Step("blocked", out, name))
                     self.guard.record(name, raw_args, out)
                     return Result(before or out, steps, provider, model,
-                                  fell_back, self.guard.calls)
+                                  fell_back, self.guard.calls, dict(kosten))
                 self.guard.record(name, raw_args, out)
                 steps.append(Step("error", out, name))
                 self.history.append({"role": "user", "content": out})
@@ -431,7 +458,8 @@ class Agent:
                 steps.append(Step("blocked", verdict.message or "", name))
                 self._state("verwirrt")
                 return Result(before or (verdict.message or ""), steps,
-                              provider, model, fell_back, self.guard.calls)
+                              provider, model, fell_back, self.guard.calls,
+                              dict(kosten))
             if verdict.level is Level.BLOCK:
                 out = verdict.message or "Aufruf verhindert."
                 self.guard.record(name, args, out)
@@ -455,7 +483,8 @@ class Agent:
         steps.append(Step("error", f"{self.max_turns} Umläufe aufgebraucht"))
         return Result(
             text or "Ich komme hier nicht weiter.",
-            steps, provider, model, fell_back, self.guard.calls)
+            steps, provider, model, fell_back, self.guard.calls,
+            dict(kosten))
 
     def _fuehre_aus(self, name: str, args: dict, steps: list[Step]) -> str:
         """Ein Werkzeug ausführen, das das Modell selbst benannt hat (Regel „Aufrufe, nicht Text“).

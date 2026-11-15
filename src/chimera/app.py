@@ -189,6 +189,40 @@ class Chimera:
         anbieter = getattr(letzter, "provider", "") if letzter is not None else ""
         return {"modell": modell or "", "anbieter": anbieter or ""}
 
+    #: Letzter Grund, aus dem der Verbrauch nicht abgelegt werden konnte —
+    #: ein Merker, damit die Warnung nicht bei jedem Turn wiederholt wird.
+    _verbrauch_fehler: str = ""
+
+    def _verbrauch_melden(self, turn) -> None:
+        """Den Verbrauch eines Umlaufs an das Gateway geben.
+
+        Der Tag kommt von hier (Ortszeit des Geraets), nicht vom Gateway:
+        ein Server rechnet keine Zeitzone aus einer Ziffernfolge.
+        """
+        import time as _uhr
+        from .provider import gateway as _gw
+        tag = _uhr.strftime("%Y-%m-%d", _uhr.localtime())
+        anfrage = {
+            "op": "verbrauch_notieren", "tag": tag,
+            "anbieter": turn.provider or "", "modell": turn.model or "",
+        }
+        for feld in ("eingabe", "ausgabe", "cache_neu", "cache_treffer", "denken"):
+            wert = (turn.verbrauch or {}).get(feld)
+            if isinstance(wert, int) and not isinstance(wert, bool):
+                anfrage[feld] = wert
+        antwort = _gw.anfragen(anfrage, warten=3.0)
+        # Ein gesendetes Op ist kein abgelegter Wert (Lehre vom Pi,
+        # 15.11.2026: `state/verbrauch` war nicht schreibbar, das Gateway
+        # sagte es auch -- nur gehoert hatte es niemand).
+        if antwort.get("ok") is not True:
+            grund = str((antwort.get("fehler") or {}).get("text")
+                        or antwort.get("fehler") or "ohne Grund")
+            if grund != self._verbrauch_fehler:
+                self._verbrauch_fehler = grund
+                log.warning("Verbrauch wird nicht abgelegt: %s", grund)
+        else:
+            self._verbrauch_fehler = ""
+
     def _on_state(self, what: str) -> None:
         """Den Zustand ans Gesicht melden.
 
@@ -416,6 +450,9 @@ def build(*, probe_network: bool = True, home: Path | None = None,
     # "gesicht"): Damit setzt der Installer das Update-Gesicht, bevor er die
     # Dienste anhaelt.
     session.gesicht_setzen = chi._gesicht_setzen
+    # Und der Verbrauch jedes Umlaufs geht ans Gateway, das die Ablage
+    # fuehrt (state/ gehoert chimera-tor, DESIGN „Verbrauch" 15.11.2026).
+    session.verbrauch_melden = chi._verbrauch_melden
     # Und die LED (Operation "led"): Damit meldet der Installer auch dann
     # seinen Ausgang, wenn er den Dienst gar nicht angehalten hat.
     session.led_melden = chi._led_melden

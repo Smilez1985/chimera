@@ -28,18 +28,137 @@ class ChimeraKonten extends HTMLElement {
         button { background:#7aa2ff; color:#0b0d12; border:0; border-radius:.4rem; padding:.35rem .8rem; font:inherit; cursor:pointer; margin:.5rem .2rem 0 0; }
         button.stumm { background:#2b2f3b; color:#e6e8ee; }
         code { font-family:ui-monospace, monospace; font-size:.8rem; word-break:break-all; }
+        .reiter { display:flex; gap:.4rem; margin:.4rem 0 .6rem; }
+        .reiter button { background:#2b2f3b; color:#e6e8ee; }
+        .reiter button.an { background:#7aa2ff; color:#0b0d12; }
+        .balken { background:#2b2f3b; border-radius:.3rem; height:.6rem; width:6rem; overflow:hidden; }
+        .balken-fuellung { background:#7aa2ff; height:100%; }
       </style>
       <h3>Konten</h3>
       <p class="klein">Guthaben je Anbieter. Jede Zahl nennt ihre Herkunft; ein alter Stand
       steht als alt da, nicht als neu. Der Betrag in der Originalwährung bleibt die Zahl —
       der Euro-Wert steht in Klammern und kommt aus dem Kurs oben.</p>
       <div id="kurse" class="klein"></div>
-      <div id="liste"></div>
-      <button id="neu">Alle neu holen</button> <span id="stand" class="klein"></span>
+      <div class="reiter">
+        <button id="r-guthaben" class="an">Guthaben</button>
+        <button id="r-verbrauch">Verbrauch</button>
+      </div>
+      <div id="bereich-guthaben">
+        <div id="liste"></div>
+        <button id="neu">Alle neu holen</button> <span id="stand" class="klein"></span>
+      </div>
+      <div id="bereich-verbrauch" hidden>
+        <p class="klein">Oben, was Chimera selbst mitzählt (Token je Aufruf, aus der
+        Antwort des Anbieters). Darunter die Abrechnung laut Anbieter — die
+        Kontostand-Abnahme. Beides mit Herkunft; umgerechnet wird nichts.</p>
+        <div id="verbrauchsliste"></div>
+      </div>
       <p id="fehler" class="fehler"></p>`;
     this.$ = (id) => this.shadowRoot.getElementById(id);
     this.$("neu").onclick = () => this.laden(true);
+    this.$("r-guthaben").onclick = () => this.reiter("guthaben");
+    this.$("r-verbrauch").onclick = () => this.verbrauchZeigen();
     this.laden(false);
+  }
+
+  /** Zwischen Guthaben und Verbrauch umschalten. */
+  reiter(was) {
+    this.$("bereich-guthaben").hidden = was !== "guthaben";
+    this.$("bereich-verbrauch").hidden = was !== "verbrauch";
+    this.$("r-guthaben").className = was === "guthaben" ? "an" : "";
+    this.$("r-verbrauch").className = was === "verbrauch" ? "an" : "";
+  }
+
+  /** Zahl mit Tausenderpunkten -- Tokens werden schnell gross. */
+  zahl(n) {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return "—";
+    return v.toLocaleString("de-DE");
+  }
+
+  /** Der Verbrauchsreiter: eigene Zaehlung und Abrechnung nebeneinander. */
+  async verbrauchZeigen() {
+    this.reiter("verbrauch");
+    const ziel = this.$("verbrauchsliste");
+    ziel.replaceChildren(this.el("p", "Lade ...", "klein"));
+    let r;
+    try {
+      r = await window.chimera.api("/api/verbrauch?tage=7");
+    } catch (e) {
+      ziel.replaceChildren(this.el("p", "Nicht abrufbar: " + e, "fehler"));
+      return;
+    }
+    ziel.replaceChildren();
+    if (!r || r.ok !== true) {
+      ziel.appendChild(this.el("p", "Nicht abrufbar: " +
+        ((r && r.fehler && r.fehler.text) || "unbekannter Grund"), "fehler"));
+      return;
+    }
+    const tage = r.tag || [];
+    if (!tage.length) {
+      ziel.appendChild(this.el("p", "Noch kein Verbrauch gezaehlt.", "klein"));
+    } else {
+      // Die groesste Tagesmenge bestimmt den Balken -- reine CSS-Breite,
+      // keine Bibliothek (Auftrag: ohne Grafana).
+      const groesste = Math.max(...tage.map((x) => Number(x.eingabe || 0) + Number(x.ausgabe || 0)), 1);
+      const t = document.createElement("table");
+      const kopf = document.createElement("tr");
+      for (const h of ["Tag", "Aufrufe", "Eingabe", "Ausgabe", ""]) kopf.appendChild(this.el("th", h));
+      t.appendChild(kopf);
+      for (const x of tage) {
+        const tr = document.createElement("tr");
+        tr.appendChild(this.el("td", x.tag || "?"));
+        tr.appendChild(this.el("td", this.zahl(x.aufrufe), "betrag"));
+        tr.appendChild(this.el("td", this.zahl(x.eingabe), "betrag"));
+        tr.appendChild(this.el("td", this.zahl(x.ausgabe), "betrag"));
+        const balken = this.el("div", "", "balken");
+        const f = this.el("div", "", "balken-fuellung");
+        const menge = Number(x.eingabe || 0) + Number(x.ausgabe || 0);
+        f.style.width = Math.max(2, Math.round((menge / groesste) * 100)) + "%";
+        balken.appendChild(f);
+        const zelle = document.createElement("td");
+        zelle.appendChild(balken);
+        tr.appendChild(zelle);
+        t.appendChild(tr);
+      }
+      ziel.appendChild(t);
+      const s = r.summe || {};
+      ziel.appendChild(this.el("p", "Summe: " + this.zahl(s.aufrufe) + " Aufrufe, " +
+        this.zahl(s.eingabe) + " Eingabe, " + this.zahl(s.ausgabe) + " Ausgabe-Token.",
+        "klein"));
+      ziel.appendChild(this.el("p", r.quelle || "", "klein"));
+    }
+    ziel.appendChild(this.abrechnungTeil(r.abrechnung));
+  }
+
+  /** Die Abrechnungsseite: Kontostand-Abnahme je Anbieter. */
+  abrechnungTeil(a) {
+    const box = document.createElement("div");
+    box.appendChild(this.el("h4", "Abrechnung laut Anbieter"));
+    if (!a || !(a.anbieter || []).length) {
+      box.appendChild(this.el("p", "Kein Anbieter mit abrufbarem Guthaben.", "klein"));
+      return box;
+    }
+    for (const x of a.anbieter) {
+      const k = this.el("div", undefined, "karte");
+      k.appendChild(this.el("h4", x.bezeichnung || x.id));
+      const v = x.veraenderung || {};
+      const waehrungen = Object.keys(v).sort();
+      if (waehrungen.length) {
+        const teile = waehrungen.map((w) => {
+          const n = Number(v[w]);
+          const zeichen = n > 0 ? "+" : "";
+          return zeichen + n.toFixed(2).replace(".", ",") + " " + w;
+        });
+        k.appendChild(this.el("p", "Veränderung im Zeitraum: " + teile.join(" · "), "betrag"));
+      } else {
+        k.appendChild(this.el("p", x.hinweis || "Noch keine Vergleichsbasis.", "klein"));
+      }
+      k.appendChild(this.el("p", this.zahl(x.anzahl) + " Kontostände mitgeschrieben.", "klein"));
+      box.appendChild(k);
+    }
+    if (a.hinweis) box.appendChild(this.el("p", a.hinweis, "klein"));
+    return box;
   }
 
   /** "12.34 ≈ 11,17 €" -- Original bleibt vorn, Euro in Klammern. */

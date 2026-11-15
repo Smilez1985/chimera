@@ -220,6 +220,7 @@ class Registry:
             try:
                 text = conn.call(prompt, history, system, model=model, **kw)
                 werkzeuge = list(getattr(conn, "letzte_werkzeuge", ()) or [])
+                verbrauch = dict(getattr(conn, "letzte_verbrauch", {}) or {})
                 fell_back = wanted is not None and (
                     conn.name != wanted.provider
                     or (wanted.model is not None and model != wanted.model)
@@ -232,6 +233,7 @@ class Registry:
                     cost=conn.cost,
                     fell_back=fell_back,
                     werkzeuge=werkzeuge,
+                    verbrauch=verbrauch,
                 )
             except Unavailable as exc:
                 errors.append(f"{conn.label}: nicht verfügbar ({exc})")
