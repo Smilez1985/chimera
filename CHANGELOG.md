@@ -1716,6 +1716,22 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Das Panel blieb nach einem Installerlauf dunkel** (15.11.2026, smilez:
+  „das chimera Display ist aktuell dunkel"): Der Installer startet den Dienst
+  in `98-service`, während sein Fortschrittsbalken das Panel noch hält — der
+  Dienst bekam `[Errno 16] Leitung belegt auf /dev/gpiochip0: [27, 4]` und
+  fiel dauerhaft auf `NullPanel`, obwohl der Zeichner zwei Sekunden später
+  von selbst endete. Neu `NachholPanel` (`src/chimera/displays/nachhol.py`):
+  Maße und Bildrate aus dem `Profil`, Bilder werden verworfen und nach einem
+  Plan (2 s … 60 s) nachgeholt; beim Gelingen werden Licht, LED und das
+  zuletzt verworfene Bild nachgezogen. Nur `OSError` wird nachgeholt — ein
+  unbekannter Typ oder ein nicht ladendes Modul bleibt `NullPanel` mit Grund.
+  `Panel.bereit` unterscheidet „kommt auf Glas" von „wird angenommen"; der
+  Dienst fragt danach statt nach dem Klassennamen, und die Statuszeile zeigt
+  „(blind)" samt Grund. Am Pi belegt: Dienst bei belegter Leitung gestartet →
+  „wird nachgeholt", nach dem Freigeben „doch noch bekommen", Gesicht zeichnet.
+  Tests `tests/test_nachhol_panel.py` (42 Punkte), Gegenprobe
+  `tests/gegenprobe_nachhol_panel.py` 9/9 rot.
 - **Ein Verlauf aus der Textzeit lehrte den verbotenen Weg** (15.11.2026, am
   Pi gefunden): Das Modell schrieb `TOOL: set_face {…}` als Text, obwohl die
   Werkzeugschnittstelle aktiv war und der Prompt sie verlangte — weil sein

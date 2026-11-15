@@ -76,12 +76,33 @@ def open_panel(kind: str = "auto", **kw) -> Panel:
     except Exception as exc:
         if kind != "auto":
             raise
-        # Bewusst kein stilles Weitermachen mit falscher Größe oder halb
-        # belegten Leitungen: es gibt kein Bild, und der Grund ist ablesbar
-        # (Regel 8a — der Unterschied zwischen „läuft blind" und „kaputt").
-        log.error("Anzeige %s aus %s nicht zu öffnen (%s) — Gesicht läuft blind.",
-                  typ, quelle, exc)
-        p = NullPanel(**{k: v for k, v in kw.items()
-                         if k in ("width", "height", "convert", "fps")})
-        p.hinweis = f"Anzeige {typ} ({quelle}) nicht zu öffnen: {exc}"
-        return p
+        # Eine belegte Leitung ist kein Defekt, sondern eine Warteschlange:
+        # Beim Installerlauf hält der Fortschrittsbalken das Panel, während
+        # Schritt 98-service den Dienst startet (am Pi 15.11.2026: „[Errno 16]
+        # Leitung belegt auf /dev/gpiochip0: [27, 4]"). Vorher fiel der Dienst
+        # dann dauerhaft auf NullPanel und das Panel blieb dunkel, obwohl der
+        # Zeichner Sekunden später endete. Jetzt wird nachgeholt.
+        if not isinstance(exc, OSError):
+            # Kein Warten hilft, wenn das Modul selbst nicht lädt oder
+            # kaputt ist — das ist ein Defekt, kein Belegtsein (Regel 8a).
+            log.error("Anzeige %s aus %s nicht zu öffnen (%s) — Gesicht "
+                      "läuft blind.", typ, quelle, exc)
+            p = NullPanel(**{k: v for k, v in kw.items()
+                             if k in ("width", "height", "convert", "fps")})
+            p.hinweis = f"Anzeige {typ} ({quelle}) nicht zu öffnen: {exc}"
+            return p
+        try:
+            prof = registry.profil(typ)
+        except Exception as fehler_profil:              # noqa: BLE001
+            # Ohne Profil gibt es nichts nachzuholen: Dann ist der Typ
+            # unbekannt oder sein Modul kaputt — ein Fehler, kein Warten.
+            log.error("Anzeige %s aus %s nicht zu öffnen (%s; kein Profil: %s) "
+                      "— Gesicht läuft blind.", typ, quelle, exc, fehler_profil)
+            p = NullPanel(**{k: v for k, v in kw.items()
+                             if k in ("width", "height", "convert", "fps")})
+            p.hinweis = f"Anzeige {typ} ({quelle}) nicht zu öffnen: {exc}"
+            return p
+        from ..displays.nachhol import NachholPanel
+        log.warning("Anzeige %s aus %s nicht zu öffnen (%s) — wird nachgeholt.",
+                    typ, quelle, exc)
+        return NachholPanel(typ, quelle, exc, profil=prof)

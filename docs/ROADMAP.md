@@ -175,6 +175,15 @@ Quelle ist PaKaChi-SM (privat); sie dient als Vorbild, hier wird nachgebaut, nic
 
 ## Betrieb — was am Gerät auffällt
 
+- [ ] **Der Installer hält das Panel, während er den Dienst startet**
+      (15.11.2026, Ursache des dunklen Displays): `98-service` startet
+      `chimera.service`, der Fortschrittsbalken (`fortschritt_start`) besitzt
+      die Leitungen 27/4 aber noch bis `fortschritt_stop` am Ende. Seit
+      `NachholPanel` wird das unschädlich (der Dienst holt die Anzeige nach),
+      die Ursache bleibt: zwei Prozesse wollen dieselbe Leitung. Zu tun:
+      Zeichner **vor** dem Dienststart beenden (Ergebnisbild vorher zeichnen,
+      dann `fortschritt_stop`, dann `klammer_aus`), und am Pi nachweisen, dass
+      im Journal kein „Leitung belegt" mehr steht.
 - [ ] **Die Werkzeugkennung steht nicht im Verlaufsprotokoll** (15.11.2026):
       `Verlauf.append` schreibt nur `rolle` und `inhalt`, nicht `tool_calls`
       und `tool_name`. Nach einem Neustart sieht das Fenster ein Ergebnis

@@ -199,6 +199,11 @@ class Panel:
     #: Warum dieses Panel so ist, wie es ist — gefüllt, wenn etwas nicht
     #: ging (Regel 8a: „läuft blind" und „ist kaputt" muss ablesbar sein).
     hinweis: str = ""
+    #: Kommt ein Bild auf Glas? ``False`` heißt: der Aufruf wird angenommen,
+    #: aber niemand sieht etwas. Danach fragt der Dienst, wenn er die
+    #: Statuszeile baut — nicht nach dem Klassennamen (sonst zählt eine
+    #: Hülle, die noch auf die Leitung wartet, als „Panel da").
+    bereit: bool = True
 
     def pruefe_groesse(self, image) -> None:
         if image.size != (self.width, self.height):
@@ -222,6 +227,10 @@ class Panel:
 
 class NullPanel(Panel):
     """Panel ohne Panel — zählt nur, was ankäme (Entwicklung, Messung)."""
+
+    #: Ein NullPanel nimmt Bilder an, zeigt sie aber nicht — ein Bild auf
+    #: Glas entsteht nicht (Regel 8a).
+    bereit = False
 
     def __init__(self, width: int = 240, height: int = 280,
                  *, convert: bool = True, fps: int = 15) -> None:

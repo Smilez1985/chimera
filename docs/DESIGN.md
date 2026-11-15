@@ -2697,7 +2697,54 @@ E-Paper-Pi; alle Treiber liegen auf ihr. Daraus folgt:
   eingerichtet und nachweisbar". Gegenprobe am Gerät: ohne den Fix im selben
   Zustand wieder rc 1 (Leitungen belegt), mit Fix rc 0.
 
+#### Ergänzung (15.11.2026) — Ein belegtes Panel ist eine Warteschlange, kein Defekt
+
+Fund am Pi: Der Installerlauf startet in Schritt `98-service` den Agenten,
+**während** der Fortschrittsbalken des Installers (`installer/lib/py/fortschritt.py`,
+gestartet von `fortschritt_start`) das Panel noch hält. Der Dienst bekam
+
+    ERROR chimera.display.panel: Anzeige whisplay aus CHIMERA_ANZEIGE nicht
+    zu öffnen ([Errno 16] Leitung belegt auf /dev/gpiochip0: [27, 4]) —
+    Gesicht läuft blind.
+
+und fiel auf `NullPanel`. Der Installer-Zeichner endete zwei Sekunden
+später von selbst (`fortschritt_stop`), die Leitung war frei — **niemand hat
+es erneut versucht.** Das Panel blieb dunkel, bis der Dienst von Hand neu
+gestartet wurde (smilez, 15.11. 02:45: „das chimera Display ist aktuell
+dunkel"). Ein Neustart brachte das Gesicht sofort zurück; die Hardware war
+nie defekt.
+
+Daraus die Regel: **Ein Fehlschlag beim Öffnen der Anzeige ist nur dann ein
+Defekt, wenn er keiner Warteschlange entspringt.** Konkret:
+
+- **`NachholPanel`** (`src/chimera/displays/nachhol.py`) hüllt ein Panel,
+  dessen Leitung belegt war. Maße und Bildrate kommen aus dem `Profil` (die
+  Datei ist lesbar, ohne die Leitung zu nehmen), Bilder werden angenommen
+  und verworfen; nach einem Plan (`VERSUCH_ABSTAENDE`: dicht am Anfang, dann
+  weiter, am Ende 60 s) wird es erneut versucht. Gelingt es, wird das echte
+  Panel geöffnet, Licht, LED und das **zuletzt verworfene Bild** werden
+  nachgezogen — sonst bliebe das Glas dunkel, bis das Gesicht von sich aus
+  neu zeichnet.
+- **Nur `OSError` wird nachgeholt.** Ein unbekannter Typ oder ein Modul, das
+  nicht lädt, ist ein Defekt und bleibt `NullPanel` mit Grund (Regel 8a);
+  Warten macht einen Importfehler nicht besser.
+- **`Panel.bereit`** sagt, ob ein Bild auf Glas kommt. `NullPanel.bereit =
+  False`, `NachholPanel.bereit` erst nach dem Öffnen. Der Dienst fragt danach
+  und nicht mehr nach dem Klassennamen — sonst zählte eine wartende Hülle
+  als „Panel da".
+
+Was **nicht** dazugehört: Die Erkennung wird weiterhin nicht wiederholt
+(Regel 6e). Nachgeholt wird ausschließlich das Öffnen der **bereits
+genannten** Anzeige; der Typ kommt unverändert aus `CHIMERA_ANZEIGE` oder
+`state/anzeige`.
+
+Offen (ROADMAP, „Betrieb"): Der Installer sollte seinen Zeichner **vor**
+dem Start des Dienstes beenden, damit es das Gedränge gar nicht erst gibt.
+Der Nachholweg macht es unschädlich, beseitigt aber nicht die Ursache —
+zwei Prozesse wollen dieselbe Leitung.
+
 ### Architekturregel 7 — Ein Prozess, ein Framebuffer
+
 
 openclawgotchis Display-Layer startet pro Update einen `sudo`-Subprozess
 mit Lock und 45 s Timeout. Bei 15 FPS wären das 15 Prozessstarts pro

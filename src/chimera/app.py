@@ -104,9 +104,12 @@ class Chimera:
         lines.append("Gesicht:    " + ("angeschlossen" if self.face
                                        else "keine Anzeige"))
         if self.panel is not None:
-            lines.append(f"Anzeige:    {type(self.panel).__name__} "
-                         f"{self.panel.width}x{self.panel.height}, "
-                         f"{self.panel.fps} Bilder/s")
+            art = (self.panel.profil.typ
+                   if getattr(self.panel, "profil", None) is not None
+                   else type(self.panel).__name__)
+            lines.append(f"Anzeige:    {art} {self.panel.width}x{self.panel.height}, "
+                         f"{self.panel.fps} Bilder/s"
+                         + ("" if self.panel.bereit else " (blind)"))
         if self.renderer is not None:
             malt = self._painter is not None and self._painter.is_alive()
             lines.append("Renderer:   " + ("zeichnet" if malt
@@ -490,7 +493,7 @@ def _try_face(notes: list[str], root) -> tuple[object, object, object]:
     """
     try:
         from .agent.face import Face
-        from .display.panel import NullPanel, open_panel
+        from .display.panel import open_panel
         from .mood.ablage import lade as mood_laden
         from .render.avatar import NoisyRenderer, State
     except ImportError as exc:
@@ -508,10 +511,11 @@ def _try_face(notes: list[str], root) -> tuple[object, object, object]:
         return None, None, None
 
     panel = open_panel()
-    if isinstance(panel, NullPanel):
-        # Der Unterschied zwischen „keine eingestellt" und „eingestellte
-        # ließ sich nicht öffnen" muss in der Statuszeile stehen, sonst
-        # sieht ein Defekt wie Absicht aus (Regel 8a).
+    if not panel.bereit:
+        # Der Unterschied zwischen „keine eingestellt", „ließ sich nicht
+        # öffnen" und „Leitung war belegt, wird nachgeholt" muss in der
+        # Statuszeile stehen, sonst sieht ein Defekt wie Absicht aus
+        # (Regel 8a).
         notes.append(f"Anzeige: blind — {panel.hinweis}" if panel.hinweis
                      else "Anzeige: keine eingestellt — Gesicht läuft blind")
     else:

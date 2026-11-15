@@ -237,13 +237,17 @@ with Umgebung():
         check("state/anzeige: Modul geoeffnet", getattr(p.profil, "typ", None), "keine")
 
     # c) Einstellung zeigt auf ein Modul, das sich nicht oeffnen laesst
-    #    (whisplay ohne Hardware) -> blind, aber MIT Grund
+    #    (whisplay ohne Hardware) -> blind, aber MIT Grund. Seit 15.11.2026
+    #    ist das ein NachholPanel: eine belegte/fehlende Leitung wird
+    #    wieder versucht, statt fuer immer blind zu bleiben (am Pi: der
+    #    Installer-Zeichner hielt das Panel, als der Dienst startete).
     with Umgebung() as wurzel:
         (wurzel / "opt/chimera/state").mkdir(parents=True)
         (wurzel / "opt/chimera/state/anzeige").write_text("whisplay\n")
         m = fassade()
         p = m.open_panel()
-        check("defekte Anzeige: NullPanel", type(p).__name__, "NullPanel")
+        check("defekte Anzeige: wird nachgeholt", type(p).__name__, "NachholPanel")
+        check("defekte Anzeige: blind", p.bereit, False)
         check("defekte Anzeige: Grund steht da", bool(p.hinweis), True)
         check("defekte Anzeige: Grund nennt den Typ", "whisplay" in p.hinweis, True)
 
