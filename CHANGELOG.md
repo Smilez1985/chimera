@@ -1962,6 +1962,13 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **`amixer -q … sget` schweigt — die Lautstärke war „nicht messbar“**
+  (am Pi gemessen 15.11.2026): `-q` gehört nur ans Schreiben. Lesende
+  Aufrufe kamen mit rc 0 und **leerer** Ausgabe zurück, `_prozent` fand
+  nichts, die Ablage blieb leer — ein stiller Erfolg, der als „keine
+  Lautstärke vorhanden“ in der Oberfläche stand. Jetzt lesen alle drei
+  Stellen ohne `-q`; die Testattrappe bildet das Gerät nach (mit `-q`
+  leere Ausgabe) und die Gegenprobe ist rot (2/2).
 - **Chatfenster war nach `ddaf8d0` kaputt** (Befund smilez 15.11.:
   *„die prompt Eingabe klebt oben, den Text kann man nicht mehr lesen"*): Die
   Module liegen seit dem Umbau in `#buehne`, das keine definite Höhe hatte —

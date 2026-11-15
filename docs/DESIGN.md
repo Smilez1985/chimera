@@ -3394,6 +3394,12 @@ geraten: Wer am Gerät mit `alsamixer` gedreht hat, findet das im Browser
 wieder. Ist nichts messbar (fremdes Gerät, Sandkasten), sagt die Seite
 „nicht messbar" statt einer erfundenen 80.
 
+**`-q` gehört nur ans Schreiben** (am Pi gemessen, 15.11.2026):
+`amixer -q -c whisplaysound sget speaker` endet mit rc 0 und gibt **nichts**
+aus. Der Wert war damit still leer — die Lautstärke stand als „nicht
+messbar" in der Oberfläche und die Ablage blieb leer. Alle lesenden Aufrufe
+kommen deshalb ohne `-q`; die Testattrappe bildet das nach.
+
 #### Kennwort ändern
 
 Drei Dinge müssen stimmen, sonst bleibt alles: das **alte** Kennwort, die

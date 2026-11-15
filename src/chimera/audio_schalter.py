@@ -156,7 +156,7 @@ class AudioSchalter:
         if not an:
             return gemerkt
         rc, text = self._ausfuehren(
-            ["amixer", "-q", "-c", self.karte, "sget", REGLER[was]], lesen=True)
+            ["amixer", "-c", self.karte, "sget", REGLER[was]], lesen=True)
         if rc == 0:
             gemessen = _prozent(text)
             if gemessen:
@@ -271,7 +271,7 @@ class AudioSchalter:
         if regler in self._schalter:
             return self._schalter[regler]
         rc, text = self._ausfuehren(
-            ["amixer", "-q", "-c", self.karte, "sget", regler], lesen=True)
+            ["amixer", "-c", self.karte, "sget", regler], lesen=True)
         faehig = rc == 0 and ("pswitch" in (text or "") or "cswitch" in (text or ""))
         self._schalter[regler] = faehig
         return faehig
@@ -285,7 +285,7 @@ class AudioSchalter:
             # Den aktuellen Wert merken, damit „an" nicht auf gut Glück auf
             # 80 % springt, sondern auf das, was der Nutzer eingestellt hat.
             rc, jetzt = self._ausfuehren(
-                ["amixer", "-q", "-c", self.karte, "sget", regler], lesen=True)
+                ["amixer", "-c", self.karte, "sget", regler], lesen=True)
             if rc == 0:
                 gemessen = _prozent(jetzt)
                 if gemessen and self._lautstaerke.get(was) != gemessen:
@@ -315,7 +315,14 @@ def _prozent(text: str) -> str:
 
 
 def _amixer(argv: list[str], *, lesen: bool = False) -> tuple[int, str]:
-    """``amixer`` als Kindprozess — feste Argumentliste, harte Frist."""
+    """``amixer`` als Kindprozess — feste Argumentliste, harte Frist.
+
+    **``-q`` gehört nur ans Schreiben.** Am Pi gemessen (15.11.2026):
+    ``amixer -q -c whisplaysound sget speaker`` endet mit rc 0 und gibt
+    **nichts** aus — der Wert wäre still leer geblieben (die Lautstärke stand
+    deshalb als „nicht messbar" in der Oberfläche, und die Ablage blieb
+    leer). Lesende Aufrufe kommen deshalb ohne ``-q``.
+    """
     try:
         p = subprocess.run(argv, capture_output=True, text=True, timeout=5)
     except (OSError, subprocess.SubprocessError) as exc:

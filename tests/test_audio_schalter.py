@@ -55,6 +55,11 @@ class Attrappe:
         if self.rc != 0:
             return self.rc, "amixer: Fehler"
         if lesen:
+            # Wie das Gerät (am Pi gemessen 15.11.): `amixer -q … sget` gibt
+            # NICHTS aus. Die Attrappe muss das nachbilden, sonst prüft ein
+            # Test, dass ein leerer Wert als 80 % gelesen wird.
+            if "-q" in argv:
+                return 0, ""
             faehig = "volume volume-joined pswitch" if self.schalter \
                 else "volume volume-joined"
             return 0, (f"Capabilities: {faehig}\n"
@@ -193,6 +198,16 @@ with tempfile.TemporaryDirectory() as td:
     okk, meldung = sch.lautstaerke_setzen("lautsprecher", 40)
     pruefe(okk, False, "scheiterndes amixer wird gemeldet")
     pruefe(bool(sch.letzter_fehler), True, "letzter_fehler gesetzt")
+
+print("== 6e. Gemessen wird am Regler, nicht geraten (am Pi gemessen: -q sget schweigt)")
+a = Attrappe(lautstaerke=80)
+sch = AudioSchalter(ausfuehren=a)
+sch.lautsprecher(True)                       # an; schreibt 80 %
+a.lautstaerke = 73                           # jemand dreht mit alsamixer
+pruefe(sch.lautstaerke("lautsprecher"), 73,
+       "Lautstärke wird am Regler gemessen")
+pruefe("-q" not in a.letzter(), True,
+       "lesender Aufruf kommt ohne -q (sonst leere Ausgabe, stiller Erfolg)")
 
 print("== 7. Die Aufnahme läuft über das gemessene Gerät, nicht über Kanäle")
 from chimera.audio_schalter import AUFNAHME_GERAET  # noqa: E402
