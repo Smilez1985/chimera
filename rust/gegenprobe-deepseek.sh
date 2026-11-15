@@ -143,6 +143,28 @@ mut argumente-als-objekt \
                                 }' \
 	'                                let _ = args;'
 
+# 16. Der Denktext geht nicht zurueck -- API antwortet 400 "must be passed
+#     back", der Agent faellt still auf einen anderen Anbieter (15.11.2026).
+mut denktext-geht-nicht-zurueck \
+	'                if let Some(g) = nachricht.get("gedacht").and_then(Value::as_str) {
+                    if !g.is_empty() {
+                        m["reasoning_content"] = json!(g);
+                    }
+                }' \
+	'                if false {
+                    m["reasoning_content"] = json!("");
+                }'
+
+# 17. Die Antwort vergisst den Denktext -- die Kette ist an der ersten Stelle
+#     gerissen, alle anderen Proben blieben davon unberuehrt.
+mut antwort-ohne-denktext \
+	'    if let Some(g) = gesammelt["denken"].as_str().filter(|s| !s.is_empty()) {
+        a["gedacht"] = json!(g);
+    }' \
+	'    if false {
+        a["gedacht"] = json!("");
+    }'
+
 # 15. Die Umformung wird nicht benutzt (Hilfsfunktion geprueft, Verdrahtung
 #     nicht) -- der Fehler vom Pi kaeme zurueck, alle Tests blieben gruen.
 mut verlauf-ungeformt \

@@ -1835,6 +1835,22 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **DeepSeek im Denkmodus war unbenutzbar** (15.11.2026, am Pi im Journal
+  gefunden: `400 "The reasoning_content in the thinking mode must be passed
+  back to the API"`, viermal an einem Vormittag): Jede Runde mit
+  Werkzeugaufruf brach ab, und der Agent fiel still auf `qwen2.5:14b`
+  zurück — niemand sah, dass das eingestellte Modell nie antwortete. Ursache:
+  Der Denktext der Assistenznachricht wurde nicht in den Verlauf
+  zurückgegeben. Neu führt der Agent ihn neutral als `gedacht` mit; das
+  Gateway übersetzt ihn für DeepSeek nach `reasoning_content` und entfernt
+  ihn bei Ollama. `Reply.gedacht`, `GatewayAnbieter.letzte_gedacht`.
+  Tests `tests/test_denktext_rueckweg.py` (8), Gegenprobe 3/3 rot,
+  `rust/gegenprobe-deepseek.sh` jetzt 17 Mutationen, alle rot.
+- **Die obere Leiste begann am Gehäuserand** (15.11.2026, smilez: *„von der
+  Temperatur in der Infozeile sieht man nur das C … das muss alles etwas nach
+  rechts geschoben werden"*): `RAND_LINKS = 24` in
+  `display/felder/oben.py` — die Temperatur beginnt jetzt in Spalte 26
+  statt 2. Test misst am Bild, dass links davon kein Pixel gesetzt ist.
 - **Ein Werkzeugaufruf ohne Codezaun ging als Antwort an den Nutzer** (15.11.2026,
   am Pi belegt): `loop.TEXT_JSON_RE` verlangte einen eingezäunten Codeblock;
   schrieb das Modell `{"name": "set_face", "arguments": {…}}` blank, wurde

@@ -36,6 +36,16 @@ GELB = (235, 190, 70)
 ROT = (225, 80, 70)
 AUS = (110, 110, 110)
 
+#: Linker Rand der oberen Leiste, in Pixeln **mehr** als ``Flaeche.rand``.
+#:
+#: Fund smilez (15.11.2026): *„von der Temperatur in der Infozeile sieht man
+#: nur das C … das muss alles etwas nach rechts geschoben werden"*. Bei
+#: ``rand = 2`` begann `43°C` in Spalte 2 und die ersten ~22 Pixel waren am
+#: Gehäuserand nicht mehr zu sehen. Die Leiste beginnt deshalb weiter innen;
+#: der Setzrand ist eine Eigenschaft **dieses** Bandes und nicht der Fläche,
+#: weil unten (Modellname, zentriert) alles stimmt.
+RAND_LINKS = 24
+
 
 def farbe_fuer(grad: float) -> tuple[int, int, int]:
     """Die Ampelfarbe zu einer Temperatur (reine Funktion, prüfbar)."""
@@ -61,7 +71,7 @@ def _zeichnen(flaeche, kontext: dict) -> None:
     oben = flaeche.oben + 1
     unten = flaeche.oben + flaeche.hoehe - 1
     mitte = (oben + unten) // 2
-    x = flaeche.rand
+    x = flaeche.rand + RAND_LINKS
 
     if grad is not None:
         schrift = flaeche.schrift(max(9, int(flaeche.hoehe * 0.8)))

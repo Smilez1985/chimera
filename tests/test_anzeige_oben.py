@@ -126,6 +126,28 @@ pruefe(len(zeilen), 2, "zwei Zeilen")
 pruefe(all("…" not in z for z in zeilen[:-1]), True,
        "die erste Zeile ist nicht gekürzt")
 
+print("== 7. Die obere Leiste beginnt nicht am Gehaeuserand")
+# Fund smilez (15.11.2026): *"von der Temperatur in der Infozeile sieht man
+# nur das C"*. Gemessen wird am Bild: links von RAND_LINKS darf in der
+# oberen Leiste kein Pixel gesetzt sein, und der Text muss vollstaendig
+# innerhalb des Bildes stehen.
+from chimera.display.felder.oben import RAND_LINKS  # noqa: E402
+img = bild({"temperatur": 43.2, "mikrofon_an": False, "lautsprecher_an": False})
+erste = None
+for y in range(0, 13):
+    for x in range(img.size[0]):
+        if img.getpixel((x, y)) not in ((0, 0, 0), (20, 20, 20)):
+            erste = x if erste is None else min(erste, x)
+pruefe(erste is not None and erste >= RAND_LINKS, True,
+       f"erster gesetzter Pixel in Spalte {erste} (Rand {RAND_LINKS})")
+rechts = None
+for y in range(0, 13):
+    for x in range(img.size[0] - 1, -1, -1):
+        if img.getpixel((x, y)) not in ((0, 0, 0), (20, 20, 20)):
+            rechts = x if rechts is None else max(rechts, x)
+pruefe(rechts is not None and rechts < img.size[0] - 2, True,
+       f"letzter gesetzter Pixel in Spalte {rechts}")
+
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(0 if FAIL == 0 else 1)

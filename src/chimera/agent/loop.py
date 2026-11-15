@@ -527,14 +527,24 @@ class Agent:
                 aufrufe = aufrufe_nativ[:MAX_WERKZEUGE_JE_RUNDE]
                 log.info("Runde %d: %s/%s rief nativ %s", turn + 1, provider,
                          model, ", ".join(a["name"] for a in aufrufe))
-                self.history.append({
+                nachricht = {
                     "role": "assistant", "content": text,
                     # Ollama-Form; die Uebersetzung je Anbieter macht das
                     # Gateway (Regel „Aufrufe, nicht Text“), hier steht das neutrale Ergebnis.
                     "tool_calls": [{"function": {"name": a["name"],
                                                  "arguments": a.get("argumente", {})}}
                                    for a in aufrufe],
-                })
+                }
+                # Denktext anhängen (Fund am Pi, 15.11.2026): DeepSeek
+                # verlangt im Denkmodus mit Werkzeugen, dass
+                # `reasoning_content` früherer Runden im Kontext steht --
+                # sonst HTTP 400 „must be passed back", und der Agent fällt
+                # still auf einen anderen Anbieter zurück. Das Gateway
+                # übersetzt `gedacht` je Anbieter (DeepSeek: reasoning_content,
+                # Ollama: wird entfernt).
+                if getattr(reply, "gedacht", ""):
+                    nachricht["gedacht"] = reply.gedacht
+                self.history.append(nachricht)
                 for a in aufrufe:
                     out = self._fuehre_aus(a["name"], a.get("argumente") or {}, steps)
                     self.history.append({"role": "tool", "content": out,

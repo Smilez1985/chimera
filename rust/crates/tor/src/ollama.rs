@@ -239,7 +239,15 @@ pub fn chat_koerper(modell: &str, anfrage: &Value) -> Value {
         nachrichten.push(json!({"role": "system", "content": s}));
     }
     if let Some(v) = anfrage.get("verlauf").and_then(Value::as_array) {
-        nachrichten.extend(v.iter().cloned());
+        // `gedacht` gehoert zu DeepSeek (Denktext zurueckgeben, 15.11.2026);
+        // Ollama kennt das Feld nicht und soll es nicht sehen.
+        for m in v {
+            let mut m = m.clone();
+            if let Some(o) = m.as_object_mut() {
+                o.remove("gedacht");
+            }
+            nachrichten.push(m);
+        }
     }
     if let Some(p) = anfrage.get("prompt").and_then(Value::as_str).filter(|p| !p.is_empty()) {
         nachrichten.push(json!({"role": "user", "content": p}));
@@ -583,6 +591,16 @@ pub(crate) mod tests {
         assert_eq!(host_von("http://ollama.example:11434"), "ollama.example:11434");
         assert_eq!(host_von("http://ollama.example:11434/x"), "ollama.example:11434");
         assert_eq!(host_von("ollama.example"), "ollama.example");
+    }
+
+    #[test]
+    fn denktext_geht_nicht_an_ollama() {
+        // `gedacht` ist DeepSeeks Denktext (15.11.2026); Ollama kennt das
+        // Feld nicht und soll es nicht sehen.
+        let k = chat_koerper("m", &json!({"prompt": "hi", "verlauf": [
+            {"role": "assistant", "content": "x", "gedacht": "denk"}]}));
+        assert!(k["messages"][0].get("gedacht").is_none());
+        assert_eq!(k["messages"][0]["content"], "x");
     }
 
     #[test]

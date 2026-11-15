@@ -84,6 +84,12 @@ class Reply:
     #: Werkzeugaufrufe der Antwort (DESIGN, Regel „Aufrufe, nicht Text“), neutral:
     #: ``[{"name": ..., "argumente": {...}, "id": ...}]``. Leer heißt: keiner.
     werkzeuge: list[dict] = field(default_factory=list)
+    #: Der **Denktext** dieser Antwort, wenn der Anbieter einen liefert
+    #: (`reasoning_content` bei DeepSeek). Er gehört an die
+    #: Assistenznachricht zurück: Im Denkmodus mit Werkzeugen verlangt die
+    #: API ihn im Kontext, sonst antwortet sie mit HTTP 400 (am Pi gemessen,
+    #: 15.11.2026). Leer heißt: kein Denktext, nichts zurückzugeben.
+    gedacht: str = ""
     #: Was der Anbieter für diese Antwort gemeldet hat (`eingabe`, `ausgabe`,
     #: `cache_neu`, `cache_treffer`, `denken`). Leer heißt: er hat nichts
     #: gesagt — dann wird auch nichts gezaehlt (DESIGN, „Verbrauch" 15.11.).

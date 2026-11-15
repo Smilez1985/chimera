@@ -269,6 +269,9 @@ class GatewayAnbieter(Connector):
         # „Verbrauch" 15.11.2026): er wird jetzt mitgezaehlt, nicht verworfen.
         v = a.get("verbrauch")
         self.letzte_verbrauch = dict(v) if isinstance(v, dict) else {}
+        # Denktext (DeepSeek): muss an die Assistenznachricht zurueck, sonst
+        # bricht die naechste Runde im Denkmodus mit 400 ab.
+        self.letzte_gedacht = str(a.get("gedacht") or "")
         return a.get("text", "")
 
 

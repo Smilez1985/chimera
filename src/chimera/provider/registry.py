@@ -234,6 +234,7 @@ class Registry:
                     fell_back=fell_back,
                     werkzeuge=werkzeuge,
                     verbrauch=verbrauch,
+                    gedacht=str(getattr(conn, "letzte_gedacht", "") or ""),
                 )
             except Unavailable as exc:
                 errors.append(f"{conn.label}: nicht verfügbar ({exc})")

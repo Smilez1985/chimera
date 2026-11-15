@@ -143,6 +143,22 @@ pub fn verlauf_formen(liste: &[Value]) -> Vec<Value> {
             "assistant" => {
                 let mut m = nachricht.clone();
                 offen.clear();
+                // Denktext zurueckgeben (15.11.2026, am Pi gemessen: HTTP 400
+                // "The `reasoning_content` in the thinking mode must be passed
+                // back to the API"). Im Denkmodus mit `tools` verlangt DeepSeek
+                // den Denktext frueherer Runden **im Kontext**; ohne ihn
+                // antwortet die API mit 400, und der Agent faellt still auf
+                // einen anderen Anbieter zurueck. Wir fuehren ihn neutral als
+                // `gedacht` und uebersetzen ihn hier.
+                if let Some(g) = nachricht.get("gedacht").and_then(Value::as_str) {
+                    if !g.is_empty() {
+                        m["reasoning_content"] = json!(g);
+                    }
+                }
+                if let Some(o) = m.as_object_mut() {
+                    // `gedacht` ist unsere Form, nicht die der API.
+                    o.remove("gedacht");
+                }
                 if let Some(aufrufe) = nachricht["tool_calls"].as_array() {
                     let mut geformt = Vec::with_capacity(aufrufe.len());
                     for aufruf in aufrufe {
@@ -417,6 +433,12 @@ pub fn antwort_aus(gesammelt: &Value, anbieter: &str, modell: &str, host: &str) 
     });
     if !aufrufe.is_empty() {
         a["werkzeuge"] = Value::Array(aufrufe);
+    }
+    // Denktext mitgeben, wenn es einen gibt: Der Agent muss ihn an die
+    // Assistenznachricht haengen, sonst bricht die naechste Runde im
+    // Denkmodus mit 400 ab (Fund 15.11.2026).
+    if let Some(g) = gesammelt["denken"].as_str().filter(|s| !s.is_empty()) {
+        a["gedacht"] = json!(g);
     }
     a
 }
@@ -939,6 +961,40 @@ mod tests {
         assert_eq!(raus[3]["tool_call_id"], "call_1");
         // Ein String bleibt ein String.
         assert_eq!(raus[0]["tool_calls"][0]["function"]["arguments"], "{}");
+    }
+
+    /// Denktext geht zurueck in den Kontext (Fund am Pi, 15.11.2026):
+    /// ohne `reasoning_content` antwortet DeepSeek im Denkmodus mit `tools`
+    /// mit HTTP 400 "The `reasoning_content` in the thinking mode must be
+    /// passed back to the API".
+    #[test]
+    fn denktext_geht_als_reasoning_content_zurueck() {
+        let verlauf = vec![
+            json!({"role": "assistant", "content": "", "gedacht": "ich denke",
+                   "tool_calls": [{"function": {"name": "ls", "arguments": {}}}]}),
+            json!({"role": "tool", "content": "ok", "tool_name": "ls"}),
+        ];
+        let raus = verlauf_formen(&verlauf);
+        assert_eq!(raus[0]["reasoning_content"], "ich denke");
+        // Unsere Form verlaesst das Haus nicht.
+        assert!(raus[0].get("gedacht").is_none());
+        // Ohne Denktext bleibt das Feld ganz weg.
+        let ohne = verlauf_formen(&[json!({"role": "assistant", "content": "hallo"})]);
+        assert!(ohne[0].get("reasoning_content").is_none());
+    }
+
+    /// Die Antwort reicht den Denktext durch, damit der Agent ihn an die
+    /// Assistenznachricht haengen kann.
+    #[test]
+    fn antwort_traegt_den_denktext() {
+        let a = antwort_aus(&json!({"text": "moin", "aufrufe": [], "denken": "hmm"}),
+                            "ds", "m", "h");
+        assert_eq!(a["ok"], true);
+        assert_eq!(a["gedacht"], "hmm");
+        // Ohne Denktext kein leeres Feld.
+        let b = antwort_aus(&json!({"text": "moin", "aufrufe": [], "denken": ""}),
+                            "ds", "m", "h");
+        assert!(b.get("gedacht").is_none());
     }
 
     /// Ohne Aufrufe bleibt alles, wie es ist.

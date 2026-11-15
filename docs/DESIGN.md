@@ -1509,6 +1509,7 @@ auch weiterhin für `anthropic` (die Anthropic-Tür ist noch nicht umgezogen).
 | Eigenheit (belegt) | Gebaut |
 |---|---|
 | Denktext steht in `message.reasoning_content` **neben** `content` | gelesen; nur Denktext ⇒ `nur_gedacht` mit Länge und Auszug, kein leerer Text |
+| **Denktext muss zurück** (mit `tools` im Request) | `reasoning_content` der Assistenznachricht wird im Verlauf mitgeführt (`gedacht`), das Gateway übersetzt es zurück — sonst HTTP 400 „must be passed back", und der Agent fällt still auf einen anderen Anbieter (Fund am Pi, 15.11.2026) |
 | Denken ist **vorgabe an**, `reasoning_effort` `low`/`high`/`max` | nur auf Auftrag gesetzt (`denken`: `false` / `low` / `medium` / `high` / `max`); ohne Angabe wird **nichts** behauptet. Unbekannte Stufe ⇒ kein Feld statt geraten |
 | `tool_choice: "required"` ist im Thinking-Modus **400** | wird dann weggelassen und in der Antwort als `werkzeug_wahl_ignoriert` **gesagt** |
 | Im Strom **kein** eigener Usage-Chunk | `stream_options.include_usage` gesetzt; Usage hängt am letzten Chunk; `usage: null` und `: keep-alive` werden toleriert |
