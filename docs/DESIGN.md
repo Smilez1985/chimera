@@ -534,14 +534,32 @@ zwischen zwei Aufträgen steht dasselbe Gesicht stundenlang.
 
 | Zeit (lokal) | Ausdrücke | Charakter |
 |---|---|---|
-| 06–10 | `COFFEE`, `YAWN`, `STRETCH`, `CHILL` | aufwachen |
-| 10–18 | `ROCK`, `MUSIC`, `CHILL` | Grundstimmung, endlos |
-| 18–23 | `BONG`, `JOINT`, `CHILL` | Handlungen mit Ablauf |
+| 06–10 | `COFFEE`, `YAWN`, `STRETCH`, `NATURE`, `WEATHER`, `EXERCISE` | aufwachen |
+| 10–18 | `ROCK`, `MUSIC`, `HIPHOP`, `JAZZ`, `CLASSIC`, `REGGAE`, `HOUSE`, `TV`, `POPCORN`, `DANCE` | Grundstimmung, endlos |
+| 18–23 | `BONG`, `JOINT`, `CHILL`, `MEDITATE`, `TV`, `POPCORN` | Handlungen mit Ablauf |
 | 23–06 | — | Ruhe |
 
-- **Mindestabstand 20 min** zwischen zwei Aktionen, **90 min Sperre je
+- **Mindestabstand 10 min** zwischen zwei Aktionen, **35 min Sperre je
   Ausdruck**. Ohne beides würfelt der Dienst im 30-s-Takt und das Gerät
   raucht den ganzen Abend.
+
+  **Beides am 15.11.2026 verkürzt, und die Fenster verbreitert.** Vorher
+  standen in 10–18 nur drei Namen bei 20 min Abstand und 90 min Sperre: die
+  Sperre war länger als der Umlauf, also blieb je Takt genau **ein**
+  Kandidat übrig („1 möglich" in jeder Protokollzeile), und aus dem Wurf
+  wurde eine feste Reihenfolge `ROCK → CHILL → MUSIC → ROCK`. Auf dem Panel
+  sah das aus wie ein eingefrorenes Gesicht — smilez: *„jetzt steht da seit
+  Stunden das face chill"*. Ein Fenster mit drei Namen und eine Sperre von
+  90 min vertragen sich nicht; entweder mehr Namen oder kürzere Sperre.
+  Beides ist geschehen.
+
+- **Zwei Zusagen, die den Wurf offen halten.** (a) *Nie zweimal derselbe
+  Ausdruck hintereinander*, solange es im Fenster eine Alternative gibt.
+  (b) *Bliebe die Sperre nur einen Kandidaten übrig, stehen die beiden am
+  längsten nicht gezeigten zur Wahl* — die Sperre ist eine Vorliebe, keine
+  Mauer. Ohne (b) ist die Auswahl bei dünner Bibliothek wieder eine
+  Reihenfolge. Beide sind mit Gegenprobe geprüft (`tests/gegenprobe_ambiente.py`,
+  8/8 Mutationen rot).
 - **Wahrscheinlichkeit `CHANCE = 0.35`** je fälligem Takt: lebendig, aber
   nicht im Minutentakt.
 - **Nur wenn wirklich nichts läuft:** kein Auftrag (`Session.busy`), kein

@@ -68,7 +68,9 @@ class Wuerfel:
         return self.werte.pop(0) if self.werte else 0.0
 
 
-ALLE = {"COFFEE", "YAWN", "STRETCH", "CHILL", "ROCK", "MUSIC", "BONG", "JOINT"}
+ALLE = {"COFFEE", "YAWN", "STRETCH", "CHILL", "ROCK", "MUSIC", "BONG", "JOINT",
+        "HIPHOP", "JAZZ", "CLASSIC", "REGGAE", "HOUSE", "TV", "POPCORN", "DANCE",
+        "NATURE", "WEATHER", "EXERCISE", "MEDITATE"}
 
 
 def bau(werte=(0.0, 0.0)):
@@ -109,7 +111,7 @@ amb, uhr = bau((0.0, 0.0))
 amb.tick(stunde=20, frei=True, haelt=False, vorhanden=ALLE)
 uhr.vor(MIN_ABSTAND_S + 1)
 zweite = amb.tick(stunde=20, frei=True, haelt=False, vorhanden=ALLE)
-pruefe(zweite in ("BONG", "JOINT", "CHILL"), True,
+pruefe(zweite in kandidaten(20), True,
        "abends nach dem Abstand: aus dem Abendfenster")
 uhr.vor(MIN_ABSTAND_S + 1)
 dritte = amb.tick(stunde=20, frei=True, haelt=False, vorhanden=ALLE)
@@ -198,6 +200,86 @@ finally:
     dienst_modul.ANBIETER_TAKT_S = alt_takt
 pruefe(rc, 0, "Dienst endet sauber")
 pruefe(doppel.gerufen >= 3, True, "Dienst ruft den Ambiente-Takt")
+
+print("== 10. Keine feste Reihenfolge (Fund 15.11.2026 am Pi)")
+# Mit 20 min Abstand und 90 min Sperre blieb je Takt genau ein Kandidat
+# uebrig: aus dem Wurf wurde ROCK -> CHILL -> MUSIC -> ROCK, und smilez sah
+# "seit Stunden das face chill". Gemessen wird hier am **echten** Aufruf --
+# die Zahl der Moeglichkeiten steht in der Protokollzeile von `tick` selbst.
+# (Ein Nachbau der Regel im Test hat am 15.11. die Mutation "nur-ein-
+# kandidat" gruen gelassen: der Test prueft dann sich selbst.)
+import logging  # noqa: E402
+
+
+class Mitschrift(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__(level=logging.INFO)
+        self.zeilen = []
+
+    def emit(self, record) -> None:
+        self.zeilen.append(record.args)
+
+
+logger = logging.getLogger("chimera.agent.ambiente")
+logger.setLevel(logging.INFO)
+mitschrift = Mitschrift()
+logger.addHandler(mitschrift)
+try:
+    uhr = Uhr()
+    rnd = __import__("random").Random(11)
+    amb = Ambiente(uhr=uhr, zufall=rnd.random)
+    wahlen, moeglich = [], []
+    for _ in range(6 * 3600 // 30):               # 6 Stunden Takt
+        uhr.vor(30)
+        wahl = amb.tick(stunde=6 + int((uhr() - 1000.0) // 3600) % 3 + 6,
+                        frei=True, haelt=False, vorhanden=ALLE)
+        if wahl:
+            wahlen.append(wahl)
+finally:
+    logger.removeHandler(mitschrift)
+
+# (wahl, stunde, kandidaten, namen) -- args der Protokollzeile
+moeglich = [int(a[2]) for a in mitschrift.zeilen]
+pruefe(len(wahlen) >= 8, True, f"in 6 h passiert etwas ({len(wahlen)} Aktionen)")
+pruefe(bool(moeglich) and min(moeglich) >= 2, True,
+       f"jede Wahl hatte mindestens zwei Moeglichkeiten {sorted(set(moeglich))}")
+pruefe(any(a != b for a, b in zip(wahlen, wahlen[1:])), True,
+       f"die Reihenfolge wechselt ({wahlen[:6]})")
+
+print("== 11. Nie zweimal derselbe Ausdruck hintereinander")
+# Zwei Namen im Fenster, beide nach 36 min wieder frei. Ohne die Regel
+# "nie zweimal hintereinander" faellt der Wurf bei zufall=0 wieder auf den
+# ersten -- das Gesicht staende zweimal nacheinander still.
+amb, uhr = bau((0.0, 0.0))
+amb.zufall = lambda: 0.0
+erste = amb.tick(stunde=12, frei=True, haelt=False,
+                 vorhanden={"ROCK", "MUSIC"})
+uhr.vor(SPERRE_JE_AUSDRUCK_S + 60)
+zweite = amb.tick(stunde=12, frei=True, haelt=False,
+                  vorhanden={"ROCK", "MUSIC"})
+pruefe(erste is not None and zweite is not None and zweite != erste, True,
+       f"zwei Wahlen, verschiedene Ausdruecke ({erste} -> {zweite})")
+
+print("== 12. Auch bei duennem Fenster bleiben zwei Moeglichkeiten")
+# Die Bibliothek darf kleiner sein als die Tabelle (DESIGN). Stehen nur drei
+# Namen im Fenster -- wie am Pi --, laeuft die Sperre nach zwei Aktionen der
+# Auswahl davon: ohne den Rueckfall bleibt genau einer uebrig, und der
+# "Wurf" ist wieder eine feste Reihenfolge.
+uhr = Uhr()
+amb = Ambiente(uhr=uhr, zufall=__import__("random").Random(5).random)
+mitschrift.zeilen.clear()
+logger.addHandler(mitschrift)
+try:
+    for _ in range(3 * 3600 // 30):
+        uhr.vor(30)
+        amb.tick(stunde=20, frei=True, haelt=False,
+                 vorhanden={"BONG", "JOINT", "CHILL"})
+finally:
+    logger.removeHandler(mitschrift)
+zahlen = [int(a[2]) for a in mitschrift.zeilen]
+pruefe(len(zahlen) >= 3, True, f"auch im duennen Fenster passiert etwas ({len(zahlen)})")
+pruefe(bool(zahlen) and min(zahlen) >= 2, True,
+       f"immer zwei zur Wahl {sorted(set(zahlen))}")
 
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")

@@ -1148,6 +1148,18 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Ambiente würfelt wieder, statt abzuspulen** (15.11.2026, smilez: *„jetzt
+  steht da seit Stunden das face chill und die Wechsellogik scheint nicht zu
+  greifen"*): Bei drei Namen im Fenster, 20 min Abstand und 90 min Sperre
+  blieb je Takt genau **ein** Kandidat übrig — das Protokoll am Pi sagte in
+  jeder Zeile „1 möglich", und die Folge war fest: `ROCK → CHILL → MUSIC →
+  ROCK`. Die Sperre war länger als der Umlauf. Neu: Fenster verbreitert
+  (10–18 zehn statt drei Namen), `MIN_ABSTAND_S` 20 → **10 min**,
+  `SPERRE_JE_AUSDRUCK_S` 90 → **35 min**. Zwei Zusagen halten den Wurf
+  offen: nie zweimal derselbe Ausdruck hintereinander (solange es eine
+  Alternative gibt) und — bei dünner Bibliothek — die beiden am längsten
+  nicht gezeigten zur Wahl, statt eines erzwungenen. Protokollzeile nennt
+  jetzt „X von Y möglich". Tests 30, Gegenprobe 8/8 rot.
 - **Ein Gähnen öffnet und schließt den Mund** (15.11.2026, smilez: *„die
   Animation yawn dauert zu lange, sieht aus als wolle er mich fressen"*):
   `mouth.style == "yawn"` war ein festes Oval ohne Bewegung. Neu

@@ -41,24 +41,37 @@ log = logging.getLogger(__name__)
 #: Fenster").
 FENSTER = (
     # frueh: aufwachen. Kaffee ist die Handlung, Gaehnen und Strecken passen
-    # dazu; CHILL fuer Tage, an denen nichts ansteht.
-    (6, 10, ("COFFEE", "YAWN", "STRETCH", "CHILL")),
-    # tagsueber: Grundstimmung. ROCK und MUSIC sind endlos (keine dauer_s),
-    # sie bleiben also stehen, bis ein Zustand sie abloest.
-    (10, 18, ("ROCK", "MUSIC", "CHILL")),
-    # abends: die Handlungen mit Ablauf (dauer_s = ein Zug).
-    (18, 23, ("BONG", "JOINT", "CHILL")),
+    # dazu; Wetter und Natur gehoeren zum Morgen.
+    (6, 10, ("COFFEE", "YAWN", "STRETCH", "NATURE", "WEATHER", "EXERCISE")),
+    # tagsueber: Grundstimmung. Alles hier ist endlos (keine dauer_s), es
+    # bleibt also stehen, bis ein Zustand es abloest.
+    (10, 18, ("ROCK", "MUSIC", "HIPHOP", "JAZZ", "CLASSIC", "REGGAE",
+              "HOUSE", "TV", "POPCORN", "DANCE")),
+    # abends: die Handlungen mit Ablauf (dauer_s = ein Zug) und CHILL.
+    (18, 23, ("BONG", "JOINT", "CHILL", "MEDITATE", "TV", "POPCORN")),
     # nachts: Ruhe. Kein Fenster -- der Agent soll nicht rauchen, waehrend
     # niemand hinsieht.
 )
 
 #: Mindestabstand zwischen zwei Aktionen, in Sekunden. Ohne diese Sperre
 #: wuerde der Dienst bei jedem Takt (30 s) erneut wuerfeln duerfen.
-MIN_ABSTAND_S = 20 * 60
+#:
+#: **Von 20 auf 10 Minuten (15.11.2026, am Pi gesehen).** Mit 20 min Abstand
+#: und 90 min Sperre stand ein Ausdruck eine halbe Stunde und der naechste
+#: war trotzdem erzwungen; smilez: *„jetzt steht da seit Stunden das face
+#: chill"*.
+MIN_ABSTAND_S = 10 * 60
 
-#: Sperre je Ausdruck: derselbe Ausdruck kommt fruehestens nach 90 Minuten
+#: Sperre je Ausdruck: derselbe Ausdruck kommt fruehestens nach 35 Minuten
 #: wieder. Sonst raucht das Geraet den ganzen Abend.
-SPERRE_JE_AUSDRUCK_S = 90 * 60
+#:
+#: **Von 90 auf 35 Minuten (15.11.2026).** Die alte Frist war laenger als der
+#: Umlauf durch das Fenster: bei drei Ausdruecken und 20 min Abstand blieb je
+#: Takt genau **ein** Kandidat uebrig, und aus dem Wurf wurde eine feste
+#: Reihenfolge (ROCK -> CHILL -> MUSIC -> ROCK …). Am Pi stand in jeder
+#: Zeile „1 moeglich". Jetzt ist die Sperre kuerzer als der Umlauf, damit
+#: wieder mehr als einer zur Wahl steht.
+SPERRE_JE_AUSDRUCK_S = 35 * 60
 
 #: Wahrscheinlichkeit, dass ein faelliger Takt wirklich etwas ausloest.
 #: 0.35 heisst: im Schnitt drei Takte (90 s) nach Ablauf des Abstands.
@@ -86,6 +99,7 @@ class Ambiente:
         self._uhr = uhr
         self._zufall = zufall
         self._letzter: float | None = None
+        self._letzter_name: str | None = None
         self._je: dict[str, float] = {}
 
     # --- Entscheidung -----------------------------------------------------
@@ -105,20 +119,36 @@ class Ambiente:
                 and jetzt - self._letzter < MIN_ABSTAND_S):
             return None
         namen = [n for n in kandidaten(stunde) if n in vorhanden]
-        namen = [n for n in namen
-                 if jetzt - self._je.get(n, float("-inf")) >= SPERRE_JE_AUSDRUCK_S]
         if not namen:
             return None
+        # Nie zweimal dasselbe hintereinander (15.11.2026): sonst wirkt der
+        # Wurf wie ein haengendes Gesicht. Nur wenn es nichts anderes gibt,
+        # bleibt der letzte Ausdruck im Rennen.
+        if len(namen) > 1 and self._letzter_name in namen:
+            namen = [n for n in namen if n != self._letzter_name]
+        alter = {n: jetzt - self._je.get(n, float("-inf")) for n in namen}
+        erlaubt = [n for n in namen if alter[n] >= SPERRE_JE_AUSDRUCK_S]
+        if not erlaubt:
+            return None
+        # Die Sperre ist eine Vorliebe, keine Mauer. Bliebe nur ein Kandidat
+        # uebrig, waere der "Wurf" eine feste Reihenfolge -- am Pi stand in
+        # jeder Zeile "1 moeglich" und das Gesicht wirkte eingefroren. Sind
+        # mindestens zwei Namen im Fenster, stehen deshalb immer die beiden
+        # am laengsten nicht gezeigten zur Wahl.
+        if len(erlaubt) < 2 and len(namen) > 1:
+            erlaubt = sorted(namen, key=lambda n: alter[n], reverse=True)[:2]
         if self._zufall() > CHANCE:
             return None
-        wahl = namen[min(len(namen) - 1, int(self._zufall() * len(namen)))]
+        wahl = erlaubt[min(len(erlaubt) - 1, int(self._zufall() * len(erlaubt)))]
         self._letzter = jetzt
+        self._letzter_name = wahl
         self._je[wahl] = jetzt
-        log.info("Ambiente: %s gewaehlt (Stunde %d, %d moeglich)",
-                 wahl, stunde, len(namen))
+        log.info("Ambiente: %s gewaehlt (Stunde %d, %d von %d moeglich)",
+                 wahl, stunde, len(erlaubt), len(namen))
         return wahl
 
     def vergessen(self) -> None:
         """Alles zuruecksetzen (Neustart, Test)."""
         self._letzter = None
+        self._letzter_name = None
         self._je.clear()
