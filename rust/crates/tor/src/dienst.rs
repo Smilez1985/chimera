@@ -761,6 +761,24 @@ mod tests {
         d
     }
 
+    /// Ein eigener Pfad je Aufruf: Prozess-Kennung, Name **und** Zähler.
+    ///
+    /// Vorher hing der Pfad nur an der Prozess-Kennung. Tests desselben
+    /// Binaries laufen in Fäden und teilen sie — ein Name genügte, solange ihn
+    /// nur ein Test benutzte. Für den verwaisten Socket war das zu wenig: Der
+    /// Test lief im Gesamtlauf gelegentlich rot, ohne dass der Fall es hergab
+    /// (Uebergabe 15.11.2026). Jetzt ist der Pfad eindeutig, und ein Fehlschlag
+    /// kann nicht mehr „irgendein anderer Test" gewesen sein.
+    fn tmp_eigen(name: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static ZAEHLER: AtomicU64 = AtomicU64::new(0);
+        let n = ZAEHLER.fetch_add(1, Ordering::Relaxed);
+        let d = std::env::temp_dir().join(format!(
+            "chimera-tor-test-{}-{name}-{n}", std::process::id()));
+        let _ = std::fs::remove_file(&d);
+        d
+    }
+
     fn starten(pfad: &Path) {
         let l = gemein::socket::binden(pfad).expect("binden");
         std::thread::spawn(move || lauschen(l));
@@ -828,10 +846,23 @@ mod tests {
 
     #[test]
     fn verwaister_socket_wird_ersetzt() {
-        let p = tmp("verwaist");
+        let p = tmp_eigen("verwaist");
         drop(UnixListener::bind(&p).unwrap()); // Datei bleibt, niemand lauscht
-        assert!(p.exists());
-        assert!(gemein::socket::binden(&p).is_ok());
+        assert!(p.exists(), "die Datei muss nach dem Schliessen liegen bleiben");
+        // Der Grund im Klartext, wenn es schiefgeht: "assertion failed" sagt
+        // bei diesem Fall nichts (Regel 8a).
+        let zweiter = gemein::socket::binden(&p);
+        assert!(zweiter.is_ok(), "verwaister Socket muss ersetzbar sein: {:?}", zweiter.err());
+        // Und die Gegenrichtung gehoert zum Vertrag: ein BEDIENTER Socket wird
+        // nicht ueberschrieben, sondern benannt. Der erste muss dafuer offen
+        // bleiben -- sonst ist er wieder verwaist und wird ersetzt (genau
+        // daran ist meine erste Fassung dieses Tests gescheitert).
+        let besetzt = gemein::socket::binden(&p);
+        let fehler = besetzt.err().unwrap_or_else(|| {
+            let _ = std::fs::remove_file(&p);
+            panic!("ein bedienter Socket darf nicht zweimal gebunden werden")
+        });
+        assert!(fehler.contains("wird schon bedient"), "Grund nennt den Fall: {fehler}");
         let _ = std::fs::remove_file(&p);
     }
 
