@@ -2543,18 +2543,19 @@ lehnte ihn mit HTTP 422 ab. Jetzt gilt strikt:
      (`{"name": "set_face", "arguments": {…}}`, am Pi 04:07 gesehen) — das
      ist kein nativer `tool_calls`, wurde also nie ausgeführt und stand als
      Text in der Chatblase. `loop.textaufrufe()` erkennt **beide** Formen
-     (`TOOL: …` und den Codeblock), `ohne_textaufrufe()` nimmt sie aus dem
+     (`TOOL: …` und den Codeblock), `text_bereinigen()` nimmt sie aus dem
      Text, und der Harness führt sie aus — mit Rüge im Protokoll, weil
      native Aufrufe der Standard bleiben. Netto: der Nutzer sieht keine
      erfundene Ausführung mehr, und ein Befehl wird nicht dadurch
      unwirksam, dass das Modell das falsche Format trifft.
 - Der Textweg bleibt für Anbieter ohne Werkzeug-Schnittstelle
   (`_nativ = False`) der einzige Weg, nicht der bequemere.
-- **Zwei Funktionen heißen gleich, tun aber Verschiedenes** —
-  `ablage.ohne_textaufrufe(fenster)` (Liste von Nachrichten, beim Laden) und
-  `loop.ohne_textaufrufe(text)` (eine Zeichenkette, je Runde). Wer sie
-  verwechselt, bekommt keinen Fehler, sondern ein falsches Ergebnis.
-  Rückstand: umbenennen (`fenster_bereinigen` / `text_bereinigen`).
+- **Zwei Funktionen mit sprechenden Namen, nicht zwei gleiche** (15.11.2026):
+  `ablage.fenster_bereinigen(fenster)` (Liste von Nachrichten, beim Laden)
+  und `loop.text_bereinigen(text)` (eine Zeichenkette, je Runde). Vorher
+  hießen beide `ohne_textaufrufe` — kein Fehler beim Verwechseln, sondern ein
+  falsches Ergebnis. Umbenannt, weil ein Name zwei Bedeutungen nicht tragen
+  kann.
 
 **Nachtrag (15.11.2026): ein Verlauf aus der Textzeit lehrt den verbotenen
 Weg.** Am Pi gemessen: Der Prompt sagte „nativ", der Verlauf der laufenden
@@ -2875,10 +2876,13 @@ Was **nicht** dazugehört: Die Erkennung wird weiterhin nicht wiederholt
 genannten** Anzeige; der Typ kommt unverändert aus `CHIMERA_ANZEIGE` oder
 `state/anzeige`.
 
-Offen (ROADMAP, „Betrieb"): Der Installer sollte seinen Zeichner **vor**
-dem Start des Dienstes beenden, damit es das Gedränge gar nicht erst gibt.
-Der Nachholweg macht es unschädlich, beseitigt aber nicht die Ursache —
-zwei Prozesse wollen dieselbe Leitung.
+**Die Ursache ist inzwischen beseitigt** (15.11.2026): `gateway.sh` startet
+den Sitzungs-Socket unter der Klammer **nicht** mehr im Modul — er trägt
+`Service=chimera.service` und startete damit den Agenten mitten im Lauf.
+Dazu beendet der Installer seinen Zeichner (`fortschritt_abschluss`: Ergebnis
+und LED zeichnen, dann anhalten) **vor** dem Start der Dienste, auch im
+Abbruchpfad. Der Nachholweg bleibt als Netz für den Fall, dass ein fremder
+Prozess die Leitung hält; er ist nicht mehr der Regelfall.
 
 ### Architekturregel 7 — Ein Prozess, ein Framebuffer
 

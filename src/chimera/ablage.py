@@ -80,7 +80,7 @@ def abspielen(eintraege: list[dict]) -> list[dict]:
             rest = fenster[-n:] if n > 0 else []
             z = e.get("zusammenfassung") or ""
             fenster = ([{"role": "user", "content": _mit_marke(z)}] if z else []) + rest
-    return ohne_textaufrufe(fenster)
+    return fenster_bereinigen(fenster)
 
 #: Ein Textaufruf, wie ihn der Textweg schrieb (``TOOL: name {json}``). Er
 #: wird im Fenster entfernt: ein Verlauf aus der Textzeit lehrt genau den Weg,
@@ -91,7 +91,7 @@ TEXT_AUFRUF = re.compile(r"^\s*TOOL:\s*[a-z_]+\s*\{.*$", re.MULTILINE | re.DOTAL
 #: Das Ergebnis, das der Textweg zu einem Aufruf zurückgab.
 TEXT_ERGEBNIS = re.compile(r"^\s*Ergebnis von\s+[A-Za-z0-9_.]+\s*:", re.UNICODE)
 
-def ohne_textaufrufe(fenster: list[dict]) -> list[dict]:
+def fenster_bereinigen(fenster: list[dict]) -> list[dict]:
     """Textaufrufe und ihre Ergebnisse aus dem Fenster nehmen.
 
     Das **Protokoll** bleibt unangetastet (Regel 8d) — hier entsteht nur das,

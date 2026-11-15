@@ -86,14 +86,14 @@ check("gleiche Anzahl Nachrichten", len(protokoll), 4)
 if GEGENPROBE:
     print("== Gegenprobe: ohne Bereinigung muss es rot werden ==")
     import chimera.ablage as ab
-    roh = ab.ohne_textaufrufe
-    ab.ohne_textaufrufe = lambda f: f          # die alte Fassung
+    roh = ab.fenster_bereinigen
+    ab.fenster_bereinigen = lambda f: f          # die alte Fassung
     try:
         fenster = abspielen(protokoll)
         check("Gegenprobe: Aufruf weg", [m["content"] for m in fenster],
               ["setze das gesicht auf CHAOS", "Erledigt."])
     finally:
-        ab.ohne_textaufrufe = roh
+        ab.fenster_bereinigen = roh
 
 print()
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")

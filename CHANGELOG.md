@@ -1101,6 +1101,12 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Zwei Funktionen heißen jetzt verschieden** (15.11.2026): `ablage.ohne_textaufrufe`
+  und `loop.ohne_textaufrufe` taten Verschiedenes (Nachrichtenliste beim
+  Laden gegen Zeichenkette je Runde) — ein Name mit zwei Bedeutungen, beim
+  Verwechseln kein Fehler, sondern ein falsches Ergebnis. Jetzt
+  `ablage.fenster_bereinigen` und `loop.text_bereinigen`; Tests, Gegenprobe
+  und DESIGN-Verweise mit umbenannt.
 - **Die zwei offenen Aufträge vom 15.11. stehen jetzt im Design** (15.11.2026):
   Design-Erst-Regel nachgezogen, bevor gebaut wird. `docs/DESIGN.md` 3.3b
   „Nachtrag" hält „der Agent baut sein Gesicht selbst" fest (Werkzeug

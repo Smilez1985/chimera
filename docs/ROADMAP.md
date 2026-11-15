@@ -184,11 +184,6 @@ Quelle ist PaKaChi-SM (privat); sie dient als Vorbild, hier wird nachgebaut, nic
       einem Browser. Zu tun: Modul öffnen, alle drei Fälle ansehen (Anbieter
       mit Pools, Ollama ohne Guthaben, Anbieter mit Fehler), und — wie bei
       `freigaben_anzeige.mjs` — einen `node`-Test mit DOM-Ersatz dazulegen.
-- [ ] **Zwei Funktionen namens `ohne_textaufrufe`** (15.11.2026):
-      `ablage.ohne_textaufrufe(fenster)` (Liste, beim Laden) und
-      `loop.ohne_textaufrufe(text)` (Zeichenkette, je Runde). Kein Fehler,
-      nur ein falsches Ergebnis, wenn man sie verwechselt. Umbenennen in
-      `fenster_bereinigen` / `text_bereinigen` (DESIGN „Aufrufe, nicht Text").
 - [ ] **Werkzeugaufrufe als ausklappbare Zeile im Web-Chat** (Auftrag smilez
       15.11.2026, DESIGN „Werkzeugaufrufe im Chat"): Zugeklappt nur der
       Werkzeugname, aufgeklappt Argumente, Ergebnis-Kurzfassung, Dauer und ob
@@ -220,15 +215,6 @@ Quelle ist PaKaChi-SM (privat); sie dient als Vorbild, hier wird nachgebaut, nic
       Nicht durch die Änderungen vom 15.11. verursacht, aber ein Test, der
       manchmal rot ist, erzieht dazu, Rot zu ignorieren. Zu tun: Ursache
       benennen (Reihenfolge von Binden/Aufräumen), nicht die Frist erhöhen.
-- [ ] **Der Installer hält das Panel, während er den Dienst startet**
-      (15.11.2026, Ursache des dunklen Displays): `98-service` startet
-      `chimera.service`, der Fortschrittsbalken (`fortschritt_start`) besitzt
-      die Leitungen 27/4 aber noch bis `fortschritt_stop` am Ende. Seit
-      `NachholPanel` wird das unschädlich (der Dienst holt die Anzeige nach),
-      die Ursache bleibt: zwei Prozesse wollen dieselbe Leitung. Zu tun:
-      Zeichner **vor** dem Dienststart beenden (Ergebnisbild vorher zeichnen,
-      dann `fortschritt_stop`, dann `klammer_aus`), und am Pi nachweisen, dass
-      im Journal kein „Leitung belegt" mehr steht.
 - [ ] **Die Werkzeugkennung steht nicht im Verlaufsprotokoll** (15.11.2026):
       `Verlauf.append` schreibt nur `rolle` und `inhalt`, nicht `tool_calls`
       und `tool_name`. Nach einem Neustart sieht das Fenster ein Ergebnis

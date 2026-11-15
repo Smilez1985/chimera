@@ -146,7 +146,7 @@ def textaufrufe(text: str) -> list[dict]:
     return gefunden
 
 
-def ohne_textaufrufe(text: str) -> str:
+def text_bereinigen(text: str) -> str:
     """Den Text ohne die Aufrufe — damit kein JSON in der Antwort steht."""
     if not text:
         return ""
@@ -490,7 +490,7 @@ class Agent:
                 # einmal je Auftrag).
                 aufrufe = textaufrufe(text)
                 if aufrufe:
-                    reste = ohne_textaufrufe(text)
+                    reste = text_bereinigen(text)
                     log.warning("Textaufruf statt Werkzeugschnittstelle "
                                 "(ausgeführt): %s", _kurz(text))
                     if not geruegt:

@@ -32,7 +32,7 @@ MUTATIONEN = [
     # (Name, Datei, alt, neu, Testdatei, erwarteter roter Punkt)
     ("bereinigung-aus",
      ABLAGE,
-     "    return ohne_textaufrufe(fenster)",
+     "    return fenster_bereinigen(fenster)",
      "    return fenster",
      "test_verlauf_saeubern.py",
      "Aufruf weg"),
