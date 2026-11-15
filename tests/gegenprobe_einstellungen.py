@@ -1,6 +1,6 @@
 """Gegenprobe: Die Avatar-Einstellungen und die Vorschau brechen.
 
-Drei Verfälschungen an einer **Kopie** des Baums (`CHIMERA_ROOT_TEST`):
+Fünf Verfälschungen an einer **Kopie** des Baums (`CHIMERA_ROOT_TEST`):
 
 1. `setzen` nimmt jeden Wert an (die Prüfung fällt weg) — dann ist
    „ungültig ändert nichts" nur ein Satz in der Doku.
@@ -28,6 +28,16 @@ ROOT = HIER.parent
 TEST = HIER / "test_einstellungen.py"
 
 MUTATIONEN = [
+    ("ueberlagerung-ignoriert-abllauf",
+     "src/chimera/render/einstellungen.py",
+     '        return int(wert) if jetzt_s < float(bis) else None',
+     '        return int(wert)'),
+    ("ueberlagerung-gilt-in-jeder-zone",
+     "src/chimera/render/einstellungen.py",
+     '        if self._werte.get("helligkeit_jetzt_zone") != jetzt_zone:\n'
+     '            return None',
+     '        if False:\n'
+     '            return None'),
     ("setzen-ohne-pruefung",
      "src/chimera/render/einstellungen.py",
      '        geprueft = self._pruefen(feld, wert)\n'

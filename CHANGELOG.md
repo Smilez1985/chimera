@@ -20,6 +20,20 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **„Helligkeit jetzt“ — vorübergehend, nur für die aktuelle Zone**
+  (smilez 15.11.: *„ein davon abgekoppelter Helligkeitsschalter der nur die
+  aktuelle Tageszeit Zone regelt, evtl sogar nur temporär bis zum nächsten
+  Tag/Nacht Wechsel und dann wieder die im Tag/Nacht Modus eingestellte
+  Dimmstufe nimmt“*): neuer Wert `helligkeit_jetzt` samt `_bis` und `_zone`
+  in derselben Ablage. `get_display()` ersetzt damit **nur** den Wert der
+  Zone, in der er gesetzt wurde, und nur bis zum nächsten Wechsel — danach
+  gilt wieder die Dimmstufe aus dem Avatar-Reiter. Die Zone rechnet
+  `einstellungen.zone()` mit der Regel des Renderers (`_is_night`); 0 ist ein
+  gültiger Wert, deshalb löscht `"zurueck"` die Überlagerung. Kein zweiter
+  Faden, kein zweiter Timer: der Renderer fragt `get_display()` wie bisher.
+- **Das Nachtfenster steht wieder im Avatar-Reiter** (Schalter, Zeiten,
+  Helligkeit tags/nachts) — der erste Wurf hatte die ganze Bildschirmkarte in
+  die Einstellungen gezogen; dort bleiben nur Kontrast und „Helligkeit jetzt“.
 - **Reiter „Einstellungen" (⚙️, vor „Abmelden")** (15.11.2026, Auftrag smilez:
   *„Kontrast und Helligkeit des Displays sowie jeweilige Lautstärke + mute /
   unmute von Mic und Soundausgabe … in einem eigenen Reiter ‚Einstellungen'
@@ -1962,6 +1976,23 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Der Reiter „Einstellungen“ war leer** (Befund smilez 15.11.: *„ist
+  vorhanden, aber leer“*): Die Modulskripte sind klassische Skripte und
+  teilen **einen** globalen Namensraum. `anzeige.js` deklariert `const STIL`,
+  der neue Reiter deklarierte es auch — ein `SyntaxError`, der das **ganze**
+  Skript tötet: `customElements.define` lief nie, `onerror` feuerte nicht
+  (die Datei wurde ja geladen), die Fläche blieb stumm leer. Jetzt kapselt
+  sich jedes Modul (`(() => { … })();`), `tests/js/module_isolierung.mjs`
+  führt alle Module in *einem* Skript aus und prüft jedes Element
+  (Gegenprobe rot), und der Rahmen **sagt**, wenn ein Modul sein Element
+  nicht definiert.
+- **Abgelaufene Sitzung führte nicht zur Anmeldemaske** (smilez 15.11.: *„ich
+  muss manuell neu laden, um mich wieder anmelden zu können“*): Reiter ohne
+  Abfrage (Status, Einstellungen) merkten das Ablaufen nie. Neu: alle 60 s
+  `GET /api/sitzung` (leere Antwort) plus sofortige Prüfung bei
+  `visibilitychange`; ein 401 zeigt die Maske und hält den Takt an. Abmelden
+  und Maske halten ihn ebenfalls an. **Bewusst schlank:** ein Aufruf je
+  Minute, kein zweiter Strom, kein WebSocket.
 - **Eine gemessene 0 % wurde als „Einstellung“ gespeichert** (am Pi
   15.11.2026): Beim Ausschalten merkt sich der Schalter die Lautstärke —
   stand der Regler aber schon auf 0 % (weil *wir* ihn ausgeschaltet

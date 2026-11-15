@@ -105,6 +105,7 @@ function maskeZeigen(art, grund) {
   $("kopf").hidden = art !== "";
   $("anmeldung").hidden = art !== "anmeldung";
   $("einrichtung").hidden = art !== "einrichtung";
+  if (art !== "") sitzungAnhalten();
   if (art === "anmeldung") {
     const f = $("anmeldefehler");
     f.style.color = "";
@@ -140,6 +141,36 @@ async function zeigeModul(m) {
   if (customElements.get(m.element)) buehne.appendChild(document.createElement(m.element));
 }
 
+/// Ein 401 aus **irgendeinem** Aufruf zeigt die Anmeldemaske (siehe `api`).
+/// `SITZUNG_TAKT_MS` ist der Takt des Wächters: kurz genug, dass man nicht
+/// minutenlang auf eine tote Sitzung starrt, lang genug, dass es kein
+/// Dauerfeuer ist (ein leerer Endpunkt, mehr nicht).
+const SITZUNG_TAKT_MS = 60000;
+let sitzungsTakt = null;
+
+/// Prüfen, ob die Sitzung noch gilt — und den Takt anhalten, wenn nicht.
+async function sitzungPruefen() {
+  // Ohne Kopfzeile sind wir nicht angemeldet (Maske oder Einrichtung):
+  // dann gibt es nichts zu wachen.
+  if ($("kopf").hidden) { sitzungAnhalten(); return; }
+  const r = await api("/api/sitzung");
+  if (r.status === 401) sitzungAnhalten();
+}
+
+function sitzungWachen() {
+  sitzungAnhalten();
+  sitzungsTakt = setInterval(sitzungPruefen, SITZUNG_TAKT_MS);
+  // Zurück aus dem Hintergrund (Handy gesperrt, Reiter weg): sofort einmal
+  // nachsehen, statt bis zu einer Minute auf die tote Sitzung zu warten.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) sitzungPruefen();
+  });
+}
+
+function sitzungAnhalten() {
+  if (sitzungsTakt !== null) { clearInterval(sitzungsTakt); sitzungsTakt = null; }
+}
+
 async function start() {
   // Erst fragen, ob ueberhaupt ein Passwort gesetzt ist: ohne eines zeigt die
   // Oberflaeche nur die Seite zum Anlegen (Regel 5j, Fassung 14.11.).
@@ -150,6 +181,13 @@ async function start() {
   const r = await api("/api/module");
   if (r.status === 401) { maskeZeigen("anmeldung"); return; }
   maskeZeigen("");
+  // Sitzungswaechter (smilez 15.11.: „wenn ich lange keine Eingabe mache und
+  // abgemeldet werde, sollte ich zurueck auf die Anmeldemaske … aktuell muss
+  // ich manuell neu laden"). Die Module fragen nicht alle etwas ab — Status
+  // und Einstellungen schweigen, also merkte niemand das Ablaufen der
+  // Sitzung. Dieser Takt fragt einen leeren Endpunkt; ein 401 laesst `api()`
+  // die Maske zeigen, und der Takt haelt an.
+  sitzungWachen();
   $("kopf").hidden = false;
   const menue = $("menue"); menue.replaceChildren();
   for (const m of r.module || []) {
@@ -184,7 +222,7 @@ $("einrichtung").addEventListener("submit", async (e) => {
   $("anmeldefehler").textContent = "Passwort angelegt — bitte jetzt anmelden.";
   $("pw").focus();
 });
-$("abmelden").onclick = async () => { await api("/api/logout", { method: "POST", body: "{}" }); location.reload(); };
+$("abmelden").onclick = async () => { sitzungAnhalten(); await api("/api/logout", { method: "POST", body: "{}" }); location.reload(); };
 start();
 </script>
 </body>

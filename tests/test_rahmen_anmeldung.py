@@ -134,6 +134,26 @@ def main() -> int:
         'if (location.protocol === "http:") $("warnung").style.display = "block";', "")
     check("kein style.display an den Masken", "style.display" in ohne_warnung, False)
 
+    # --- 2b. Sitzungswächter --------------------------------------------
+    # smilez 15.11.: „wenn ich lange keine Eingabe mache und abgemeldet werde
+    # sollte ich zurück auf die Anmeldemaske geleitet werden, aber aktuell
+    # muss ich dazu manuell neu laden". Reiter, die nichts abfragen (Status,
+    # Einstellungen), merkten das Ablaufen gar nicht.
+    check("der Rahmen fragt /api/sitzung", "/api/sitzung" in skript, True)
+    check("es gibt einen Takt", "setInterval(sitzungPruefen" in skript, True)
+    check("der Takt ist nicht Dauerfeuer (>= 30 s)",
+          int(re.search(r"SITZUNG_TAKT_MS = (\d+)", skript).group(1)) >= 30000, True)
+    check("ein 401 haelt den Takt an", "sitzungAnhalten();" in skript, True)
+    check("Rueckkehr aus dem Hintergrund prueft sofort",
+          'visibilitychange' in skript, True)
+    check("Abmelden haelt den Takt an",
+          "sitzungAnhalten(); await api(\"/api/logout\"" in skript, True)
+    check("die Maske haelt den Takt an",
+          'if (art !== "") sitzungAnhalten();' in skript, True)
+    web_rs = (ROOT / "rust/crates/tor/src/web.rs").read_text(encoding="utf-8")
+    check("die Route /api/sitzung gibt es im Gateway",
+          '("/api/sitzung")' in web_rs or '"/api/sitzung"' in web_rs, True)
+
     # --- 3. Das Symbol im Tab ------------------------------------------
     link = re.search(r'<link[^>]*rel="icon"[^>]*>', text)
     check("es gibt ein <link rel=\"icon\">", link is not None, True)

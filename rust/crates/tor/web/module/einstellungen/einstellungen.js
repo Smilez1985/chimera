@@ -1,4 +1,11 @@
 "use strict";
+// **Eigener Geltungsbereich, und zwar zwingend.** Die Modulskripte des
+// Rahmens sind klassische Skripte: sie teilen sich EINEN globalen
+// Namensraum. `anzeige.js` deklariert bereits `const STIL` — eine zweite
+// Deklaration im selben Skriptverbund ist ein SyntaxError, und dann läuft
+// **das ganze Modul** nicht: der Reiter bleibt leer, ohne Fehlermeldung
+// (am Gerät gesehen, 15.11.2026). Die Kapselung macht das unmöglich.
+(() => {
 // Einstellungen-Modul (DESIGN, Regel „Einstellungen am Gerät"): Bildschirm
 // (Kontrast, Helligkeit, Nachtfenster), Mikrofon und Tonausgabe samt
 // Lautstärke, und das Kennwort der Oberfläche.
@@ -82,16 +89,21 @@ class ChimeraEinstellungen extends HTMLElement {
         <input type="range" id="kontrast" min="0" max="100" step="5" value="45">
         <p class="klein">Hebt alle Farben gemeinsam an — für helle Räume (kein
         Lichtsensor am Gerät).</p>
-        <label class="schalter"><input type="checkbox" id="nacht_dimmen">
-        Nachts von selbst dunkler</label>
-        <label for="nacht_von">Dunkel ab</label>
-        <input type="time" id="nacht_von" value="22:00">
-        <label for="nacht_bis">Wieder hell ab</label>
-        <input type="time" id="nacht_bis" value="06:00">
-        <label for="helligkeit_tag">Helligkeit tags: <span id="twert">255</span> von 255</label>
-        <input type="range" id="helligkeit_tag" min="20" max="255" step="5" value="255">
-        <label for="helligkeit_nacht">Helligkeit nachts: <span id="nwert">80</span> von 255</label>
-        <input type="range" id="helligkeit_nacht" min="20" max="255" step="5" value="80">
+      </div>
+
+      <div class="karte">
+        <strong>Helligkeit jetzt</strong>
+        <p class="klein" id="zone">—</p>
+        <label for="helligkeit_jetzt">Aktuelle Helligkeit: <span id="jwert">—</span> von 255</label>
+        <input type="range" id="helligkeit_jetzt" min="20" max="255" step="5" value="255">
+        <p class="klein">Gilt <strong>nur für die aktuelle Zone</strong> (Tag oder
+        Nacht) und nur bis zum nächsten Wechsel — danach nimmt das Gerät wieder
+        die Dimmstufe aus dem Avatar-Reiter. Die Tag-/Nacht-Werte selbst stehen
+        dort beim Nachtfenster.</p>
+        <p class="zeile">
+          <button class="zweit" id="zurueck">Zurück auf Tag/Nacht-Einstellung</button>
+          <span class="wert" id="jstatus">—</span>
+        </p>
       </div>
 
       <div class="karte">
@@ -150,22 +162,16 @@ class ChimeraEinstellungen extends HTMLElement {
     // (`/api/einstellungen/display` → Op `avatar_setzen`). Nur beim Loslassen
     // senden — jede Zwischenstufe zu schreiben hieße, je Pixel eine Datei zu
     // ersetzen.
-    const regler = [
-      ["kontrast", "kontrast", "kwert", Number],
-      ["helligkeit_tag", "helligkeit_tag", "twert", Number],
-      ["helligkeit_nacht", "helligkeit_nacht", "nwert", Number],
-    ];
-    for (const [id, feld, anzeige, deuten] of regler) {
-      const e = this.$(id);
-      e.oninput = () => { this.$(anzeige).textContent = e.value; };
-      e.onchange = () => this.setzenDisplay(feld, deuten(e.value));
-    }
-    const dimmen = this.$("nacht_dimmen");
-    dimmen.onchange = () => this.setzenDisplay("nacht_dimmen", dimmen.checked);
-    const von = this.$("nacht_von");
-    von.onchange = () => this.setzenDisplay("nacht_von", von.value);
-    const bis = this.$("nacht_bis");
-    bis.onchange = () => this.setzenDisplay("nacht_bis", bis.value);
+    const kontrast = this.$("kontrast");
+    kontrast.oninput = () => { this.$("kwert").textContent = kontrast.value; };
+    kontrast.onchange = () => this.setzenDisplay("kontrast", Number(kontrast.value));
+    // Die vorübergehende Helligkeit: derselbe Weg wie die anderen Werte,
+    // aber der Dienst hängt Zone und Wechsel selbst an (er weiß, in welcher
+    // Zone er gerade schaltet).
+    const jetzt = this.$("helligkeit_jetzt");
+    jetzt.oninput = () => { this.$("jwert").textContent = jetzt.value; };
+    jetzt.onchange = () => this.setzenDisplay("helligkeit_jetzt", Number(jetzt.value));
+    this.$("zurueck").onclick = () => this.setzenDisplay("helligkeit_jetzt", "zurueck");
 
     // Audio: der Knopf schaltet, der Regler stellt ein.
     this.$("mikrofon").onclick = () => this.schalten("mikrofon");
@@ -192,15 +198,22 @@ class ChimeraEinstellungen extends HTMLElement {
     k.max = String(w.kontrast_max || 100);
     k.value = String(w.kontrast ?? 45);
     this.$("kwert").textContent = k.value;
-    const t = this.$("helligkeit_tag");
-    t.value = String(w.helligkeit_tag ?? 255);
-    this.$("twert").textContent = t.value;
-    const n = this.$("helligkeit_nacht");
-    n.value = String(w.helligkeit_nacht ?? 80);
-    this.$("nwert").textContent = n.value;
-    this.$("nacht_dimmen").checked = !!w.nacht_dimmen;
-    this.$("nacht_von").value = w.nacht_von || "22:00";
-    this.$("nacht_bis").value = w.nacht_bis || "06:00";
+
+    // Helligkeit jetzt: Regler zeigt, was gerade gilt (Überlagerung oder die
+    // eingestellte Dimmstufe der Zone) — und sagt, worauf er schaltet.
+    const zone = w.zone === "nacht" ? "Nacht" : "Tag";
+    const grund = w.nacht_dimmen ? `Nachtfenster ${w.nacht_von}–${w.nacht_bis}`
+                                 : "Nachtfenster aus (immer Tag-Helligkeit)";
+    this.$("zone").textContent = `Gerade gilt die ${zone}-Zone (${grund}).`;
+    const eingestellt = w.zone === "nacht" ? w.helligkeit_nacht : w.helligkeit_tag;
+    const wert = w.helligkeit_jetzt_gilt && typeof w.helligkeit_jetzt === "number"
+      ? w.helligkeit_jetzt : eingestellt;
+    const j = this.$("helligkeit_jetzt");
+    j.value = String(wert ?? 255);
+    this.$("jwert").textContent = j.value;
+    this.$("jstatus").textContent = w.helligkeit_jetzt_gilt
+      ? `vorübergehend, gilt bis ${w.wechsel_um || "zum Wechsel"}`
+      : `Einstellung der Zone (${eingestellt ?? "—"})`;
     for (const h of w.hinweise || []) this._melden(h, "meldung");
   }
 
@@ -289,3 +302,4 @@ ChimeraEinstellungen.passwortFehler = passwortFehler;
 if (!customElements.get("chimera-einstellungen")) {
   customElements.define("chimera-einstellungen", ChimeraEinstellungen);
 }
+})();

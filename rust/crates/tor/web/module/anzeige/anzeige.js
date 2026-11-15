@@ -306,9 +306,21 @@ class ChimeraAnzeigeSeite extends HTMLElement {
             <input type="color" id="farbe" value="#8B5A2B">
             <p class="klein">Schatten und Glanz leitet der Renderer aus der
             Grundfarbe ab — eine Farbe genügt.</p>
-            <p class="klein">Kontrast und Helligkeit stehen im Reiter
-            <strong>Einstellungen</strong> — sie gehören dem Bildschirm, nicht
-            dem Gesicht.</p>
+          </div>
+          <div class="karte">
+            <strong>Nachtfenster</strong>
+            <label class="schalter"><input type="checkbox" id="nacht_dimmen">
+            Nachts von selbst dunkler</label>
+            <label for="nacht_von">Dunkel ab</label>
+            <input type="time" id="nacht_von" value="22:00">
+            <label for="nacht_bis">Wieder hell ab</label>
+            <input type="time" id="nacht_bis" value="06:00">
+            <label for="helligkeit_nacht">Helligkeit nachts: <span id="nwert">80</span> von 255</label>
+            <input type="range" id="helligkeit_nacht" min="20" max="255" step="5" value="80">
+            <label for="helligkeit_tag">Helligkeit tags: <span id="twert">255</span> von 255</label>
+            <input type="range" id="helligkeit_tag" min="20" max="255" step="5" value="255">
+            <p class="klein">Kontrast und eine <em>vorübergehende</em> Helligkeit
+            für die aktuelle Zone stehen im Reiter <strong>Einstellungen</strong>.</p>
           </div>
           <div class="karte">
             <strong>Vorschau</strong>
@@ -367,6 +379,29 @@ class ChimeraAnzeigeSeite extends HTMLElement {
     const farbe = this.$("farbe");
     farbe.value = w.farbe || "#8B5A2B";
     farbe.onchange = () => this.setzen("farbe", farbe.value);
+
+    // Nachtfenster und die zwei Dimmstufen (Auftrag smilez 15.11.: die Option
+    // gehört hierher, nicht in die Einstellungen — dort steht nur die
+    // vorübergehende Helligkeit der aktuellen Zone).
+    const dimmen = this.$("nacht_dimmen");
+    dimmen.checked = !!w.nacht_dimmen;
+    dimmen.onchange = () => this.setzen("nacht_dimmen", dimmen.checked);
+    const von = this.$("nacht_von");
+    von.value = w.nacht_von || "22:00";
+    von.onchange = () => this.setzen("nacht_von", von.value);
+    const bis = this.$("nacht_bis");
+    bis.value = w.nacht_bis || "06:00";
+    bis.onchange = () => this.setzen("nacht_bis", bis.value);
+    const nacht = this.$("helligkeit_nacht");
+    nacht.value = String(w.helligkeit_nacht ?? 80);
+    this.$("nwert").textContent = nacht.value;
+    nacht.oninput = () => { this.$("nwert").textContent = nacht.value; };
+    nacht.onchange = () => this.setzen("helligkeit_nacht", Number(nacht.value));
+    const tag = this.$("helligkeit_tag");
+    tag.value = String(w.helligkeit_tag ?? 255);
+    this.$("twert").textContent = tag.value;
+    tag.oninput = () => { this.$("twert").textContent = tag.value; };
+    tag.onchange = () => this.setzen("helligkeit_tag", Number(tag.value));
 
     for (const h of w.hinweise || []) this._melden(h, "meldung");
   }

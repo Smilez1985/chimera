@@ -245,5 +245,90 @@ im_renderer = sorted(
 check("die Positivliste ist genau das, was der Renderer zeichnet",
       sorted(E.FRISUREN), im_renderer)
 
+# --- 7. Vorübergehende Helligkeit der aktuellen Zone --------------------
+#
+# Auftrag smilez (15.11.): „in Einstellungen ein davon abgekoppelter
+# Helligkeitsschalter der nur die aktuelle Tageszeit Zone regelt, evtl sogar
+# nur temporär bis zum nächsten Tag/Nacht Wechsel und dann wieder die im
+# Tag/Nacht Modus eingestellte Dimmstufe nimmt".
+
+print("== 7. Helligkeit jetzt: Zone, Ablauf, Rückkehr ==")
+import time as _zeit  # noqa: E402
+
+with tempfile.TemporaryDirectory() as td:
+    pfad = Path(td) / "avatar.json"
+    a = E.Avatar(pfad)
+    # Tag/Nacht-Modus an, klare Werte: tags 255, nachts 60.
+    a.setzen("nacht_dimmen", True)
+    a.setzen("helligkeit_tag", 255)
+    a.setzen("helligkeit_nacht", 60)
+    a.setzen("nacht_von", "22:00")
+    a.setzen("nacht_bis", "06:00")
+
+    # Die Zonenrechnung ist die des Renderers — nicht nachgebaut, sondern
+    # dieselbe Regel: über Mitternacht zählt beides.
+    check("zone: 23:00 ist Nacht", E.zone("23:00", "22:00", "06:00"), "nacht")
+    check("zone: 05:59 ist Nacht", E.zone("05:59", "22:00", "06:00"), "nacht")
+    check("zone: 06:00 ist Tag", E.zone("06:00", "22:00", "06:00"), "tag")
+    check("zone: 21:59 ist Tag", E.zone("21:59", "22:00", "06:00"), "tag")
+    check("zone: Fenster ohne Mitternacht", E.zone("13:00", "12:00", "14:00"), "nacht")
+    check("naechster Wechsel ab 23:00 → 06:00",
+          E.naechster_wechsel("23:00", "22:00", "06:00"), 7 * 3600)
+    check("naechster Wechsel ab 10:00 → 22:00",
+          E.naechster_wechsel("10:00", "22:00", "06:00"), 12 * 3600)
+
+    # Was gilt jetzt? (Der Test setzt die Zone über `nacht_dimmen` aus.)
+    a.setzen("nacht_dimmen", False)
+    check("ohne Nachtfenster gilt immer Tag", a.als_json()["zone"], "tag")
+    check("Display ohne Überlagerung: Tagwert",
+          a.get_display()["brightness_day"], 255)
+
+    ok, meldung = a.setzen("helligkeit_jetzt", 120)
+    check("setzen wird bestätigt", ok, True)
+    check("die Meldung nennt Zone und Gültigkeit",
+          "tag" in meldung and "gilt bis" in meldung, True)
+    j = a.als_json()
+    check("Überlagerung gilt", j["helligkeit_jetzt_gilt"], True)
+    check("Überlagerung ersetzt den Tagwert",
+          a.get_display()["brightness_day"], 120)
+    check("der Nachtwert bleibt unberührt",
+          a.get_display()["brightness_night"], 60)
+    check("sie hat ein Ablaufdatum in der Zukunft", j["gilt_bis"] > _zeit.time(), True)
+
+    # Abgelaufen: der Wert fällt auf die Einstellung zurück (Überlagerung aus,
+    # Wert bleibt als Leiche in der Datei stehen -- er gilt nicht).
+    roh = json.loads(pfad.read_text(encoding="utf-8"))
+    roh["helligkeit_jetzt_bis"] = int(_zeit.time()) - 1
+    pfad.write_text(json.dumps(roh), encoding="utf-8")
+    b = E.Avatar(pfad)
+    check("abgelaufen gilt nicht mehr", b.als_json()["helligkeit_jetzt_gilt"], False)
+    check("abgelaufen: wieder die eingestellte Dimmstufe",
+          b.get_display()["brightness_day"], 255)
+
+    # Zone gewechselt: derselbe Wert gilt in der anderen Zone nicht.
+    b.setzen("helligkeit_jetzt", 130)
+    roh = json.loads(pfad.read_text(encoding="utf-8"))
+    roh["helligkeit_jetzt_zone"] = "nacht"
+    pfad.write_text(json.dumps(roh), encoding="utf-8")
+    c = E.Avatar(pfad)
+    check("Wert aus der anderen Zone gilt nicht", c.als_json()["helligkeit_jetzt_gilt"], False)
+    check("… und ändert den Tagwert nicht", c.get_display()["brightness_day"], 255)
+
+    # Zurücknehmen: der einzige Weg zur eingestellten Dimmstufe.
+    ok, meldung = c.setzen("helligkeit_jetzt", "zurueck")
+    check("zurücknehmen wird bestätigt", ok, True)
+    d = json.loads(pfad.read_text(encoding="utf-8"))
+    check("zurücknehmen räumt alle drei Felder",
+          [k for k in d if k.startswith("helligkeit_jetzt")], [])
+    check("zurücknehmen: Einstellung gilt",
+          E.Avatar(pfad).get_display()["brightness_day"], 255)
+
+    # Unsinn wird abgelehnt und ändert nichts.
+    e = E.Avatar(pfad)
+    vorher = e.get_display()
+    check("300 ist keine Helligkeit", e.setzen("helligkeit_jetzt", 300)[0], False)
+    check("'zuruck' ist kein Befehl", e.setzen("helligkeit_jetzt", "zuruck")[0], False)
+    check("nach Ablehnung unverändert", e.get_display(), vorher)
+
 print(f"\n{PASS} ok, {FAIL} FAIL")
 sys.exit(0 if FAIL == 0 else 1)

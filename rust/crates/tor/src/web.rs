@@ -507,6 +507,14 @@ pub fn behandle(z: &Zustand, a: &Anfrage) -> Antwort {
             r.cookie = Some(format!("{COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"));
             r
         }
+        // Sitzungswächter: Die Oberfläche fragt das regelmäßig. Ohne diesen
+        // Aufruf merkte ein Reiter, der nichts abfragt (Status, Einstellungen),
+        // das Ablaufen der Sitzung erst beim nächsten Klick — smilez am
+        // 15.11.: „ich muss manuell neu laden, um mich wieder anzumelden".
+        // Die Antwort ist absichtlich leer: es geht nur um den Status 200/401.
+        ("GET", "/api/sitzung") => {
+            json_antwort(200, json!({"ok": true}))
+        }
         ("GET", "/api/module") => {
             let (m, f) = module_erkennen(z.modul_dir.as_deref());
             for x in &f {

@@ -54,7 +54,11 @@ STANDARD_NACHT_DIMMEN = False
 #: Felder, die die Ablage kennt. Alles andere wird abgewiesen, nicht
 #: gespeichert -- ein Tippfehler soll nicht als Leiche in der Datei liegen.
 FELDER = ("frisur", "farbe", "kontrast", "helligkeit_tag",
-          "helligkeit_nacht", "nacht_von", "nacht_bis", "nacht_dimmen")
+          "helligkeit_nacht", "nacht_von", "nacht_bis", "nacht_dimmen",
+          # Vorübergehende Helligkeit für die **aktuelle** Zone (Regel
+          # „Einstellungen am Gerät"): Sie gilt bis zum nächsten Tag/Nacht-
+          # Wechsel und fällt dann auf die eingestellte Dimmstufe zurück.
+          "helligkeit_jetzt", "helligkeit_jetzt_bis", "helligkeit_jetzt_zone")
 
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 _UHRZEIT = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -100,6 +104,17 @@ def helligkeit_pruefen(wert) -> int | None:
     return zahl if 0 <= zahl <= 255 else None
 
 
+def helligkeit_bis_pruefen(wert) -> int | None:
+    """Zeitstempel (Sekunden seit der Epoche), 0 oder positiv, oder ``None``."""
+    if isinstance(wert, bool):
+        return None
+    try:
+        zahl = int(str(wert).strip())
+    except (TypeError, ValueError):
+        return None
+    return zahl if 0 <= zahl < 4102444800 else None   # bis 2099
+
+
 def uhrzeit_pruefen(wert) -> str | None:
     """``HH:MM`` (00:00..23:59), oder ``None``."""
     if not isinstance(wert, str):
@@ -129,6 +144,35 @@ def frisur_pruefen(wert) -> str | None:
         return None
     text = wert.strip().lower()
     return text if text in FRISUREN else None
+
+
+def zone(uhrzeit: str, von: str, bis: str) -> str:
+    """``"nacht"`` oder ``"tag"`` — dieselbe Regel wie der Renderer.
+
+    Der Renderer entscheidet mit `_is_night` (``start <= now < end``, Fenster
+    über Mitternacht: ``now >= start or now < end``). Diese Funktion rechnet
+    **genau das** nach, damit die Seite nicht rät, in welcher Zone sie gerade
+    schaltet — eine zweite Wahrheit hier wäre ein Schalter, der die falsche
+    Zahl ändert.
+    """
+    if von <= bis:
+        return "nacht" if von <= uhrzeit < bis else "tag"
+    return "nacht" if (uhrzeit >= von or uhrzeit < bis) else "tag"
+
+
+def _minuten(text: str) -> int:
+    st, mi = text.split(":")
+    return int(st) * 60 + int(mi)
+
+
+def naechster_wechsel(uhrzeit: str, von: str, bis: str) -> int:
+    """Sekunden bis zum nächsten Zonenwechsel (immer > 0)."""
+    jetzt = _minuten(uhrzeit)
+    kandidaten = []
+    for grenze in (_minuten(von), _minuten(bis)):
+        rest = (grenze - jetzt) % (24 * 60)
+        kandidaten.append(rest or 24 * 60)
+    return min(kandidaten) * 60
 
 
 def vorschau(mood: dict, vorgabe: float = VORSCHAU_SEKUNDEN) -> tuple:
@@ -232,8 +276,18 @@ class Avatar:
             return farbe_pruefen(wert)
         if feld == "kontrast":
             return kontrast_pruefen(wert)
-        if feld in ("helligkeit_tag", "helligkeit_nacht"):
+        if feld in ("helligkeit_tag", "helligkeit_nacht",
+                    "helligkeit_jetzt"):
+            # "zurueck" löscht die vorübergehende Helligkeit — der einzige
+            # Weg zurück zur eingestellten Dimmstufe (0 wäre ein gültiger,
+            # also pechschwarzer Wert und dürfte das nicht).
+            if wert == "zurueck":
+                return "zurueck"
             return helligkeit_pruefen(wert)
+        if feld == "helligkeit_jetzt_bis":
+            return helligkeit_bis_pruefen(wert)
+        if feld == "helligkeit_jetzt_zone":
+            return wert if wert in ("tag", "nacht") else None
         if feld in ("nacht_von", "nacht_bis"):
             return uhrzeit_pruefen(wert)
         if feld == "nacht_dimmen":
@@ -249,6 +303,36 @@ class Avatar:
         if geprueft is None:
             return (False, f"{feld}: {wert!r} ungültig — nichts geändert")
         neu = dict(self._werte)
+        if feld == "helligkeit_jetzt":
+            if geprueft == "zurueck":
+                # Zurück auf die eingestellte Dimmstufe: die Überlagerung
+                # verschwindet ganz (kein Rest, der später wieder aufwacht).
+                for k in ("helligkeit_jetzt", "helligkeit_jetzt_bis",
+                          "helligkeit_jetzt_zone"):
+                    neu.pop(k, None)
+                try:
+                    self._schreiben(neu)
+                except OSError as exc:
+                    return (False, f"nicht schreibbar: {exc}")
+                self._werte = neu
+                return (True, "Helligkeit zurück auf die Tag/Nacht-Einstellung")
+            # Wert setzen **und** die Gültigkeit mitgeben: bis zum nächsten
+            # Wechsel, in der Zone, in der gerade geschaltet wird.
+            import time
+            jetzt_zone = self._jetzt_zone()
+            rest = naechster_wechsel(self._uhrzeit(),
+                                     self._werte.get("nacht_von") or STANDARD_NACHT_VON,
+                                     self._werte.get("nacht_bis") or STANDARD_NACHT_BIS)
+            neu["helligkeit_jetzt"] = geprueft
+            neu["helligkeit_jetzt_bis"] = int(time.time()) + int(rest)
+            neu["helligkeit_jetzt_zone"] = jetzt_zone
+            try:
+                self._schreiben(neu)
+            except OSError as exc:
+                return (False, f"nicht schreibbar: {exc}")
+            self._werte = neu
+            return (True, f"Helligkeit jetzt ({jetzt_zone}) = {geprueft}, "
+                          f"gilt bis {self._wechsel_um()}")
         neu[feld] = geprueft
         try:
             self._schreiben(neu)
@@ -296,7 +380,7 @@ class Avatar:
         ``night_mode_end``) — hier entsteht keine zweite Rechnung, nur die
         Ablage davor.
         """
-        return {
+        disp = {
             "auto_dim": bool(self._werte.get("nacht_dimmen")),
             "brightness_day": int(self._werte.get("helligkeit_tag")
                                   or STANDARD_HELLIGKEIT_TAG),
@@ -305,6 +389,68 @@ class Avatar:
             "night_mode_start": self._werte.get("nacht_von") or STANDARD_NACHT_VON,
             "night_mode_end": self._werte.get("nacht_bis") or STANDARD_NACHT_BIS,
         }
+        # Die **vorübergehende** Helligkeit der aktuellen Zone (Regel
+        # „Einstellungen am Gerät"). Sie ersetzt nur den Wert der Zone, in der
+        # sie gesetzt wurde, und nur bis zum nächsten Wechsel — danach gilt
+        # wieder die eingestellte Dimmstufe. Kein Schalter in der Oberfläche
+        # muss daran denken: der Renderer fragt `get_display()` je Bild.
+        jetzt = self._jetzt_zone()
+        override = self._ueberlagerung(jetzt)
+        if override is not None:
+            if jetzt == "nacht":
+                disp["brightness_night"] = override
+            else:
+                disp["brightness_day"] = override
+        return disp
+
+    # --- Vorübergehende Helligkeit --------------------------------------
+
+    @staticmethod
+    def _uhrzeit(wann=None) -> str:
+        """Ortszeit als ``HH:MM`` (Tests setzen sie über ``wann``)."""
+        if wann is None:
+            import time
+            wann = time.localtime()
+        return f"{wann.tm_hour:02d}:{wann.tm_min:02d}"
+
+    def _jetzt_zone(self, wann=None) -> str:
+        """In welcher Zone schaltet die Helligkeit **gerade**?
+
+        Ohne Nachtfenster (`nacht_dimmen` aus) gilt immer die Tag-Helligkeit —
+        genau wie im Renderer (`if auto_dim and is_night`).
+        """
+        if not self._werte.get("nacht_dimmen"):
+            return "tag"
+        return zone(self._uhrzeit(wann),
+                    self._werte.get("nacht_von") or STANDARD_NACHT_VON,
+                    self._werte.get("nacht_bis") or STANDARD_NACHT_BIS)
+
+    def _wechsel_um(self) -> str:
+        """Uhrzeit des nächsten Zonenwechsels als ``HH:MM`` (für die Seite)."""
+        jetzt = self._uhrzeit()
+        von = self._werte.get("nacht_von") or STANDARD_NACHT_VON
+        bis = self._werte.get("nacht_bis") or STANDARD_NACHT_BIS
+        jetzt_min = _minuten(jetzt)
+        naechste = None
+        for grenze in (von, bis):
+            rest = (_minuten(grenze) - jetzt_min) % (24 * 60)
+            rest = rest or 24 * 60
+            if naechste is None or rest < naechste[0]:
+                naechste = (rest, grenze)
+        return naechste[1] if naechste else bis
+
+    def _ueberlagerung(self, jetzt_zone: str, jetzt_s: float | None = None) -> int | None:
+        """Gilt die vorübergehende Helligkeit? Dann ihren Wert, sonst ``None``."""
+        wert = self._werte.get("helligkeit_jetzt")
+        if wert is None or wert == "zurueck":
+            return None
+        if self._werte.get("helligkeit_jetzt_zone") != jetzt_zone:
+            return None
+        bis = self._werte.get("helligkeit_jetzt_bis") or 0
+        if jetzt_s is None:
+            import time
+            jetzt_s = time.time()
+        return int(wert) if jetzt_s < float(bis) else None
 
     # --- Was die Weboberfläche liest ------------------------------------
 
@@ -321,6 +467,16 @@ class Avatar:
             "nacht_von": self._werte.get("nacht_von") or STANDARD_NACHT_VON,
             "nacht_bis": self._werte.get("nacht_bis") or STANDARD_NACHT_BIS,
             "nacht_dimmen": bool(self._werte.get("nacht_dimmen")),
+            # Wohin die Seite einen Helligkeitsregler gerade schaltet: die
+            # aktuelle Zone, der nächste Wechsel und ob eine vorübergehende
+            # Helligkeit gilt (Regel „Einstellungen am Gerät").
+            "zone": self._jetzt_zone(),
+            "wechsel_um": self._wechsel_um(),
+            "helligkeit_jetzt": (self._werte.get("helligkeit_jetzt")
+                                 if isinstance(self._werte.get("helligkeit_jetzt"), int)
+                                 else None),
+            "helligkeit_jetzt_gilt": self._ueberlagerung(self._jetzt_zone()) is not None,
+            "gilt_bis": int(self._werte.get("helligkeit_jetzt_bis") or 0),
             "frisuren": list(FRISUREN),
             "kontrast_max": KONTRAST_MAX,
             "vorschau_sekunden": VORSCHAU_SEKUNDEN,

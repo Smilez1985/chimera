@@ -3363,15 +3363,34 @@ Er bringt keine eigene Ablage mit:
 
 | Wert | Besitzer | Weg |
 |---|---|---|
-| Kontrast, Helligkeit tags/nachts, Nachtfenster | Dienst (`einstellungen/avatar.json`, bereits vorhanden) | `POST /api/einstellungen/display` → Op `avatar_setzen` |
+| Kontrast, vorübergehende Helligkeit | Dienst (`einstellungen/avatar.json`) | `POST /api/einstellungen/display` → Op `avatar_setzen` |
 | Mikrofon/Tonausgabe an-aus, Lautstärke | Dienst (`AudioSchalter`, `config/audio.json`) | `POST /api/einstellungen/audio` → Op `audio_setzen` |
 | Kennwort der Oberfläche | Gateway (`state/web/passwort-hash`) | `POST /api/einstellungen/passwort` |
 
-**Die Bildschirmwerte sind aus dem Avatar-Reiter umgezogen**, nicht kopiert.
-Zwei Bedienstellen für denselben Wert wären zwei Wahrheiten: Wer den Kontrast
-an einer Stelle ändert, sieht an der anderen einen alten Stand und glaubt der
-falschen. Der Avatar zeigt weiter Frisur, Farbe und Vorschau — das ist das
-Gesicht, nicht der Bildschirm.
+**Was wo bleibt (Fassung 16.11., nach smilez' Rückmeldung).** Der erste Wurf
+hatte die *gesamte* Bildschirmkarte in den Reiter gezogen — falsch: das
+**Nachtfenster gehört zum Avatar** („du hast die Tag/Nacht-Option aus Avatar
+entfernt, aber die war gut so"). Die Aufteilung ist jetzt:
+
+| Reiter | Bildschirm | Audio | Kennwort |
+|---|---|---|---|
+| Avatar | Nachtfenster: Schalter, Zeiten, **Helligkeit tags/nachts** | — | — |
+| Einstellungen | Kontrast, **Helligkeit jetzt** (nur aktuelle Zone, auf Zeit) | Mikrofon, Tonausgabe | ändern |
+
+**Kein Wert hat zwei Bedienstellen:** Die Dimmstufen stehen einmal im Avatar,
+die vorübergehende Helligkeit einmal in den Einstellungen — und sie schreiben
+in **dieselbe** Ablage (ein Schreiber, der Dienst).
+
+**„Helligkeit jetzt" ist eine Überlagerung, keine zweite Einstellung.**
+`helligkeit_jetzt` gilt für die Zone, in der sie gesetzt wurde (Nachtfenster
+an → im Fenster „nacht", sonst „tag"), und **nur bis zum nächsten
+Zonenwechsel** (`helligkeit_jetzt_bis`, gerechnet aus den Fensterzeiten).
+Danach nimmt `get_display()` wieder die eingestellte Dimmstufe der Zone. Die
+Zone rechnet `einstellungen.zone()` mit **genau der Regel** des Renderers
+(`_is_night`: `start <= now < end`, über Mitternacht `now >= start or now <
+end`) — eine zweite Rechnung hier wäre ein Regler, der die falsche Zahl
+ändert. **0 ist ein gültiger Wert**, deshalb löscht "zurueck" die
+Überlagerung, statt sie auf 0 zu setzen.
 
 Rechte: `einstellungen-lesen` (Seite lesen) und `einstellungen-schreiben`
 (ändern), beide in `web::RECHTE`. Die Prüfung der Werte bleibt dort, wo sie
@@ -3431,6 +3450,37 @@ ein neues Kennwort zu haben.
   Seite heraus, auf der er steht.
 - Die Vorprüfung im Browser (leer, zu kurz, nicht gleich) ist Bequemlichkeit,
   nicht die Entscheidung — sie nennt **denselben** Grund wie das Gateway.
+
+#### Modulskripte teilen EINEN Namensraum
+
+Die Module werden als klassische Skripte geladen (`<script src>`), also in
+**einem** globalen Gültigkeitsbereich — wie mehrere `<script>`-Blöcke einer
+Seite. `anzeige.js` deklariert `const STIL`; der neue Reiter deklarierte es
+ebenfalls. Zwei `const`-Deklarationen desselben Namens sind dort ein
+**SyntaxError**, und ein SyntaxError tötet das *ganze* Skript, nicht nur die
+Zeile: `customElements.define` lief nie, der Reiter blieb **leer und stumm** —
+`onerror` feuert nicht, die Datei wurde ja geladen (am Gerät gesehen,
+15.11.2026).
+
+Daraus zwei Regeln:
+
+- **Jedes Modul lebt in einem eigenen Geltungsbereich** (`(() => { … })();`).
+- `tests/js/module_isolierung.mjs` führt **alle** Module in *einem* Skript
+  aus (wie der Browser) und prüft, dass danach jedes Manifest-Element
+  definiert ist — Gegenprobe: das entkapselte Modul wird rot.
+- Der Rahmen sagt es, wenn ein Modul sein Element nicht definiert, statt eine
+  leere Fläche zu zeigen.
+
+#### Sitzung abgelaufen heißt zurück zur Anmeldemaske
+
+smilez 15.11.: *„wenn ich lange keine Eingabe mache und abgemeldet werde,
+sollte ich zurück auf die Anmeldemaske geleitet werden, aber aktuell muss ich
+dazu manuell neu laden."* Der 401-Griff im `api()` des Rahmens war da — er
+griff nur nie, weil Reiter ohne Abfrage (Status, Einstellungen) **nichts**
+anfragen. Jetzt läuft ein Wächter: alle 60 s `GET /api/sitzung` (leere
+Antwort, es geht nur um 200/401), zusätzlich sofort bei
+`visibilitychange` (Handy gesperrt → zurück). Ein 401 zeigt die Maske, und
+der Takt hält an; Abmelden und Maske halten ihn ebenfalls an.
 
 #### Höhenkette: warum die Eingabe oben klebte
 
