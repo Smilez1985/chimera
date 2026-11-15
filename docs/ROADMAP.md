@@ -233,6 +233,34 @@ Quelle ist PaKaChi-SM (privat); sie dient als Vorbild, hier wird nachgebaut, nic
       (z. B. `CHIMERA_HOME`) oder den Ordner für die Gruppe `chimera` öffnen
       — und **am Gerät** nachweisen, dass keine Warnung mehr kommt.
 
+## Phase Web-Einstellungen — Gesicht und Avatar im Browser (smilez, 15.11.2026)
+
+Auftrag: *„schau dir die Logik sowie die webui Module zum Einstellen von
+Gesichts Optionen und Avatar Optionen Haare etc. bei noisy an und passe sie für
+chimera an und verbessere sie"*.
+
+- [ ] **Einstellungen für Gesicht/Avatar** — Noisy hat genau zwei:
+      `hair_style` (8 Werte) und `hair_color` (noisy_runtime.py:270-303),
+      dazu Helligkeit/Nachtfenster und Animationstempo (`display`,
+      `visuals`). Das Datenmodell ist brauchbar (Sektionen, atomares
+      `os.replace`), die **Verdrahtung nicht**: Noisy hält `RuntimeConfig` im
+      selben Prozess und der Renderer liest sie je Frame (`web_ui.py:987`,
+      `noisy_runtime.py:137-211`). Chimera hat Gateway (Rust) und Dienst
+      (Python) getrennt — die Tür muss wie jede andere über eine Gateway-Op
+      gehen, nicht über eine zweite Ablage.
+      Zu entscheiden: welche Felder (Frisur/Farbe gibt es in Chimera noch
+      nicht — der Renderer kennt sie als Mood-Felder `hair`), wo sie liegen
+      (`state/einstellungen/…` mit Eintrag in `ReadWritePaths`), und wie der
+      Dienst sie liest (Ablage je Bild ist zu teuer — einmal beim Start plus
+      Signal).
+- [ ] **Vorschau ohne Display** — Noisy rendert jeden Mood headless in ein
+      PNG (`noisy_preview.py:139`, `kontaktbogen()`): hoher Hebel beim Bauen
+      eigener Ausdrücke, in Chimera nicht vorhanden.
+- [ ] **Ambiente-Fenster und -Abstände einstellbar** machen, sobald es die
+      Einstellungsseite gibt (`agent/ambiente.py`: `FENSTER`,
+      `MIN_ABSTAND_S`, `SPERRE_JE_AUSDRUCK_S`, `CHANCE` stehen als
+      Konstanten).
+
 ## Phase Regelnamen — Nummern werden zu sprechenden Namen (DESIGN: Regel „Sprechende Namen“)
 
 Alle 74 nummerierten Architekturregeln und die rund 460 Verweise darauf in
