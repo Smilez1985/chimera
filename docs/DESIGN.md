@@ -3125,12 +3125,30 @@ Sekunde nichts. Skalierung macht CSS; der Puffer bleibt in Panelgröße.
   Damit läuft nie ein Zähler in einem versteckten Reiter weiter, und niemand
   muss zwischen zwei Tabs verhandeln, wer das Bild holt. Zusätzlich pausiert
   der Abruf bei `document.hidden`.
-- **Position:** `float: right` **im Verlauf**, Start oben rechts,
-  verschiebbar (Seite über die Mitte, Höhe über den Abstand im Fluss). Nur ein
-  Element im Fluss kann umflossen werden; `position: fixed` steht außerhalb und
-  die Blasen liefen darunter. `position: sticky` auf einem Float ist verworfen:
-  beim Kleben rechnet der Fluss nicht mehr um, dann liegt das Gesicht über dem
-  Text.
+- **Position:** Das Gesicht ist **fest im Chatfeld verankert**, nicht im
+  Verlauf (`position: absolute` in einer Bühne über dem Verlauf). Es bleibt
+  also, wo es abgelegt wurde, während der Verlauf darunter durchscrollt —
+  Vorgabe smilez (15.11.2026): *„das Gesicht muss immer da liegen bleiben,
+  wo es abgelegt wird, … der Text muss darum herum scrollen."* Start oben
+  rechts, verschiebbar per Zeiger (beide Achsen, innerhalb des Chatfelds
+  begrenzt); die Lage merkt sich der Browser, wie den Ein-/Ausschalter.
+
+  **Umfließen ist hier Rechnung, keine CSS-Eigenschaft.** Ein `float` fließt
+  mit dem Inhalt und scrollt weg — das war der erste Entwurf und ist an
+  dieser Vorgabe gescheitert. `position: fixed` steht außerhalb des Flusses:
+  der Text liefe darunter durch, ohne umzubrechen. `shape-outside` gilt nur
+  für Floats. Also: eine Blase, die das Gesicht überdeckt, bekommt auf der
+  Seite des Gesichts einen Rand in dessen Breite (CSS-Klasse, Rand aus einer
+  Variablen) — sie wird schmaler und bricht um, Blasen darüber und darunter
+  nutzen die volle Breite. Gemessen wird je Bild, aber nur an den Blasen im
+  sichtbaren Band; ein `ResizeObserver`/`scroll`-Ereignis stößt die Rechnung
+  an, sie läuft gebündelt je Anzeigebild (rAF), nicht je Ereignis.
+
+  **Der Preis, offen benannt:** Die Rechnung braucht eine Messung pro
+  Anzeigebild (Layout lesen). Auf einem Handy mit 15 Blasen im Bild ist das
+  ein einzelner Layout-Durchlauf — vertretbar, aber es ist der teuerste Teil
+  des Spiegels, nicht das Bild. Bleibt es zu teuer, ist die nächste Stufe
+  eine feste Spalte reservierten Platzes (kein Rechnen, dafür Leerraum).
 
 #### Was das kostet (am Pi gemessen, 15.11.2026, `b3c26c1`)
 
@@ -3155,6 +3173,9 @@ sparen will, baut den Renderer in Rust (Stufe 2), nicht dieses Bild weg.
   dann gilt „Zähler kleiner als `seit`" als neues Bild, nicht als Stillstand).
 - JS: RGB565 → RGBA gegen bekannte Werte (0xF800 rot, 0x07E0 grün, 0x001F blau,
   je mit Gegenprobe), und `disconnectedCallback` hält den Abruf wirklich an.
+- JS: der Umfluss (`ChimeraChat.weichtAus`) — Blase ganz oberhalb/unterhalb
+  weicht nicht aus, Berühren ist kein Überdecken, auf der linken Seite gilt
+  die gespiegelte Bedingung.
 
 **Nicht Teil dieses Entwurfs:** Ton (Regel 5g), Kamerabild, Fernsteuerung des
 Panels. Das Gateway liest nur.

@@ -157,7 +157,12 @@ hat "Konfigurationsfehler (2) startet nicht neu" "$U" "RestartPreventExitStatus=
 hat "ExecStart im Dienstmodus" "$U" "ExecStart=$PY -m chimera --dienst"
 hat "laeuft als eigener Nutzer" "$U" "User=chimera"
 hat "nur vorhandene Gruppen" "$U" "SupplementaryGroups=audio gpio"
-hat_nicht "keine fehlende Gruppe (spi)" "$U" "spi"
+# Wortgrenze, nicht Teilzeichenkette: seit dem Anzeigespiegel enthaelt die
+# Einheit das Wort "AnzeigespIegel" -- ein festes "spi" traf es mit (15.11.2026
+# rot, ohne dass eine Gruppe dazukam). Geprueft wird die Gruppenzeile.
+if grep -qE '^SupplementaryGroups=.*(^| )spi( |$)' "$U"; then
+	bad "keine fehlende Gruppe (spi) -- 'spi' steht in SupplementaryGroups"
+else ok "keine fehlende Gruppe (spi)"; fi
 hat_nicht "i2c nicht ohne --mit" "$U" "i2c"
 hat "schreibt nur im eigenen Bereich" "$U" "ReadWritePaths=$NUTZERBEREICH"
 hat "Dienstprotokoll erst im RAM" "$U" "RuntimeDirectory=chimera/logs/productive"

@@ -199,6 +199,11 @@ class Panel:
     #: Warum dieses Panel so ist, wie es ist — gefüllt, wenn etwas nicht
     #: ging (Regel 8a: „läuft blind" und „ist kaputt" muss ablesbar sein).
     hinweis: str = ""
+    #: Der zuletzt gezeigte Panelspeicher (RGB565, Big-Endian) — ``None``,
+    #: solange kein vollständiges Bild vorliegt. Der Anzeigespiegel
+    #: veröffentlicht ihn (DESIGN, Regel „Anzeigespiegel"); er wird dafür
+    #: **nicht** neu gerechnet.
+    bild_bytes: bytes | None = None
     #: Kommt ein Bild auf Glas? ``False`` heißt: der Aufruf wird angenommen,
     #: aber niemand sieht etwas. Danach fragt der Dienst, wenn er die
     #: Statuszeile baut — nicht nach dem Klassennamen (sonst zählt eine
@@ -245,3 +250,8 @@ class NullPanel(Panel):
         if self.convert:
             self.last = to_rgb565(image)
         self.frames += 1
+
+    @property
+    def bild_bytes(self) -> bytes | None:
+        """Was auf einem echten Panel im Speicher stünde (Anzeigespiegel)."""
+        return self.last

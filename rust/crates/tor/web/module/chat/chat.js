@@ -1,6 +1,18 @@
 "use strict";
 // Chat-Modul (DESIGN 5m): hängt am selben Strom wie Telegram. Zeigt Text nur
 // per textContent an, nie als HTML.
+/// Weicht eine Blase dem Gesicht aus? Reine Rechnung ohne DOM, damit
+/// `tests/js/chat_umfluss.mjs` sie an der ECHTEN Datei pruefen kann.
+///
+/// `rechts` sagt, auf welcher Seite des Verlaufs das Gesicht liegt. Eine Blase
+/// weicht aus, wenn sie es senkrecht ueberdeckt UND auf seiner Seite bis unter
+/// seine Kante reicht -- eine schmale Blase weit links stoert niemanden.
+function weichtAus(blase, gesicht, rechts) {
+  const senkrecht = blase.unten > gesicht.oben && blase.oben < gesicht.unten;
+  if (!senkrecht) return false;
+  return rechts ? blase.rechts > gesicht.links : blase.links < gesicht.rechts;
+}
+
 class ChimeraChat extends HTMLElement {
   connectedCallback() {
     this.seit = 0;
@@ -10,11 +22,23 @@ class ChimeraChat extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <style>
         :host { display:flex; flex-direction:column; height:100%; }
-        #liste { flex:1; overflow:auto; padding:.75rem; display:flex; flex-direction:column; gap:.5rem; }
-        .m { max-width:85%; padding:.5rem .75rem; border-radius:.75rem; white-space:pre-wrap; word-break:break-word; }
-        .ich { align-self:flex-end; background:#2f4a8a; }
-        .sie { align-self:flex-start; background:#2b2f3b; }
-        .sys { align-self:center; color:#8a90a2; font-size:.85rem; }
+        /* Flaeche mit Verlauf und Buehne: das Gesicht liegt FEST ueber dem
+           Verlauf und scrollt nicht mit (DESIGN, Regel „Anzeigespiegel"). */
+        #flaeche { position:relative; flex:1; min-height:0; }
+        #buehne { position:absolute; inset:0; pointer-events:none; }
+        #buehne > * { pointer-events:auto; }
+        #liste { position:absolute; inset:0; overflow:auto; padding:.75rem; display:block; }
+        .m { width:fit-content; max-width:85%; padding:.5rem .75rem; margin:.25rem 0;
+             border-radius:.75rem; white-space:pre-wrap; word-break:break-word;
+             transition:margin .12s linear; }
+        /* Ueberdeckt eine Blase das Gesicht, weicht sie ihm aus: sie wird
+           schmaler und bricht um. Das ist die Rechnung hinter „der Text
+           fliesst darum herum" -- CSS kann das ohne Float nicht. */
+        .m.weicht-rechts { margin-right: var(--frei, 126px); }
+        .m.weicht-links { margin-left: var(--frei, 126px); }
+        .ich { margin-left:auto; background:#2f4a8a; }
+        .sie { margin-right:auto; background:#2b2f3b; }
+        .sys { margin:.25rem auto; color:#8a90a2; font-size:.85rem; }
         .tuer { display:block; font-size:.7rem; opacity:.6; }
         form { display:flex; gap:.5rem; padding:.5rem; border-top:1px solid #2b2f3b; }
         textarea { flex:1; resize:none; padding:.5rem; border-radius:.5rem; border:1px solid #2b2f3b;
@@ -30,11 +54,16 @@ class ChimeraChat extends HTMLElement {
         <label>Anbieter: <select id="a-wahl"></select></label>
         <label>Modell: <select id="m-wahl"></select></label>
         <label>Denken: <select id="d-wahl"></select></label>
+        <label title="Gesicht im Chat zeigen (verschiebbar)"><input type="checkbox" id="gesicht"> Gesicht</label>
       </div>
-      <div id="liste"></div>
+      <div id="flaeche">
+        <div id="liste"></div>
+        <div id="buehne"></div>
+      </div>
       <div id="denkt"></div>
       <form><textarea id="eingabe" rows="2" placeholder="Nachricht"></textarea><button type="submit">Senden</button></form>`;
     this.liste = this.shadowRoot.getElementById("liste");
+    this.buehne = this.shadowRoot.getElementById("buehne");
     this.denkt = this.shadowRoot.getElementById("denkt");
     this.wahl = this.shadowRoot.getElementById("wahl");
     this.aWahl = this.shadowRoot.getElementById("a-wahl");
@@ -44,6 +73,13 @@ class ChimeraChat extends HTMLElement {
     this.aWahl.addEventListener("change", () => { this.modelleZeigen(); this.wahlMerken(); });
     this.mWahl.addEventListener("change", () => { this.denkenZeigen(); this.wahlMerken(); });
     this.dWahl.addEventListener("change", () => this.wahlMerken());
+    // Gesicht im Chat (DESIGN, Regel „Anzeigespiegel"). Die Wahl ist eine
+    // Ansichtseinstellung je Geraet, keine Geraeteeinstellung -- deshalb im
+    // Browser gemerkt und nicht in einer Gateway-Ablage.
+    this.gesichtWahl = this.shadowRoot.getElementById("gesicht");
+    this.gesichtWahl.checked = this.gesichtGemocht();
+    this.gesichtWahl.addEventListener("change", () => this.gesichtSetzen(this.gesichtWahl.checked));
+    if (this.gesichtWahl.checked) this.gesichtSetzen(true);
     this.shadowRoot.querySelector("form").addEventListener("submit", (e) => { e.preventDefault(); this.senden(); });
     this.shadowRoot.getElementById("eingabe").addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); this.senden(); }
@@ -53,12 +89,106 @@ class ChimeraChat extends HTMLElement {
     // einem Neuladen war der Verlauf weg).
     this.liste.addEventListener("scroll", () => {
       if (this.liste.scrollTop < 80) this.aeterLaden();
+      this.umflussSpaeter();
     });
+    // Ein Zug am Gesicht aendert, welche Blasen ihm ausweichen muessen.
+    this.shadowRoot.addEventListener("anzeige-bewegt", () => this.umflussSpaeter());
+    if (window.ResizeObserver) {
+      new ResizeObserver(() => this.umflussSpaeter()).observe(this.liste);
+    }
     this.sitzungenLaden();
     this.auswahlLaden();
     this.hoeren();
   }
   disconnectedCallback() { this.laeuft = false; }
+
+  /// Ist das Gesicht eingeschaltet? Vorgabe: an -- wer die Oberflaeche
+  /// oeffnet, will sehen, was das Geraet gerade zeigt.
+  gesichtGemocht() {
+    try { return localStorage.getItem("chimera.gesicht") !== "0"; } catch (_) { return true; }
+  }
+
+  /// Das Gesicht ein- oder aushaengen.
+  ///
+  /// Das Element kommt aus dem Modul `anzeige` (eigenes Modul, eigenes Recht).
+  /// Ein Reiter, den niemand geoeffnet hat, hat dessen Skript nicht geladen --
+  /// der Chat holt es bei Bedarf nach. Ausgehaengt wird ueber `remove`; der
+  /// Zaehler im Element endet mit `disconnectedCallback`.
+  async gesichtSetzen(an) {
+    try { localStorage.setItem("chimera.gesicht", an ? "1" : "0"); } catch (_) {}
+    if (!an) {
+      if (this.gesicht) { this.gesicht.remove(); this.gesicht = null; }
+      return;
+    }
+    if (!customElements.get("chimera-anzeige")) {
+      await new Promise((ok, nein) => {
+        const s = document.createElement("script");
+        s.src = "/module/anzeige/anzeige.js";
+        s.onload = ok;
+        s.onerror = () => nein(new Error("Anzeige-Modul nicht ladbar"));
+        document.head.appendChild(s);
+      }).catch((e) => this.blase("sys", `Gesicht: ${e.message}`));
+    }
+    if (!customElements.get("chimera-anzeige")) return;
+    if (this.gesicht) return;
+    const el = document.createElement("chimera-anzeige");
+    el.setAttribute("schwebend", "");
+    el.style.setProperty("--breite", "110px");
+    // In die Buehne, NICHT in den Verlauf: sonst scrollt es mit.
+    this.buehne.appendChild(el);
+    this.gesicht = el;
+    this.umflussSpaeter();
+  }
+
+  /// Den Umfluss gebündelt anstoßen (je Anzeigebild, nicht je Ereignis).
+  umflussSpaeter() {
+    if (this._umflussGeplant) return;
+    this._umflussGeplant = true;
+    const lauf = () => { this._umflussGeplant = false; this.umfluss(); };
+    if (window.requestAnimationFrame) requestAnimationFrame(lauf);
+    else setTimeout(lauf, 16);
+  }
+
+  /// Welche Blasen muss das Gesicht ausweichen lassen?
+  ///
+  /// Ein `float` scheidet aus (er scrollt mit), `position: fixed` scheidet
+  /// aus (der Text liefe darunter durch). Also wird gemessen: liegt eine
+  /// Blase im Rechteck des Gesichts, bekommt sie auf dessen Seite einen Rand
+  /// in seiner Breite und bricht um (DESIGN, Regel „Anzeigespiegel").
+  umfluss() {
+    const g = this.gesicht;
+    if (!g) {
+      for (const el of this.liste.querySelectorAll(".m")) {
+        el.classList.remove("weicht-rechts", "weicht-links");
+      }
+      return;
+    }
+    const gr = g.getBoundingClientRect();
+    const lr = this.liste.getBoundingClientRect();
+    const breite = g.offsetWidth || 110;
+    const abstand = 16;                       // Luft zwischen Blase und Gesicht
+    this.liste.style.setProperty("--frei", `${breite + abstand}px`);
+    // Rechts, wenn die Mitte des Gesichts rechts der Mitte des Verlaufs liegt.
+    const rechts = (gr.left + gr.width / 2) > (lr.left + lr.width / 2);
+    // Nur das sichtbare Band messen: was ausserhalb liegt, kann nicht
+    // ueberdeckt sein, und eine Messung weniger ist eine Messung weniger.
+    const oben = lr.top - 40;
+    const unten = lr.bottom + 40;
+    for (const el of this.liste.children) {
+      if (!el.classList || !el.classList.contains("m")) continue;
+      const r = el.getBoundingClientRect();
+      if (r.bottom < oben || r.top > unten) {
+        el.classList.remove("weicht-rechts", "weicht-links");
+        continue;
+      }
+      const ueberlappt = ChimeraChat.weichtAus(
+        { oben: r.top, unten: r.bottom, links: r.left, rechts: r.right },
+        { oben: gr.top, unten: gr.bottom, links: gr.left, rechts: gr.right },
+        rechts);
+      el.classList.toggle(rechts ? "weicht-rechts" : "weicht-links", ueberlappt);
+      el.classList.remove(rechts ? "weicht-links" : "weicht-rechts");
+    }
+  }
 
   blase(klasse, text, tuer) {
     const d = document.createElement("div");
@@ -67,6 +197,8 @@ class ChimeraChat extends HTMLElement {
     d.appendChild(document.createTextNode(text));
     this.liste.appendChild(d);
     this.liste.scrollTop = this.liste.scrollHeight;
+    this.umflussSpaeter();
+    return d;
   }
 
   async senden() {
@@ -142,6 +274,7 @@ class ChimeraChat extends HTMLElement {
           if (knoten) vorne.appendChild(knoten);
         }
         this.liste.insertBefore(vorne, this.liste.firstChild);
+        this.umflussSpaeter();
         this.geladen = geladen + r.eintraege.length;
         this.liste.scrollTop = this.liste.scrollHeight - hoehe;
       } else {
@@ -288,8 +421,10 @@ class ChimeraChat extends HTMLElement {
     this.sid = this.wahl.value;
     this.schreibgeschuetzt = this.sid !== this.haupt;
     this.liste.replaceChildren();
+    this.gesicht = null;              // wurde mit entfernt
     this.geladen = 0;
     this.seit = 0;
+    if (this.gesichtWahl && this.gesichtWahl.checked) this.gesichtSetzen(true);
     await this.verlaufZeigen();
   }
 
@@ -308,4 +443,7 @@ class ChimeraChat extends HTMLElement {
     this.liste.scrollTop = this.liste.scrollHeight;
   }
 }
+// An der Klasse, damit der Node-Test sie ohne DOM erreicht.
+ChimeraChat.weichtAus = weichtAus;
+
 customElements.define("chimera-chat", ChimeraChat);

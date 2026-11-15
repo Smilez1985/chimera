@@ -151,6 +151,16 @@ class WhisplayPanel(Panel):
             self.teilbilder += 1
         self._letztes_bild = rgb
 
+    @property
+    def bild_bytes(self) -> bytes | None:
+        """Der volle Panelspeicher des zuletzt gezeigten Bildes.
+
+        ``show`` schreibt bei unverändertem Bild nur Teilrechtecke; der
+        **volle** Puffer bleibt trotzdem stehen und ist damit das, was der
+        Anzeigespiegel braucht (DESIGN, Regel „Anzeigespiegel").
+        """
+        return self._letztes_bild
+
     def backlight(self, percent: int, *, grund: str = "") -> None:
         p = max(0, min(100, int(percent)))
         # Jede Aenderung mit Grund ins Protokoll: "das Licht geht aus" ist sonst

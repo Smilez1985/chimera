@@ -167,6 +167,11 @@ class NachholPanel(Panel):
             return
         echt.show(image)
 
+    @property
+    def bild_bytes(self) -> bytes | None:
+        """Nur da, wenn das echte Panel offen ist — sonst gibt es kein Bild."""
+        return getattr(self._echt, "bild_bytes", None)
+
     def backlight(self, percent: int) -> None:
         self._licht = percent
         echt = self._versuche_jetzt()

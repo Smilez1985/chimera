@@ -167,7 +167,7 @@ fn ok_manifest(n: &str) -> String {
 fn das_eingebaute_chatmodul_ist_gueltig_und_erkannt() {
     let (m, f) = module_erkennen(None);
     assert!(f.is_empty(), "{f:?}");
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "anzeige", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status"]);
     assert!(m.iter().all(|x| x.eingebaut));
 }
 
@@ -178,12 +178,13 @@ fn ein_neues_verzeichnis_erscheint_im_menue_ohne_codeaenderung() {
     std::fs::write(d.join("zusatz/manifest.json"), ok_manifest("zusatz")).unwrap();
     let (m, f) = module_erkennen(Some(&d));
     assert!(f.is_empty(), "{f:?}");
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status", "zusatz"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["chat", "anzeige", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status", "zusatz"]);
     let z = zustand(Some(d), "/x".into());
     let c = anmelden(&z);
     let r = behandle(&z, &a("GET", "/api/module", &c, b""));
     let v: Value = serde_json::from_slice(&r.body).unwrap();
-    assert_eq!(v["module"].as_array().unwrap().len(), 11);
+    // Elf eingebaute plus das nachgelegte "zusatz".
+    assert_eq!(v["module"].as_array().unwrap().len(), 12);
 }
 
 #[test]
@@ -197,7 +198,7 @@ fn ein_kaputtes_manifest_verwirft_nur_dieses_modul_und_wird_gemeldet() {
     std::fs::create_dir_all(d.join("leer")).unwrap(); // Verzeichnis ohne Manifest
     let (m, f) = module_erkennen(Some(&d));
     let namen: Vec<_> = m.iter().map(|x| x.name.as_str()).collect();
-    assert_eq!(namen, vec!["chat", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status", "gut"]);
+    assert_eq!(namen, vec!["chat", "anzeige", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status", "gut"]);
     assert_eq!(f.len(), 4, "{f:?}");
 }
 
@@ -207,7 +208,7 @@ fn ein_nachgelegtes_modul_ersetzt_kein_eingebautes() {
     std::fs::create_dir_all(d.join("chat")).unwrap();
     std::fs::write(d.join("chat/manifest.json"), ok_manifest("chat")).unwrap();
     let (m, f) = module_erkennen(Some(&d));
-    assert_eq!(m.len(), 10);
+    assert_eq!(m.len(), 11);
     assert!(m.iter().all(|x| x.eingebaut));
     assert_eq!(f.len(), 1);
 }
@@ -221,7 +222,7 @@ fn die_reihenfolge_kommt_aus_dem_manifest() {
             format!(r#"{{"name":"{n}","titel":"T","element":"x-{n}","einstieg":"a.js","rechte":[],"reihenfolge":{r}}}"#)).unwrap();
     }
     let (m, _) = module_erkennen(Some(&d));
-    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["b-zuerst", "chat", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status", "a-zuletzt"]);
+    assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["b-zuerst", "chat", "anzeige", "anbieter", "ollama", "wahl", "konten", "freigaben", "ssh", "telegram", "netz", "status", "a-zuletzt"]);
 }
 
 #[test]
@@ -1186,4 +1187,94 @@ fn die_positivliste_braucht_zahlen() {
     let r = behandle(&z, &a("POST", "/api/telegram/erlaubt", &c, br#"{"ids":["abc"]}"#));
     assert_eq!(r.status, 400);
     assert!(String::from_utf8_lossy(&r.body).contains("Zahl"));
+}
+
+// --- Anzeigespiegel (DESIGN, Regel „Anzeigespiegel") ---
+
+/// `CHIMERA_ANZEIGE_BILD` ist prozessweit -- zwei Tests, die ihn setzen,
+/// wuerden sich gegenseitig den Pfad unter den Fuessen wegziehen. Deshalb
+/// ein gemeinsames Schloss: die Tests laufen, aber nicht gleichzeitig.
+static ANZEIGE_PFAD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn spiegel_datei(name: &str, breite: u16, hoehe: u16, zaehler: u64) -> PathBuf {
+    let d = tmp(name);
+    std::fs::create_dir_all(&d).unwrap();
+    let p = d.join("bild");
+    let mut inhalt = crate::anzeige::kopf_bauen_fuer_test(breite, hoehe, zaehler);
+    inhalt.extend(std::iter::repeat(0x3Cu8).take(breite as usize * hoehe as usize * 2));
+    std::fs::write(&p, &inhalt).unwrap();
+    p
+}
+
+#[test]
+fn das_anzeige_modul_wird_ausgeliefert_und_hat_sein_recht() {
+    let z = zustand(None, tmp("anz-modul").join("s.sock"));
+    let c = anmelden(&z);
+    let r = behandle(&z, &a("GET", "/api/module", &c, b""));
+    assert_eq!(r.status, 200);
+    let v: Value = serde_json::from_slice(&r.body).unwrap();
+    let m = v["module"].as_array().unwrap();
+    let an = m.iter().find(|x| x["name"] == "anzeige").expect("Modul fehlt im Menü");
+    assert_eq!(an["titel"]["de"], "Anzeige");
+    assert!(an["rechte"].as_array().unwrap().iter().any(|r| r == "anzeige-lesen"));
+    // Das Recht muss bekannt sein, sonst verwirft `module_erkennen` das Manifest.
+    assert!(RECHTE.contains(&"anzeige-lesen"));
+
+    let r = behandle(&z, &a("GET", "/module/anzeige/anzeige.js", &c, b""));
+    assert_eq!(r.status, 200, "die JS-Datei fehlt im Binary");
+    let js = String::from_utf8_lossy(&r.body);
+    assert!(js.contains("chimera-anzeige"), "Elementname fehlt im Skript");
+    // Das Manifest nennt das Element, das Skript definiert es -- ein
+    // Auseinanderlaufen waere ein leerer Reiter (Lehre aus freigaben_lesen).
+    assert!(js.contains(&format!("customElements.define(\"{}\"", an["element"].as_str().unwrap())));
+}
+
+#[test]
+fn die_anzeige_route_liefert_das_bild_und_204_bei_gleichstand() {
+    let _schloss = ANZEIGE_PFAD.lock().unwrap_or_else(|e| e.into_inner());
+    let p = spiegel_datei("anz-bild", 4, 3, 11);
+    std::env::set_var("CHIMERA_ANZEIGE_BILD", &p);
+    let z = zustand(None, tmp("anz-route").join("s.sock"));
+    let c = anmelden(&z);
+
+    // Neues Bild: die Datei kommt Byte für Byte zurück.
+    let r = behandle(&z, &a("GET", "/api/anzeige/bild?seit=0", &c, b""));
+    assert_eq!(r.status, 200);
+    assert_eq!(r.typ, "application/octet-stream");
+    assert_eq!(r.body, std::fs::read(&p).unwrap());
+
+    // Gleicher Zähler: 204 ohne ein einziges Pixel.
+    let r = behandle(&z, &a("GET", "/api/anzeige/bild?seit=11", &c, b""));
+    assert_eq!(r.status, 204);
+    assert!(r.body.is_empty());
+
+    // Ein Zähler, den es nie gab (Dienst neu gestartet): neues Bild, kein
+    // Stillstand -- der Client darf sich nicht festfahren.
+    let r = behandle(&z, &a("GET", "/api/anzeige/bild?seit=999", &c, b""));
+    assert_eq!(r.status, 200);
+
+    // Schreibend gibt es hier nichts.
+    let r = behandle(&z, &a("POST", "/api/anzeige/bild", &c, b""));
+    assert_eq!(r.status, 405);
+    let r = behandle(&z, &a("GET", "/api/anzeige/gibtsnicht", &c, b""));
+    assert_eq!(r.status, 404);
+}
+
+#[test]
+fn ohne_anzeige_ist_der_grund_benannt_und_nicht_ein_schwarzes_bild() {
+    let _schloss = ANZEIGE_PFAD.lock().unwrap_or_else(|e| e.into_inner());
+    let d = tmp("anz-fehlt");
+    std::fs::create_dir_all(&d).unwrap();
+    std::env::set_var("CHIMERA_ANZEIGE_BILD", d.join("gibtsnicht"));
+    let z = zustand(None, tmp("anz-fehlt-sock").join("s.sock"));
+    let c = anmelden(&z);
+    let r = behandle(&z, &a("GET", "/api/anzeige/bild?seit=0", &c, b""));
+    assert_eq!(r.status, 503);
+    let v: Value = serde_json::from_slice(&r.body).unwrap();
+    let text = v["fehler"].as_str().unwrap_or("");
+    assert!(text.contains("nicht lesbar"), "Grund muss den Fehler nennen: {text}");
+
+    // Anmeldung bleibt Pflicht.
+    let r = behandle(&z, &a("GET", "/api/anzeige/bild?seit=0", "", b""));
+    assert_eq!(r.status, 401);
 }

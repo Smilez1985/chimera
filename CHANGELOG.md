@@ -20,6 +20,41 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Anzeigespiegel** (15.11.2026, Auftrag smilez: *„das Gesicht … im
+  Chatfenster oben rechts spiegeln"*): neue Regel „Anzeigespiegel" im DESIGN
+  mit eigenem Entwurf, dazu die Umsetzung in drei Schichten.
+  *Schreibseite:* `display/spiegel.py` veröffentlicht den Puffer, den das
+  Panel ohnehin gerechnet hat (`Panel.bild_bytes`, neu für Whisplay,
+  NullPanel und NachholPanel), nach `/run/chimera/anzeige/bild` — 32 Byte
+  Kopf (Kennung, Fassung, Format, Breite, Höhe, Zähler) plus RGB565, also
+  **134 400 Byte** je Bild bei 240×280 (zwei Byte je Punkt, nicht drei).
+  Geschrieben wird nach `bild.neu` und atomar umbenannt: ein Leser sieht nie
+  ein halbes Bild. Ein **gleiches** Bild wird nicht erneut veröffentlicht —
+  der Zähler bleibt stehen. Fehler werden **einmal** genannt, nicht im
+  Bildtakt. Abschaltbar über `CHIMERA_SPIEGEL=0`.
+  *Gateway:* neues Modul `anzeige` mit dem Recht `anzeige-lesen` und
+  `GET /api/anzeige/bild?seit=<Zähler>` — unverändert heißt `204` ohne ein
+  Byte; sonst die Datei Byte für Byte. Fehlt das Bild, antwortet die Route
+  `503` mit benanntem Grund, nicht mit einem schwarzen Rechteck (Regel 8a).
+  **Kein WebSocket:** `tiny_http` kann keine, eine Fremdbibliothek verstößt
+  gegen Regel 14, und der Chat fragt seit jeher ab (`/api/chat/strom?seit=`).
+  *Oberfläche:* Element `<chimera-anzeige>` (Modul `anzeige`) wandelt RGB565
+  im Browser nach RGBA und liegt **fest** über dem Verlauf (Vorgabe smilez:
+  *„das Gesicht muss immer da liegen bleiben, wo es abgelegt wird … der Text
+  muss darum herum scrollen"*) — oben rechts startend, per Zeiger auf beiden
+  Achsen verschiebbar, Lage im Browser gemerkt. Blasen, die es überdecken,
+  bekommen auf seiner Seite einen Rand in seiner Breite und brechen um
+  (Rechnung je Anzeigebild, `ChimeraChat.weichtAus`); ein `float` flösse mit
+  dem Text mit, `position: fixed` ließe den Text darunter durch. Der Chat schaltet es
+  über einen Haken im Kopf ein und aus (Merker im Browser, Ansichts- und
+  keine Geräteeinstellung); das Skript des Moduls wird bei Bedarf
+  nachgeladen. Der Abruf läuft **nur im aktiven Reiter**: `disconnectedCallback`
+  hält ihn an, zusätzlich pausiert er bei `document.hidden`.
+  *Nebenbei:* `#liste` im Chat ist jetzt Blockfluss statt Flex, das Gesicht
+  liegt in einer eigenen Bühne darüber — in einem Flex-Container kann keine
+  Blase schmaler werden, ohne die anderen zu verschieben. Der Dienst bekommt ein
+  eigenes `RuntimeDirectory=chimera/anzeige` (sonst gehörte `/run/chimera`
+  `root:root` und der Spiegel wäre still aus).
 - **Obere Infoleiste und ehrliche Kennwerte** (15.11.2026, Auftrag smilez):
   neue Regel „Anzeigefelder" mit zwei Leisten — `seite="oben"` in
   `display/feld.py`, `StatusLine` zeichnet beide (oben an Zeile 0, unten am

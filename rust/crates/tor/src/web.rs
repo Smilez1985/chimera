@@ -51,6 +51,11 @@ const EINGEBAUT: &[Eingebaut] = &[
         dateien: &[("chat.js", "text/javascript; charset=utf-8", include_str!("../web/module/chat/chat.js"))],
     },
     Eingebaut {
+        name: "anzeige",
+        manifest: include_str!("../web/module/anzeige/manifest.json"),
+        dateien: &[("anzeige.js", "text/javascript; charset=utf-8", include_str!("../web/module/anzeige/anzeige.js"))],
+    },
+    Eingebaut {
         name: "status",
         manifest: include_str!("../web/module/status/manifest.json"),
         dateien: &[("status.js", "text/javascript; charset=utf-8", include_str!("../web/module/status/status.js"))],
@@ -173,7 +178,7 @@ pub struct Modul {
 /// eintragen**, wenn das Gateway ein neues Recht kennt. Ein Recht, das nicht in
 /// dieser Liste steht, verwirft das Modul -- sonst wuerde ein Tippfehler im
 /// Manifest still ein wirkungsloses Recht verlangen.
-pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben", "wahl-lesen", "wahl-schreiben", "freigaben-lesen", "freigaben-schreiben", "ssh-lesen", "ssh-schreiben", "telegram-lesen", "telegram-schreiben", "netz-lesen", "netz-schreiben"];
+pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben", "wahl-lesen", "wahl-schreiben", "freigaben-lesen", "freigaben-schreiben", "ssh-lesen", "ssh-schreiben", "telegram-lesen", "telegram-schreiben", "netz-lesen", "netz-schreiben", "anzeige-lesen"];
 
 fn name_ok(s: &str) -> bool {
     !s.is_empty() && s.len() <= 32 && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
@@ -527,6 +532,7 @@ pub fn behandle(z: &Zustand, a: &Anfrage) -> Antwort {
         (_, p) if p.starts_with("/api/ssh/") => ssh_api(z, a, &p["/api/ssh/".len()..]),
         (_, p) if p.starts_with("/api/telegram/") => telegram_api(z, a, &p["/api/telegram/".len()..]),
         (_, p) if p.starts_with("/api/netz/") => netz_api(z, a, &p["/api/netz/".len()..]),
+        (_, p) if p.starts_with("/api/anzeige/") => anzeige_api(z, a, &p["/api/anzeige/".len()..]),
         (_, p) if p.starts_with("/api/quota/") => quota_api(z, a, &p["/api/quota/".len()..]),
         ("GET", "/api/verbrauch") => verbrauch_api(z, a),
         _ => fehler(404, "nicht gefunden"),
@@ -773,6 +779,42 @@ fn wahl_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort {
 /// "Tailscale -- gelesen, nicht gesteuert"). Lesen braucht `netz-lesen`,
 /// Schalten `netz-schreiben` -- und zusaetzlich die Freigabe `tailscale`,
 /// die der Dienst prueft (er entscheidet, nicht die Oberflaeche).
+/// Das Bild des Anzeigespiegels (DESIGN, Regel „Anzeigespiegel").
+///
+/// Das Gateway **liest nur** — aus der Datei, die der Renderer atomar
+/// umbenennt, und nie aus dem Panel. Der Zähler steht im Kopf des Bildes
+/// (die Antwort ist die Datei, Byte für Byte); so braucht die Route keinen
+/// eigenen Kopf und der Browser hat den Zähler genau für das Bild, das er
+/// bekommen hat. Unverändert heißt 204 ohne ein einziges Pixel.
+fn anzeige_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
+    let (m, _) = module_erkennen(z.modul_dir.as_deref());
+    if !hat_recht(&m, "anzeige", "anzeige-lesen") {
+        return fehler(403, "Modul anzeige hat das Recht 'anzeige-lesen' nicht");
+    }
+    match (a.methode, was) {
+        ("GET", "bild") => {
+            let seit: u64 = query_wert(a.query, "seit").and_then(|s| s.parse().ok()).unwrap_or(0);
+            match crate::anzeige::lesen(&crate::anzeige::pfad(), seit) {
+                Ok(crate::anzeige::Gelesen::Unveraendert) => Antwort {
+                    status: 204,
+                    typ: "application/octet-stream".into(),
+                    body: Vec::new(),
+                    cookie: None,
+                },
+                Ok(crate::anzeige::Gelesen::Bild { daten, .. }) => Antwort {
+                    status: 200,
+                    typ: "application/octet-stream".into(),
+                    body: daten,
+                    cookie: None,
+                },
+                Err(grund) => fehler(503, &grund),
+            }
+        }
+        ("GET", _) => fehler(404, "nicht gefunden"),
+        _ => fehler(405, "Methode nicht erlaubt"),
+    }
+}
+
 fn netz_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
     let (m, _) = module_erkennen(z.modul_dir.as_deref());
     netz_antwort(z, a, was, &m)

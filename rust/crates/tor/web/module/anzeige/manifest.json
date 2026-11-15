@@ -1,0 +1,9 @@
+{
+  "name": "anzeige",
+  "titel": {"de": "Anzeige", "en": "Display"},
+  "symbol": "🖵",
+  "reihenfolge": 20,
+  "einstieg": "anzeige.js",
+  "element": "chimera-anzeige-seite",
+  "rechte": ["anzeige-lesen"]
+}

@@ -139,8 +139,14 @@ Environment=PYTHONUNBUFFERED=1
 # beim Stoppen **geloescht**. Mit `chimera` in der Liste raeumte ein
 # Neustart des Dienstes /run/chimera samt `tor.sock` und `sitzung.sock` weg
 # (15.11.2026 am Pi gesehen) -- die Sockets gehoeren anderen Einheiten.
-# Deshalb ein eigenes Blatt fuer das Lebenszeichen.
-RuntimeDirectory=chimera/logs/productive chimera/state
+# Deshalb eigene Blaetter fuer Lebenszeichen und Anzeigespiegel.
+#
+# `chimera/anzeige` gehoert dazu, weil der Spiegel dort seine Bilddatei
+# ablegt (DESIGN, Regel „Anzeigespiegel"). Ohne dieses Blatt gehoerte
+# /run/chimera `root:root` 0755, und der Dienst koennte sein eigenes
+# Unterverzeichnis nicht anlegen -- der Spiegel waere still aus.
+# Ein Muster dafuer gibt es: `state/` wird genauso vom Dienst beschrieben.
+RuntimeDirectory=chimera/logs/productive chimera/state chimera/anzeige
 Environment=CHIMERA_LOG_RAM=$SERVICE_LOG_RAM
 Environment=CHIMERA_LOG_KARTE=$CHIMERA_LOGS_PRODUCTIVE
 WorkingDirectory=$CHIMERA_DATA

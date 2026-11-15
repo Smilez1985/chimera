@@ -4,6 +4,7 @@
 //! Anbieter, Telegram und Web folgen (docs/ROADMAP.md, Phase 4d).
 
 mod abruf;
+mod anzeige;
 mod daten;
 mod deepseek;
 mod freigaben;

@@ -419,7 +419,8 @@ class ParticleSystem:
 # ============================================================
 class NoisyRenderer:
     def __init__(self, state=None, panel=None, *, width=None, height=None,
-                 target_fps=None, thermal_path=None, ruhe_fps=None):
+                 target_fps=None, thermal_path=None, ruhe_fps=None,
+                 spiegel=None):
         """Renderer aufsetzen.
 
         ``panel`` ist ein beliebiges Panel aus :mod:`chimera.display.panel`;
@@ -433,11 +434,17 @@ class NoisyRenderer:
 
         ``thermal_path`` sagt, wo die CPU-Temperatur steht; ``""`` schaltet
         die Temperaturkopplung ab, ``None`` nimmt den Vorgabewert.
+
+        ``spiegel`` ist ein :class:`chimera.display.spiegel.Spiegel`; ``None``
+        heisst: nichts veroeffentlichen (Tests, Messungen). Der Dienst gibt
+        einen mit, damit die Web-Oberflaeche das Gesicht zeigen kann
+        (DESIGN, Regel „Anzeigespiegel").
         """
         from ..display.panel import NullPanel
 
         self.state = state if state is not None else State()
         self.panel = panel if panel is not None else NullPanel()
+        self.spiegel = spiegel
 
         self.WIDTH = int(width or getattr(self.panel, "width", 240))
         self.HEIGHT = int(height or getattr(self.panel, "height", 280))
@@ -2505,6 +2512,12 @@ class NoisyRenderer:
             if self.statusline is not None:
                 self.statusline.zeichnen(img, jetzt_ms=jetzt_ms)
             self.panel.show(img)
+            if self.spiegel is not None:
+                # Der Anzeigespiegel veröffentlicht, was das Panel ohnehin
+                # gerechnet hat — kein zweiter Durchlauf durch to_rgb565
+                # (DESIGN, Regel „Anzeigespiegel").
+                self.spiegel.zeige(getattr(self.panel, "bild_bytes", None),
+                                   self.WIDTH, self.HEIGHT)
             if self.led is not None:
                 # Grundzustand der LED = Glow des Gesichts, das eben
                 # gezeichnet wurde -- dieselbe Farbe, nicht eine zweite Quelle.

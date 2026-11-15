@@ -651,7 +651,8 @@ def _try_face(notes: list[str], root) -> tuple[object, object, object]:
     # gezeichnet wird.
     state = State()
     try:
-        renderer = NoisyRenderer(state, panel)
+        from .display.spiegel import Spiegel
+        renderer = NoisyRenderer(state, panel, spiegel=Spiegel())
     except Exception as exc:                          # noqa: BLE001
         notes.append(f"Renderer: nicht aufsetzbar ({exc}) — Gesicht "
                      "ohne Bild")
