@@ -2318,6 +2318,27 @@ Text-Protokoll `TOOL: name {json}` bleibt **Rückfall** für Modelle, deren
 Katalog keine Werkzeuge misst — nie beides gleichzeitig (zwei Wege zu
 demselben Werkzeug sind die Fehlerklasse aus 10g).
 
+**Verschärft (smilez, 15.11.2026): „hartes System-Werkzeug, kein Text".**
+Der Prompt lehrte weiterhin `TOOL: name {…}` **und** schickte die Schemas
+mit — genau der Zustand, den diese Regel verbietet. Folgen, beide am Gerät
+gesehen: (a) das Modell schrieb den Aufruf in den Text und die Runde kostete
+Tokens, (b) der Verlauf bekam eine `tool`-Nachricht ohne Aufruf, und DeepSeek
+lehnte ihn mit HTTP 422 ab. Jetzt gilt strikt:
+
+- Ist die Schnittstelle aktiv (`_nativ`), kommt `SYSTEM_TEMPLATE_NATIV`:
+  keine Aufrufsyntax, **keine Werkzeugliste**. Die Beschreibungen gehen als
+  Schemas mit — einmal statt zweimal, und in jeder Runde gespart.
+- Ein `TOOL:` im Text wird dann **nicht ausgeführt**. Es gibt eine Rüge
+  (`RUEGE_TEXT_AUFTRAG`) und eine neue Runde; ein zweiter Textaufruf wird
+  als Antwort durchgereicht, damit der Lauf endet statt zu schleifen.
+- Der Textweg bleibt nur für Anbieter ohne Werkzeug-Schnittstelle
+  (`_nativ = False`) — dort ist er der einzige Weg, nicht der bequemere.
+
+Der Harness führt aus, das Modell triggert nur: Das ist der Sinn der
+Schnittstelle und der Grund, warum die Tokens dafür nicht im Prompt stehen.
+Gemessen: `tests/test_agent.py` (Schnittstelle, Rüge, Rückfall),
+`tests/gegenprobe_werkzeug_weg.py` 4/4 rot.
+
 **Formate: alle, jedes für seinen Fall, mit Universaladapter.** Nachgeprüft
 am 12.11. (Quellen in Klammern):
 

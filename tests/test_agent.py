@@ -638,6 +638,61 @@ check("Verlauf traegt die Kurzform", _letzte.endswith("active=mood_idle]"), True
 check("Systemprompt bleibt ohne active",
       "active=" not in str(_reg2.gesehen[0].get("system") or ""), True)
 
+print("== Werkzeugaufrufe: Schnittstelle statt Text (15.11.2026) ==")
+
+class TextRegistry:
+    """Antwortet mit Text; merkt sich Systemprompt und Verlauf."""
+
+    def __init__(self, texte):
+        self.texte = list(texte)
+        self.gesehen = []
+
+    def resolve(self, task):
+        return [(StubConn(), "m")]
+
+    def call(self, task, prompt, history=None, system=None, **kw):
+        self.gesehen.append({"verlauf": [dict(m) for m in (history or [])],
+                             "system": system, **kw})
+        return Reply(self.texte.pop(0), "stub", "m", Access.LOCAL,
+                     CostClass.FREE)
+
+with tempfile.TemporaryDirectory() as td:
+    from chimera.agent.sohelper import Ausfuehrer
+
+    # (a) Der native Prompt nennt keine Aufrufsyntax und keine Werkzeugliste.
+    tb = Toolbox(td, ausfuehrer=Ausfuehrer(Path(td) / "kein.sock"))
+    nat = Agent(TextRegistry([]), tb)
+    sysp = nat._system()
+    check("nativ: keine Aufrufsyntax als Vorlage", "TOOL: name" in sysp, False)
+    check("nativ: keine Werkzeugliste", "- list_dir(" in sysp, False)
+    check("nativ: Schnittstelle genannt", "Werkzeugschnitt" in sysp, True)
+
+    # (b) Ein Textaufruf wird NICHT ausgeführt, sondern gerügt.
+    reg = TextRegistry(["Ich lege das an.\nTOOL: write_file {\"path\": \"x.txt\", "
+                        "\"content\": \"hallo\"}", "Fertig."])
+    res = Agent(reg, tb).run("schreib was")
+    check("Textaufruf: nichts ausgeführt",
+          any(s.kind == "tool" for s in res.steps), False)
+    check("Textaufruf: kein Ergebnis im Verlauf",
+          any(str(m.get("content", "")).startswith("Ergebnis von")
+              for m in reg.gesehen[-1]["verlauf"]), False)
+    check("Textaufruf: Rüge im Verlauf",
+          any("als TEXT geschrieben" in str(m.get("content"))
+              for m in reg.gesehen[1]["verlauf"]), True)
+    check("Textaufruf: Lauf endet mit der Antwort", res.text, "Fertig.")
+    check("Textaufruf: als Fehlschritt vermerkt",
+          any(s.kind == "error" and "im Text" in s.detail for s in res.steps), True)
+
+    # (c) Der Textweg bleibt für Anbieter ohne Schnittstelle.
+    reg2 = TextRegistry(["TOOL: list_dir {}", "Fertig."])
+    alt = Agent(reg2, tb)
+    alt._nativ = False
+    res2 = alt.run("schau nach")
+    check("Rückfall: Textaufruf wird ausgeführt",
+          any(s.kind == "tool" for s in res2.steps), True)
+    check("Rückfall: Prompt nennt das Format",
+          "TOOL: name" in alt._system(), True)
+
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(1 if FAIL else 0)
 

@@ -1064,6 +1064,17 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Werkzeuge laufen über die Schnittstelle, nicht über Text** (15.11.2026,
+  Auftrag smilez): Der Systemprompt lehrte weiter `TOOL: name {…}` und
+  schickte zusätzlich die Werkzeugschemas mit — zwei Wege gleichzeitig, und
+  der Textweg war die Fehlerquelle (ein `TOOL:` im Text ist keine
+  Werkzeugnachricht; DeepSeek antwortete mit HTTP 422). Jetzt:
+  `SYSTEM_TEMPLATE_NATIV` **ohne** Aufrufsyntax und **ohne** die
+  Werkzeugliste (die Schemas gehen ohnehin mit — das spart Tokens in jeder
+  Runde), und ein Textaufruf wird **nicht** mehr ausgeführt, sondern einmal
+  gerügt und die Runde wiederholt. Der Textweg bleibt nur für Anbieter ohne
+  Werkzeug-Schnittstelle (`_nativ = False`). Tests: 10 neue in
+  `tests/test_agent.py` (174 ok), `tests/gegenprobe_werkzeug_weg.py` 4/4 rot.
 - **Der Systemprompt führt das Gesicht** (14.11.2026, Auftrag smilez): neuer
   fester Abschnitt `GESICHT_TEMPLATE` in `agent/loop.py` — kürzester Weg
   (`set_face <NAME>`), neue Ausdrücke nur **bei einer Änderung**, die vier

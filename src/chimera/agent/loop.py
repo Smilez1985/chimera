@@ -66,6 +66,53 @@ Verfügbare Werkzeuge:
 Halte dich kurz. Du läufst auf einem kleinen Gerät, und deine Antworten
 werden vorgelesen."""
 
+#: Der Prompt fuer den **nativen** Weg (smilez, 15.11.2026). Hier steht
+#: bewusst **keine** Werkzeugliste und **keine** Aufrufsyntax als Text:
+#: Die Werkzeuge gehen als Schnittstelle mit (`tools` im Anfragerumpf), das
+#: Modell triggert sie nur, die Arbeit macht der Harness. Zwei Gruende:
+#: Erstens kostet eine zweite Beschreibung Tokens in jeder Anfrage — und
+#: zwar in jeder Runde. Zweitens war der Textweg die Quelle eines echten
+#: Fehlers: ein `TOOL:` im Text ist keine Werkzeugnachricht, DeepSeek
+#: lehnte den Verlauf mit HTTP 422 ab (am Pi gemessen, 15.11.2026).
+SYSTEM_TEMPLATE_NATIV = """Du bist Chimera, ein Gerät mit einem Gesicht auf einem kleinen Bildschirm.
+
+Du hast Werkzeuge. Sie sind dir als Schnittstelle hinterlegt und werden
+aufgerufen, nicht geschrieben: Rufe ein Werkzeug über die Werkzeugschnitt-
+stelle auf (tool call). Schreibe einen Aufruf NIE als Text in die Antwort
+(kein "TOOL: …") — Text dort wird nicht ausgeführt, kostet nur Platz und
+ist ein Fehler.
+
+Rufe ein Werkzeug nur, wenn du es wirklich brauchst. Ohne Werkzeug
+antwortest du einfach normal.
+
+Halte dich kurz. Du läufst auf einem kleinen Gerät, und deine Antworten
+werden vorgelesen."""
+
+#: Der Prompt fuer den **Textweg** — nur fuer Anbieter ohne
+#: Werkzeug-Schnittstelle. Er ist der Rueckfall, nicht der Normalfall.
+SYSTEM_TEMPLATE = """Du bist Chimera, ein Gerät mit einem Gesicht auf einem kleinen Bildschirm.
+
+Du kannst Werkzeuge benutzen. Dafür schreibst du eine Zeile in genau dieser Form:
+
+TOOL: name {"feld": "wert"}
+
+Danach hörst du auf zu schreiben und wartest auf das Ergebnis. Pro Antwort
+höchstens ein Werkzeugaufruf. Wenn du kein Werkzeug brauchst, antworte
+einfach normal.
+
+Verfügbare Werkzeuge:
+{tools}
+
+Halte dich kurz. Du läufst auf einem kleinen Gerät, und deine Antworten
+werden vorgelesen."""
+
+#: Was das Modell hört, wenn es trotz Schnittstelle einen Textaufruf
+#: schreibt. Ohne diese Ruege wiederholte es den Fehler bis zum Ende der
+#: Umlaeufe — die Antwort waere nie ausgefuehrt worden.
+RUEGE_TEXT_AUFTRAG = """Du hast einen Werkzeugaufruf als TEXT geschrieben. Er wurde NICHT ausgeführt.
+Werkzeuge laufen über die Werkzeugschnittstelle (tool call), nicht über Text.
+Antworte erneut — mit einem echten Werkzeugaufruf oder mit deiner Antwort."""
+
 #: Der feste Teil der Gesichtsanweisung (smilez, 14.11.2026). Er gehört zum
 #: **stabilen** Anfang des Prompts: gleiche Werkzeuge, gleiche Reihenfolge,
 #: damit der Cache trifft (DESIGN 5q). Der **aktive** Ausdruck steht
@@ -149,11 +196,17 @@ class Agent:
     # --- Hilfen -----------------------------------------------------------
 
     def _system(self) -> str:
-        lines = []
-        for spec in (t.spec for t in self.tools._tools.values()):
-            args = ", ".join(spec.params) or "keine"
-            lines.append(f"- {spec.name}({args}): {spec.description}")
-        text = SYSTEM_TEMPLATE.replace("{tools}", "\n".join(lines))
+        if self._nativ:
+            # Die Werkzeuge gehen als Schnittstelle mit; eine zweite
+            # Aufzaehlung im Prompt kostete Tokens in jeder Runde und lehrte
+            # den Textweg, der nicht mehr ausgefuehrt wird (15.11.2026).
+            text = SYSTEM_TEMPLATE_NATIV
+        else:
+            lines = []
+            for spec in (t.spec for t in self.tools._tools.values()):
+                args = ", ".join(spec.params) or "keine"
+                lines.append(f"- {spec.name}({args}): {spec.description}")
+            text = SYSTEM_TEMPLATE.replace("{tools}", "\n".join(lines))
 
         # Die Anweisung, das Gesicht zu führen, gehört nur hinein, wenn es
         # eines gibt — ein Gerät ohne Anzeige hätte sonst ein Werkzeug, das
@@ -229,6 +282,7 @@ class Agent:
         provider = model = ""
         fell_back = False
         text = ""
+        geruegt = False          # ein Textaufruf wird einmal geruegt, nicht oefter
 
         for turn in range(self.max_turns):
             self._state("denkt")
@@ -276,6 +330,29 @@ class Agent:
                     self.history.append({"role": "tool", "content": out,
                                          "tool_name": a["name"]})
                 continue
+
+            # Nativer Weg: Ein Textaufruf wird NICHT ausgefuehrt (smilez,
+            # 15.11.2026). Er kostet Tokens in jeder Runde, kommt nie als
+            # Werkzeugnachricht an (DeepSeek: HTTP 422 "missing field
+            # tool_call_id") und tauescht eine Ausfuehrung vor, die es nicht
+            # gibt. Stattdessen eine Ruege und eine neue Runde; ein zweiter
+            # Textaufruf wird als Antwort durchgereicht, damit der Lauf endet.
+            if self._nativ:
+                if CALL_RE.search(text):
+                    if not geruegt:
+                        geruegt = True
+                        self.history.append({"role": "assistant",
+                                             "content": text})
+                        self.history.append({"role": "user",
+                                             "content": RUEGE_TEXT_AUFTRAG})
+                        steps.append(Step("error",
+                                          "Werkzeugaufruf im Text — nicht ausgeführt"))
+                        continue
+                self.history.append({"role": "assistant", "content": text})
+                steps.append(Step("text", text[:80]))
+                self._state("spricht")
+                return Result(text, steps, provider, model, fell_back,
+                              self.guard.calls)
 
             call = CALL_RE.search(text)
             if not call:
