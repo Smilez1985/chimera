@@ -173,6 +173,18 @@ Quelle ist PaKaChi-SM (privat); sie dient als Vorbild, hier wird nachgebaut, nic
 - [ ] **Am Pi belegen:** Mood per MQTT senden, Gesicht ändert sich; ungültiger
       Name ändert nichts; ohne Positivliste kommt nichts an.
 
+## Betrieb — was am Gerät auffällt
+
+- [ ] **Lebenszeichen-Zustandsdatei ist für den Dienst nicht schreibbar**
+      (15.11.2026, beim Deploy aufgefallen): `/opt/chimera/state` gehört
+      `root:chimera-tor` (0710), der Dienst läuft als `chimera` — bei jedem
+      Takt `WARNING … Permission denied: '/opt/chimera/state/lebenszeichen.json.neu'`.
+      Der Watchdog selbst arbeitet (systemd bekommt die Beats, entschieden
+      wird auf der monotonen Uhr), die Datei ist nur zur Ansicht. Trotzdem:
+      entweder den Pfad in ein für den Dienst schreibbares Verzeichnis legen
+      (z. B. `CHIMERA_HOME`) oder den Ordner für die Gruppe `chimera` öffnen
+      — und **am Gerät** nachweisen, dass keine Warnung mehr kommt.
+
 ## Phase Regelnamen — Nummern werden zu sprechenden Namen (DESIGN: Regel „Sprechende Namen“)
 
 Alle 74 nummerierten Architekturregeln und die rund 460 Verweise darauf in
