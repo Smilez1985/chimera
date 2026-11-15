@@ -72,7 +72,21 @@ def abspielen(eintraege: list[dict]) -> list[dict]:
     for e in eintraege:
         art = e.get("art")
         if art == "nachricht":
-            fenster.append({"role": e["rolle"], "content": e["inhalt"]})
+            m = {"role": e["rolle"], "content": e["inhalt"]}
+            # Werkzeugkennung und Denktext gehoeren zum Verlauf, nicht nur
+            # ins Protokoll (15.11.2026): Ohne sie verliert ein Neustart die
+            # Verbindung zwischen Aufruf und Ergebnis — und DeepSeek im
+            # Denkmodus verlangt den Denktext frueherer Runden zurueck.
+            if e.get("werkzeug"):
+                m["tool_name"] = e["werkzeug"]
+            if e.get("gedacht"):
+                m["gedacht"] = e["gedacht"]
+            if e.get("werkzeuge"):
+                m["tool_calls"] = [
+                    {"function": {"name": str(w.get("name") or ""),
+                                  "arguments": w.get("argumente") or {}}}
+                    for w in e["werkzeuge"] if isinstance(w, dict)]
+            fenster.append(m)
         elif art == "leer":
             fenster = []
         elif art == "verdichtet":
@@ -80,7 +94,7 @@ def abspielen(eintraege: list[dict]) -> list[dict]:
             rest = fenster[-n:] if n > 0 else []
             z = e.get("zusammenfassung") or ""
             fenster = ([{"role": "user", "content": _mit_marke(z)}] if z else []) + rest
-    return fenster_bereinigen(fenster)
+    return fenster_bereinigen(_aufrufe_paaren(fenster))
 
 #: Ein Textaufruf, wie ihn der Textweg schrieb (``TOOL: name {json}``). Er
 #: wird im Fenster entfernt: ein Verlauf aus der Textzeit lehrt genau den Weg,
@@ -90,6 +104,35 @@ TEXT_AUFRUF = re.compile(r"^\s*TOOL:\s*[a-z_]+\s*\{.*$", re.MULTILINE | re.DOTAL
 
 #: Das Ergebnis, das der Textweg zu einem Aufruf zurückgab.
 TEXT_ERGEBNIS = re.compile(r"^\s*Ergebnis von\s+[A-Za-z0-9_.]+\s*:", re.UNICODE)
+
+def _aufrufe_paaren(fenster: list[dict]) -> list[dict]:
+    """Nur Aufrufe behalten, deren Ergebnisse **alle** im Fenster stehen.
+
+    Ein Turn kann mitten im Werkzeugaufruf geendet haben (Absturz, Neustart);
+    dann fehlt zu einem Aufruf das Ergebnis. Eine solche Nachricht ist keine
+    Wahrheit mehr, und die Schnittstelle weist sie ab ("tool_calls ohne
+    tool response"). Der Text bleibt, die Aufrufe gehen.
+    """
+    raus: list[dict] = []
+    for i, m in enumerate(fenster):
+        aufrufe = m.get("tool_calls")
+        if not aufrufe:
+            raus.append(m)
+            continue
+        ergebnisse = 0
+        for folge in fenster[i + 1:]:
+            if folge.get("role") != "tool":
+                break
+            ergebnisse += 1
+        if ergebnisse >= len(aufrufe):
+            raus.append(m)
+        else:
+            ohne = {k: v for k, v in m.items() if k != "tool_calls"}
+            log.info("Verlauf: %d Aufruf(e) ohne Ergebnis verworfen.", len(aufrufe))
+            raus.append(ohne)
+    # Verwaiste Ergebnisse (tool ohne Aufruf davor) bleiben -- der Gateway
+    # macht daraus eine Nutzernachricht (Regel „Aufrufe, nicht Text").
+    return raus
 
 def fenster_bereinigen(fenster: list[dict]) -> list[dict]:
     """Textaufrufe und ihre Ergebnisse aus dem Fenster nehmen.
@@ -508,8 +551,23 @@ class Verlauf(list):
         return self.sid or self.ablage.aktiv()
 
     def append(self, m: dict) -> None:
-        self.ablage.anhaengen({"art": "nachricht", "rolle": m["role"],
-                               "inhalt": m["content"]}, self.sid)
+        eintrag = {"art": "nachricht", "rolle": m["role"], "inhalt": m["content"]}
+        # Werkzeugkennung mitschreiben (15.11.2026): Im Protokoll stand nur
+        # Rolle und Text — welches Werkzeug gerufen wurde und was es
+        # zurueckgab, war hinterher nicht mehr zu sehen.
+        aufrufe = m.get("tool_calls") or ()
+        namen = []
+        for a in aufrufe:
+            fn = (a or {}).get("function") or {}
+            namen.append({"name": str(fn.get("name") or ""),
+                          "argumente": fn.get("arguments") or {}})
+        if namen:
+            eintrag["werkzeuge"] = namen
+        if m.get("tool_name"):
+            eintrag["werkzeug"] = str(m["tool_name"])
+        if m.get("gedacht"):
+            eintrag["gedacht"] = str(m["gedacht"])
+        self.ablage.anhaengen(eintrag, self.sid)
         super().append(m)
 
     def clear(self) -> None:

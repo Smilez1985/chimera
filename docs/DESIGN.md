@@ -3684,6 +3684,16 @@ data/gedaechtnis/
 - **Die Sitzung liegt auf der Platte** (`data/sitzungen/<id>/verlauf.jsonl`,
   Zeile für Zeile angehängt) und übersteht damit Neustarts. Heute geht
   sie verloren.
+- **Eine Zeile trägt die Werkzeugkennung** (15.11.2026): Bis dahin stand
+  dort nur `rolle` und `inhalt` — welches Werkzeug gerufen wurde und was es
+  zurückgab, war hinterher nicht mehr zu sehen, weder für die Fehlersuche
+  noch beim Abspielen nach einem Neustart. Neu: `werkzeuge` (Name und
+  Argumente) an der Assistenznachricht, `werkzeug` am Ergebnis und
+  `gedacht` für den Denktext. Beim Abspielen kommen sie zurück —
+  **aber nur vollständig**: Hat ein Turn mitten im Aufruf geendet, fehlt
+  das Ergebnis, und eine Nachricht mit Aufrufen ohne Ergebnisse weist die
+  Schnittstelle ab. Solche Aufrufe werden verworfen (der Text bleibt), und
+  es wird gesagt (`tests/test_protokoll_werkzeuge.py`, Gegenprobe 5/5 rot).
 - **Verdichten im Lauf** (ersetzt `_compact()`, gebaut 14.11.2026):
   Gelöscht wird nichts, die verdichteten Nachrichten bleiben in
   `verlauf.jsonl`. Ins Fenster kommen die Zusammenfassung **mit Verweis**
@@ -4565,10 +4575,20 @@ Stunde Stille von einem gewollten Nichtstun nicht zu unterscheiden.
   `fortschritt()`, beim Beenden `stop()`. `Session.ask` meldet vor dem
   Modellaufruf `busy("Turn …", 300 s)` an — 300 s ist die Zeitgrenze des
   Gateway-Aufrufs und damit die Obergrenze, nicht eine Freikarte.
-- Zustandsdatei `state/lebenszeichen.json` (über `CHIMERA_LEBENSZEICHEN`):
-  Zweck, Dauer, Frist als Unix-Zeit. **Entschieden wird auf
-  `time.monotonic()`** — eine springende Systemzeit (Gerät ohne RTC) darf
-  weder neu starten noch eine Frist verlängern.
+- Zustandsdatei `lebenszeichen.json` im **RuntimeDirectory**
+  (`/run/chimera/…`, über `CHIMERA_LEBENSZEICHEN`): Zweck, Dauer, Frist als
+  Unix-Zeit. **Entschieden wird auf `time.monotonic()`** — eine springende
+  Systemzeit (Gerät ohne RTC) darf weder neu starten noch eine Frist
+  verlängern.
+  **Bis 15.11.2026 lag sie unter `state/`, und das war falsch:** `state/`
+  gehört `root:chimera-tor` mit 0710, der Dienst läuft als `chimera` —
+  also schrieb er bei jedem Takt in ein Verzeichnis, in das er nicht
+  schreiben darf (`[Errno 13] Permission denied`, 24-mal in zehn Minuten
+  am Pi). Unter dem RuntimeDirectory gehört das Verzeichnis dem Dienst,
+  und der Inhalt ist ohnehin flüchtig: er beschreibt eine laufende Frist
+  **dieser** Instanz, nicht einen Zustand über Neustarts hinweg.
+  Ein Fehlschlag wird **einmal** gemeldet, nicht im 10-s-Takt; erholt sich
+  der Melder, wird das ebenfalls gesagt.
 - Fehlt `NOTIFY_SOCKET`, läuft der Dienst weiter und **meldet**, dass der
   Watchdog nicht greift.
 

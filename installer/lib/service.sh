@@ -148,7 +148,14 @@ RestartSec=5
 RestartPreventExitStatus=2
 # Wo das Lebenszeichen seine laufende Frist notiert (nur zur Ansicht --
 # entschieden wird auf der monotonen Uhr, siehe lebenszeichen.py).
-Environment=CHIMERA_LEBENSZEICHEN=$CHIMERA_STATE/lebenszeichen.json
+#
+# **Seit 15.11.2026 unter /run, nicht unter $CHIMERA_STATE.** Der Dienst
+# laeuft als Nutzer `chimera`; `$CHIMERA_STATE` gehoert `root:chimera-tor`
+# mit 0710, also schrieb er bei jedem Takt einen Fehlschlag ins Journal
+# ("[Errno 13] Permission denied", 24-mal in zehn Minuten am Pi). Unter dem
+# RuntimeDirectory gehoert das Verzeichnis dem Dienst selbst, und der Inhalt
+# ist ohnehin fluechtig: Er beschreibt eine laufende Frist dieser Instanz.
+Environment=CHIMERA_LEBENSZEICHEN=%t/chimera/lebenszeichen.json
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=read-only

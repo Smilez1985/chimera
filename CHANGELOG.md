@@ -1835,6 +1835,17 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Das Lebenszeichen schrieb ins Nichts** (15.11.2026): Die Zustandsdatei
+  lag unter `state/` — `root:chimera-tor`, 0710, der Dienst läuft als
+  `chimera`. Ergebnis: bei jedem Takt `[Errno 13] Permission denied`, am Pi
+  24 Zeilen in zehn Minuten. Jetzt liegt sie im RuntimeDirectory
+  (`/run/chimera/lebenszeichen.json`), das dem Dienst gehört, und ein
+  Fehlschlag wird **einmal** gemeldet statt alle 10 s.
+- **`verlauf.jsonl` nannte keine Werkzeuge** (15.11.2026): `Verlauf.append`
+  schrieb nur Rolle und Text. Neu stehen `werkzeuge` (Name + Argumente),
+  `werkzeug` und `gedacht` in der Zeile und werden beim Abspielen
+  zurückgegeben — außer bei halben Runden (Aufruf ohne Ergebnis), die die
+  Schnittstelle ablehnen würde.
 - **DeepSeek im Denkmodus war unbenutzbar** (15.11.2026, am Pi im Journal
   gefunden: `400 "The reasoning_content in the thinking mode must be passed
   back to the API"`, viermal an einem Vormittag): Jede Runde mit

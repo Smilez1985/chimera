@@ -102,6 +102,9 @@ class Melder:
         self._stop = threading.Event()
         self._faden: threading.Thread | None = None
         self._gesendet = 0
+        #: Letzter Schreibfehler der Zustandsdatei (gegen Wiederholung im
+        #: 10-s-Takt); leer = alles gut.
+        self._schreibfehler = ""
         self._verweigert = 0
 
     # --- Zustand ----------------------------------------------------------
@@ -209,8 +212,21 @@ class Melder:
             tmp = self.zustandsdatei.with_name(self.zustandsdatei.name + ".neu")
             tmp.write_text(json.dumps(daten, ensure_ascii=False) + "\n", encoding="utf-8")
             os.replace(tmp, self.zustandsdatei)
+            if self._schreibfehler:                 # erholt: Merker raeumen
+                log.info("Lebenszeichen-Zustand wieder schreibbar (%s).",
+                         self.zustandsdatei)
+                self._schreibfehler = ""
         except OSError as exc:
-            log.warning("Lebenszeichen-Zustand nicht schreibbar: %s", exc)
+            # Einmal sagen, nicht alle 10 s (15.11.2026): Am Pi stand die
+            # Warnung 24-mal in zehn Minuten im Journal — 20 % aller Zeilen
+            # waren derselbe Satz, und der eigentliche Grund war eine
+            # Verzeichnisberechtigung, nicht der Dienst. Gemeldet wird der
+            # erste Fehlschlag je Pfad; erholt sich der Melder, wird der
+            # Merker geräumt.
+            if self._schreibfehler != str(exc):
+                self._schreibfehler = str(exc)
+                log.warning("Lebenszeichen-Zustand nicht schreibbar (%s): %s",
+                            self.zustandsdatei, exc)
 
 
 # --- Der eine Melder des Prozesses ----------------------------------------
