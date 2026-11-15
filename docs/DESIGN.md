@@ -1844,6 +1844,37 @@ die Netzsuche gefunden.
   angelegt: Typ, Adresse oder Schlüssel, dann die Modellliste. Der
   Ablauf ist der von OpenMinis.
 
+### Werkzeugaufrufe im Chat: eigene, ausklappbare Zeile (Auftrag smilez, 15.11.2026)
+
+Befund aus dem Chatverlauf am Pi (15.11., 04:07): Das Modell schrieb seinen
+Aufruf als JSON-Codeblock in die Antwort — `{"name": "set_face", "arguments":
+{"mood": "BONG"}}` — und das stand dann als **Text in der Chatblase**. Der
+Aufruf war kein nativer `tool_calls`, wurde nicht ausgeführt, und der Nutzer
+las eine Behauptung statt eines Ergebnisses.
+
+Zwei Dinge folgen daraus, das eine ist gebaut, das andere bestellt:
+
+- **Gebaut (15.11.2026):** Diese Textform wird erkannt und als **Rückfall**
+  ausgeführt (`agent/loop.py: textaufrufe`), das JSON verschwindet aus der
+  Antwort. Native Aufrufe bleiben der Standard.
+- **Bestellt (smilez, 15.11.2026):** Ein Werkzeugaufruf gehört **nicht** in
+  den Fließtext, sondern in eine eigene, kleine, **ausklappbare** Zeile
+  unter der Assistenten-Bubble:
+
+  - zugeklappt nur der **Name** („⚙ set_face") und ein Zeichen, dass es
+    aufklappbar ist — die Antwort bleibt lesbar;
+  - aufgeklappt Argumente, Kurzfassung des Ergebnisses, Dauer und ob der
+    Aufruf **nativ** oder als **Rückfall** lief;
+  - kein Lua, kein Framework: dasselbe Muster wie die übrigen Module
+    (Regel 5m), CSS ohne Bibliothek.
+
+  Dafür muss der **Dienst** seine Werkzeugschritte an das Gateway melden
+  (er weiss sie: `Step(kind="tool", tool=…, detail=…)`), das sie je Sitzung
+  ablegt und über `/api/sitzung/…` ausliefert; die Chat-Blase rendert die
+  Liste. Ohne diese Meldung hat die Oberfläche nichts anzuzeigen — sie sieht
+  heute nur die fertige Antwort (Grund: die Sitzung ist ein Textstrom,
+  Regel 5s).
+
 ### Architekturregel 5m — Die Web-Oberfläche ist eine Plattform aus Modulen
 
 Fassung 2 (smilez, 30.10.): Die Oberfläche ist kein Konfigurationsformular,

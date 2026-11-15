@@ -175,6 +175,16 @@ Quelle ist PaKaChi-SM (privat); sie dient als Vorbild, hier wird nachgebaut, nic
 
 ## Betrieb — was am Gerät auffällt
 
+- [ ] **Werkzeugaufrufe als ausklappbare Zeile im Web-Chat** (Auftrag smilez
+      15.11.2026, DESIGN „Werkzeugaufrufe im Chat"): Zugeklappt nur der
+      Werkzeugname, aufgeklappt Argumente, Ergebnis-Kurzfassung, Dauer und ob
+      der Aufruf **nativ** oder als **Rückfall** lief. Zu bauen: (1) der
+      Dienst meldet seine Werkzeugschritte (`Step(kind="tool", tool=…,
+      detail=…)`) an das Gateway, (2) das Gateway legt sie je Sitzung ab und
+      liefert sie über eine Route, (3) `chat.js` rendert die Liste in der
+      Blase. Vorher gibt es in der Oberfläche nichts anzuzeigen — sie sieht
+      nur den fertigen Antworttext.
+
 - [ ] **Der Agent baut sein Gesicht selbst** (Auftrag smilez 15.11.,
       DESIGN 3.3b „Nachtrag"): `mood_anlegen` existiert, **niemand ruft es
       auf**. Beim Dienststart prüfen, ob `moods.json` fehlt/leer ist → ein
