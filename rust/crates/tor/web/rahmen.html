@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chimera</title>
+<!-- Symbol im Tab (DESIGN, Regel „Avatar-Einstellungen"): als data:-URI im
+     Rahmen. Keine zusätzliche Route — eine Route ohne Datei wäre ein 404 im
+     Netzprotokoll, und ein Favicon ist kein Modul. '# ' ist %23 kodiert. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%237aa2ff'/%3E%3Cpath d='M3 15a13 13 0 0 1 26 0c-3-4-6-6-13-6S6 11 3 15z' fill='%238b5a2b'/%3E%3Ccircle cx='11.5' cy='17' r='2.4' fill='%230b0d12'/%3E%3Ccircle cx='20.5' cy='17' r='2.4' fill='%230b0d12'/%3E%3Cpath d='M11 22c1.6 2.4 8.4 2.4 10 0' stroke='%230b0d12' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
   :root { --bg:#12141a; --fl:#1c1f28; --rd:#2b2f3b; --tx:#e6e8ee; --ak:#7aa2ff; --gedimmt:#8a90a2; --fehler:#ff7a7a; }
   * { box-sizing: border-box; }
@@ -21,9 +25,14 @@
   nav button[aria-current="true"] { background: var(--ak); color: #0b0d12; }
   main { flex: 1; min-height: 0; overflow: auto; }
   #warnung { background: #4a3a12; color: #ffd989; padding: .35rem .75rem; font-size: .85rem; display: none; }
-  #anmeldung { max-width: 22rem; margin: 18vh auto 0; padding: 1rem; display: none; }
-  #anmeldung input { width: 100%; padding: .6rem; margin: .5rem 0; border-radius: .5rem;
-                     border: 1px solid var(--rd); background: var(--fl); color: var(--tx); font: inherit; }
+  /* Die Modulfläche ist ein eigenes Element: Anmeldung und Einrichtung sind
+     GESCHWISTER, nicht Kinder. Vorher ersetzte ein Modulwechsel alles in
+     <main> — samt Anmeldeformular; ein 401 zeigte dann ein Element, das nicht
+     mehr im Dokument hing, und das Chatfenster blieb stehen. */
+  #buehne:empty { display: none; }
+  .maske { max-width: 22rem; margin: 18vh auto 0; padding: 1rem; }
+  .maske input { width: 100%; padding: .6rem; margin: .5rem 0; border-radius: .5rem;
+                 border: 1px solid var(--rd); background: var(--fl); color: var(--tx); font: inherit; }
   .fehler { color: var(--fehler); min-height: 1.4em; }
 </style>
 </head>
@@ -36,7 +45,8 @@
     <button class="knopf" id="abmelden">Abmelden</button>
   </header>
   <main id="inhalt">
-    <form id="einrichtung" style="display:none">
+    <div id="buehne"></div>
+    <form id="einrichtung" class="maske" hidden>
       <h2>Willkommen</h2>
       <p class="klein">Noch kein Passwort gesetzt. Lege jetzt eines an — mindestens 8 Zeichen,
       zweimal eingeben. Danach gilt es für jede Anmeldung; vergessen? Auf dem Gerät:
@@ -46,7 +56,7 @@
       <button class="knopf" type="submit">Passwort anlegen</button>
       <div class="fehler" id="einrichtungsfehler"></div>
     </form>
-    <form id="anmeldung">
+    <form id="anmeldung" class="maske" hidden>
       <h2>Chimera</h2>
       <input id="pw" type="password" autocomplete="current-password" placeholder="Passwort" autofocus>
       <button class="knopf" type="submit">Anmelden</button>
@@ -65,15 +75,36 @@ const api = async (pfad, opt = {}) => {
   const r = await fetch(pfad, { ...opt, headers: { "X-Chimera": "1", "Content-Type": "application/json" } });
   let j = {}; try { j = await r.json(); } catch (_) {}
   // Die Sitzung kann zwischen zwei Klicks ablaufen (Neustart des Gateways
-  // räumt sie ab). Ohne diesen Griff sähe das aus wie "Modul nicht ladbar"
-  // oder ein Fehler im Modul -- der Nutzer soll stattdessen die Anmeldung sehen.
-  if (r.status === 401 && pfad !== "/api/login") {
-    $("kopf").hidden = true;
-    $("anmeldung").style.display = "block";
+  // räumt sie ab, oder die 12 Stunden sind um). Ohne diesen Griff bliebe das
+  // Chatfenster stehen und niemand käme zurück zur Anmeldung — die Maske lag
+  // früher IM Modulbereich und wurde beim Modulwechsel mit weggeräumt.
+  // Die Module werden dabei abgebaut: ihr Element verschwindet, damit hält
+  // `disconnectedCallback` die Abfragen an (kein Dauerfeuer auf 401).
+  if (r.status === 401 && pfad !== "/api/login" && pfad !== "/api/passwort-neu") {
+    maskeZeigen("anmeldung", "Sitzung abgelaufen — bitte neu anmelden.");
+  } else if (r.status === 409) {
+    // Kein Passwort gesetzt (etwa nach einem Werksreset im anderen Tab).
+    maskeZeigen("einrichtung");
   }
   return { status: r.status, ...j };
 };
 window.chimera = { api, sprache };
+
+/// Eine Maske zeigen und die Modulfläche leeren. `art` ist "anmeldung" oder
+/// "einrichtung"; ein leerer `art` zeigt das Modul wieder (nach dem Anmelden).
+function maskeZeigen(art, grund) {
+  if (art !== "") $("buehne").replaceChildren();
+  $("kopf").hidden = art !== "";
+  $("anmeldung").hidden = art !== "anmeldung";
+  $("einrichtung").hidden = art !== "einrichtung";
+  if (art === "anmeldung") {
+    const f = $("anmeldefehler");
+    f.style.color = "";
+    f.textContent = grund || "";
+    $("pw").focus();
+  }
+}
+window.chimera.maskeZeigen = maskeZeigen;
 
 if (location.protocol === "http:") $("warnung").style.display = "block";
 
@@ -84,17 +115,21 @@ function titel(m) {
 
 async function zeigeModul(m) {
   for (const b of $("menue").children) b.setAttribute("aria-current", b.dataset.name === m.name ? "true" : "false");
-  const inhalt = $("inhalt");
-  inhalt.replaceChildren();
+  // Nur die Buehne leeren, nie <main>: die Masken sind Geschwister der
+  // Buehne und muessen einen Modulwechsel ueberleben (sonst haette ein 401
+  // hinterher nichts, wo es erscheinen koennte).
+  const buehne = $("buehne");
+  buehne.replaceChildren();
+  maskeZeigen("");
   if (!customElements.get(m.element)) {
     await new Promise((ok, nein) => {
       const s = document.createElement("script");
       s.src = `/module/${encodeURIComponent(m.name)}/${encodeURIComponent(m.einstieg)}`;
       s.onload = ok; s.onerror = () => nein(new Error("Modul nicht ladbar"));
       document.head.appendChild(s);
-    }).catch((e) => { inhalt.textContent = `${titel(m)}: ${e.message}`; });
+    }).catch((e) => { buehne.textContent = `${titel(m)}: ${e.message}`; });
   }
-  if (customElements.get(m.element)) inhalt.appendChild(document.createElement(m.element));
+  if (customElements.get(m.element)) buehne.appendChild(document.createElement(m.element));
 }
 
 async function start() {
@@ -102,15 +137,11 @@ async function start() {
   // Oberflaeche nur die Seite zum Anlegen (Regel 5j, Fassung 14.11.).
   try {
     const e = await api("/api/einrichtung");
-    if (e.noetig) {
-      $("anmeldung").style.display = "none";
-      $("einrichtung").style.display = "block";
-      return;
-    }
+    if (e.noetig) { maskeZeigen("einrichtung"); return; }
   } catch (_) {}
   const r = await api("/api/module");
-  if (r.status === 401) { $("kopf").hidden = true; $("anmeldung").style.display = "block"; return; }
-  $("anmeldung").style.display = "none";
+  if (r.status === 401) { maskeZeigen("anmeldung"); return; }
+  maskeZeigen("");
   $("kopf").hidden = false;
   const menue = $("menue"); menue.replaceChildren();
   for (const m of r.module || []) {
@@ -139,8 +170,7 @@ $("einrichtung").addEventListener("submit", async (e) => {
   $("e-pw").value = ""; $("e-pw2").value = "";
   if (!r.ok) { $("einrichtungsfehler").textContent = r.fehler || "Fehler"; return; }
   // Angelegt: jetzt anmelden mit genau diesem Passwort.
-  $("einrichtung").style.display = "none";
-  $("anmeldung").style.display = "block";
+  maskeZeigen("anmeldung");
   $("anmeldefehler").textContent = "";
   $("anmeldefehler").style.color = "#7be0a0";
   $("anmeldefehler").textContent = "Passwort angelegt — bitte jetzt anmelden.";

@@ -762,12 +762,35 @@ class NoisyRenderer:
         # Fenster ueber Mitternacht (z.B. 22:00 - 06:00)
         return now >= start or now < end
 
+    @staticmethod
+    def _rt_wert(rt, methode, vorgabe):
+        """Einen Wert aus der Laufzeit-Config holen -- oder die Vorgabe.
+
+        Die Laufzeit-Config ist nicht mehr die von Noisy: Die
+        Avatar-Einstellungen (DESIGN, Regel „Avatar-Einstellungen") bringen
+        nur Frisur, Farbe und Kontrast. Ein Renderer, der dann an
+        ``rt.get_speed()`` abstuerzt, waere bei 2 Bildern/s ein Ausfall, den
+        niemand mit einer Einstellung in Verbindung bringt. Fehlende Methode
+        = Vorgabe, und der Aufrufer sieht den Wert, mit dem gerechnet wurde.
+        """
+        if rt is None:
+            return vorgabe
+        hole = getattr(rt, methode, None)
+        if not callable(hole):
+            return vorgabe
+        try:
+            return hole()
+        except Exception:                             # noqa: BLE001
+            return vorgabe
+
     def _apply_brightness(self, img):
         """Software-Dimming: skaliert das Bild nach Tag-/Nacht-Helligkeit."""
         rt = getattr(self.state, 'rt', None)
         if rt is None:
             return img
-        disp = rt.get_display()
+        disp = self._rt_wert(rt, "get_display", {})
+        if not isinstance(disp, dict):
+            disp = {}
         if disp.get("auto_dim", True) and self._is_night(disp):
             brightness = disp.get("brightness_night", 80)
         else:
@@ -2089,7 +2112,7 @@ class NoisyRenderer:
 
         # Laufzeit-Parameter (Speed) vom Orchestrator
         rt = getattr(self.state, 'rt', None)
-        speed = rt.get_speed() if rt is not None else 1.0
+        speed = self._rt_wert(rt, "get_speed", 1.0)
 
         # Mood-Daten aus dem Zustand. Der Helfer liefert immer ein
         # vollstaendiges Dict -- auch wenn noch nichts gesetzt wurde.
@@ -2185,26 +2208,29 @@ class NoisyRenderer:
         holen = getattr(rt, 'get_contrast', None) if rt is not None else None
         boost = (holen() / 100.0) if holen else DEFAULT_CONTRAST_BOOST
 
-        # Frisur und Haarfarbe kommen aus der Laufzeit-Config, damit sie
-        # im Dashboard einstellbar sind. Ein Mood darf sie weiterhin
-        # ueberschreiben (hair.style / hair.color) - der Rasta-Hut braucht
-        # nun mal andere Haare als der Kurzhaarschnitt.
+        # Frisur und Haarfarbe kommen aus den Avatar-Einstellungen (DESIGN,
+        # Regel „Avatar-Einstellungen"), damit sie im Browser einstellbar
+        # sind. Ein Ausdruck darf sie ueberschreiben -- aber nur als **Kostüm**:
+        #
+        #   Wer im Ausdruck eine eigene Frisur nennt (`hair.style`), stellt
+        #   damit den ganzen Haarschnitt ein, also auch die Farbe (CLASSIC
+        #   traegt eine weisse Peruecke). Nennt er keine, gilt die Einstellung
+        #   -- sonst waere der Farbwaehler ein Bedienelement ohne Wirkung:
+        #   Alle mitgelieferten Ausdruecke setzen `hair.color` (42-mal das
+        #   Standardbraun), ein Vergleich mit "hat keinen Wert" lief also
+        #   immer ins Leere.
         self.hair_style = 'mochi'
         if rt is not None and hasattr(rt, 'get_hair_style'):
             self.hair_style = rt.get_hair_style()
-            # Vorsicht: get_render_data() hat die Standard-Haarfarbe schon
-            # eingemischt, ein setdefault() liefe also immer ins Leere.
-            # Massgeblich ist, ob der MOOD selbst eine Farbe setzt - dann
-            # behaelt er sie (der Rasta-Hut braucht andere Haare als der
-            # Kurzhaarschnitt). Sonst gilt die Einstellung aus dem
-            # Dashboard.
-            roh = self._mood()
-            if 'color' not in roh.get('hair', {}):
+            roh = self._mood().get('hair', {})
+            if not roh.get('style'):
                 hair = dict(hair)
-                farbe = rt.get_hair_color()
-                hair['color'] = farbe
-                hair.pop('color_dark', None)
-                hair.pop('color_light', None)
+                holen_farbe = getattr(rt, 'get_hair_color', None)
+                farbe = holen_farbe() if callable(holen_farbe) else None
+                if farbe:
+                    hair['color'] = farbe
+                    hair.pop('color_dark', None)
+                    hair.pop('color_light', None)
 
         # --- SMOOTH COLOR MORPHING ---
         # morph_speed kommt vom Orchestrator (Transition-Geschwindigkeit)

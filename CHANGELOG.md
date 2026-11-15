@@ -20,6 +20,44 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Modul „Avatar" mit Frisur, Haarfarbe und Kontrast** (15.11.2026, Auftrag
+  smilez: *„Feld ‚Anzeige' in ‚Avatar' umbenennen … die Auswahl der Haare
+  (von noisy übernehmen was geht) … manuelle Vorschau"*): Die Kennung bleibt
+  `anzeige` (Manifest, Recht, Pfad, Spiegeldatei) — nur die Beschriftung im
+  Menü und auf der Seite heißt jetzt **Avatar**. Daneben, rechts vom Gesicht,
+  liegen die Einstellungen: Frisur (neun Werte, aus den
+  `draw_hair_*-Methoden` des Renderers, die aus dem Noisy-Port schon da
+  waren), Haarfarbe (Farbwähler) und Kontrast für helle Räume.
+  **Ein Schreiber:** der Dienst, `einstellungen/avatar.json` in seinem
+  Benutzerbereich (`os.replace`, 0644, Vorgaben bei kaputter Datei **mit
+  Hinweis**). Das Gateway reicht nur durch — neue Ops `avatar_lesen`,
+  `avatar_setzen` über den Sitzungs-Socket, neue Routen
+  `GET/POST /api/anzeige/einstellung` mit dem neuen Recht
+  `anzeige-schreiben`. Kein Neustart nötig: der Renderer liest die Werte über
+  `state.rt` beim nächsten Bild.
+  **Kostüm-Regel:** Jeder mitgelieferte Ausdruck setzt `hair.color` — die alte
+  Bedingung „Ausdruck hat keine eigene Farbe" lief deshalb immer ins Leere und
+  der Farbwähler wäre ein Bedienelement ohne Wirkung gewesen. Jetzt gilt: Wer
+  im Ausdruck eine eigene **Frisur** nennt, stellt damit den ganzen Haarschnitt
+  (`CLASSIC` trägt eine weiße Perücke); sonst gilt die Einstellung.
+  **Der Renderer liest nachsichtig** (`_rt_wert`): `rt` ist nicht mehr Noisys
+  volle `RuntimeConfig`, und ein fehlendes `get_speed()` darf bei zwei Bildern
+  je Sekunde nicht zum Ausfall werden.
+- **Vorschau eines Ausdrucks aus dem Browser** (15.11.2026): `POST
+  /api/anzeige/vorschau {name}` und `GET /api/anzeige/ausdruecke`. Die Dauer
+  entscheidet eine reine Funktion (`render/einstellungen.py`): ein Ausdruck
+  **mit** `dauer_s` läuft **einmal ganz** (die `BONG`-Regel vom 15.11.),
+  ein Dauerzustand **30 s**, dann zurück. Der Ablauf ist der des Renderers
+  (`mood_bis`) — kein zweiter Timer. Die Seite sagt vor dem Klick, was
+  passieren wird.
+- **Tab-Symbol und Anmeldemaske im Rahmen** (15.11.2026, zwei Meldungen von
+  smilez): Der Tab hat jetzt ein Symbol als `data:image/svg+xml` (keine
+  zusätzliche Route, kein 404). Und die Anmeldung liegt nicht mehr **im**
+  Modulbereich: `zeigeModul` leert nur noch `#buehne`, Anmeldung und
+  Einrichtung sind Geschwister davon. Ein 401 aus irgendeinem Aufruf baut die
+  Module ab (ihr `disconnectedCallback` hält die Abfragen an) und zeigt die
+  Maske mit dem Grund „Sitzung abgelaufen"; ein 409 führt zur Einrichtung
+  statt zu einem Fenster, in dem nichts mehr geht.
 - **Vorschau ohne Gerät** (15.11.2026): `tools/vorschau.py` zeichnet einen
   Ausdruck in Panelgröße als PNG — mit demselben `NoisyRenderer`, der auch
   auf dem Pi zeichnet (`NullPanel` statt Whisplay), also kein zweiter

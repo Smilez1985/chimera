@@ -1215,10 +1215,17 @@ fn das_anzeige_modul_wird_ausgeliefert_und_hat_sein_recht() {
     let v: Value = serde_json::from_slice(&r.body).unwrap();
     let m = v["module"].as_array().unwrap();
     let an = m.iter().find(|x| x["name"] == "anzeige").expect("Modul fehlt im Menü");
-    assert_eq!(an["titel"]["de"], "Anzeige");
+    // Beschriftung und Kennung sind zwei Dinge (DESIGN, Regel
+    // „Avatar-Einstellungen"): im Menü steht „Avatar", die Kennung bleibt
+    // `anzeige` -- sonst zoege die Umbenennung Pfad, Recht und Spiegel mit.
+    assert_eq!(an["titel"]["de"], "Avatar");
+    assert_eq!(an["name"], "anzeige");
     assert!(an["rechte"].as_array().unwrap().iter().any(|r| r == "anzeige-lesen"));
-    // Das Recht muss bekannt sein, sonst verwirft `module_erkennen` das Manifest.
+    // Ohne das Schreibrecht koennte die Seite keine Frisur setzen.
+    assert!(an["rechte"].as_array().unwrap().iter().any(|r| r == "anzeige-schreiben"));
+    // Die Rechte muessen bekannt sein, sonst verwirft `module_erkennen` das Manifest.
     assert!(RECHTE.contains(&"anzeige-lesen"));
+    assert!(RECHTE.contains(&"anzeige-schreiben"));
 
     let r = behandle(&z, &a("GET", "/module/anzeige/anzeige.js", &c, b""));
     assert_eq!(r.status, 200, "die JS-Datei fehlt im Binary");
@@ -1277,4 +1284,85 @@ fn ohne_anzeige_ist_der_grund_benannt_und_nicht_ein_schwarzes_bild() {
     // Anmeldung bleibt Pflicht.
     let r = behandle(&z, &a("GET", "/api/anzeige/bild?seit=0", "", b""));
     assert_eq!(r.status, 401);
+}
+
+// --- Avatar: Einstellungen und Vorschau (DESIGN, Regel „Avatar-…") ---
+//
+// Geprueft wird hier die **Tuer**: Recht, Methode und der ehrliche Fehler,
+// wenn der Dienst fehlt. Dass die Werte stimmen, prueft der Python-Test
+// (tests/test_einstellungen.py) — hier steht keine zweite Wahrheit.
+
+#[test]
+fn avatar_einstellungen_gehen_nur_mit_recht_und_ueber_den_dienst() {
+    // Ohne Socket gibt es keinen Dienst: 502 mit Grund, keine geratenen Werte.
+    let z = zustand(None, tmp("anz-avatar").join("s.sock"));
+    let c = anmelden(&z);
+
+    let r = behandle(&z, &a("GET", "/api/anzeige/einstellung", &c, b""));
+    assert_eq!(r.status, 502, "ohne Dienst muss der Grund kommen");
+    let v: Value = serde_json::from_slice(&r.body).unwrap();
+    assert!(v["fehler"].as_str().unwrap_or("").contains("Dienst"),
+            "Grund muss den Dienst nennen: {v}");
+
+    // Schreiben braucht POST und den Wert; ein leerer Koerper ist ein 400.
+    let r = behandle(&z, &a("POST", "/api/anzeige/einstellung", &c, br#"{"feld":"frisur"}"#));
+    assert_eq!(r.status, 400);
+    let r = behandle(&z, &a("POST", "/api/anzeige/einstellung", &c, br#"{"wert":"zopf"}"#));
+    assert_eq!(r.status, 400);
+    // Objekt, aber ohne Zeichenkette/Zahl als Wert: abgelehnt, nicht geraten.
+    let r = behandle(&z, &a("POST", "/api/anzeige/einstellung", &c,
+                           br#"{"feld":"frisur","wert":{"x":1}}"#));
+    assert_eq!(r.status, 400);
+
+    // Lesend gibt es kein Schreiben und umgekehrt.
+    let r = behandle(&z, &a("POST", "/api/anzeige/ausdruecke", &c, b"{}"));
+    assert_eq!(r.status, 405);
+    let r = behandle(&z, &a("GET", "/api/anzeige/vorschau", &c, b""));
+    assert_eq!(r.status, 405);
+
+    // Vorschau ohne Namen: 400, nicht "irgendwas".
+    let r = behandle(&z, &a("POST", "/api/anzeige/vorschau", &c, b"{}"));
+    assert_eq!(r.status, 400);
+
+    // Unbekannter Weg bleibt 404.
+    let r = behandle(&z, &a("GET", "/api/anzeige/gibtsnicht", &c, b""));
+    assert_eq!(r.status, 404);
+
+    // Und ohne Anmeldung geht gar nichts.
+    let r = behandle(&z, &a("GET", "/api/anzeige/einstellung", "", b""));
+    assert_eq!(r.status, 401);
+}
+
+#[test]
+fn ein_modul_ohne_schreibrecht_darf_keine_frisur_setzen() {
+    // Die eingebauten Module bringen `anzeige-schreiben` mit und verdecken
+    // den Fall „kein Modul hat das Recht". Deshalb dieselbe Bauart wie bei
+    // `anbieter_antwort`: die Modulliste von aussen, hier ohne `anzeige`.
+    let z = zustand(None, tmp("anz-rechte-sock").join("s.sock"));
+    let c = anmelden(&z);
+    let (alle, _) = module_erkennen(None);
+    let ohne: Vec<Modul> = alle.into_iter().filter(|m| m.name != "anzeige").collect();
+
+    let r = anzeige_antwort(&z, &a("POST", "/api/anzeige/einstellung", &c,
+                                   br#"{"feld":"frisur","wert":"zopf"}"#),
+                            "einstellung", &ohne);
+    assert_eq!(r.status, 403);
+    let v: Value = serde_json::from_slice(&r.body).unwrap();
+    assert!(v["fehler"].as_str().unwrap_or("").contains("anzeige-schreiben"));
+
+    let r = anzeige_antwort(&z, &a("POST", "/api/anzeige/vorschau", &c, br#"{"name":"ROCK"}"#),
+                            "vorschau", &ohne);
+    assert_eq!(r.status, 403);
+
+    // Lesen: `anzeige-lesen` haengt am Modul `anzeige` selbst -- fehlt es,
+    // ist auch das Lesen zu (403, nicht 502).
+    let r = anzeige_antwort(&z, &a("GET", "/api/anzeige/einstellung", &c, b""),
+                            "einstellung", &ohne);
+    assert_eq!(r.status, 403);
+
+    // Mit dem Modul im Boot, aber ohne Dienst: 502 mit Grund (keine Werte).
+    let (alle, _) = module_erkennen(None);
+    let r = anzeige_antwort(&z, &a("GET", "/api/anzeige/einstellung", &c, b""),
+                            "einstellung", &alle);
+    assert_eq!(r.status, 502);
 }

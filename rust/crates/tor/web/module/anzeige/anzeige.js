@@ -233,24 +233,193 @@ class ChimeraAnzeige extends HTMLElement {
   }
 }
 
+/// Wie die Seite eine Vorschau ankündigt (reine Funktion, ohne DOM —
+/// `tests/js/avatar_seite.mjs` prüft sie ohne Browser).
+///
+/// Die Auskunft muss stimmen, sonst ist sie schlimmer als keine: Ein
+/// Dauerzustand bleibt 30 s stehen, ein Ausdruck mit eigener Dauer läuft
+/// einmal ganz (und nicht 30 s lang, davon 17 s bewegungslos).
+function vorschauText(eintrag) {
+  if (!eintrag || !eintrag.name) return "";
+  if (eintrag.dauerzustand) {
+    const s = Math.round(eintrag.vorschau_s || 0);
+    return `${eintrag.name}: ${s} s Vorschau, dann zurück`;
+  }
+  const d = Math.round(eintrag.dauer_s || 0);
+  return d > 0 ? `${eintrag.name}: läuft einmal ganz (${d} s)`
+               : `${eintrag.name}: läuft einmal ganz`;
+}
+
+/// Beschriftung der Frisuren. Die Kennungen sind die Namen der
+/// `draw_hair_<name>`-Methoden im Renderer — eine Liste, eine Stelle
+/// (`render/einstellungen.py`), hier nur die Anzeige.
+const FRISUREN_TEXT = {
+  mochi: "Mochi", peruecke: "Perücke", kurz: "Kurz", strubbel: "Strubbel",
+  scheitel: "Scheitel", locken: "Locken", pony: "Pony", punk: "Punk",
+  zopf: "Zopf",
+};
+
+const STIL_SEITE = `
+  :host { display:block; padding:1rem; }
+  h3 { margin:.2rem 0 .5rem; font:1rem/1.3 system-ui, sans-serif; }
+  .spalte { display:flex; gap:1rem; align-items:flex-start; flex-wrap:wrap; }
+  /* Das Gesicht links, die Einstellungen daneben — auf schmalen Fenstern
+     rutschen sie untereinander (kein eigener Reiter, keine zweite Seite). */
+  .bild { flex:0 0 auto; width:min(240px, 46vw); }
+  .einst { flex:1 1 260px; min-width:220px; }
+  .karte { border:1px solid #2b2f3b; border-radius:.6rem; padding:.75rem;
+           margin:0 0 .75rem; background:#1c1f28; }
+  .karte strong { display:block; margin:0 0 .4rem; }
+  label { display:block; font-size:.85rem; color:#8a90a2; margin:.5rem 0 .2rem; }
+  select, input[type=color] { width:100%; font:inherit; padding:.35rem;
+           border-radius:.4rem; border:1px solid #2b2f3b; background:#12141a; color:#e6e8ee; }
+  input[type=color] { height:2.6rem; padding:.15rem; cursor:pointer; }
+  input[type=range] { width:100%; }
+  button { background:#7aa2ff; color:#0b0d12; border:0; border-radius:.4rem;
+           padding:.4rem .9rem; font:inherit; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:default; }
+  .klein { color:#8a90a2; font-size:.85rem; margin:.35rem 0 0; }
+  .fehler { color:#ff7a7a; } .gut { color:#7be0a0; } .meldung { color:#ffd989; }
+`;
+
 class ChimeraAnzeigeSeite extends HTMLElement {
   connectedCallback() {
     this.attachShadow({ mode: "open" });
-    this.shadowRoot.innerHTML = `<style>${STIL}
-      :host { display:block; padding:1rem; }
-      #kopf { font:0.9rem/1.4 system-ui, sans-serif; color:#8a90a2; margin:0 0 .75rem; }
-      #bild { max-width:240px; }
-    </style>
-    <p id="kopf">Anzeige — wird geladen.</p>
-    <div id="bild"><chimera-anzeige></chimera-anzeige></div>`;
-    this.kopfText = this.shadowRoot.getElementById("kopf");
+    this.shadowRoot.innerHTML = `<style>${STIL}${STIL_SEITE}</style>
+      <h3>Avatar</h3>
+      <div class="spalte">
+        <div class="bild">
+          <chimera-anzeige></chimera-anzeige>
+          <p class="klein" id="kopf">Bild wird geladen …</p>
+        </div>
+        <div class="einst">
+          <div class="karte">
+            <strong>Haare</strong>
+            <label for="frisur">Frisur</label>
+            <select id="frisur"></select>
+            <label for="farbe">Haarfarbe</label>
+            <input type="color" id="farbe" value="#8B5A2B">
+            <p class="klein">Schatten und Glanz leitet der Renderer aus der
+            Grundfarbe ab — eine Farbe genügt.</p>
+            <label for="kontrast">Kontrast für helle Räume: <span id="kwert">0</span> %</label>
+            <input type="range" id="kontrast" min="0" max="100" step="5" value="0">
+          </div>
+          <div class="karte">
+            <strong>Vorschau</strong>
+            <label for="ausdruck">Ausdruck</label>
+            <select id="ausdruck"></select>
+            <p class="klein" id="was">—</p>
+            <button id="zeigen">Vorschau zeigen</button>
+          </div>
+          <p id="meldung" class="klein"></p>
+        </div>
+      </div>`;
+    this.$ = (id) => this.shadowRoot.getElementById(id);
     const b = this.shadowRoot.querySelector("chimera-anzeige");
     b._melde = (text) => {
-      this.kopfText.textContent = text ? `Anzeige: ${text}`
+      this.$("kopf").textContent = text ? `Anzeige: ${text}`
         : `Anzeige: läuft, Bild ${b.zaehler}, ${b.canvas.width}×${b.canvas.height}`;
     };
+    this.laden();
+  }
+
+  _melden(text, art = "") {
+    const m = this.$("meldung");
+    if (!m) return;
+    m.textContent = text;
+    m.className = "klein " + art;
+  }
+
+  async laden() {
+    const r = await window.chimera.api("/api/anzeige/einstellung");
+    if (!r.ok) {
+      this._melden("Einstellungen nicht lesbar: " + text(r), "fehler");
+    } else if (r.avatar) {
+      this.werte = r.avatar;
+      this._fuellen(r.avatar);
+    }
+    const a = await window.chimera.api("/api/anzeige/ausdruecke");
+    if (!a.ok) {
+      this._melden("Ausdrücke nicht lesbar: " + text(a), "fehler");
+      return;
+    }
+    this.ausdruecke = a.ausdruecke || [];
+    this._ausdrueckeFuellen();
+  }
+
+  _fuellen(w) {
+    const frisur = this.$("frisur");
+    frisur.replaceChildren();
+    for (const name of w.frisuren || []) {
+      const o = document.createElement("option");
+      o.value = name;
+      o.textContent = FRISUREN_TEXT[name] || name;
+      if (name === w.frisur) o.selected = true;
+      frisur.appendChild(o);
+    }
+    frisur.onchange = () => this.setzen("frisur", frisur.value);
+    const farbe = this.$("farbe");
+    farbe.value = w.farbe || "#8B5A2B";
+    farbe.onchange = () => this.setzen("farbe", farbe.value);
+    const kontrast = this.$("kontrast");
+    kontrast.max = String(w.kontrast_max || 100);
+    kontrast.value = String(w.kontrast || 0);
+    this.$("kwert").textContent = String(w.kontrast || 0);
+    kontrast.oninput = () => { this.$("kwert").textContent = kontrast.value; };
+    // Erst beim Loslassen senden: jede Zwischenstufe zu schreiben hieße,
+    // bei jedem Pixel eine Datei zu ersetzen.
+    kontrast.onchange = () => this.setzen("kontrast", Number(kontrast.value));
+    for (const h of w.hinweise || []) this._melden(h, "meldung");
+  }
+
+  _ausdrueckeFuellen() {
+    const sel = this.$("ausdruck");
+    sel.replaceChildren();
+    for (const e of this.ausdruecke) {
+      const o = document.createElement("option");
+      o.value = e.name;
+      o.textContent = e.name;
+      sel.appendChild(o);
+    }
+    const zeigen = () => {
+      const e = this.ausdruecke.find((x) => x.name === sel.value);
+      this.$("was").textContent = vorschauText(e) || "—";
+    };
+    sel.onchange = zeigen;
+    zeigen();
+    this.$("zeigen").onclick = async () => {
+      const knopf = this.$("zeigen");
+      if (!sel.value) return;
+      knopf.disabled = true;
+      const r = await window.chimera.api("/api/anzeige/vorschau",
+        { method: "POST", body: JSON.stringify({ name: sel.value }) });
+      knopf.disabled = false;
+      if (!r.ok) { this._melden("Vorschau nicht möglich: " + text(r), "fehler"); return; }
+      this._melden(`${r.gesetzt}: ${r.grund}`, "gut");
+    };
+  }
+
+  async setzen(feld, wert) {
+    this._melden("…", "");
+    const r = await window.chimera.api("/api/anzeige/einstellung",
+      { method: "POST", body: JSON.stringify({ feld, wert }) });
+    if (!r.ok) { this._melden("Nicht gesetzt: " + text(r), "fehler"); return; }
+    if (r.avatar) { this.werte = r.avatar; this._fuellen(r.avatar); }
+    this._melden(r.meldung || "gesetzt", "gut");
   }
 }
+
+/// Was das Gateway als Fehler geschickt hat, als Satz. Drei Formen, weil
+/// die Routen unterschiedlich antworten — ein „[object Object]" hilft
+/// niemandem.
+function text(antwort) {
+  const f = antwort && antwort.fehler;
+  if (typeof f === "string") return f;
+  if (f && typeof f.text === "string") return f.text;
+  return "unbekannter Fehler (" + (antwort && antwort.status) + ")";
+}
+
+ChimeraAnzeigeSeite.vorschauText = vorschauText;
 
 // Die beiden Rechnungen haengen an der Klasse, damit `tests/js/anzeige_bild.mjs`
 // die ECHTE Datei pruefen kann (kein Nachbau der Formel) — ein klassisches

@@ -3180,6 +3180,153 @@ sparen will, baut den Renderer in Rust (Stufe 2), nicht dieses Bild weg.
 **Nicht Teil dieses Entwurfs:** Ton (Regel 5g), Kamerabild, Fernsteuerung des
 Panels. Das Gateway liest nur.
 
+### Regel „Avatar-Einstellungen" — Frisur und Farbe gehören dem Dienst, die Tür dem Gateway
+
+Auftrag smilez (15.11.2026): *„Feld ‚Anzeige' in ‚Avatar' umbenennen … daneben
+ist genug Platz für die Einstellungen, die Auswahl der Haare (von noisy
+übernehmen was geht, den Rest nachbauen, an chimera anpassen und verbessern)
+und manuelle Vorschau soll mood einmal ablaufen lassen, moods ohne feste
+Laufzeit laufen für 30 Sekunden als Vorschau"*.
+
+Dazu zwei Mängel der Oberfläche, die im selben Zug behoben werden: **eine
+abgelaufene Sitzung ließ das Chatfenster stehen, in dem man nichts mehr tun
+konnte**, und **der Tab hatte kein Symbol**.
+
+#### Der Name ist Beschriftung, die Kennung bleibt
+
+Im Menü und auf der Seite heißt das Modul **Avatar**. Die Kennung `anzeige`
+bleibt: sie steht im Manifest, im Recht, im Pfad `/api/anzeige/…`, im Modul
+`anzeige` des Gateways und in der Spiegeldatei. Eine Kennung ist ein interner
+Name, keine Beschriftung — sie umzubenennen bricht vier Stellen und bringt dem
+Nutzer nichts. Wer beides gleich nennt, verwechselt sie beim nächsten Umbau.
+
+#### Woher die Werte kommen (Noisy-Vergleich)
+
+Noisy hat genau zwei Felder (`hair_style` 8 Werte, `hair_color`), hält die
+`RuntimeConfig` im selben Prozess und der Renderer liest sie je Bild
+(`noisy_runtime.py:270-303`). **Der Renderer ist bereits portiert:** Chimera
+kennt neun Frisuren (`draw_hair_mochi`, `_peruecke`, `_kurz`, `_strubbel`,
+`_scheitel`, `_locken`, `_pony`, `_punk`, `_zopf` — eine mehr als Noisy) und
+liest sie über `state.rt`:
+
+| Methode | Wirkung |
+|---|---|
+| `get_hair_style()` | Name aus der Positivliste; steuert `draw_hair_<name>` |
+| `get_hair_color()` | `(r, g, b)`; gilt, solange der Ausdruck keine eigene Frisur nennt |
+| `get_contrast()` | 0..100 (Vorgabe **45**, das ist die bisherige Anhebung 0.45), hebt alle Farben gemeinsam an |
+
+Nur angeschlossen war das nie — `state.rt` blieb leer, der Renderer fiel auf
+seine Vorgaben zurück. Diese Regel schließt genau diese Lücke und baut nichts
+zweites daneben.
+
+#### Wer die Frisur stellt, stellt auch die Farbe (Kostüm-Regel)
+
+Beim Anschließen fiel auf: **jeder** der 43 mitgelieferten Ausdrücke setzt
+`hair.color` (42-mal das Standardbraun), also lief die alte Bedingung „der
+Ausdruck hat keine eigene Farbe → Einstellung gilt" immer ins Leere. Der
+Farbwähler wäre ein Bedienelement ohne Wirkung gewesen — genau die Sorte
+Defekt, die man erst am Gerät merkt.
+
+Die Regel ist deshalb am **Kostüm** festgemacht, nicht an der Farbe:
+
+- Nennt der Ausdruck eine eigene Frisur (`hair.style`), gehört ihm der ganze
+  Haarschnitt — auch die Farbe. `CLASSIC` trägt eine weiße Perücke; die bleibt
+  weiß.
+- Nennt er keine, gilt die Einstellung aus dem Browser (42 von 43 Ausdrücken
+  inklusive `IDLE`, `ROCK`, `BONG`).
+
+#### Der Renderer liest nachsichtig
+
+`rt` ist nicht mehr Noisys volle `RuntimeConfig`: Frisur, Farbe und Kontrast
+statt sechzehn Feldern. Ein `rt.get_speed()`, das dann abstürzt, wäre bei zwei
+Bildern je Sekunde ein Ausfall, den niemand mit einer Einstellung verbindet —
+deshalb `NoisyRenderer._rt_wert(rt, methode, vorgabe)`: fehlende Methode oder
+Fehler ergibt die Vorgabe, und der Renderer rechnet sichtbar damit weiter.
+
+#### Ein Schreiber: der Dienst — die Tür ist das Gateway
+
+`$CHIMERA_HOME/einstellungen/avatar.json`, geschrieben **nur** vom Dienst
+(`os.replace`, 0644, Vorgaben bei fehlender oder kaputter Datei):
+
+```json
+{"frisur": "mochi", "farbe": "#8B5A2B", "kontrast": 45}
+```
+
+**Die Vorgabe des Kontrasts ist 45, nicht 0.** Der Renderer hob bisher ohne
+Einstellung um `DEFAULT_CONTRAST_BOOST` = 0.45 an (helle Räume, kein
+Lichtsensor am Gerät). Ein Feld mit Vorgabe 0 hätte diese Anhebung beim ersten
+Start abgeschaltet — alle Farben auf einen Schlag dunkler, und niemand hätte
+es dem Farbwähler angesehen.
+
+- **Nicht das Gateway schreibt.** Regel 5t gibt jeder Ablage genau einen
+  Schreiber; hier ist es der Dienst, denn er besitzt den Renderer und muss die
+  Änderung sofort sehen. Ein zweiter Schreiber (Gateway) wäre eine zweite
+  Wahrheit und ein Wettlauf.
+- **Darum liegt die Datei im Benutzerbereich, nicht in `state/`.** `state/`
+  gehört `root:chimera-tor` 0710 — der Dienst käme nicht heran (dieselbe Falle
+  wie beim Lebenszeichen, 15.11.). `$CHIMERA_HOME` gehört ihm, und
+  `ReadWritePaths` der Unit deckt es ab.
+- **Der Weg vom Browser** ist eine Gateway-Op über den bestehenden
+  Sitzungs-Socket (Regel 5s): `avatar_lesen`, `avatar_setzen`. Das Gateway
+  prüft Recht und Eingabe, der Dienst prüft die Werte noch einmal (die
+  Positivliste steht dort, wo gezeichnet wird). Ist der Dienst nicht
+  erreichbar, sagt die Seite das — sie zeigt keine geratenen Werte.
+- **Kein Neustart nötig:** Der Dienst setzt die Werte im laufenden Betrieb;
+  der Renderer liest sie über `state.rt` beim nächsten Bild.
+
+#### Vorschau: einmal ganz, sonst 30 Sekunden
+
+`POST /api/anzeige/vorschau {name}` → Op `vorschau` → `Face.set_by_name`.
+Die Dauer entscheidet eine reine Funktion (`render/einstellungen.py`):
+
+- Ausdruck **mit** `dauer_s` → `dauer=None`: er läuft **einmal ganz** (die
+  Regel aus `Face._dauer_von`, 15.11.: eine Animation mit festem Ablauf wird
+  nicht mitten abgeschnitten — `BONG` 13 s, nicht 4).
+- Ausdruck **ohne** `dauer_s` (Dauerzustand wie `ROCK`) → **30 s**, dann
+  zurück zum vorherigen Ausdruck.
+- Der Ablauf nutzt `mood_bis`/`mood_ablauf` des Renderers — **kein zweiter
+  Timer**, kein eigener Faden.
+
+Die Übersicht `GET /api/anzeige/ausdruecke` liefert Name, `dauer_s` und die
+Kennzeichnung „Dauerzustand", damit die Seite sagen kann, was passiert.
+
+#### Sitzung abgelaufen heißt: Anmeldemaske, nicht totes Fenster
+
+Der Rahmen legt die Modulfläche in `#buehne`; Anmeldung und Einrichtung sind
+**Geschwister**, nicht Kinder. Vorher ersetzte `zeigeModul` den Inhalt von
+`#inhalt` — und damit das Anmeldeformular selbst. Ein 401 zeigte dann ein
+Element, das nicht mehr im Dokument hing: das Chatfenster blieb stehen und
+niemand konnte sich anmelden. Jetzt gilt:
+
+- 401 aus **irgendeinem** Aufruf (auch aus dem Ereignisstrom des Chats) →
+  Modulfläche leeren (die Elemente werden abgebaut, ihr `disconnectedCallback`
+  hält die Abfragen an), Kopfzeile aus, Anmeldemaske an, Grund im Text
+  („Sitzung abgelaufen — bitte neu anmelden").
+- 409 (kein Passwort gesetzt) führt zur Einrichtung, nicht zur Anmeldung.
+
+#### Das Symbol im Tab
+
+`<link rel="icon" href="data:image/svg+xml,…">` im Rahmen — ein Gesicht als
+SVG, **url-kodiert und ASCII-nur**. Keine zusätzliche Route: eine Route ohne
+Datei wäre ein 404 im Netzprotokoll, und ein Favicon ist kein Modul.
+
+#### Tests und Gegenproben
+
+- Werte: unbekannte Frisur, kaputtes Hex, Kontrast außerhalb 0..100 werden
+  abgelehnt und **ändern nichts** (Gegenprobe: nach dem Fehlversuch steht der
+  alte Wert).
+- Fehlende, halbe oder fremde Datei → Vorgaben, und das wird gesagt.
+- Schreiben ist atomar: nach `os.replace` liegt nie eine halbe Datei.
+- Vorschau: endlicher Ausdruck → `dauer=None` (läuft ganz), Dauerzustand →
+  30 s; Gegenprobe mit vertauschter Bedingung wird rot.
+- Der Renderer bekommt die Werte wirklich: Haarstil aus der Ablage landet im
+  gezeichneten Bild (Pixelvergleich zweier Frisuren, nicht nur der Aufruf).
+- JS: `bildMalen`/`kopfDeuten` unverändert; neu die reine Funktion
+  `vorschauText(name, dauer_s)` (was die Seite ankündigt) — und dass die
+  Anmeldemaske nach einem 401 wieder **im Dokument** hängt.
+- Routen: jeder neue Aufruf aus `anzeige.js` steht in `web.rs`
+  (`tests/test_web_routen.py`).
+
 ### Architekturregel 7 — Ein Prozess, ein Framebuffer
 
 

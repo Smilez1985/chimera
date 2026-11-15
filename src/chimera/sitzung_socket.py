@@ -231,6 +231,36 @@ class SitzungsServer:
                     else:
                         antwort({"ok": False,
                                  "fehler": f"Gesicht {name} nicht gesetzt"})
+                elif op in ("avatar_lesen", "avatar_setzen", "ausdruecke",
+                            "vorschau"):
+                    # Avatar-Einstellungen und Vorschau (DESIGN, Regel
+                    # „Avatar-Einstellungen"). Der Dienst ist der einzige
+                    # Schreiber; das Gateway fragt hier und prueft vorher das
+                    # Recht. Ohne Bruecke wird der Grund genannt, nicht die
+                    # Vorgabe gezeigt.
+                    bruecke = getattr(self.session, "avatar_bruecke", None)
+                    if bruecke is None:
+                        antwort({"ok": False,
+                                 "fehler": "keine Avatar-Bruecke — ohne Dienst "
+                                           "keine Einstellungen"})
+                        continue
+                    if op == "avatar_lesen":
+                        antwort({"ok": True, "avatar": bruecke.avatar_lesen()})
+                    elif op == "ausdruecke":
+                        antwort({"ok": True,
+                                 "ausdruecke": bruecke.ausdruecke()})
+                    elif op == "vorschau":
+                        name = str(q.get("name") or "").strip()
+                        if not name:
+                            antwort({"ok": False, "fehler": "name fehlt"})
+                        else:
+                            antwort(bruecke.vorschau(name))
+                    else:
+                        feld = str(q.get("feld") or "").strip()
+                        ok, meldung = bruecke.avatar_setzen(feld, q.get("wert"))
+                        antwort({"ok": ok, "meldung": meldung,
+                                 "avatar": bruecke.avatar_lesen()
+                                 if ok else None})
                 elif op == "led":
                     # Abschluss des Installers auf die LED legen. Der Dienst
                     # haelt die Pins -- der Installer kann das Panel nicht

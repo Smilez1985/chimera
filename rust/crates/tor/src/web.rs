@@ -178,7 +178,7 @@ pub struct Modul {
 /// eintragen**, wenn das Gateway ein neues Recht kennt. Ein Recht, das nicht in
 /// dieser Liste steht, verwirft das Modul -- sonst wuerde ein Tippfehler im
 /// Manifest still ein wirkungsloses Recht verlangen.
-pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben", "wahl-lesen", "wahl-schreiben", "freigaben-lesen", "freigaben-schreiben", "ssh-lesen", "ssh-schreiben", "telegram-lesen", "telegram-schreiben", "netz-lesen", "netz-schreiben", "anzeige-lesen"];
+pub const RECHTE: &[&str] = &["chat", "status", "anbieter-lesen", "anbieter-schreiben", "wahl-lesen", "wahl-schreiben", "freigaben-lesen", "freigaben-schreiben", "ssh-lesen", "ssh-schreiben", "telegram-lesen", "telegram-schreiben", "netz-lesen", "netz-schreiben", "anzeige-lesen", "anzeige-schreiben"];
 
 fn name_ok(s: &str) -> bool {
     !s.is_empty() && s.len() <= 32 && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
@@ -788,11 +788,35 @@ fn wahl_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort {
 /// bekommen hat. Unverändert heißt 204 ohne ein einziges Pixel.
 fn anzeige_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
     let (m, _) = module_erkennen(z.modul_dir.as_deref());
-    if !hat_recht(&m, "anzeige", "anzeige-lesen") {
-        return fehler(403, "Modul anzeige hat das Recht 'anzeige-lesen' nicht");
+    anzeige_antwort(z, a, was, &m)
+}
+
+/// Wie `anzeige_api`, mit der Modulliste von aussen. Noetig, weil die
+/// eingebauten Module das Schreibrecht mitbringen und den Fall „kein Modul
+/// hat das Recht" sonst verdecken — genau wie bei `anbieter_antwort`.
+fn anzeige_antwort(z: &Zustand, a: &Anfrage, was: &str, m: &[Modul]) -> Antwort {
+    // Lesen und Schreiben sind getrennte Rechte: das Bild sehen darf jedes
+    // Modul mit `anzeige-lesen`, an Frisur und Farbe kommt nur eines mit
+    // `anzeige-schreiben` (DESIGN, Regel „Avatar-Einstellungen").
+    let post = a.methode == "POST";
+    match (post, was) {
+        (false, "bild" | "einstellung" | "ausdruecke") => {
+            if !hat_recht(m, "anzeige", "anzeige-lesen") {
+                return fehler(403, "Modul anzeige hat das Recht 'anzeige-lesen' nicht");
+            }
+        }
+        (true, "einstellung" | "vorschau") => {
+            if !schreibrecht_vergeben(m, "anzeige-schreiben") {
+                return fehler(403, "kein Modul hat das Recht 'anzeige-schreiben'");
+            }
+        }
+        (_, "bild" | "einstellung" | "ausdruecke" | "vorschau") => {
+            return fehler(405, "Methode nicht erlaubt");
+        }
+        _ => return fehler(404, "nicht gefunden"),
     }
-    match (a.methode, was) {
-        ("GET", "bild") => {
+    match (post, was) {
+        (false, "bild") => {
             let seit: u64 = query_wert(a.query, "seit").and_then(|s| s.parse().ok()).unwrap_or(0);
             match crate::anzeige::lesen(&crate::anzeige::pfad(), seit) {
                 Ok(crate::anzeige::Gelesen::Unveraendert) => Antwort {
@@ -810,8 +834,57 @@ fn anzeige_api(z: &Zustand, a: &Anfrage, was: &str) -> Antwort {
                 Err(grund) => fehler(503, &grund),
             }
         }
-        ("GET", _) => fehler(404, "nicht gefunden"),
-        _ => fehler(405, "Methode nicht erlaubt"),
+        // Frisur, Farbe und Kontrast kommen nicht aus einer Datei, die das
+        // Gateway liest: Der Dienst ist der einzige Schreiber seiner Ablage
+        // (DESIGN, „Avatar-Einstellungen"). Ohne Dienst gibt es einen
+        // genannten Grund, keine geratenen Werte.
+        (false, "einstellung") => {
+            match sitzung::anfragen(&z.sitzung_socket, &json!({"op": "avatar_lesen"})) {
+                Ok(r) => json_antwort(200, r),
+                Err(e) => fehler(502, &format!("Dienst nicht erreichbar: {e}")),
+            }
+        }
+        (true, "einstellung") => {
+            let v: Value = match serde_json::from_slice(a.body) {
+                Ok(v @ Value::Object(_)) => v,
+                _ => return fehler(400, "kein JSON-Objekt"),
+            };
+            let feld = match v["feld"].as_str().map(str::trim) {
+                Some(f) if !f.is_empty() => f.to_string(),
+                _ => return fehler(400, "Feld \"feld\" fehlt"),
+            };
+            // Den Wert reicht das Gateway unveraendert weiter: Geprueft wird
+            // dort, wo gezeichnet wird (eine Positivliste, eine Stelle). Das
+            // Gateway prueft nur die Form.
+            let wert = match v.get("wert") {
+                Some(w) if w.is_string() || w.is_number() => w.clone(),
+                _ => return fehler(400, "Feld \"wert\" fehlt (Text oder Zahl)"),
+            };
+            let anfrage = json!({"op": "avatar_setzen", "feld": feld, "wert": wert});
+            match sitzung::anfragen(&z.sitzung_socket, &anfrage) {
+                Ok(r) => json_antwort(200, r),
+                Err(e) => fehler(502, &format!("Dienst nicht erreichbar: {e}")),
+            }
+        }
+        (false, "ausdruecke") => match sitzung::anfragen(&z.sitzung_socket, &json!({"op": "ausdruecke"})) {
+            Ok(r) => json_antwort(200, r),
+            Err(e) => fehler(502, &format!("Dienst nicht erreichbar: {e}")),
+        },
+        (true, "vorschau") => {
+            let v: Value = match serde_json::from_slice(a.body) {
+                Ok(v @ Value::Object(_)) => v,
+                _ => return fehler(400, "kein JSON-Objekt"),
+            };
+            let name = match v["name"].as_str().map(str::trim) {
+                Some(n) if !n.is_empty() => n.to_string(),
+                _ => return fehler(400, "Feld \"name\" fehlt"),
+            };
+            match sitzung::anfragen(&z.sitzung_socket, &json!({"op": "vorschau", "name": name})) {
+                Ok(r) => json_antwort(200, r),
+                Err(e) => fehler(502, &format!("Dienst nicht erreichbar: {e}")),
+            }
+        }
+        _ => fehler(404, "nicht gefunden"),
     }
 }
 

@@ -154,6 +154,11 @@ class Session:
     #: 15.11.2026). Der Dienst haengt hier den Weg zum Gateway ein; ohne sie
     #: wird nichts gezaehlt -- und das ist im Protokoll zu sehen, nicht still.
     verbrauch_melden: object = None
+    #: Die Avatar-Einstellungen samt Vorschau (DESIGN, Regel
+    #: „Avatar-Einstellungen"). Der Dienst haengt hier seine Bruecke ein; sie
+    #: ist der **einzige** Schreiber der Ablage. Ohne sie antworten die
+    #: Operationen `avatar_*` mit einem benannten Grund, nicht mit Vorgaben.
+    avatar_bruecke: object = None
 
     def gesicht(self, name: str) -> bool:
         """Einen Ausdruck setzen, etwa aus dem Installer (Update-Anzeige).

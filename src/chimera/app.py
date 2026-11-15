@@ -203,6 +203,76 @@ class Chimera:
             log.warning("Gesicht %r gibt es nicht", name)
             return False
 
+    # --- Avatar-Einstellungen und Vorschau --------------------------------
+    #
+    # Eine Brücke für den Sitzungs-Socket (DESIGN, Regel
+    # „Avatar-Einstellungen"): Der Browser fragt das Gateway, das Gateway
+    # fragt hier. Der Dienst ist der einzige Schreiber der Ablage, weil er
+    # den Renderer besitzt.
+
+    def avatar(self):
+        """Die Einstellungs-Ablage, so wie der Renderer sie liest."""
+        if self.face is None:
+            return None
+        return getattr(self.face.state, "rt", None)
+
+    def avatar_lesen(self) -> dict | None:
+        abl = self.avatar()
+        return abl.als_json() if abl is not None else None
+
+    def avatar_setzen(self, feld: str, wert) -> tuple[bool, str]:
+        abl = self.avatar()
+        if abl is None:
+            return (False, "keine Avatar-Ablage — Gesicht nicht aufgesetzt")
+        return abl.setzen(feld, wert)
+
+    def ausdruecke(self) -> list[dict]:
+        """Was sich vorführen lässt: Name, eigene Dauer, Art.
+
+        Die Art („Dauerzustand" / „eigene Dauer") rechnet dieselbe Funktion,
+        die auch die Vorschau plant (``render.einstellungen.vorschau``) —
+        eine Ankündigung, zwei Stellen wären zwei Wahrheiten.
+        """
+        if self.face is None:
+            return []
+        from .render.einstellungen import vorschau
+        liste = []
+        for eintrag in self.face.moods.entries():
+            dauer, grund = vorschau(eintrag.mood)
+            liste.append({
+                "name": eintrag.name,
+                "dauer_s": float(eintrag.mood.get("dauer_s") or 0),
+                "dauerzustand": dauer is not None,
+                "vorschau_s": 0.0 if dauer is None else float(dauer),
+                "grund": grund,
+            })
+        return sorted(liste, key=lambda x: x["name"])
+
+    def vorschau(self, name: str) -> dict:
+        """Einen Ausdruck einmal vorführen (DESIGN, „Avatar-Einstellungen").
+
+        Die Dauer kommt aus ``render.einstellungen.vorschau``: eigene Dauer →
+        läuft einmal ganz (``dauer=None``), Dauerzustand → 30 s. Der Ablauf
+        danach ist der des Renderers (``mood_bis``) — kein zweiter Timer.
+        """
+        if self.face is None:
+            return {"ok": False, "fehler": "keine Anzeige angeschlossen"}
+        from .render.einstellungen import vorschau as planen
+        try:
+            eintrag = self.face.moods.find(name)
+        except Exception:                             # noqa: BLE001
+            eintrag = None
+        if eintrag is None:
+            return {"ok": False, "fehler": f"unbekannter Ausdruck {name!r}"}
+        dauer, grund = planen(eintrag.mood)
+        try:
+            gesetzt = self.face.set_by_name(eintrag.name, hard=True, dauer=dauer)
+        except KeyError as exc:
+            return {"ok": False, "fehler": f"unbekannter Ausdruck: {exc}"}
+        return {"ok": True, "gesetzt": gesetzt.get("name", eintrag.name),
+                "dauer_s": 0.0 if dauer is None else float(dauer),
+                "grund": grund}
+
     def _status_kontext(self) -> dict:
         """Was die Kennwerte im Statusbereich zeigen: Modell und Anbieter.
 
@@ -576,6 +646,11 @@ def build(*, probe_network: bool = True, home: Path | None = None,
     # "gesicht"): Damit setzt der Installer das Update-Gesicht, bevor er die
     # Dienste anhaelt.
     session.gesicht_setzen = chi._gesicht_setzen
+    # Und die Avatar-Einstellungen samt Vorschau (Operationen
+    # `avatar_lesen`, `avatar_setzen`, `ausdruecke`, `vorschau`): Der
+    # Browser kommt nur über das Gateway herein, geschrieben wird hier
+    # (DESIGN, Regel „Avatar-Einstellungen").
+    session.avatar_bruecke = chi
     # Und der Verbrauch jedes Umlaufs geht ans Gateway, das die Ablage
     # fuehrt (state/ gehoert chimera-tor, DESIGN „Verbrauch" 15.11.2026).
     session.verbrauch_melden = chi._verbrauch_melden
@@ -650,6 +725,19 @@ def _try_face(notes: list[str], root) -> tuple[object, object, object]:
     # liest sie. Zwei Zustände wären zwei Gesichter, von denen das falsche
     # gezeichnet wird.
     state = State()
+    # Avatar-Einstellungen (DESIGN, Regel „Avatar-Einstellungen"): Frisur,
+    # Haarfarbe und Kontrast liegen in `einstellungen/avatar.json` und
+    # erreichen den Renderer über `state.rt` — dieselbe Naht, die aus dem
+    # Noisy-Port übrig war und bisher leer blieb. Fehlt die Ablage, gilt die
+    # Vorgabe; das wird gesagt, nicht verschwiegen.
+    try:
+        from .render.einstellungen import Avatar
+        avatar = Avatar(Path(root) / "einstellungen" / "avatar.json")
+        state.rt = avatar
+        for hinweis in avatar.als_json()["hinweise"]:
+            notes.append(f"Avatar: {hinweis}")
+    except Exception as exc:                          # noqa: BLE001
+        notes.append(f"Avatar-Einstellungen: nicht lesbar ({exc}) — Vorgaben")
     try:
         from .display.spiegel import Spiegel
         renderer = NoisyRenderer(state, panel, spiegel=Spiegel())
