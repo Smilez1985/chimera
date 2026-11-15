@@ -233,6 +233,23 @@ Quelle ist PaKaChi-SM (privat); sie dient als Vorbild, hier wird nachgebaut, nic
       (z. B. `CHIMERA_HOME`) oder den Ordner für die Gruppe `chimera` öffnen
       — und **am Gerät** nachweisen, dass keine Warnung mehr kommt.
 
+### Aus dem Noisy-Recon (15.11.2026) — zwei Lücken, die dort offen sind
+
+- [ ] **Ein hängender Zustand hat keine Frist.** Noisy prüft nur, ob Prozesse
+      leben (`noisy_orchestrator.py:1475-1492`), nicht, ob noch **Daten**
+      kommen: liefert die Audio-Engine `None`, kehrt `process_cycle` einfach
+      zurück (`:1163-1165`) und der alte Mood bleibt unbegrenzt stehen. Bei
+      Chimera ist die Lücke anders, aber vorhanden: `agent/loopguard.py`
+      erkennt Werkzeug-Rekursion, nicht einen Zustand, der hängen bleibt
+      (etwa `arbeitet` ohne Turn). Zu bauen: eine Frist auf den letzten
+      Fortschritt der Agent-Schleife → `wartet` melden, statt den letzten
+      Ausdruck zu zeigen.
+- [ ] **Entscheidungsprotokoll nur bei Wechsel.** Noisy schreibt eine Zeile
+      nur, wenn sich die Signatur (Zustand, Mood, Kandidat, Szene) ändert —
+      das hielt 11 241 Zeilen in 4,5 h klein (`noisy_orchestrator.py:458-511`).
+      Für Chimera billig und beim Debuggen des Mood-Wechsels sofort nützlich
+      (heute steht je Wechsel nichts Zusammenhängendes im Journal).
+
 ## Phase Web-Einstellungen — Gesicht und Avatar im Browser (smilez, 15.11.2026)
 
 Auftrag: *„schau dir die Logik sowie die webui Module zum Einstellen von
