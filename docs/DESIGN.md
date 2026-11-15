@@ -450,6 +450,22 @@ nie gemeldet, das Gesicht blieb nach der ersten Antwort stehen.
    nicht die des Zustands. `spricht`, `denkt`, `arbeitet` verhalten sich
    unverändert: sie zeigen ihren eigenen Ausdruck und kehren über `wartet`
    zum Agentengesicht zurück.
+7. **Ein gesetztes Gesicht hat eine Haltezeit von 5 Sekunden** (smilez,
+   15.11.2026). Punkt 6 machte den Ausdruck dauerhaft — zu sehen war er
+   trotzdem nicht: `set_face` setzte ihn, 0,45 s später meldete die
+   Schleife `arbeitet` und die Übergangsdauer blendete ihn weg. smilez am
+   Gerät: *„wird das so schnell abgespielt … das es kaum zu sehen und sofort
+   vorbei ist"*. **Nachgemessen, bevor geändert wurde:** Die Bewegung der
+   eingebauten Moods ist in Ordnung (Schwingungen zwischen 0,5 s und 21 s je
+   Periode) — zu kurz war die **Standzeit**, nicht die Animation. Also hält
+   `Face.set_by_name` den Ausdruck `HALT_S` = 5 s (`agent/face.py`); solange
+   diese Frist läuft, übernehmen `arbeitet`, `denkt` und `spricht` nicht.
+   Ausnahmen: ein **Reflex** (`verwirrt`, `fehler`) bricht die Frist (Regel
+   6b — ein Schreck blendet nicht ein), und `wartet` ist ausgenommen, weil es
+   ohnehin den Agentenausdruck zeigt und ein inzwischen gelöschter auf IDLE
+   zurückfallen muss. Ein neuer `set_face` setzt die Frist neu.
+   Tests `tests/test_gesicht_haltezeit.py` (13), Gegenprobe
+   `tests/gegenprobe_gesicht_haltezeit.py` 6/6 rot.
 
 #### Architekturregel 4c — Das Sprachmodell setzt Absicht, nicht Bilder
 

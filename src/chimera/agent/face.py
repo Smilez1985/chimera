@@ -16,6 +16,7 @@ Zwei Richtungen:
 from __future__ import annotations
 
 import logging
+import time
 
 from ..mood import ablage as moodablage
 from ..mood import blend
@@ -40,11 +41,22 @@ STATE_MOODS = {
 #: (Regel 6b).
 HARD_STATES = {"verwirrt", "fehler"}
 
+#: Wie lange ein vom **Agenten** gesetztes Gesicht stehen bleibt, bevor ein
+#: Zustand (``arbeitet``, ``spricht``) es übernehmen darf — in Sekunden.
+#:
+#: Fund am Gerät (15.11.2026, smilez): *„wird das so schnell abgespielt … das
+#: es kaum zu sehen und sofort vorbei ist"*. Nachgemessen: Die Bewegung eines
+#: Moods ist in Ordnung (eingebaute Ausdrücke schwingen zwischen 0,5 s und
+#: 21 s je Periode), aber der Ausdruck war nur **0,45 s** zu sehen — die
+#: Übergangsdauer. Danach meldete die Schleife ``arbeitet`` und blendete ihn
+#: weg. Ein Befehl, dessen Ergebnis man nicht sieht, ist kein Befehl.
+HALT_S = 5.0
+
 
 class Face:
     """Setzt Ausdrücke auf dem Renderer-Zustand."""
 
-    def __init__(self, registry, state, *, ablage=None):
+    def __init__(self, registry, state, *, ablage=None, clock=time.monotonic):
         """``registry`` ist die Mood-Bibliothek, ``state`` der Renderer-Zustand.
 
         ``ablage`` ist die Datei der eigenen Ausdrücke (DESIGN 3.3b). Fehlt
@@ -59,6 +71,10 @@ class Face:
         #: (DESIGN, Regel „Sprechgesicht" 6). `wartet` kehrt dorthin zurück,
         #: statt auf IDLE — sonst radiert jeder Turn das Gesicht aus.
         self._agent_mood: str = ""
+        #: Bis wann der Agentenausdruck stehen bleibt (``HALT_S``).
+        self._haelt_bis: float = 0.0
+        #: Einsetzbare Uhr — die Haltezeit wird ohne Warten geprüft.
+        self._uhr = clock
 
     # --- eigene Ausdrücke -----------------------------------------------
 
@@ -85,6 +101,10 @@ class Face:
         # Der Agent hat hier bewusst gewählt — das ist der Ausdruck, zu dem
         # `wartet` zurückkehrt (Regel „Sprechgesicht" 6).
         self._agent_mood = str(mood.get("name") or "")
+        # … und er bleibt erst einmal stehen (HALT_S), sonst sieht niemand
+        # das Ergebnis des Werkzeugaufrufs.
+        self._haelt_bis = self._uhr() + HALT_S
+        self._last_state = ""
         return mood
 
     def _resolve(self, name: str) -> dict:
@@ -131,6 +151,19 @@ class Face:
         am Turn-Ende vergessen — genau das war am Display zu sehen.
         """
         if what == self._last_state:
+            return
+        if what in HARD_STATES:
+            # Ein Schreck ist ein Reflex und bricht die Haltezeit.
+            self._haelt_bis = 0.0
+        elif what != "wartet" and self._uhr() < self._haelt_bis:
+            # Der Agent hat gerade ein Gesicht gesetzt: Es bleibt stehen,
+            # statt im nächsten Zustand zu verschwinden. ``_last_state``
+            # wird absichtlich NICHT gesetzt — derselbe Zustand darf es
+            # nach Ablauf der Frist erneut versuchen. ``wartet`` ist
+            # ausgenommen: Es zeigt ohnehin den Agentenausdruck, und ein
+            # inzwischen gelöschter muss auf IDLE zurückfallen können.
+            log.debug("Zustand %r wartet: Ausdruck %r hält noch %.1f s",
+                      what, self._agent_mood, self._haelt_bis - self._uhr())
             return
         self._last_state = what
 

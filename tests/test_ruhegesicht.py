@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # echten Quellbaum anzufassen (Muster aus test_freigabe_erinnerung.py).
 sys.path.insert(0, str(Path(os.environ.get("CHIMERA_SRC") or ROOT / "src")))
 
-from chimera.agent.face import Face  # noqa: E402
+from chimera.agent.face import HALT_S, Face  # noqa: E402
 from chimera.mood.registry import Registry  # noqa: E402
 from chimera.render.avatar import State  # noqa: E402
 
@@ -44,28 +44,44 @@ def check(m, got, want):
 
 BIB = ROOT / "data" / "moods-builtin.json"
 
-def neues_face() -> tuple[Face, State]:
+class Uhr:
+    """Einsetzbare Uhr: die Haltezeit (HALT_S) wird ohne Warten geprüft."""
+    def __init__(self) -> None:
+        self.t = 100.0
+    def __call__(self) -> float:
+        return self.t
+    def vor(self, sekunden: float) -> None:
+        self.t += sekunden
+
+
+def neues_face() -> tuple[Face, State, Uhr]:
     reg = Registry.load(BIB)
     st = State()
-    return Face(reg, st), st
+    uhr = Uhr()
+    return Face(reg, st, clock=uhr), st, uhr
 
 print("== ohne Agentenwahl bleibt die Ruhe IDLE ==")
-face, st = neues_face()
+face, st, uhr = neues_face()
 face.show_state("wartet")
 check("frisch: wartet -> IDLE", st.mood_name, "IDLE")
 
 print("== ein gesetztes Gesicht überlebt den Turn ==")
-face, st = neues_face()
+face, st, uhr = neues_face()
 face.set_by_name("CHAOS", hard=True)
 check("set_face zeigt CHAOS", st.mood_name, "CHAOS")
 face.show_state("wartet")
 check("nach wartet steht weiter CHAOS", st.mood_name, "CHAOS")
 
 print("== der Zustand zeigt sich, die Ruhe kehrt zum Agenten zurück ==")
+# Seit 15.11.2026 hält ein gesetztes Gesicht HALT_S Sekunden, bevor ein
+# Zustand es übernimmt (sonst war der Befehl nicht zu sehen). Hier läuft
+# die Frist ab, danach zeigt der Zustand wieder seinen eigenen Ausdruck.
+uhr.vor(HALT_S + 0.1)
 face.show_state("denkt")
 check("denkt zeigt seinen Ausdruck", st.mood_name, "CURIOUS")
 face.show_state("wartet")
 check("danach wieder CHAOS", st.mood_name, "CHAOS")
+uhr.vor(HALT_S + 0.1)
 face.show_state("spricht")
 check("spricht zeigt SPEAK", st.mood_name, "SPEAK")
 face.show_state("wartet")
@@ -77,7 +93,7 @@ face.show_state("wartet")
 check("Ruhe folgt dem letzten set_face", st.mood_name, "ROCK")
 
 print("== ein gelöschter Ausdruck fällt auf IDLE zurück ==")
-face, st = neues_face()
+face, st, uhr = neues_face()
 face.set_by_name("CHAOS", hard=True)
 face.moods.remove("CHAOS")
 face._last_state = None          # neuer Turn: der Zustand wird neu gemeldet
@@ -89,7 +105,7 @@ except Exception as exc:         # noqa: BLE001 — ein Absturz ist ein Fehlschl
 check("gelöschter Ausdruck -> IDLE", ergebnis, "IDLE")
 
 print("== die Meldung, die das Modell sieht, nennt das Agentengesicht ==")
-face, st = neues_face()
+face, st, uhr = neues_face()
 face.set_by_name("CHAOS", hard=True)
 face.show_state("wartet")
 check("mood_name ist der Agentenausdruck", st.mood_name, "CHAOS")
@@ -98,7 +114,7 @@ if GEGENPROBE:
     # Die Gegenprobe verfälscht das Verhalten im Speicher: `wartet` fällt
     # wieder auf IDLE zurück, wie vor der Änderung.
     print("== Gegenprobe: altes Verhalten (wartet -> IDLE) muss rot werden ==")
-    face, st = neues_face()
+    face, st, uhr = neues_face()
     face.set_by_name("CHAOS", hard=True)
     face._ruhegesicht = lambda: False        # das alte Verhalten
     face._last_state = None
