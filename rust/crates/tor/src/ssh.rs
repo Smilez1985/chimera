@@ -228,6 +228,11 @@ pub fn setzen(p: &Pfade, name: &str, wert: &Value) -> Result<Value, (&'static st
         return Err(("wert_ungueltig", format!("Nutzer \"{nutzer}\" ist kein Nutzername.")));
     }
     let port = zahlen(wert, "port", 22, 1, 65535)?;
+    // Ebene 2 der Sperre (DESIGN, Regel 5n / SSRF): Die eigene Adresse kommt
+    // gar nicht erst als brauchbarer Eintrag in die Tabelle.
+    if let Err(grund) = ziel_pruefen(adresse, port as u16) {
+        return Err(("eigene_adresse_gesperrt", grund));
+    }
     let schluessel = wert.get("schluessel").and_then(Value::as_str).unwrap_or("").trim();
     if !schluessel_ok(schluessel) {
         return Err((
@@ -338,6 +343,9 @@ pub fn vorschlag(p: &Pfade, name: &str, adresse: &str, nutzer: &str, port: Optio
     let port = port.unwrap_or(22);
     if !(1..=65535).contains(&port) {
         return Err(("wert_ungueltig", format!("\"port\" {port} liegt nicht zwischen 1 und 65535.")));
+    }
+    if let Err(grund) = ziel_pruefen(adresse.trim(), port as u16) {
+        return Err(("eigene_adresse_gesperrt", grund));
     }
     let mut ganz = roh(p);
     let Some(hosts) = ganz.as_object_mut().and_then(|o| o.get_mut("hosts")).and_then(Value::as_object_mut) else {
@@ -450,6 +458,14 @@ pub fn op_ssh_mit_socket(p: &Pfade, host: &str, befehl: &str, jetzt: u64, socket
     let beginn = std::time::Instant::now();
     let tcp = match verbinden(adresse, port) {
         Ok(t) => t,
+        // Die Sperre ist kein Erreichbarkeitsproblem: sie bekommt ihren
+        // eigenen Code, damit Oberfläche und Protokoll sie unterscheiden
+        // können („nicht erreichbar" lädt zum Wiederholen ein, „gesperrt"
+        // nicht).
+        Err(e) if e.starts_with("eigene_adresse_gesperrt") => {
+            let (_, text) = e.split_once(':').unwrap_or(("", &e));
+            return gemein::zeile::fehlerantwort("eigene_adresse_gesperrt", text.trim());
+        }
         Err(e) => {
             return gemein::zeile::fehlerantwort(
                 "nicht_erreichbar",
@@ -579,6 +595,159 @@ fn an_ausfuehrer_aufnahme(e: &Value, host: &str, passwort: &str, tcp: &std::net:
         .map_err(|e| format!("keine Antwort vom Ausführer ({e})"))
 }
 
+
+// --- SSRF-Schutz: keine Verbindung auf das eigene System -------------------
+//
+// Befund (Security-Issue, 15.11.2026): Wer im Reiter „Fernzugriff" die eigene
+// Adresse (`127.0.0.1`, die LAN- oder Tailscale-IP) einträgt, lässt den Agenten
+// über SSH auf sich selbst zugreifen. Die Shell, die der lokale `sshd` startet,
+// erbt dessen Netzrecht — die `IPAddressDeny=any`-Sandbox des Agenten ist damit
+// ausgehebelt (DESIGN, Regel 5n: „Wer Werkzeuge hat, hat kein Netz").
+//
+// **Drei Ebenen, ein Prüfer:** die Adresse wird beim Eintragen geprüft
+// (`setzen`, `vorschlag`), beim Holen des Hostschlüssels (`scan`) und — die
+// eigentliche Sperre — unmittelbar **vor dem Verbinden** (`verbinden`). Die
+// letzte Ebene ist die wichtige: sie sieht die **aufgelösten IPs**, nicht den
+// Namen, und gilt damit auch für `localhost`, `ip6-localhost` oder einen
+// DNS-Namen, der auf das eigene Gerät zeigt.
+
+/// Zeitfenster für den Zwischenspeicher der eigenen Adressen. Kurz genug, dass
+/// eine neue LAN- oder Tailscale-Adresse sofort greift, lang genug, dass nicht
+/// jede Verbindung `/proc` liest.
+const EIGENE_ADRESSEN_TTL: std::time::Duration = std::time::Duration::from_secs(30);
+
+static EIGENE_ADRESSEN: std::sync::Mutex<Option<(std::time::Instant, Vec<std::net::IpAddr>)>> =
+    std::sync::Mutex::new(None);
+
+/// Die eigenen Adressen — aus `/proc`, nicht geraten.
+///
+/// Ohne zusätzliche Bibliothek: `/proc/net/fib_trie` markiert jede lokale
+/// Adresse mit `host LOCAL`, `/proc/net/if_inet6` listet die IPv6-Adressen der
+/// Schnittstellen. Beides sind Zeilenformate, die sich ohne FFI lesen lassen.
+pub fn eigene_adressen() -> Vec<std::net::IpAddr> {
+    if let Ok(g) = EIGENE_ADRESSEN.lock() {
+        if let Some((wann, liste)) = g.as_ref() {
+            if wann.elapsed() < EIGENE_ADRESSEN_TTL {
+                return liste.clone();
+            }
+        }
+    }
+    let liste = eigene_adressen_lesen();
+    if let Ok(mut g) = EIGENE_ADRESSEN.lock() {
+        *g = Some((std::time::Instant::now(), liste.clone()));
+    }
+    liste
+}
+
+/// Die Adressen aus den beiden `/proc`-Dateien deuten. **Rein** — damit die
+/// Zeilenformate eine Prüfung haben und nicht am Gerät ausprobiert werden.
+pub fn adressen_aus_proc(fib_trie: &str, if_inet6: &str) -> Vec<std::net::IpAddr> {
+    use std::net::IpAddr;
+    let mut out: Vec<IpAddr> = Vec::new();
+    // IPv4: in fib_trie steht die Adresse eine Zeile über "/32 host LOCAL".
+    let mut letzte: Option<IpAddr> = None;
+    for zeile in fib_trie.lines() {
+        // Zeilen mit Adresse sehen so aus: "     |-- 192.0.2.7" — der
+        // Baumstrich gehört nicht zur Adresse.
+        let z = zeile.trim().trim_start_matches("|--").trim();
+        if let Ok(ip) = z.parse::<IpAddr>() {
+            letzte = Some(ip);
+            continue;
+        }
+        if z.contains("host LOCAL") {
+            if let Some(ip) = letzte.take() {
+                out.push(ip);
+            }
+        }
+    }
+    // IPv6: erste Spalte ist die Adresse in 32 Hex-Zeichen.
+    for zeile in if_inet6.lines() {
+        if let Some(feld) = zeile.split_whitespace().next() {
+            if feld.len() == 32 {
+                // 32 Hex-Zeichen = 16 Bytes zu je zwei Zeichen (der erste
+                // Wurf las 8×4 Zeichen und scheiterte an [u8; 16] — der
+                // Test hat es aufgedeckt, bevor es jemand am Gerät merkte).
+                if let Ok(bytes) = (0..16)
+                    .map(|i| u8::from_str_radix(&feld[i * 2..i * 2 + 2], 16))
+                    .collect::<Result<Vec<u8>, _>>()
+                {
+                    if let Ok(acht) = <[u8; 16]>::try_from(bytes.as_slice()) {
+                        out.push(IpAddr::from(acht));
+                    }
+                }
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn eigene_adressen_lesen() -> Vec<std::net::IpAddr> {
+    use std::net::IpAddr;
+    let fib = std::fs::read_to_string("/proc/net/fib_trie").unwrap_or_default();
+    let v6 = std::fs::read_to_string("/proc/net/if_inet6").unwrap_or_default();
+    let mut out = adressen_aus_proc(&fib, &v6);
+    // Rückfall, wenn `/proc` nicht lesbar ist (PRoot, gehärtete Container):
+    // Ein UDP-Socket verrät die Quelladresse der Standardroute, ohne ein
+    // Paket zu senden.
+    for sonde in ["8.8.8.8:53", "[2001:4860:4860::8888]:53"] {
+        if let Ok(s) = std::net::UdpSocket::bind("0.0.0.0:0")
+            .or_else(|_| std::net::UdpSocket::bind("[::]:0"))
+        {
+            if s.connect(sonde).is_ok() {
+                if let Ok(a) = s.local_addr() {
+                    out.push(a.ip());
+                }
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// Darf diese IP **nicht** das Ziel einer Verbindung sein? Reine Rechnung.
+///
+/// Gesperrt sind: nicht festgelegte Adressen (`0.0.0.0`, `::`), Loopback
+/// (`127.0.0.0/8`, `::1`), Link-Local (`169.254.0.0/16`, `fe80::/10`),
+/// Multicast und **jede eigene Adresse** des Geräts.
+pub fn ziel_gesperrt(ip: &std::net::IpAddr, eigene: &[std::net::IpAddr]) -> bool {
+    use std::net::IpAddr;
+    if ip.is_unspecified() || ip.is_loopback() || ip.is_multicast() {
+        return true;
+    }
+    match ip {
+        IpAddr::V4(v4) => v4.is_link_local() || v4.is_broadcast() || eigene.iter().any(|e| e == ip),
+        IpAddr::V6(v6) => v6.is_unicast_link_local() || eigene.iter().any(|e| e == ip),
+    }
+}
+
+/// Vor dem Verbinden: löst auf und prüft **jede** aufgelöste Adresse.
+///
+/// Rückgabe `Err("eigene_adresse_gesperrt: …")` — das Kürzel ist der
+/// Fehlercode, den die Oberfläche und das Protokoll nennen. Ist der Name nicht
+/// auflösbar, ist das **kein** Freibrief: dann entscheidet `verbinden` selbst
+/// und meldet den Auflösungsfehler.
+pub fn ziel_pruefen(adresse: &str, port: u16) -> Result<(), String> {
+    use std::net::ToSocketAddrs;
+    let eigene = eigene_adressen();
+    let Ok(ziele) = (adresse, port).to_socket_addrs() else {
+        return Ok(());
+    };
+    for z in ziele {
+        if ziel_gesperrt(&z.ip(), &eigene) {
+            return Err(format!(
+                "eigene_adresse_gesperrt: {adresse} zeigt auf {} — das ist das eigene Gerät \
+                 oder eine lokale Adresse. Eine SSH-Verbindung auf sich selbst würde die \
+                 Netz-Sandbox des Agenten aushebeln (Regel 5n).",
+                z.ip()
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn verbinden(adresse: &str, port: u16) -> Result<std::net::TcpStream, String> {
     use std::net::ToSocketAddrs;
     let ziele: Vec<_> = (adresse, port)
@@ -587,6 +756,18 @@ fn verbinden(adresse: &str, port: u16) -> Result<std::net::TcpStream, String> {
         .collect();
     if ziele.is_empty() {
         return Err("keine Adresse aufgelöst".into());
+    }
+    // Die eigentliche Sperre: hier liegen die IPs, hier wird geprüft — auch
+    // wenn der Name erst jetzt auf das eigene Gerät zeigt.
+    let eigene = eigene_adressen();
+    for z in &ziele {
+        if ziel_gesperrt(&z.ip(), &eigene) {
+            return Err(format!(
+                "eigene_adresse_gesperrt: {adresse} zeigt auf {} — das ist das eigene Gerät \
+                 oder eine lokale Adresse (Regel 5n).",
+                z.ip()
+            ));
+        }
     }
     let mut letzter = String::from("kein Versuch");
     for z in ziele {
@@ -718,6 +899,9 @@ pub fn ausgabe_deuten(text: &str, adresse: &str, port: u64) -> Result<Value, Str
 pub fn scan(adresse: &str, port: u64) -> Result<Value, String> {
     use std::process::{Command, Stdio};
 
+    // Auch das Fragen ist ein Verbindungsversuch: eine eigene Adresse wird
+    // hier genauso abgelehnt wie beim Verbinden.
+    ziel_pruefen(adresse, port as u16)?;
     let argv = befehl(adresse, port);
     let mut kind = Command::new(&argv[0])
         .args(&argv[1..])
@@ -890,6 +1074,90 @@ mod tests {
     fn eintrag(adresse: &str) -> Value {
         json!({"adresse": adresse, "nutzer": "dietpi", "port": 22, "schluessel": "radxa_ed25519",
                "hostschluessel": {"typ": "ssh-ed25519", "schluessel": blob()}, "rechte": "zaun"})
+    }
+
+    // --- SSRF-Schutz (Regel 5n) ----------------------------------------
+
+    #[test]
+    fn die_eigenen_adressen_werden_aus_proc_gelesen() {
+        use std::net::IpAddr;
+        // Zeilenformate, wie sie das Gerät liefert (gekürzt).
+        let fib = "Main:\n  +-- 0.0.0.0/0 3 0 5\n     |-- 0.0.0.0\n        /0 universe UNICAST\n"
+            .to_string()
+            + "     +-- 127.0.0.0/8 2 0 2\n        |-- 127.0.0.0\n           /8 host LOCAL\n"
+            + "        |-- 127.0.0.1\n           /32 host LOCAL\n"
+            + "     +-- 192.0.2.0/24 2 0 2\n        |-- 192.0.2.7\n           /32 host LOCAL\n";
+        let v6 = "00000000000000000000000000000001 01 80 10 80       lo\n\
+                  fe800000000000000000000000000001 02 40 20 80    eth0\n";
+        let a = adressen_aus_proc(&fib, v6);
+        let ip = |s: &str| s.parse::<IpAddr>().unwrap();
+        for erwartet in ["127.0.0.1", "192.0.2.7", "::1", "fe80::1"] {
+            assert!(a.contains(&ip(erwartet)), "{erwartet} fehlt in {a:?}");
+        }
+        // Nur "universe" ist keine eigene Adresse. Das Loopback-Netz
+        // 127.0.0.0/8 führt fib_trie ebenfalls als "host LOCAL" — es landet
+        // also mit in der Liste, und das ist in Ordnung: gesperrt ist der
+        // ganze Bereich ohnehin (`is_loopback`).
+        assert!(!a.contains(&ip("0.0.0.0")), "{a:?}");
+        assert!(a.contains(&ip("127.0.0.0")), "{a:?}");
+        // Leere Eingabe: leere Liste, kein Absturz.
+        assert!(adressen_aus_proc("", "").is_empty());
+    }
+
+    #[test]
+    fn gesperrt_sind_loopback_link_local_unspecified_und_eigene() {
+        use std::net::IpAddr;
+        let eigene: Vec<IpAddr> = vec!["192.0.2.7".parse().unwrap(), "2001:db8::7".parse().unwrap()];
+        let ip = |s: &str| s.parse::<IpAddr>().unwrap();
+        // Gesperrt:
+        for s in ["127.0.0.1", "127.1.2.3", "::1", "0.0.0.0", "::",
+                  "169.254.5.5", "fe80::1", "224.0.0.1", "255.255.255.255",
+                  "192.0.2.7", "2001:db8::7"] {
+            assert!(ziel_gesperrt(&ip(s), &eigene), "{s} muss gesperrt sein");
+        }
+        // Erlaubt: fremde Adressen, auch im eigenen Netz.
+        for s in ["192.168.178.100", "10.0.0.5", "203.0.113.5", "2001:db8::99"] {
+            assert!(!ziel_gesperrt(&ip(s), &eigene), "{s} darf erlaubt sein");
+        }
+        // Eine leere Liste sperrt Loopback trotzdem — die Regel hängt nicht
+        // am Zwischenspeicher.
+        assert!(ziel_gesperrt(&ip("127.0.0.1"), &[]));
+    }
+
+    #[test]
+    fn die_eigene_adresse_kommt_nicht_in_die_tabelle() {
+        let p = p("ssrf-setzen");
+        for adresse in ["127.0.0.1", "localhost", "::1", "0.0.0.0"] {
+            let r = setzen(&p, "selbst", &json!({
+                "adresse": adresse, "nutzer": "chimera", "port": 22, "schluessel": "id",
+                "hostschluessel": Value::Null,
+            }));
+            match r {
+                Err((code, _)) => assert_eq!(code, "eigene_adresse_gesperrt", "{adresse}"),
+                Ok(v) => panic!("{adresse} wurde angenommen: {v}"),
+            }
+        }
+        // Die Tabelle bleibt leer — kein halber Eintrag.
+        assert!(laden(&p)["hosts"].as_object().map(|h| h.is_empty()).unwrap_or(true));
+    }
+
+    #[test]
+    fn der_agent_schlaegt_sich_keinen_selbstzugang_vor() {
+        let p = p("ssrf-vorschlag");
+        let r = vorschlag(&p, "selbst", "127.0.0.1", "chimera", None, "");
+        assert_eq!(r.unwrap_err().0, "eigene_adresse_gesperrt");
+        let r = vorschlag(&p, "selbst", "localhost", "chimera", None, "");
+        assert_eq!(r.unwrap_err().0, "eigene_adresse_gesperrt");
+    }
+
+    #[test]
+    fn verbinden_zu_sich_selbst_wird_abgelehnt_bevor_es_verbindet() {
+        let fehler = verbinden("127.0.0.1", 22).unwrap_err();
+        assert!(fehler.contains("eigene_adresse_gesperrt"), "{fehler}");
+        // Ein nicht auflösbarer Name scheitert mit dem Auflösungsfehler —
+        // nicht mit der Sperre, und ohne stillen Erfolg.
+        let fehler = verbinden("gibt-es-nicht.invalid", 22).unwrap_err();
+        assert!(fehler.contains("auflösbar") || fehler.contains("gesperrt"), "{fehler}");
     }
 
     #[test]
@@ -1078,6 +1346,19 @@ mod tests {
         setzen(p, name, &e).unwrap();
     }
 
+    /// Ein Eintrag mit einer Adresse, die `setzen` **ablehnt** (Loopback).
+    ///
+    /// Gebraucht für den Test des Verbindungsaufbaus: Die Sperre soll dort
+    /// greifen, nicht schon beim Eintragen. Der Eintrag entsteht deshalb mit
+    /// einer erlaubten Adresse und wird danach in der Datei umgeschrieben —
+    /// so, wie ein alter Bestand aussehen könnte.
+    fn host_anlegen_trotz_sperre(p: &Pfade, name: &str, adresse: &str, port: u16) {
+        host_anlegen(p, name, "r.example", port);
+        let mut ganz = roh(p);
+        ganz["hosts"][name]["adresse"] = json!(adresse);
+        schreiben(p, &ganz).unwrap();
+    }
+
     #[test]
     fn ssh_ohne_freigabe_verbindet_nicht() {
         let p = p("ssh-frei");
@@ -1106,7 +1387,7 @@ mod tests {
         // Ein "Ziel", das auf eine Verbindung wartet.
         let ziel = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = ziel.local_addr().unwrap().port();
-        host_anlegen(&p, "radxa", "127.0.0.1", port);
+        host_anlegen_trotz_sperre(&p, "radxa", "127.0.0.1", port);
         // Eine echte Freigabe: das Ziel steht auf der Positivliste.
         setzen_freigabe(&p, "ssh", "dietpi@radxa");
         // Ein Ausführer, der den Deskriptor prueft statt ssh zu starten.
@@ -1141,7 +1422,15 @@ mod tests {
             s.write_all(b"banner\n").unwrap();
             zeile
         });
-        let a = op_ssh_mit_socket(&p, "radxa", "uptime", 1000, &d.to_string_lossy());
+        // **Die Sperre greift:** ein Ziel auf der eigenen Loopback-Adresse
+        // wird abgelehnt, bevor irgendetwas verbunden wird (SSRF-Schutz).
+        let sperre = op_ssh_mit_socket(&p, "radxa", "uptime", 1000, &d.to_string_lossy());
+        assert_eq!(sperre["fehler"]["code"], "eigene_adresse_gesperrt", "{sperre}");
+        // Geprueft wird deshalb der Weg dahinter: das Weiterreichen des
+        // Deskriptors an den Ausführer.
+        let tcp = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let e = holen(&p, "radxa").unwrap();
+        let a = an_ausfuehrer_schicken(&e, "radxa", "uptime", &tcp, &d.to_string_lossy()).unwrap();
         let auftrag = faden.join().unwrap();
         let _ = eingehend.join();
         assert_eq!(a["ok"], true, "{a}");

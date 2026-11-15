@@ -20,6 +20,11 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Sprache Deutsch/Englisch** im Reiter Einstellungen (smilez 15.11.):
+  Die Wahl liegt in `localStorage` (`chimera.sprache`), übersetzt sind die
+  **Hülle** (Anmeldung, Abmelden, Warnstreifen) und die Reiterbeschriftung
+  aus den Manifesten. Die Texte in den Modulen folgen später (ROADMAP).
+  Ein Neuladen genügt; kein Endpunkt, keine Ablage, kein Neustart.
 - **„Helligkeit jetzt“ — vorübergehend, nur für die aktuelle Zone**
   (smilez 15.11.: *„ein davon abgekoppelter Helligkeitsschalter der nur die
   aktuelle Tageszeit Zone regelt, evtl sogar nur temporär bis zum nächsten
@@ -1289,6 +1294,9 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Reiter Einstellungen nutzt die volle Breite** (smilez: warum nutzen
+  die Einstellungen nur eine Seite?): `max-width:44rem` war eine
+  Eigenmächtigkeit dieses Moduls — alle anderen Reiter nutzen die Breite.
 - **Bong, Joint und Kaffee sind zu Gast** (15.11.2026, smilez: *„warum hast
   du die idle Animationen wie Joint, bong und Kaffee ignoriert?"*): Mit zehn
   Musiknamen im Tagfenster kam keine Handlung mehr an die Reihe, obwohl sie
@@ -1976,6 +1984,14 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Die eigene Nachricht erschien nicht als Chatblase** (Befund smilez
+  15.11.: *„meine Nachricht taucht nicht als chatbubble auf … ich bekomme
+  die Antwort“*): Die Blase entstand erst aus dem **Echo** des Dienstes
+  (Ereignis `eingabe`). War das Fenster eben erst geöffnet, fiel dieses Echo
+  mit dem ersten Abruf des Stroms zusammen — und der gilt als Rückstand und
+  wird übersprungen (er ist ja schon im geladenen Verlauf). Jetzt zeigt
+  `senden()` die eigene Nachricht **sofort**; das Echo wird an Text erkannt
+  und nicht doppelt angezeigt.
 - **Der Reiter „Einstellungen“ war leer** (Befund smilez 15.11.: *„ist
   vorhanden, aber leer“*): Die Modulskripte sind klassische Skripte und
   teilen **einen** globalen Namensraum. `anzeige.js` deklariert `const STIL`,
@@ -2524,6 +2540,17 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Prüfsumme heraus; jetzt bricht die Prüfung benannt ab.
 
 ### Sicherheit
+- **SSH auf das eigene Gerät ist gesperrt (SSRF / Loopback-Bypass)**
+  (Security-Befund 15.11.2026): Wer die eigene Adresse eintrug und freigab,
+  ließ den Agenten per SSH auf sich selbst zugreifen; die Shell des lokalen
+  `sshd` erbt dessen Netzrecht und hebelt `IPAddressDeny=any` aus (Regel 5n).
+  **Ein Prüfer, drei Ebenen:** `setzen`/`vorschlag` (nichts wird gespeichert),
+  `scan` (Hostschlüssel holen) und `verbinden` — die letzte sieht die
+  **aufgelösten IPs** und fängt damit auch `localhost` und DNS-Namen ab.
+  Gesperrt: `0.0.0.0`/`::`, Loopback, Link-Local, Multicast/Broadcast und
+  jede eigene Adresse (aus `/proc/net/fib_trie` + `/proc/net/if_inet6`,
+  Rückfall UDP-Route-Sonde, 30 s zwischengespeichert). Neuer Fehlercode
+  `eigene_adresse_gesperrt`. Test + Gegenprobe (4 Verfälschungen rot).
 - **Tailnet-Adressen gelten als eigene Adressen** (13.11.): `100.64.0.0/10`
   ist CGNAT — dort liegen Tailscale-/Headscale-Adressen. `web_abruf` holt von
   dort nur noch mit ausdrücklichem Eintrag in der Positivliste, wie von jeder

@@ -154,6 +154,29 @@ def main() -> int:
     check("die Route /api/sitzung gibt es im Gateway",
           '("/api/sitzung")' in web_rs or '"/api/sitzung"' in web_rs, True)
 
+    # --- 2c. Sprache (Deutsch/Englisch) ----------------------------------
+    # smilez 15.11.: „in Einstellungen fehlt auch noch die Sprache,
+    # deutsch/english". Ein Merker im Browser, kein Zustand im Dienst.
+    check("die Sprache kommt aus localStorage", 'chimera.sprache' in skript, True)
+    check("ohne Merker entscheidet der Browser", 'navigator.language' in skript, True)
+    check("nur de und en werden angenommen",
+          'if (g === "de" || g === "en") return g;' in skript, True)
+    # Beide Sprachtabellen müssen dieselben Schlüssel haben — sonst bleibt
+    # ein Element in einer Sprache leer.
+    de = re.search(r"de: \{(.*?)\},\n  en:", skript, re.S)
+    en = re.search(r"en: \{(.*?)\},\n\};", skript, re.S)
+    check("es gibt zwei Sprachtabellen", de is not None and en is not None, True)
+    if de and en:
+        # Die Tabellen stehen mit einem Schlüssel je Zeile — so lässt sich
+        # der Schlüssel vom Text im Wert unterscheiden ("… Gerät: ").
+        schluessel_de = set(re.findall(r"^\s+(\w+):", de.group(1), re.M))
+        schluessel_en = set(re.findall(r"^\s+(\w+):", en.group(1), re.M))
+        check("de und en nennen dieselben Schlüssel", schluessel_de, schluessel_en)
+        # Und jedes Element mit data-t hat einen Text.
+        im_markup = set(re.findall(r'data-t="([a-z_]+)"', text))
+        check("jede data-t-Kennung hat einen Text", im_markup - schluessel_de, set())
+        check("es gibt überhaupt Übersetzungen (Test sieht etwas)", len(im_markup) >= 8, True)
+
     # --- 3. Das Symbol im Tab ------------------------------------------
     link = re.search(r'<link[^>]*rel="icon"[^>]*>', text)
     check("es gibt ein <link rel=\"icon\">", link is not None, True)

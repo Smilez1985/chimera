@@ -9,6 +9,13 @@ Stand: 2026-11-10. Pre-Alpha.
 
 ---
 
+## Offen aus dem 16.11.2026
+
+- **Modultexte auf Englisch** — die Hülle (Anmeldung, Reiter, Abmelden)
+  ist zweisprachig, die Texte *in* den Modulen sind deutsch. Dafür braucht
+  jedes Modul eine Sprachtabelle am `window.chimera.sprache`. Kein Umbau
+  der Logik, nur Texte — deshalb ein eigener Punkt.
+
 ## Phase „Echte Lücken" — Reihenfolge nach Wirkung je Aufwand (14.11.2026)
 
 Aus dem Prüfbericht `docs/../shared` bzw. dem Plan

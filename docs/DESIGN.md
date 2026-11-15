@@ -3451,6 +3451,21 @@ ein neues Kennwort zu haben.
 - Die Vorprüfung im Browser (leer, zu kurz, nicht gleich) ist Bequemlichkeit,
   nicht die Entscheidung — sie nennt **denselben** Grund wie das Gateway.
 
+#### Sprache: ein Merker im Browser, kein Zustand im Dienst
+
+Der Reiter bietet **Deutsch/Englisch** an. Die Wahl liegt in `localStorage`
+(`chimera.sprache`) und wird beim Aufbau der Hülle gelesen — kein Endpunkt,
+keine Ablage, kein Neustart: ein `location.reload()` genügt, und die Reiter
+tragen ihre Beschriftung aus dem Manifest (`titel.de`/`titel.en`).
+Übersetzt ist die **Hülle** (Anmeldung, Abmelden, Warnstreifen) und die
+Reiterbeschriftung; die Texte *in* den Modulen sind weiter deutsch und stehen
+so in der ROADMAP. Eine halbe Übersetzung, die das verschweigt, wäre schlimmer
+als keine.
+
+Der Test (`tests/test_rahmen_anmeldung.py`) hält drei Dinge: die Wahl kommt aus
+dem Merker, beide Sprachtabellen haben **dieselben Schlüssel**, und zu jedem
+`data-t` im Markup gibt es einen Text.
+
 #### Modulskripte teilen EINEN Namensraum
 
 Die Module werden als klassische Skripte geladen (`<script src>`), also in
@@ -6068,6 +6083,51 @@ Fehlt der Pfad, ist `force` nicht möglich: die Aufnahme sagt das und schlägt
 `zaun`.)
 
 ---
+
+### Regel „Keine Verbindung auf das eigene Gerät" — SSH auf sich selbst hebelt die Sandbox aus
+
+Security-Befund (15.11.2026, gemeldet als Issue „SSRF / Loopback-Bypass im
+SSH-Modul"). Wer im Reiter „Fernzugriff" die eigene Adresse einträgt
+(`127.0.0.1`, `localhost`, die LAN- oder Tailscale-IP) und sie freigibt, lässt
+den Agenten über SSH auf **sich selbst** zugreifen. Die Shell, die der lokale
+`sshd` startet, erbt dessen Netzrecht — die `IPAddressDeny=any`-Sandbox des
+Agenten (Regel 5n: *„Wer Werkzeuge hat, hat kein Netz"*) ist damit ausgehebelt.
+Das ist keine Theorie: ein Copy-Paste-Fehler, ein Prompt-Injection-Versuch
+oder ein gestohlenes Web-Kennwort genügen.
+
+**Ein Prüfer, drei Ebenen.** Die Entscheidung steht in `ssh.rs` und wird an
+allen drei Stellen benutzt — keine zweite Regel, die auseinanderlaufen kann:
+
+| Ebene | Stelle | Wirkung |
+|---|---|---|
+| Eintragen | `setzen`, `vorschlag` | `eigene_adresse_gesperrt`, nichts wird gespeichert |
+| Hostschlüssel holen | `scan` (`ssh-keyscan`) | derselbe Fehler, bevor gefragt wird |
+| **Verbinden** | `verbinden` | die eigentliche Sperre — sie sieht die **aufgelösten IPs** |
+
+Die dritte Ebene ist die wichtige: Sie prüft, was wirklich angesprochen wird,
+und fängt damit auch `localhost`, `ip6-localhost` oder einen DNS-Namen ab, der
+auf das eigene Gerät zeigt. Gesperrt sind: nicht festgelegte Adressen
+(`0.0.0.0`, `::`), Loopback (`127.0.0.0/8`, `::1`), Link-Local
+(`169.254.0.0/16`, `fe80::/10`), Multicast/Broadcast und **jede eigene
+Adresse**.
+
+**Eigene Adressen werden gelesen, nicht geraten:** `/proc/net/fib_trie`
+(IPv4, `host LOCAL`) und `/proc/net/if_inet6` (IPv6), dazu als Rückfall eine
+UDP-Route-Sonde für Gehäuse ohne lesbares `/proc` (PRoot). Der Zwischenspeicher
+hält 30 s — eine neue LAN- oder Tailscale-Adresse greift damit sofort, ohne
+dass jede Verbindung `/proc` liest. Der Parser (`adressen_aus_proc`) ist
+**rein** und wird mit echten Zeilenformaten geprüft; dabei fiel auf, dass 32
+Hex-Zeichen 16 Bytes sind, nicht 8 (der erste Wurf hätte jede IPv6-Adresse
+verworfen).
+
+**Ein eigener Fehlercode**, nicht „nicht erreichbar": „nicht erreichbar" lädt
+zum Wiederholen ein, „gesperrt" nicht.
+
+Geprüft: `ziel_gesperrt` (reine Rechnung, inklusive „leere Liste sperrt
+Loopback trotzdem"), der Parser, `setzen`/`vorschlag` (nichts landet in der
+Tabelle), `verbinden` (scheitert **vor** dem Verbindungsaufbau), und der
+Deskriptor-Test läuft jetzt am Weg *hinter* der Sperre. Gegenprobe: vier
+Verfälschungen (`rust/gegenprobe-ssh.sh`, Nr. 28–31), alle rot.
 
 ### Aufnahme eines Hosts: das Passwort einmal, der Schlüssel danach
 

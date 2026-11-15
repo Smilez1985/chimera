@@ -225,6 +225,28 @@ mut keyscan-rsa-zuerst \
 	'            "ssh-ed25519" => 0,' \
 	'            "ssh-ed25519" => 9,'
 
+# 28. Loopback gilt nicht mehr als gesperrt (SSRF-Schutz faellt).
+mut ssrf-loopback-erlaubt \
+	'    if ip.is_unspecified() || ip.is_loopback() || ip.is_multicast() {' \
+	'    if ip.is_unspecified() || ip.is_multicast() {'
+# 29. Die eigenen Adressen werden nicht mehr geprueft (nur Loopback bliebe).
+mut ssrf-eigene-ignoriert \
+	'        IpAddr::V4(v4) => v4.is_link_local() || v4.is_broadcast() || eigene.iter().any(|e| e == ip),' \
+	'        IpAddr::V4(v4) => v4.is_link_local() || v4.is_broadcast(),'
+# 30. Der Verbindungsaufbau prueft die aufgeloesten IPs nicht mehr.
+mut ssrf-verbinden-ohne-pruefung \
+	'    for z in &ziele {
+        if ziel_gesperrt(&z.ip(), &eigene) {' \
+	'    for z in &ziele {
+        if false {'
+# 31. Das Eintragen prueft die Adresse nicht (Ebene 2 faellt).
+mut ssrf-setzen-ohne-pruefung \
+	'    if let Err(grund) = ziel_pruefen(adresse, port as u16) {
+        return Err(("eigene_adresse_gesperrt", grund));
+    }
+    let schluessel = wert.get("schluessel")' \
+	'    let schluessel = wert.get("schluessel")'
+
 zurueck
 echo "---"
 echo "$gruen gruen (0 ist gut)"

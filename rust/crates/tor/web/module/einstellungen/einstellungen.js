@@ -21,7 +21,9 @@
 // Vorprüfung hier ist Bequemlichkeit, nicht die Entscheidung.
 
 const STIL = `
-  :host { display:block; padding:1rem; max-width:44rem; }
+  /* Volle Breite wie alle anderen Reiter — die halbe Seite war eine
+     Eigenmaechtigkeit dieses Moduls (smilez, 15.11.). */
+  :host { display:block; padding:1rem; }
   h3 { margin:.2rem 0 .6rem; font:1rem/1.3 system-ui, sans-serif; }
   .karte { border:1px solid #2b2f3b; border-radius:.6rem; padding:.75rem;
            margin:0 0 .75rem; background:#1c1f28; }
@@ -134,6 +136,17 @@ class ChimeraEinstellungen extends HTMLElement {
       </div>
 
       <div class="karte">
+        <strong>Sprache / Language</strong>
+        <label for="sprache">Oberfläche</label>
+        <select id="sprache">
+          <option value="de">Deutsch</option>
+          <option value="en">English</option>
+        </select>
+        <p class="klein">Gilt für die Reiter und die Anmeldung. Die Texte in den
+        Modulen selbst folgen später — sie sind noch deutsch.</p>
+      </div>
+
+      <div class="karte">
         <strong>Kennwort ändern</strong>
         <label for="alt">Bisheriges Kennwort</label>
         <input type="password" id="alt" autocomplete="current-password">
@@ -174,6 +187,16 @@ class ChimeraEinstellungen extends HTMLElement {
     jetzt.oninput = () => { this.$("jwert").textContent = jetzt.value; };
     jetzt.onchange = () => this.setzenDisplay("helligkeit_jetzt", Number(jetzt.value));
     this.$("zurueck").onclick = () => this.setzenDisplay("helligkeit_jetzt", "zurueck");
+
+    // Sprache: eine Ansichtssache dieses Browsers, keine Geräteeinstellung.
+    // Deshalb localStorage statt Ablage im Dienst — und ein Neuladen, damit
+    // die Reiter mit dem neuen Wert aufgebaut werden (kein halber Zustand).
+    const sprache = this.$("sprache");
+    sprache.value = (window.chimera && window.chimera.sprache) || "de";
+    sprache.onchange = () => {
+      try { localStorage.setItem("chimera.sprache", sprache.value); } catch (_) {}
+      location.reload();
+    };
 
     // Audio: der Knopf schaltet, der Regler stellt ein.
     this.$("mikrofon").onclick = () => this.schalten("mikrofon");

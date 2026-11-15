@@ -313,6 +313,12 @@ class ChimeraChat extends HTMLElement {
     // Auf die eingestellte Höhe zurück: Ein geleerter Kasten, der 12 Zeilen
     // hoch bleibt, nimmt dem Verlauf den Platz weg (smilez, 15.11.).
     this.eingabeNachziehen();
+    // **Die eigene Nachricht sofort zeigen**, nicht auf das Echo aus dem
+    // Strom warten (Befund smilez 15.11.: „meine Nachricht taucht nicht als
+    // chatbubble auf … ich bekomme die Antwort"). Das Echo kommt gleich
+    // danach und darf sie nicht doppeln — deshalb wird es erkannt und
+    // verworfen.
+    this.eigene = { text, knoten: this.blase("ich", text, "web") };
     const auftrag = { text };
     // Die Wahl gilt fuer die Sitzung, nicht nur fuer dieses Fenster: sie geht
     // mit jeder Frage mit. Leer heisst "der Anbieter entscheidet" (5h).
@@ -349,7 +355,15 @@ class ChimeraChat extends HTMLElement {
 
   ereignis(e) {
     if (this.schreibgeschuetzt) return;
-    if (e.art === "eingabe") this.blase("ich", e.text, e.tuer);
+    if (e.art === "eingabe") {
+      // Schon gezeigt (eigene Nachricht aus diesem Fenster): nur die Marke
+      // lösen, nicht ein zweites Mal anzeigen.
+      if (this.eigene && this.eigene.text === e.text) {
+        this.eigene = null;
+        return;
+      }
+      this.blase("ich", e.text, e.tuer);
+    }
     else if (e.art === "antwort" || e.art === "fehler") { this.denkt.textContent = ""; this.blase("sie", e.text); }
     else if (e.art === "zustand") this.denkt.textContent = e.text;
     else if (e.art === "umgeleitet" || e.art === "wechsel" || e.art === "neu") this.blase("sys", e.text);
@@ -526,6 +540,7 @@ class ChimeraChat extends HTMLElement {
 
   async sitzungWechseln() {
     this.sid = this.wahl.value;
+    this.eigene = null;
     this.schreibgeschuetzt = this.sid !== this.haupt;
     this.liste.replaceChildren();
     this.gesicht = null;              // wurde mit entfernt

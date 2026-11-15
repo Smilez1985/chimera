@@ -46,30 +46,29 @@
 </head>
 <body>
 <div id="app">
-  <div id="warnung">Unverschlüsselte Verbindung (HTTP). Nur im eigenen Netz benutzen.</div>
+  <div id="warnung" data-t="unsicher"></div>
   <header id="kopf" hidden>
     <strong>Chimera</strong>
     <nav id="menue"></nav>
-    <button class="knopf" id="abmelden">Abmelden</button>
+    <button class="knopf" id="abmelden" data-t="abmelden"></button>
   </header>
   <main id="inhalt">
     <div id="buehne"></div>
     <form id="einrichtung" class="maske" hidden>
-      <h2>Willkommen</h2>
-      <p class="klein">Noch kein Passwort gesetzt. Lege jetzt eines an — mindestens 8 Zeichen,
-      zweimal eingeben. Danach gilt es für jede Anmeldung; vergessen? Auf dem Gerät:
+      <h2 data-t="willkommen"></h2>
+      <p class="klein"><span data-t="kein_pw"></span>
       <code>sudo /opt/chimera/bin/web-passwort</code></p>
-      <input id="e-pw" type="password" autocomplete="new-password" placeholder="Neues Passwort" autofocus>
-      <input id="e-pw2" type="password" autocomplete="new-password" placeholder="Passwort wiederholen">
-      <button class="knopf" type="submit">Passwort anlegen</button>
+      <input id="e-pw" type="password" autocomplete="new-password" data-t="neues" autofocus>
+      <input id="e-pw2" type="password" autocomplete="new-password" data-t="wiederholen">
+      <button class="knopf" type="submit" data-t="anlegen"></button>
       <div class="fehler" id="einrichtungsfehler"></div>
     </form>
     <form id="anmeldung" class="maske" hidden>
       <h2>Chimera</h2>
-      <input id="pw" type="password" autocomplete="current-password" placeholder="Passwort" autofocus>
-      <button class="knopf" type="submit">Anmelden</button>
+      <input id="pw" type="password" autocomplete="current-password" data-t="passwort" autofocus>
+      <button class="knopf" type="submit" data-t="anmelden"></button>
       <div class="fehler" id="anmeldefehler"></div>
-      <p class="klein">Passwort vergessen? Auf dem Gerät:
+      <p class="klein"><span data-t="vergessen"></span>
       <code>sudo /opt/chimera/bin/web-passwort</code></p>
     </form>
   </main>
@@ -78,7 +77,52 @@
 "use strict";
 // Der Rahmen kennt kein einzelnes Modul: Er fragt /api/module und baut das Menü daraus.
 const $ = (id) => document.getElementById(id);
-const sprache = (navigator.language || "de").slice(0, 2);
+
+// Sprache der Oberfläche: erst der Merker (Reiter „Einstellungen"), sonst die
+// Browsersprache. Nur Deutsch und Englisch — alles andere fällt auf Englisch
+// zurück, wie es die Modultitel auch tun.
+function spracheWaehlen() {
+  try {
+    const g = localStorage.getItem("chimera.sprache");
+    if (g === "de" || g === "en") return g;
+  } catch (_) { /* ohne Merker gilt der Browser */ }
+  return (navigator.language || "de").slice(0, 2) === "de" ? "de" : "en";
+}
+const sprache = spracheWaehlen();
+
+/// Was die Hülle selbst sagt. Die Modultexte sind noch deutsch — das steht so
+/// im Reiter „Einstellungen" und in der ROADMAP.
+const TEXTE = {
+  de: {
+    abmelden: "Abmelden",
+    anmelden: "Anmelden",
+    passwort: "Passwort",
+    willkommen: "Willkommen",
+    neues: "Neues Passwort",
+    wiederholen: "Passwort wiederholen",
+    anlegen: "Passwort anlegen",
+    abgelaufen: "Sitzung abgelaufen — bitte neu anmelden.",
+    kein_pw: "Noch kein Passwort gesetzt. Lege jetzt eines an — mindestens 8 Zeichen, zweimal eingeben. Danach gilt es für jede Anmeldung; vergessen? Auf dem Gerät:",
+    vergessen: "Passwort vergessen? Auf dem Gerät:",
+    angelegt: "Passwort angelegt — bitte jetzt anmelden.",
+    unsicher: "Unverschlüsselte Verbindung (HTTP). Nur im eigenen Netz benutzen.",
+  },
+  en: {
+    abmelden: "Log out",
+    anmelden: "Log in",
+    passwort: "Password",
+    willkommen: "Welcome",
+    neues: "New password",
+    wiederholen: "Repeat password",
+    anlegen: "Set password",
+    abgelaufen: "Session expired — please log in again.",
+    kein_pw: "No password set yet. Choose one now — at least 8 characters, twice. It applies to every login; forgotten? On the device:",
+    vergessen: "Forgot the password? On the device:",
+    angelegt: "Password set — please log in now.",
+    unsicher: "Unencrypted connection (HTTP). Use it only on your own network.",
+  },
+};
+const T = TEXTE[sprache] || TEXTE.en;
 const api = async (pfad, opt = {}) => {
   const r = await fetch(pfad, { ...opt, headers: { "X-Chimera": "1", "Content-Type": "application/json" } });
   let j = {}; try { j = await r.json(); } catch (_) {}
@@ -89,7 +133,7 @@ const api = async (pfad, opt = {}) => {
   // Die Module werden dabei abgebaut: ihr Element verschwindet, damit hält
   // `disconnectedCallback` die Abfragen an (kein Dauerfeuer auf 401).
   if (r.status === 401 && pfad !== "/api/login" && pfad !== "/api/passwort-neu") {
-    maskeZeigen("anmeldung", "Sitzung abgelaufen — bitte neu anmelden.");
+    maskeZeigen("anmeldung", T.abgelaufen);
   } else if (r.status === 409) {
     // Kein Passwort gesetzt (etwa nach einem Werksreset im anderen Tab).
     maskeZeigen("einrichtung");
@@ -115,7 +159,20 @@ function maskeZeigen(art, grund) {
 }
 window.chimera.maskeZeigen = maskeZeigen;
 
+/// Die Texte der Hülle in der gewählten Sprache setzen — ein Griff, eine
+/// Stelle. Markup trägt die Sprachkennung (`data-t="abmelden"`).
+function texteSetzen() {
+  for (const e of document.querySelectorAll("[data-t]")) {
+    const wert = T[e.dataset.t];
+    if (typeof wert === "string") {
+      if (e.tagName === "INPUT") e.placeholder = wert;
+      else e.textContent = wert;
+    }
+  }
+}
+
 if (location.protocol === "http:") $("warnung").style.display = "block";
+texteSetzen();
 
 function titel(m) {
   const t = m.titel;
@@ -219,7 +276,7 @@ $("einrichtung").addEventListener("submit", async (e) => {
   maskeZeigen("anmeldung");
   $("anmeldefehler").textContent = "";
   $("anmeldefehler").style.color = "#7be0a0";
-  $("anmeldefehler").textContent = "Passwort angelegt — bitte jetzt anmelden.";
+  $("anmeldefehler").textContent = T.angelegt;
   $("pw").focus();
 });
 $("abmelden").onclick = async () => { sitzungAnhalten(); await api("/api/logout", { method: "POST", body: "{}" }); location.reload(); };
