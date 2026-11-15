@@ -1514,6 +1514,74 @@ Anbieter und ist keine Leseoperation an unserem Zustand.
 und wo es keine Zahl gibt, der **Grund** statt `0`. Damit funktioniert die
 Frage auch über PTT/TTS: „Wie viel Guthaben habe ich noch?"
 
+#### Euro-Anzeige und Summe je Anbieter (15.11.2026, Auftrag smilez)
+
+**Der Auftrag:** „Die Währungen, die im Dashboard unter Konten bei Guthaben
+angezeigt werden, sollten immer mit dem aktuellen Wechselkurs, der oben
+ebenfalls pro Währung stehen sollte, in Klammer in € angezeigt werden … bei
+DeepSeek kann gerne unterm Strich USD + CNY zusammengerechnet in € als
+Gesamt-Guthaben angezeigt werden, damit ich eine Rechengrundlage habe."
+
+**Das hebt Zusage 1 oben teilweise auf — bewusst und mit Grenzen.** Der
+alte Satz („nie umrechnen, nie summieren") kommt von OpenMinis und schützt
+vor einer erfundenen Zahl. Der Grund bleibt gültig, die Anzeige ändert sich:
+
+1. **Der Originalbetrag bleibt die Zahl.** Jeder Pool zeigt zuerst seine
+   Währung, die Umrechnung steht **in Klammern** und mit `≈`. Wer den Kurs
+   nicht glaubt, liest links den echten Betrag.
+2. **Ohne Kurs keine Umrechnung.** Fehlt der Kurs oder ist er älter als die
+   Frist, steht `—` und der Grund („kein Kurs"), nie eine geschätzte Zahl
+   aus einem alten Kurs ohne Kennzeichnung. Ein alter Kurs wird mit Datum
+   gezeigt (`Kurs vom 13.11.`), weil er nützlicher ist als nichts — aber
+   immer mit Datum.
+3. **Summe nur innerhalb eines Anbieters.** Über Anbieter hinweg wird nicht
+   summiert (zwei Konten sind zwei Konten). Innerhalb eines Anbieters ist
+   die Summe erlaubt, weil dort beide Währungen dasselbe Konto bezahlen —
+   genau so hat es smilez begründet.
+
+**Kurse:** `https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR,CNY`
+(und einmal `base=CNY`), EZB-Referenzkurse, kein Schlüssel, tagesaktuell.
+Ablage `state/quota/kurse.json` (0600, atomar) mit `geholt`, `datum` (das
+Datum, das die Quelle nennt — EZB aktualisiert nur werktags) und
+`kurse: {USD: {EUR: 0.90481, …}}`. Frische `KURS_FRISCHE_S` = 12 h; ein
+Abruffehler überschreibt einen vorhandenen Stand **nicht**, er setzt nur
+`fehler` und `geholt` bleibt stehen. Abgerufen wird im **Gateway** (Regel
+5n), nie aus dem Browser oder aus Python.
+
+**Wo die Zahlen entstehen:** `quota::eintrag` bleibt die einzige Stelle, die
+Pools baut; es setzt je Pool `euro` (Zahl oder `null`) und je Anbieter
+`summe_euro` + `summe_waehrungen`. Ein zweiter Rechenweg in `konten.js`
+wäre die Fehlerklasse aus 10g (zwei Stellen, die dasselbe rechnen).
+
+#### Verbrauch: eigene Zählung gegen die Abrechnung des Anbieters (15.11.2026)
+
+**Der Auftrag:** „Verbrauch einmal in chimera selbst und einmal von der API
+abgreifen und vergleichen — ohne schwere Abhängigkeit wie Grafana."
+
+**Zwei Zahlen, zwei Herkünfte, ehrlich getrennt:**
+
+- **Eigene Zählung** (`state/verbrauch/<tag>.json`): je Tag und Modell die
+  Summen `eingabe`, `ausgabe`, `cache_neu`, `cache_treffer`, `denken`,
+  `aufrufe`. Die Werte stammen aus dem `verbrauch`-Block, den **jede**
+  Antwort mitbringt (das Gateway reicht ihn bisher ungenutzt durch — er
+  wurde verworfen). Rein, ohne Netz: der Python-Teil zählt mit und legt ab.
+- **Abrechnung des Anbieters**: Für DeepSeek gibt es **keinen** öffentlichen
+  Usage-Endpunkt (nur `/user/balance`, dokumentiert). Deshalb wird nicht
+  „der Verbrauch" abgefragt, sondern der **Kontostand-Verlauf**: jede
+  Guthaben-Antwort wird mit Zeitpunkt in `state/quota/<id>-verlauf.json`
+  (Ringpuffer, 500 Stände) gelegt. Die Differenz zweier Stände über einen
+  Zeitraum ist die tatsächlich abgerechnete Summe — in der Währung des
+  Kontos.
+- **Vergleich**: je Zeitraum die eigene Zählung (Tokens) gegen die
+  Kontostand-Abnahme (Geld). Beide Zahlen stehen nebeneinander mit ihrer
+  Herkunft; einen Umrechnungsfaktor Tokens→Geld **erfindet** die Anzeige
+  nicht. Wo eine Seite fehlt, steht der Grund.
+
+**Anzeige ohne Grafana:** eine Tabelle (Tag, Aufrufe, Tokens, Δ Guthaben) und
+ein Balken je Tag in reinem CSS (Breite in Prozent) — keine Bibliothek, kein
+zusätzlicher Dienst. Das Konten-Modul bekommt dafür einen zweiten Reiter
+„Verbrauch".
+
 **Entschieden (smilez, 10.11.2026):**
 
 - **`provider/` und `bot/telegram.py` bleiben** — siehe Punkt 1.

@@ -30,6 +30,13 @@ pub const FEHLER_ABSTAND_S: u64 = 60;
 pub const ABRUF: Duration = Duration::from_secs(10);
 pub const VERBINDUNG: Duration = Duration::from_secs(5);
 
+/// Wie lange ein Wechselkurs als aktuell gilt (12 h). Die Quelle nennt
+/// Tageskurse der EZB; ein Wert vom Vortag ist am Wochenende normal und
+/// wird **mit Datum** gezeigt, nicht versteckt (DESIGN, Euro-Anzeige 15.11.).
+pub const KURS_FRISCHE_S: u64 = 12 * 3600;
+/// Die Kursquelle: EZB-Referenzkurse, ohne Schluessel.
+pub const KURS_URL: &str = "https://api.frankfurter.dev/v1/latest?base=EUR&symbols=USD,CNY";
+
 fn agent() -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_connect(Some(VERBINDUNG))
@@ -116,6 +123,124 @@ pub fn retry_after(wert: Option<&str>) -> Option<u64> {
     wert?.trim().parse::<u64>().ok()
 }
 
+// ------------------------------------------------------------- Kurse
+
+/// Die Kurstabelle aus der Antwort der Quelle (rein, ohne Netz).
+///
+/// Die Quelle liefert `{"base":"EUR","rates":{"USD":1.1052,"CNY":7.3738}}` —
+/// also **Einheiten je Euro**. Gebraucht wird das Umgekehrte: Euro je
+/// Einheit. Genau das passiert hier, und nur hier.
+pub fn kurse_aus(roh: &Value) -> (std::collections::BTreeMap<String, f64>, String) {
+    let mut tabelle = std::collections::BTreeMap::new();
+    if let Some(rates) = roh["rates"].as_object() {
+        for (waehrung, wert) in rates {
+            if let Some(kurs) = wert.as_f64() {
+                if kurs > 0.0 {
+                    let euro = 1.0 / kurs;
+                    // Auf sechs Nachkommastellen: darunter ist die Quelle
+                    // selbst ungenau, mehr wäre eine erfundene Genauigkeit.
+                    tabelle.insert(waehrung.to_uppercase(), (euro * 1e6).round() / 1e6);
+                }
+            }
+        }
+    }
+    let datum = roh["date"].as_str().unwrap_or("").to_string();
+    (tabelle, datum)
+}
+
+fn kursdatei(p: &crate::daten::Pfade) -> std::path::PathBuf {
+    p.state.join("quota").join("kurse.json")
+}
+
+/// Die gespeicherten Kurse (`{}`, wenn keine).
+pub fn kurse_gespeichert(p: &crate::daten::Pfade) -> Value {
+    std::fs::read_to_string(kursdatei(p))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .unwrap_or_else(|| json!({}))
+}
+
+/// Kurse holen, wenn der Stand älter als `KURS_FRISCHE_S` ist (oder `neu`).
+///
+/// Ein Fehler **überschreibt keinen** vorhandenen Stand: dann bleibt der
+/// alte Kurs mit Datum stehen und `fehler` sagt, warum er alt ist. Eine
+/// Kursangabe zu löschen, weil das Netz weg ist, wäre der schlechtere Tausch.
+pub fn kurse(p: &crate::daten::Pfade, jetzt: u64, neu: bool) -> Value {
+    let alt = kurse_gespeichert(p);
+    let geholt = alt["geholt"].as_u64().unwrap_or(0);
+    let faellig = neu || geholt == 0 || jetzt.saturating_sub(geholt) >= KURS_FRISCHE_S;
+    let mut stand = alt.clone();
+    if faellig {
+        match agent()
+            .get(KURS_URL)
+            .header("accept", "application/json")
+            .call()
+        {
+            Ok(mut r) => {
+                let status = r.status().as_u16();
+                match r.body_mut().read_json::<Value>() {
+                    Ok(roh) if status == 200 => {
+                        let (tabelle, datum) = kurse_aus(&roh);
+                        if tabelle.is_empty() {
+                            stand["fehler"] = json!(format!(
+                                "Die Kursquelle antwortete ohne Kurse (HTTP {status})."
+                            ));
+                        } else {
+                            stand = json!({
+                                "geholt": jetzt,
+                                "datum": datum,
+                                "kurse": tabelle,
+                                "quelle": "EZB-Referenzkurse ueber frankfurter.dev",
+                                "fehler": Value::Null,
+                            });
+                            if let Err(text) = crate::daten::atomar_schreiben(
+                                &kursdatei(p),
+                                &serde_json::to_vec_pretty(&stand).unwrap_or_default(),
+                                0o600,
+                            ) {
+                                stand["hinweis"] = json!(format!(
+                                    "Kurs geholt, aber nicht abgelegt: {text}"
+                                ));
+                            }
+                        }
+                    }
+                    Ok(_) => {
+                        stand["fehler"] = json!(format!("Die Kursquelle antwortete mit HTTP {status}."));
+                    }
+                    Err(e) => {
+                        stand["fehler"] = json!(format!("Antwort nicht lesbar ({status}): {e}"));
+                    }
+                }
+            }
+            Err(e) => {
+                stand["fehler"] = json!(format!("Kein Abruf moeglich: {e}"));
+            }
+        }
+    }
+    let geholt = stand["geholt"].as_u64().unwrap_or(0);
+    stand["alter_s"] = json!(jetzt.saturating_sub(geholt));
+    stand["veraltet"] = json!(geholt == 0 || jetzt.saturating_sub(geholt) >= KURS_FRISCHE_S);
+    stand["frische_s"] = json!(KURS_FRISCHE_S);
+    stand
+}
+
+/// Euro-Betrag zu einem Betrag in `waehrung` — `None`, wenn kein Kurs da ist.
+///
+/// Kein Rückfall auf 1.0 und keine Schätzung: ohne Kurs gibt es keine Zahl
+/// (DESIGN, Euro-Anzeige 15.11.).
+pub fn in_euro(betrag: &Value, waehrung: &str, kurse: &Value) -> Option<f64> {
+    let w = waehrung.trim().to_uppercase();
+    if w == "EUR" {
+        return betrag.as_str().and_then(|s| s.trim().parse::<f64>().ok());
+    }
+    let kurs = kurse["kurse"][&w].as_f64()?;
+    let zahl = betrag
+        .as_str()
+        .and_then(|s| s.trim().parse::<f64>().ok())
+        .or_else(|| betrag.as_f64())?;
+    Some((zahl * kurs * 100.0).round() / 100.0)
+}
+
 // ------------------------------------------------------------- Abruf
 
 /// Die Herkunft, die zu einem Anbieter-Typ gehoert. Wird **immer** mitgeliefert.
@@ -170,12 +295,15 @@ fn deepseek_abrufen(basis: &str, schluessel: &str) -> Result<Value, Value> {
 ///
 /// `neu` erzwingt einen Abruf -- aber **nicht** gegen ein laufendes
 /// `Retry-After` (ROADMAP: „`Retry-After` bindet auch den Knopf").
+/// `kurse` ist der Stand aus [`kurse`]; leer heisst: keine Umrechnung, und
+/// dann steht `euro: null` da statt einer erfundenen Zahl.
 pub fn eintrag(
     p: &crate::daten::Pfade,
     id: &str,
     a: &Value,
     jetzt: u64,
     neu: bool,
+    kurse: &Value,
 ) -> Value {
     let typ = a["typ"].as_str().unwrap_or("").trim().to_string();
     let basis = match typ.as_str() {
@@ -304,7 +432,57 @@ pub fn eintrag(
         e["zustand"] = json!("unbekannt");
         e["hinweis"] = json!("Der Anbieter hat keine Waehrung gemeldet.");
     }
+    mit_euro(&mut e, kurse);
     e
+}
+
+/// Euro-Betraege und die Summe je Anbieter eintragen (DESIGN, Euro-Anzeige
+/// 15.11.2026). Die **einzige** Stelle, die rechnet -- die Oberflaeche zeigt
+/// nur, was hier steht (Regel 10g: nicht zwei Stellen dasselbe rechnen).
+///
+/// Der Originalbetrag bleibt die Zahl; `euro` steht daneben. `summe_euro`
+/// wird nur gesetzt, wenn **alle** Pools umgerechnet werden konnten --
+/// sonst waere die Summe kleiner als das Konto und saehe trotzdem aus wie
+/// das Ganze (Regel: Summen gegen die Gesamtzahl pruefen).
+pub fn mit_euro(e: &mut Value, kurse: &Value) {
+    let Some(pools) = e["pools"].as_array().cloned() else { return };
+    let mut neu = Vec::with_capacity(pools.len());
+    let mut summe = 0.0f64;
+    let mut vollstaendig = !pools.is_empty();
+    let mut waehrungen = Vec::new();
+    for mut pool in pools {
+        let waehrung = pool["waehrung"].as_str().unwrap_or("").to_string();
+        waehrungen.push(waehrung.clone());
+        match in_euro(&pool["gesamt"], &waehrung, kurse) {
+            Some(v) => {
+                summe += v;
+                pool["euro"] = json!((v * 100.0).round() / 100.0);
+            }
+            None => {
+                pool["euro"] = Value::Null;
+                vollstaendig = false;
+            }
+        }
+        // Dieselbe Umrechnung fuer die beiden Teilbetraege -- nicht in der
+        // Oberflaeche nachgerechnet (Regel 10g).
+        for feld in ["aufgeladen", "geschenkt"] {
+            let wert = in_euro(&pool[feld], &waehrung, kurse);
+            pool[format!("euro_{feld}")] = match wert {
+                Some(v) => json!((v * 100.0).round() / 100.0),
+                None => Value::Null,
+            };
+        }
+        neu.push(pool);
+    }
+    if !neu.is_empty() {
+        e["pools"] = Value::Array(neu);
+    }
+    if vollstaendig {
+        e["summe_euro"] = json!((summe * 100.0).round() / 100.0);
+        e["summe_waehrungen"] = json!(waehrungen);
+    } else if !waehrungen.is_empty() {
+        e["summe_waehrungen"] = json!(waehrungen);
+    }
 }
 
 /// Warum dieser Typ nichts liefert -- im Klartext, nie stillschweigend leer.
@@ -336,6 +514,11 @@ pub fn op_lesen(p: &crate::daten::Pfade, anfrage: &Value, jetzt: u64) -> Value {
         }
     }
     let (liste, _) = crate::daten::anbieter_laden(p);
+    // Erst die Ablage lesen. Ein Netzabruf fuer Kurse lohnt nur, wenn
+    // ueberhaupt ein Eintrag Betraege hat -- sonst fragt ein Geraet ohne
+    // Anbieter bei jedem Aufruf der Oberflaeche eine Kursquelle (DESIGN,
+    // Euro-Anzeige 15.11.).
+    let mut kursstand = kurse_gespeichert(p);
     let mut raus = Vec::new();
     for (id, a) in &liste {
         if let Some(n) = nur {
@@ -346,21 +529,40 @@ pub fn op_lesen(p: &crate::daten::Pfade, anfrage: &Value, jetzt: u64) -> Value {
         if a.get("an").and_then(Value::as_bool) == Some(false) {
             continue;
         }
-        raus.push(eintrag(p, id, a, jetzt, neu));
+        raus.push(eintrag(p, id, a, jetzt, neu, &kursstand));
     }
     if let Some(id) = nur {
         if raus.is_empty() {
             return fehlerantwort("anbieter_unbekannt", &format!("Unbekannter Anbieter: {id}"));
         }
     }
-    json!({"ok": true, "jetzt": jetzt, "frische_s": FRISCHE_S, "anbieter": raus})
+    // Jetzt lohnt der Kurs: nur wenn ein Eintrag Betraege traegt.
+    let braucht = raus.iter().any(|e| {
+        e["pools"].as_array().map(|a| !a.is_empty()).unwrap_or(false)
+    });
+    if braucht {
+        let frisch = kurse(p, jetzt, false);
+        if frisch["kurse"].is_object() {
+            kursstand = frisch;
+            for e in &mut raus {
+                mit_euro(e, &kursstand);
+            }
+        } else if kursstand["kurse"].is_null() {
+            kursstand = frisch;             // kein Stand da: Fehler zeigen
+        }
+    }
+    json!({"ok": true, "jetzt": jetzt, "frische_s": FRISCHE_S,
+           "kurse": kursstand, "anbieter": raus})
 }
 
 /// Derselbe Eintrag fuer genau einen Anbieter -- fuer Tests und die Tuer.
 pub fn eintrag_von(p: &crate::daten::Pfade, id: &str, jetzt: u64, neu: bool) -> Value {
     let (liste, _) = crate::daten::anbieter_laden(p);
+    // Kurse nur aus der Ablage: `eintrag_von` ist die Tuer fuer einen
+    // einzelnen Anbieter und soll keinen zweiten Netzweg oeffnen (Regel 5n).
+    let kurse = kurse_gespeichert(p);
     match liste.iter().find(|(i, _)| i == id) {
-        Some((_, a)) => eintrag(p, id, a, jetzt, neu),
+        Some((_, a)) => eintrag(p, id, a, jetzt, neu, &kurse),
         None => fehlerantwort("anbieter_unbekannt", &format!("Unbekannter Anbieter: {id}")),
     }
 }
@@ -631,5 +833,84 @@ mod tests {
         assert_eq!(a["fehler"]["code"], "anbieter_unbekannt");
         let a = op_lesen(&pf, &json!({"id": "../x"}), 1000);
         assert_eq!(a["fehler"]["code"], "id_ungueltig");
+    }
+
+    // ------------------------------------------------------------ Kurse
+
+    #[test]
+    fn kurse_werden_zu_euro_je_einheit_gedreht() {
+        // Die Quelle nennt Einheiten je Euro; gebraucht wird Euro je Einheit.
+        let roh = json!({"base": "EUR", "date": "2026-11-13",
+                         "rates": {"USD": 1.1052, "CNY": 7.3738}});
+        let (tab, datum) = kurse_aus(&roh);
+        assert_eq!(datum, "2026-11-13");
+        assert!((tab["USD"] - 0.90481).abs() < 0.00001, "{:?}", tab);
+        assert!((tab["CNY"] - 0.13562).abs() < 0.00001, "{:?}", tab);
+        // Ein Kurs von 0 waere keine Umrechnung, sondern eine Division durch
+        // null -- er wird weggelassen, nicht uebernommen.
+        let (tab, _) = kurse_aus(&json!({"rates": {"XXX": 0.0, "YYY": 2.0}}));
+        assert!(!tab.contains_key("XXX"));
+        assert!(tab.contains_key("YYY"));
+    }
+
+    #[test]
+    fn ohne_kurs_keine_zahl() {
+        let k = json!({"kurse": {"USD": 0.9}});
+        assert_eq!(in_euro(&json!("2.00"), "USD", &k), Some(1.8));
+        assert_eq!(in_euro(&json!("2.00"), "EUR", &k), Some(2.0));
+        // Unbekannte Waehrung: keine Zahl, kein Rueckfall auf 1.0.
+        assert_eq!(in_euro(&json!("2.00"), "GBP", &k), None);
+        // Kursstand ohne Kurse: ebenfalls keine Zahl.
+        assert_eq!(in_euro(&json!("2.00"), "USD", &json!({"fehler": "x"})), None);
+        // Unsinniger Betrag: keine Zahl (nicht 0).
+        assert_eq!(in_euro(&json!("viel"), "USD", &k), None);
+    }
+
+    #[test]
+    fn summe_nur_wenn_alle_pools_umgerechnet_sind() {
+        let k = json!({"kurse": {"USD": 0.9, "CNY": 0.13}});
+        let mut e = json!({"pools": [
+            {"waehrung": "USD", "gesamt": "10.00"},
+            {"waehrung": "CNY", "gesamt": "100.00"},
+        ]});
+        mit_euro(&mut e, &k);
+        assert_eq!(e["pools"][0]["euro"], 9.0);
+        assert_eq!(e["pools"][1]["euro"], 13.0);
+        assert_eq!(e["summe_euro"], 22.0);
+        assert_eq!(e["summe_waehrungen"], json!(["USD", "CNY"]));
+
+        // Fehlt ein Kurs, gibt es KEINE Summe -- eine kleinere Summe, die wie
+        // das ganze Konto aussieht, waere schlimmer als keine.
+        let mut e2 = json!({"pools": [
+            {"waehrung": "USD", "gesamt": "10.00"},
+            {"waehrung": "GBP", "gesamt": "5.00"},
+        ]});
+        mit_euro(&mut e2, &k);
+        assert!(e2.get("summe_euro").is_none(), "{e2}");
+        assert_eq!(e2["pools"][1]["euro"], Value::Null);
+    }
+
+    #[test]
+    fn euro_aendert_den_originalbetrag_nicht() {
+        let k = json!({"kurse": {"USD": 0.9}});
+        let mut e = json!({"pools": [{"waehrung": "USD", "gesamt": "10.00"}]});
+        mit_euro(&mut e, &k);
+        assert_eq!(e["pools"][0]["gesamt"], "10.00");
+    }
+
+    #[test]
+    fn gespeicherte_kurse_werden_gelesen_und_altern() {
+        let pf = p("kurse");
+        let d = pf.state.join("quota");
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("kurse.json"),
+            json!({"geholt": 1000, "datum": "2026-11-13",
+                   "kurse": {"USD": 0.9}}).to_string()).unwrap();
+        let k = kurse_gespeichert(&pf);
+        assert_eq!(k["datum"], "2026-11-13");
+        assert_eq!(k["kurse"]["USD"], 0.9);
+        // Ein leerer Pfad ergibt einen leeren Stand, keinen Fehler.
+        let leer = p("keine-kurse");
+        assert!(kurse_gespeichert(&leer)["kurse"].is_null());
     }
 }

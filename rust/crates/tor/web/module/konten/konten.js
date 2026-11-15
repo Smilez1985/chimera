@@ -3,7 +3,8 @@
 // Anbieter", Auftrag 13.11.).
 //
 // Grundsätze, die hier sichtbar werden müssen, nicht nur im Code:
-//  * Je Währung ein eigener Betrag -- nie umgerechnet, nie summiert.
+//  * Je Währung ein eigener Betrag; der €-Wert steht in Klammern (15.11.:
+//    Auftrag smilez -- mit Kurs oben, Summe je Anbieter).
 //  * Herkunft steht an jeder Zahl (Quelle, Belegtheit, Endpunkt).
 //  * Ein alter Stand wird gezeigt und als alt beschriftet, nicht versteckt.
 //  * Wo es keine Zahl gibt, steht der Grund.
@@ -30,14 +31,23 @@ class ChimeraKonten extends HTMLElement {
       </style>
       <h3>Konten</h3>
       <p class="klein">Guthaben je Anbieter. Jede Zahl nennt ihre Herkunft; ein alter Stand
-      steht als alt da, nicht als neu. Je Währung ein eigener Betrag — umgerechnet und
-      summiert wird nichts.</p>
+      steht als alt da, nicht als neu. Der Betrag in der Originalwährung bleibt die Zahl —
+      der Euro-Wert steht in Klammern und kommt aus dem Kurs oben.</p>
+      <div id="kurse" class="klein"></div>
       <div id="liste"></div>
       <button id="neu">Alle neu holen</button> <span id="stand" class="klein"></span>
       <p id="fehler" class="fehler"></p>`;
     this.$ = (id) => this.shadowRoot.getElementById(id);
     this.$("neu").onclick = () => this.laden(true);
     this.laden(false);
+  }
+
+  /** "12.34 ≈ 11,17 €" -- Original bleibt vorn, Euro in Klammern. */
+  mitEuro(betrag, euro) {
+    const roh = (betrag === null || betrag === undefined || betrag === "") ? "—" : String(betrag);
+    if (roh === "—") return roh;
+    const e = this.euro(euro);
+    return e === "—" ? roh : roh + " (" + e + ")";
   }
 
   el(tag, text, klasse) {
@@ -49,6 +59,34 @@ class ChimeraKonten extends HTMLElement {
 
   post(pfad, body) {
     return window.chimera.api(pfad, { method: "POST", body: JSON.stringify(body || {}) });
+  }
+
+  /** Euro-Betrag fuer die Anzeige: "≈ 1,23 €"; ohne Zahl ein Strich. */
+  euro(wert) {
+    const n = Number(wert);
+    if (wert === null || wert === undefined || !Number.isFinite(n)) return "—";
+    return "≈ " + n.toFixed(2).replace(".", ",") + " €";
+  }
+
+  /** Die Kurszeile ueber den Karten: je Waehrung ein Kurs, mit Datum. */
+  kurseZeigen(k) {
+    const ziel = this.$("kurse");
+    ziel.replaceChildren();
+    const tabelle = (k && k.kurse) || null;
+    if (!tabelle) {
+      const grund = (k && k.fehler) || "kein Kurs geholt";
+      ziel.textContent = "Kurse: keine (" + grund + "). Betraege stehen ohne Euro-Wert da.";
+      return;
+    }
+    const teile = Object.keys(tabelle).sort().map((w) => {
+      // Ein Kurs von 1 EUR in W ist der Preis; angezeigt wird lieber, wie
+      // viel 1 W in EUR ist -- das ist die Zahl, mit der man rechnet.
+      return "1 " + w + " = " + this.euro(tabelle[w]).replace("≈ ", "").replace(" €", "") + " €";
+    });
+    const datum = k.datum ? " · Kurs vom " + k.datum : "";
+    const alt = k.veraltet ? " (aelter, wird nachgeladen)" : "";
+    ziel.textContent = "Kurse: " + teile.join(" · ") + datum + alt;
+    if (k.fehler) ziel.textContent += " · Abruf: " + k.fehler;
   }
 
   /** Alter in Worten -- kurz, damit es in eine Zeile passt. */
@@ -84,6 +122,7 @@ class ChimeraKonten extends HTMLElement {
       return;
     }
     this.$("stand").textContent = `Frische: ${Math.round((r.frische_s || 600) / 60)} Minuten.`;
+    this.kurseZeigen(r.kurse);
     for (const a of anbieter) liste.appendChild(this.karte(a));
   }
 
@@ -122,12 +161,21 @@ class ChimeraKonten extends HTMLElement {
       for (const p of pools) {
         const tr = document.createElement("tr");
         tr.appendChild(this.el("td", p.waehrung || "?"));
-        tr.appendChild(this.el("td", p.gesamt ?? "—", "betrag"));
-        tr.appendChild(this.el("td", p.aufgeladen ?? "—", "betrag"));
-        tr.appendChild(this.el("td", p.geschenkt ?? "—", "betrag"));
+        tr.appendChild(this.el("td", this.mitEuro(p.gesamt, p.euro), "betrag"));
+        tr.appendChild(this.el("td", this.mitEuro(p.aufgeladen, p.euro_aufgeladen), "betrag"));
+        tr.appendChild(this.el("td", this.mitEuro(p.geschenkt, p.euro_geschenkt), "betrag"));
         t.appendChild(tr);
       }
       k.appendChild(t);
+      // Summe nur innerhalb dieses Anbieters: beide Waehrungen zahlen
+      // dasselbe Konto (smilez, 15.11.). Ueber Anbieter wird nicht summiert.
+      if (a.summe_euro !== undefined && a.summe_euro !== null) {
+        const w = (a.summe_waehrungen || []).join(" + ");
+        k.appendChild(this.el("p", "Gesamt: " + w + " " + this.euro(a.summe_euro), "betrag"));
+      } else if ((a.summe_waehrungen || []).length) {
+        k.appendChild(this.el("p", "Gesamt: kein Euro-Wert, weil fuer " +
+          a.summe_waehrungen.join("/") + " kein Kurs vorliegt.", "alt"));
+      }
       // Ein Hinweis, der nicht als Zahl taugt, wird nicht verschluckt.
       if (a.verfuegbar === false) {
         k.appendChild(this.el("p", "Der Anbieter meldet: zur Zeit nicht verfügbar.", "alt"));

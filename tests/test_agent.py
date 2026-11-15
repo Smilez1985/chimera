@@ -447,7 +447,21 @@ text = guthaben_als_text({"anbieter": [
     {"bezeichnung": "D", "zustand": "gut", "pools": [
         {"waehrung": "CNY", "gesamt": "1.00"}, {"waehrung": "USD", "gesamt": "2.00"}]}]})
 check("zwei Waehrungen bleiben zwei Betraege", ("1,00 CNY" in text and "2,00 USD" in text), True)
-check("nichts wird summiert", "3,00" in text, False)
+check("nichts wird summiert, was das Gateway nicht summiert hat", "3,00" in text, False)
+
+# Euro (15.11.2026, Auftrag smilez): der fertige Wert aus dem Gateway wird
+# gesetzt, nicht nachgerechnet; ohne Wert steht keine Zahl da.
+_text = guthaben_als_text({"anbieter": [
+    {"bezeichnung": "DeepSeek", "zustand": "gut", "pools": [
+        {"waehrung": "USD", "gesamt": "10.00", "euro": 9.05},
+        {"waehrung": "CNY", "gesamt": "50.00", "euro": 6.78}],
+     "summe_euro": 15.83}]})
+check("Euro steht je Betrag in Klammern", "10,00 USD (ca. 9,05 Euro)" in _text, True)
+check("Summe je Anbieter wird genannt", "gesamt ca. 15,83 Euro" in _text, True)
+check("ohne Euro-Wert keine Zahl",
+      "ca." in guthaben_als_text({"anbieter": [
+          {"bezeichnung": "D", "zustand": "gut",
+           "pools": [{"waehrung": "USD", "gesamt": "1.00", "euro": None}]}]}), False)
 check("veraltet wird gesagt, nicht verschwiegen",
       "veraltet, Stand vor 2 Stunden" in guthaben_als_text({"anbieter": [
           {"bezeichnung": "D", "zustand": "gut", "pools": [{"waehrung": "CNY", "gesamt": "1"}],

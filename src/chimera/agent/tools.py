@@ -70,9 +70,11 @@ def _alter_text(sekunden) -> str:
 def guthaben_als_text(antwort: dict) -> str:
     """Aus der Antwort des Gateways einen Satz je Anbieter machen.
 
-    Rein: keine Netzabfrage, keine Rechnung. Je Waehrung ein eigener Betrag
-    (nie summiert, nie umgerechnet), und wo es keine Zahl gibt, steht der
-    Grund -- nicht ``0``.
+    Rein: keine Netzabfrage, **keine eigene Rechnung** -- der Euro-Wert kommt
+    fertig aus dem Gateway (`quota::mit_euro`), hier wird er nur gesetzt. Je
+    Waehrung ein eigener Betrag; die Summe steht nur da, wenn das Gateway sie
+    gebildet hat (15.11.2026, Auftrag smilez). Wo es keine Zahl gibt, steht
+    der Grund -- nicht ``0``.
     """
     liste = antwort.get("anbieter") or []
     if not liste:
@@ -96,6 +98,9 @@ def guthaben_als_text(antwort: dict) -> str:
                 auf = _zahl(p.get("aufgeladen"))
                 ge = _zahl(p.get("geschenkt"))
                 teil = f"{gesamt} {waehrung}" if gesamt else f"Betrag unbekannt ({waehrung})"
+                euro = p.get("euro")
+                if gesamt and isinstance(euro, (int, float)):
+                    teil += f" (ca. {_zahl(f'{euro:.2f}')} Euro)"
                 extra = []
                 if auf:
                     extra.append(f"{auf} aufgeladen")
@@ -105,6 +110,9 @@ def guthaben_als_text(antwort: dict) -> str:
                     teil += " (" + ", ".join(extra) + ")"
                 teile.append(teil)
             satz = f"{name}: " + ", ".join(teile)
+            summe = e.get("summe_euro")
+            if isinstance(summe, (int, float)):
+                satz += f" -- gesamt ca. {_zahl(f'{summe:.2f}')} Euro"
             if e.get("verfuegbar") is False:
                 satz += " -- zur Zeit nicht verfuegbar"
             alter = _alter_text(e.get("alter_s"))

@@ -20,6 +20,20 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Guthaben erscheint in Euro, Kurse stehen oben** (15.11.2026, Auftrag
+  smilez): `quota::kurse` holt die EZB-Referenzkurse über
+  `api.frankfurter.dev` (USD/CNY gegen EUR, kein Schlüssel), legt sie in
+  `state/quota/kurse.json` (0600, 12 h frisch) und rechnet an **einer**
+  Stelle um (`quota::mit_euro`): je Pool `euro`, `euro_aufgeladen`,
+  `euro_geschenkt`, je Anbieter `summe_euro` — aber nur, wenn **alle** Pools
+  einen Kurs haben; sonst gibt es keine Summe statt einer zu kleinen.
+  `konten.js` zeigt den Originalbetrag mit dem Euro-Wert in Klammern, die
+  Kurszeile über den Karten mit Datum der Quelle, und „Gesamt" je Anbieter
+  (DeepSeek: USD + CNY, weil beide dasselbe Konto zahlen). Das Werkzeug
+  `guthaben` sagt dieselben Euro-Werte an (Komma, wie gesprochen). Am Pi
+  belegt: Kurse vom 13.11. (USD 0,904814 · CNY 0,135615), DeepSeek CN¥43,33
+  ≈ 5,88 € und 6,98 USD ≈ 6,32 € → gesamt 12,20 €. Tests: cargo 490 (+5 in
+  `quota`), `test_agent` 180.
 - **Jeder Werkzeugaufruf steht im Protokoll** (15.11.2026, Auftrag smilez
   „ein tooluse sollte geloggt werden"): Bis hierher stand im Dienstprotokoll
   nichts darüber, ob ein Aufruf ausgeführt wurde — „es sagt was es tut, aber
