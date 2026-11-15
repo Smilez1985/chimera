@@ -20,6 +20,14 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Wrap-up-Runde und Deckel 30** (15.11.2026, DESIGN Muster 5): `max_turns`
+  stand auf 8 — 8 Umläufe × 3 Werkzeuge = höchstens 24 Aufrufe, während die
+  Schleifenbremse erst ab 10 **gleichen** Aufrufen warnt: die Sicherung war
+  im Normalfall toter Code, der Deckel begrenzte die Arbeit. Jetzt
+  `MAX_UMLAEUFE = 30` (über der Warnschwelle, weit unter den 200 von
+  OpenMinis) und eine **Wrap-up-Runde** ohne Werkzeuge am Deckel, die nicht
+  als Umlauf zählt: der Lauf endet mit einem Ergebnis statt mit „Ich komme
+  hier nicht weiter."
 - **Verbrauch: eigene Zählung und Abrechnung nebeneinander** (15.11.2026,
   Auftrag smilez „ohne Grafana"): neues Modul `verbrauch.rs` —
   `op: verbrauch_notieren` (der Dienst meldet je Umlauf Tokens, Tag kommt
@@ -1744,6 +1752,24 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   alten Tabelle (kommen als Module `gamepi13` und `epd2in13b` wieder).
 
 ### Behoben
+- **Ein Werkzeugaufruf ohne Codezaun ging als Antwort an den Nutzer** (15.11.2026,
+  am Pi belegt): `loop.TEXT_JSON_RE` verlangte einen eingezäunten Codeblock;
+  schrieb das Modell `{"name": "set_face", "arguments": {…}}` blank, wurde
+  nichts ausgeführt, das JSON stand als Antwort in der Blase und ging **nicht**
+  als Ergebnis an das Modell zurück. `textaufrufe()`/`text_bereinigen()`
+  erkennen jetzt zusätzlich ein JSON-Objekt am Textanfang — aber nur, wenn der
+  Name ein **bekanntes** Werkzeug ist; ein fremder Name bleibt Text.
+- **Die Rüge log über den eigenen Code** (15.11.2026): `RUEGE_TEXT_AUFTRAG`
+  sagte „Er wurde NICHT ausgeführt", während der Rückfall genau das tut.
+  Getrennt in `RUEGE_AUSGEFUEHRT` und `RUEGE_NICHT_AUSGEFUEHRT`; der alte Name
+  bleibt als Alias auf „nicht ausgeführt". (Gefunden von der Gegenprobe: die
+  bisherige Prüfung war grün, weil das Werkzeug-Ergebnis selbst „es wurde
+  nichts ausgeführt" enthält — jetzt wird die Rüge gezielt geprüft.)
+- **Nach einer Dauer fiel das Gesicht auf IDLE** (15.11.2026, am Pi gesehen:
+  das Modell sagte „das Gesicht bleibt WORK", auf dem Display stand `IDLE`):
+  `Face._ablauf` leerte `_agent_mood`, damit fand `wartet` kein Agentengesicht
+  mehr. Jetzt wird der **vorherige** Ausdruck zum Agentengesicht; `IDLE`
+  bleibt der Fall „der Agent hat noch nichts gewählt".
 - **Der Installer hielt das Panel, während er den Dienst startete**
   (15.11.2026, Ursache des dunklen Displays am selben Tag): Der
   Sitzungs-Socket trägt `Service=chimera.service` — schrieb eine geänderte

@@ -158,10 +158,19 @@ class Face:
         ``zurueck`` ist der Ausdruck, der vor dem gesetzten galt — der
         Renderer übergibt ihn, damit das Zurücknehmen nicht davon abhängt,
         in welcher Reihenfolge die Felder geräumt werden.
+
+        Seit 15.11.2026 ist der Ablauf **kein Löschen der Wahl** (smilez, am
+        Pi gesehen: das Modell sagte „das Gesicht bleibt WORK", auf dem
+        Display stand `IDLE`). Vorher setzte diese Stelle `_agent_mood = ""`;
+        damit fand `wartet` kein Agentengesicht mehr und fiel auf `IDLE`
+        zurück, obwohl der vorherige Ausdruck weiter in der Bibliothek stand.
+        Jetzt wird der vorherige zum Agentengesicht: `IDLE` bleibt genau der
+        Fall „der Agent hat noch nichts gewählt".
         """
         if zurueck is None:
             zurueck = self.state.mood_zurueck
-        self._agent_mood = ""
+        name = str((zurueck or {}).get("name") or "").strip()
+        self._agent_mood = name if name and self.moods.find(name) else ""
         self._haelt_bis = 0.0
         self._last_state = ""
         self.state.mood_bis = None

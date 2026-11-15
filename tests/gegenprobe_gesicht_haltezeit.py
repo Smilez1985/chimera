@@ -56,6 +56,12 @@ MUTATIONEN = [
      AVATAR,
      "    if jetzt < bis:\n        return False",
      "    if False:\n        return False"),
+    # 15.11.2026: Der Ablauf darf die Wahl nicht löschen (am Pi: IDLE statt
+    # WORK). Die Mutation stellt das alte Verhalten wieder her.
+    ("ablauf-loescht-die-wahl",
+     FACE,
+     '        self._agent_mood = name if name and self.moods.find(name) else ""',
+     '        self._agent_mood = ""'),
 ]
 
 

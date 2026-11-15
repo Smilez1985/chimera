@@ -42,6 +42,24 @@ from .verdichten import schnittindex, verdichte
 #: Wie viele native Aufrufe je Runde ausgeführt werden (DESIGN, Regel „Aufrufe, nicht Text“).
 MAX_WERKZEUGE_JE_RUNDE = 3
 
+#: Wie viele Umlaeufe ein Auftrag hoechstens bekommt (DESIGN, Muster 5 in
+#: „Uebernommene Muster aus OpenMinis"). Acht waren zu wenig: 8 x 3 = 24
+#: Werkzeugaufrufe, waehrend die Schleifenbremse erst ab 10 **gleichen**
+#: Aufrufen warnt — die Sicherung konnte nie greifen, der Deckel begrenzte
+#: die Arbeit. 30 gibt echter Arbeit Luft (Datei lesen, aendern, pruefen,
+#: Dienst neu starten, nachsehen) und bleibt ueber der Warnschwelle.
+#: OpenMinis faehrt 200; das ist auf einem 462-MB-Geraet an einem bezahlten
+#: Modell eine Rechnung, kein Sicherheitsnetz.
+MAX_UMLAEUFE = 30
+
+#: Was das Modell in der Wrap-up-Runde hoert. Sie bekommt **keine** Werkzeuge
+#: (DESIGN, Muster 5): sonst endet ein erschoepfter Lauf mitten in einem
+#: Aufruf, und der Nutzer liest „Ich komme hier nicht weiter." statt eines
+#: Ergebnisses. Einmal je Auftrag, sie zaehlt nicht als weiterer Umlauf.
+WRAPUP_AUFTRAG = """Deine Umläufe sind aufgebraucht. Du bekommst keine Werkzeuge mehr.
+Schreibe jetzt zusammen, was du hast: was erledigt ist, was nicht, und was
+der nächste Schritt wäre. Keine Werkzeugaufrufe, keine Entschuldigungen."""
+
 log = logging.getLogger(__name__)
 
 #: Wie viel von Argumenten und Ergebnis ins Protokoll geht. Das Protokoll
@@ -103,13 +121,20 @@ TEXT_JSON_RE = re.compile(
     r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL | re.IGNORECASE)
 
 
-def textaufrufe(text: str) -> list[dict]:
+def textaufrufe(text: str, bekannt=None) -> list[dict]:
     """Werkzeugaufrufe, die das Modell **in den Text** geschrieben hat.
 
-    Zwei Formen: ``TOOL: name {json}`` und ein Codeblock mit
-    ``{"name": …, "arguments": {…}}``. Rückgabe ist eine Liste
+    Drei Formen: ``TOOL: name {json}``, ein Codeblock mit
+    ``{"name": …, "arguments": {…}}`` und seit 15.11.2026 auch ein **nacktes**
+    JSON-Objekt am Textanfang. Rückgabe ist eine Liste
     ``[{"name": …, "argumente": {…}}]``; was sich nicht als Aufruf lesen
     lässt, wird übergangen (kein Raten).
+
+    ``bekannt`` ist die Menge der vorhandenen Werkzeugnamen. Sie entscheidet
+    **nur** über die nackte Form: Ohne sie wäre jede Antwort, die mit einem
+    JSON-Objekt beginnt (Beispiel, Datenstruktur), ein Werkzeugaufruf. Am Pi
+    (15.11.2026, 05:00) schrieb das Modell den Aufruf ohne Codezaun — er
+    wurde deshalb nicht erkannt und ging als Antwort an den Nutzer.
     """
     if not text:
         return []
@@ -130,29 +155,64 @@ def textaufrufe(text: str) -> list[dict]:
             daten = json.loads(roh)
         except (ValueError, TypeError):
             continue
-        if not isinstance(daten, dict):
-            continue
-        name = daten.get("name") or daten.get("tool") or daten.get("werkzeug")
-        if not isinstance(name, str) or not name.strip():
-            continue
-        argumente = daten.get("arguments", daten.get("argumente", {}))
-        if isinstance(argumente, str):
-            argumente = _json_objekt(argumente) or {}
-        if not isinstance(argumente, dict):
-            argumente = {}
-        eintrag = {"name": name.strip(), "argumente": argumente}
-        if eintrag not in gefunden:
+        eintrag = _als_aufruf(daten)
+        if eintrag is not None and eintrag not in gefunden:
             gefunden.append(eintrag)
+
+    # Nackte Form: ein JSON-Objekt am Textanfang — nur bei bekanntem Namen.
+    if bekannt:
+        nackt = _als_aufruf(_json_objekt(text))
+        if (nackt is not None and nackt["name"] in bekannt
+                and nackt not in gefunden):
+            gefunden.append(nackt)
     return gefunden
 
 
-def text_bereinigen(text: str) -> str:
-    """Den Text ohne die Aufrufe — damit kein JSON in der Antwort steht."""
+def _als_aufruf(daten) -> dict | None:
+    """Ein geparstes JSON-Objekt als Aufruf lesen — oder ``None``."""
+    if not isinstance(daten, dict):
+        return None
+    name = daten.get("name") or daten.get("tool") or daten.get("werkzeug")
+    if not isinstance(name, str) or not name.strip():
+        return None
+    argumente = daten.get("arguments", daten.get("argumente", {}))
+    if isinstance(argumente, str):
+        argumente = _json_objekt(argumente) or {}
+    if not isinstance(argumente, dict):
+        argumente = {}
+    return {"name": name.strip(), "argumente": argumente}
+
+
+def text_bereinigen(text: str, bekannt=None) -> str:
+    """Den Text ohne die Aufrufe — damit kein JSON in der Antwort steht.
+
+    ``bekannt`` muss dieselbe Menge sein wie bei :func:`textaufrufe`, sonst
+    bleibt die nackte Form im Text stehen, obwohl sie ausgeführt wurde.
+    """
     if not text:
         return ""
-    rest = TEXT_JSON_RE.sub("", text)
-    rest = CALL_RE.sub("", rest)
+    rest = CALL_RE.sub("", TEXT_JSON_RE.sub("", text))
+    if bekannt:
+        nackt = _als_aufruf(_json_objekt(rest))
+        if nackt is not None and nackt["name"] in bekannt:
+            rest = _ohne_kopf(rest)
     return rest.strip()
+
+
+def _ohne_kopf(text: str) -> str:
+    """Den Text ab dem ersten vollständigen JSON-Objekt zurückgeben."""
+    t = (text or "").strip()
+    if not t.startswith("{"):
+        return text
+    tiefe = 0
+    for i, zeichen in enumerate(t):
+        if zeichen == "{":
+            tiefe += 1
+        elif zeichen == "}":
+            tiefe -= 1
+            if tiefe == 0:
+                return t[i + 1:]
+    return text
 
 
 def _json_objekt(text: str) -> dict | None:
@@ -231,11 +291,22 @@ Halte dich kurz. Du läufst auf einem kleinen Gerät, und deine Antworten
 werden vorgelesen."""
 
 #: Was das Modell hört, wenn es trotz Schnittstelle einen Textaufruf
-#: schreibt. Ohne diese Ruege wiederholte es den Fehler bis zum Ende der
-#: Umlaeufe — die Antwort waere nie ausgefuehrt worden.
-RUEGE_TEXT_AUFTRAG = """Du hast einen Werkzeugaufruf als TEXT geschrieben. Er wurde NICHT ausgeführt.
+#: schreibt **und der Harness ihn ausführt**. Ohne Ruege wiederholte es den
+#: Fehler bis zum Ende der Umlaeufe.
+RUEGE_AUSGEFUEHRT = """Du hast einen Werkzeugaufruf als TEXT geschrieben. Er wurde diesmal ausgeführt,
+aber das ist der Ausnahmefall. Werkzeuge laufen über die Werkzeugschnittstelle
+(tool call), nicht über Text. Antworte erneut und nutze dabei die Schnittstelle."""
+
+#: Der alte Satz, für den Fall, dass wirklich **nichts** lief. Bis 15.11.2026
+#: stand er auch beim ausgeführten Rückfall — damit log der Harness ueber den
+#: eigenen Code, und das Modell lernte, ihm zu misstrauen (smilez).
+RUEGE_NICHT_AUSGEFUEHRT = """Du hast einen Werkzeugaufruf als TEXT geschrieben. Er wurde NICHT ausgeführt.
 Werkzeuge laufen über die Werkzeugschnittstelle (tool call), nicht über Text.
 Antworte erneut — mit einem echten Werkzeugaufruf oder mit deiner Antwort."""
+
+#: Rückwaertsvertraeglich fuer Aufrufer, die den alten Namen nutzen: er meint
+#: den Fall "nicht ausgefuehrt" (so stand es im Text).
+RUEGE_TEXT_AUFTRAG = RUEGE_NICHT_AUSGEFUEHRT
 
 #: Was der Nutzer hoert, wenn das Modell auch nach der Ruege nur einen
 #: Textaufruf schreibt. Die Behauptung "ich habe X getan" waere gelogen.
@@ -289,7 +360,7 @@ class Agent:
     """Ein Auftrag, ein Gespräch, ein Zustand."""
 
     def __init__(self, registry, toolbox: Toolbox, *, task: str = "gespraech",
-                 max_turns: int = 8, guard: GuardConfig | None = None,
+                 max_turns: int = MAX_UMLAEUFE, guard: GuardConfig | None = None,
                  on_state=None, skills=None, memory=None):
         self.registry = registry
         self.tools = toolbox
@@ -479,18 +550,21 @@ class Agent:
             # behauptet eine Ausfuehrung, die es nicht gab) — der Aufruf fliegt
             # aus dem Text, und der Nutzer hoert, dass es nicht ging.
             if self._nativ:
-                # Rückfall: Das Modell hat den Aufruf **in den Text**
-                # geschrieben (JSON im Codeblock, ``TOOL: …``). Am Pi
-                # (15.11.2026, 04:07) stand so ein Aufruf als Text in der
-                # Chatblase und wurde nie ausgeführt — die Antwort behauptete
-                # eine Ausführung, die es nicht gab. Native Aufrufe sind der
-                # Standard; wenn das Modell sie nicht trifft, wird der
-                # Textaufruf ausgeführt, damit aus dem Befehl ein Ergebnis
-                # wird. Die Rüge bleibt (Protokoll + Hinweis an das Modell,
-                # einmal je Auftrag).
-                aufrufe = textaufrufe(text)
+                # Rückfall (15.11.2026, 766f381): Das Modell hat den Aufruf
+                # **in den Text** geschrieben — als Codeblock, als ``TOOL: …``
+                # oder (seit 05:00) als **nacktes** JSON. Am Pi stand so ein
+                # Aufruf als Text in der Chatblase und wurde nie ausgeführt;
+                # die Antwort behauptete eine Ausführung, die es nicht gab.
+                # Native Aufrufe sind der Standard; trifft das Modell sie
+                # nicht, wird der Textaufruf ausgeführt, damit aus dem Befehl
+                # ein Ergebnis wird — und das Ergebnis geht als
+                # Werkzeug-nachricht **an das Modell zurück**, nicht an den
+                # Nutzer. Die Rüge bleibt (Protokoll + Hinweis, einmal je
+                # Auftrag) und sagt jetzt, was wirklich passiert ist.
+                bekannt = set(self.tools.names())
+                aufrufe = textaufrufe(text, bekannt=bekannt)
                 if aufrufe:
-                    reste = text_bereinigen(text)
+                    reste = text_bereinigen(text, bekannt=bekannt)
                     log.warning("Textaufruf statt Werkzeugschnittstelle "
                                 "(ausgeführt): %s", _kurz(text))
                     if not geruegt:
@@ -502,7 +576,7 @@ class Agent:
                         self.history.append({"role": "assistant",
                                              "content": reste})
                         self.history.append({"role": "user",
-                                             "content": RUEGE_TEXT_AUFTRAG})
+                                             "content": RUEGE_AUSGEFUEHRT})
                     else:
                         self.history.append({"role": "assistant",
                                              "content": reste})
@@ -584,12 +658,47 @@ class Agent:
             self.history.append({"role": "user",
                                  "content": f"Ergebnis von {name}:\n{out}"})
 
-        # Umläufe aufgebraucht: das ist eine Auskunft, kein Absturz.
+        # Umläufe aufgebraucht: das ist eine Auskunft, kein Absturz — aber
+        # nicht das Ende. Die Wrap-up-Runde gehört dem Ergebnis (DESIGN,
+        # Muster 5): ohne sie endet der Lauf mitten in einem Werkzeugaufruf
+        # und der Nutzer liest „Ich komme hier nicht weiter."
         steps.append(Step("error", f"{self.max_turns} Umläufe aufgebraucht"))
+        abschluss = self._wrapup(denken, steps, kosten, anbieter, modell)
+        if abschluss:
+            text = abschluss
         return Result(
             text or "Ich komme hier nicht weiter.",
             steps, provider, model, fell_back, self.guard.calls,
             dict(kosten))
+
+    def _wrapup(self, denken: str, steps: list[Step], kosten: dict,
+                anbieter: str, modell: str) -> str:
+        """Eine letzte Runde **ohne Werkzeuge** — das Modell schreibt zusammen.
+
+        Sie zählt nicht als Umlauf: der Deckel ist die Grenze für Arbeit,
+        nicht für das Aufschreiben. Scheitert der Aufruf, bleibt es beim
+        bisherigen Text; die Runde darf den Lauf nicht schlechter machen.
+        """
+        self.history.append({"role": "user", "content": WRAPUP_AUFTRAG})
+        wahl = f"{anbieter}/{modell}" if anbieter and modell else (anbieter or "")
+        versuch = {"bevorzugt": wahl or None}
+        if self._nativ:
+            versuch["werkzeuge"] = []          # leer = keine Schnittstelle
+        if denken:
+            versuch["denken"] = denken
+        try:
+            reply = self.registry.call(self.task, "", self.history,
+                                       self._system(), **versuch)
+        except Exception as exc:                 # noqa: BLE001
+            log.warning("Wrap-up-Runde fehlgeschlagen: %s", exc)
+            steps.append(Step("error", f"Wrap-up fehlgeschlagen: {exc}"))
+            return ""
+        _verbrauch_addieren(kosten, getattr(reply, "verbrauch", {}))
+        text = (reply.text or "").strip()
+        if text:
+            steps.append(Step("text", text[:80]))
+            self._state("spricht")
+        return text
 
     def _fuehre_aus(self, name: str, args: dict, steps: list[Step]) -> str:
         """Ein Werkzeug ausführen, das das Modell selbst benannt hat (Regel „Aufrufe, nicht Text“).

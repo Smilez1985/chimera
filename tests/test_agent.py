@@ -720,6 +720,70 @@ with tempfile.TemporaryDirectory() as td:
     check("Rückfall: Prompt nennt das Format",
           "TOOL: name" in alt._system(), True)
 
+    # (e) Die Form vom Pi, 15.11.2026 05:00: **nacktes** JSON ohne Codezaun.
+    #     Sie ging vorher als Antwort an den Nutzer, ausgeführt wurde nichts.
+    reg4 = TextRegistry(['{"name": "write_file", "arguments": {"path": "z.txt", '
+                         '"content": "hallo"}}', "Fertig."])
+    res4 = Agent(reg4, tb).run("schreib was")
+    check("nacktes JSON: ausgeführt",
+          any(s.kind == "tool" and s.tool == "write_file" for s in res4.steps),
+          True)
+    check("nacktes JSON: kein JSON in der Antwort",
+          "arguments" in res4.text, False)
+    check("nacktes JSON: Antwort ist der Text", res4.text.strip(), "Fertig.")
+
+    # (f) Ein JSON-Objekt mit **fremdem** Namen ist keine Ausführung: sonst
+    #     würde jede Antwort über JSON ein Werkzeug starten.
+    reg5 = TextRegistry(['{"name": "gibt_es_nicht", "arguments": {}}'])
+    res5 = Agent(reg5, tb).run("erfinde was")
+    check("fremder Name: nicht ausgeführt",
+          any(s.kind == "tool" for s in res5.steps), False)
+    check("fremder Name: bleibt Antwort", "gibt_es_nicht" in res5.text, True)
+
+    # (g) Die Rüge sagt die Wahrheit: beim Rückfall wurde ausgeführt.
+    #     Geprüft wird die **Rüge** (user, "als TEXT geschrieben") — nicht
+    #     "irgendeine Nachricht": das Werkzeug-Ergebnis enthält selbst
+    #     "Es wurde nichts ausgeführt" und machte die Prüfung grün, obwohl
+    #     die Rüge log (so gefunden von der Gegenprobe, 15.11.2026).
+    _ruegen = [str(m.get("content"))
+               for m in reg4.gesehen[1]["verlauf"]
+               if m.get("role") == "user"
+               and "als TEXT geschrieben" in str(m.get("content"))]
+    check("Rüge: vorhanden", len(_ruegen), 1)
+    check("Rüge: nennt die Ausführung",
+          bool(_ruegen) and "nicht ausgeführt" not in _ruegen[0].lower(), True)
+
+    # (h) Der Deckel: nach den Umläufen bekommt das Modell **eine** Runde
+    #     ohne Werkzeuge und liefert dort das Ergebnis (DESIGN, Muster 5).
+    class Dreht:
+        """Ruft endlos dasselbe Werkzeug auf, bis die Wrap-up-Runde kommt."""
+
+        def __init__(self):
+            self.gesehen = []
+
+        def resolve(self, task):
+            return [(StubConn(), "m")]
+
+        def call(self, task, prompt, history=None, system=None, **kw):
+            self.gesehen.append({"verlauf": [dict(m) for m in (history or [])],
+                                 **kw})
+            if kw.get("werkzeuge") == []:
+                return Reply("Zusammengefasst: zwei Aufrufe, nichts erledigt.",
+                             "stub", "m", Access.LOCAL, CostClass.FREE)
+            return Reply("", "stub", "m", Access.LOCAL, CostClass.FREE,
+                         werkzeuge=[{"name": "list_dir",
+                                     "argumente": {"path": "a"}}])
+
+    dreht = Dreht()
+    res6 = Agent(dreht, tb, max_turns=2).run("mach weiter")
+    check("Deckel: Wrap-up-Runde ohne Werkzeuge",
+          any(g.get("werkzeuge") == [] for g in dreht.gesehen), True)
+    check("Deckel: Ergebnis ist der Wrap-up-Text",
+          res6.text.startswith("Zusammengefasst"), True)
+    check("Deckel: genau ein Wrap-up",
+          sum(1 for g in dreht.gesehen if g.get("werkzeuge") == []), 1)
+    check("Deckel: Vorgabe 30 Umläufe", Agent(dreht, tb).max_turns, 30)
+
 print(f"Ergebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(1 if FAIL else 0)
 

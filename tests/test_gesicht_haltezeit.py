@@ -167,6 +167,20 @@ bong = face.moods.get("BONG")
 pruefe(round(float(bong.get("dauer_s") or 0)), 13,
        "BONG hat dauer_s (ein Zug dauert 13 s)")
 
+print("== 7d. Nach Ablauf bleibt der vorherige Ausdruck das Agentengesicht")
+# Befund am Pi (15.11.2026, 05:00): das Modell sagte „das Gesicht bleibt WORK",
+# auf dem Display stand danach IDLE. Ursache war `_ablauf` -- es leerte
+# `_agent_mood`, und `wartet` fand dann kein Agentengesicht mehr.
+face, state, uhr = bau()
+face.set_by_name("WORK")
+face.set_by_name("BONG", dauer=3)
+pruefe(aktuell(state), "BONG", "Animation läuft")
+ablauf_pruefen(state, jetzt=uhr() + 3.5)
+pruefe(aktuell(state), "WORK", "nach Ablauf gilt der vorherige Ausdruck")
+face.show_state("wartet")
+pruefe(aktuell(state), "WORK",
+       "und die Ruhe bleibt dort -- nicht IDLE")
+
 print("== 8. Ein gelöschter Ausdruck fällt in der Ruhe auf IDLE zurück")
 face, state, uhr = bau()
 face.set_by_name("CHAOS")
