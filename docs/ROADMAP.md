@@ -528,8 +528,12 @@ Löst `provider/` und `bot/` im Dienst ab. Jede Stufe für sich lauffähig.
       - **Einstellungen:** Passwort ändern, Werksreset mit Satz am Display,
         Telegram, Sprache.
       - **Anbieter Anthropic** (Schlüssel, danach Abo).
-      - **Anzeigespiegel (Waveshare)** — braucht zuerst ein fertiges Bild im
-        Shared Memory vom Renderer, eigener Entwurf.
+      - **Anzeigespiegel (Waveshare)** — Entwurf steht (DESIGN, Regel „Anzeigespiegel"),
+        gebaut ist nichts. Die Voraussetzung „fertiges Bild im Speicher" ist
+        erfüllt (`Panel.last` hält den RGB565-Puffer ohnehin). Zu bauen:
+        Veröffentlichen nach `/run/chimera/anzeige/bild`, Route
+        `/api/anzeige/bild` samt Recht `anzeige-lesen`, Element
+        `<chimera-anzeige>` im Chat (verschiebbar, `float`).
       - **Ein Zusatzmodul** erscheint ohne Änderung an Rahmen oder Gateway —
         belegt ist es (Test mit Gegenprobe); offen bleibt der Lauf am Pi
         (Anmeldung, Chat gegen die echte Sitzung).

@@ -2097,7 +2097,8 @@ modular.
 - **Anzeigespiegel:** Der Renderer (Regel 7, ein Prozess, ein Framebuffer)
   legt das fertige Bild lesbar im Shared Memory ab; das Gateway liest nur
   und liefert es als Bildfolge an die Seite. Das Gateway schreibt nie ins
-  Panel.
+  Panel. **Entwurf: Regel „Anzeigespiegel"** (Ablage in `/run`, Kopf mit Maßen und Zähler,
+  Abfrage statt WebSocket, Element im Chat verschiebbar).
 - **Frontend:** Leichtes JavaScript ohne Build-Schritt und ohne Fremdpaket;
   Web Components, ein Modul = ein Element. Handytauglich.
 - **Sitzungen:** Es bleibt bei **einer** Hauptsitzung für alle Türen
@@ -3053,6 +3054,110 @@ Dazu beendet der Installer seinen Zeichner (`fortschritt_abschluss`: Ergebnis
 und LED zeichnen, dann anhalten) **vor** dem Start der Dienste, auch im
 Abbruchpfad. Der Nachholweg bleibt als Netz für den Fall, dass ein fremder
 Prozess die Leitung hält; er ist nicht mehr der Regelfall.
+
+### Regel „Anzeigespiegel" — der Renderer veröffentlicht das fertige Bild, das Gateway liest es nur
+
+Regel 5m nennt den Anzeigespiegel seit dem 30.10. in einem Satz; hier steht
+der Entwurf. Auftrag smilez (15.11.2026): das Gesicht im Chatfenster oben
+rechts zeigen, verschiebbar, die Blasen fließen per `float` darum herum — so
+ressourcenschonend wie möglich.
+
+**Die Voraussetzung ist bereits erfüllt.** `Panel.last` (`src/chimera/displays/base.py`)
+hält nach jedem `show()` genau den Panelspeicher des zuletzt gezeigten Bildes;
+`to_rgb565()` ist für das Panel ohnehin gelaufen. Der Spiegel rechnet **nichts**
+nach, er veröffentlicht einen vorhandenen Puffer.
+
+#### Ablage: tmpfs, nie das Datenverzeichnis
+
+`/run/chimera/anzeige/bild` — 32 Byte Kopf, dann die Pixel als RGB565,
+Big-Endian (dieselbe Ordnung wie der Panelspeicher, damit der Puffer
+unverändert durchgereicht wird).
+
+- **Zwei Bytes je Punkt, nicht drei.** 240×280 = **134 400 Byte**, nicht die
+  201 KB eines RGB888-Bildes. Bei 15 Bildern/s sind das 2 MB/s — auf einer
+  SD-Karte wäre das Gift, in `/run` (tmpfs, am Pi 84 MB frei) ist es ein
+  `memcpy`.
+- **Maße stehen im Kopf, nicht im Code** (Regel 6c): Breite, Höhe und Format
+  kommen aus dem Profil der Anzeige. 240×280 ist die Whisplay-Vorgabe, nicht
+  die Wahrheit — das GamePi13 hat 240×240, das E-Paper 250×122 und 1 Bit.
+- **Ein Zähler, keine Zeit.** Die Geräteuhr ist unzuverlässig (Regel 7d); ein
+  monoton steigender Zähler im Kopf ist vergleichbar und läuft nicht rückwärts.
+- **Nie ein halbes Bild.** Geschrieben wird nach `bild.neu`, dann
+  `os.replace()` — der Leser sieht entweder das alte oder das neue Bild, nie
+  einen Riss. Ein offener Deskriptor zeigt immer auf ein vollständiges Bild,
+  auch wenn inzwischen weitergeschrieben wurde.
+- **Das Bild ist kein Geheimnis:** Datei 0644 in einem Verzeichnis 0755. Der
+  Zugang ist über Anmeldung, LAN-Begrenzung und das Recht unten geregelt, nicht
+  über Dateirechte. Das Gateway schreibt **nie** in diese Datei und nie ins
+  Panel (Regel 5m).
+
+#### Der Weg zum Browser: Abfrage, kein WebSocket
+
+`GET /api/anzeige/bild?seit=<Zähler>` im eingebauten Modul `anzeige`:
+
+- Zähler gleich → **204**, kein Byte Pixel. Erst wenn sich das Bild geändert
+  hat, folgen Kopf und Rumpf, mit `X-Chimera-Bild: <Zähler>`.
+- Kein Bild, kaputter Kopf oder falsche Länge → **503** mit
+  `X-Chimera-Grund`; die Seite zeigt den Grund als Text. Ein schwarzes Rechteck
+  wäre eine Lüge (Regel 8a).
+- Neues Recht **`anzeige-lesen`** in `web.rs::RECHTE`, im Manifest genannt.
+  Wer das Recht nicht hat, bekommt die Route nicht durchgereicht.
+
+**Warum kein WebSocket** (die naheliegende, verworfene Alternative): das
+Gateway hängt an `tiny_http`, das keine WebSockets kann. Eine Fremdbibliothek
+verstößt gegen Regel 14, ein handgeschriebenes RFC 6455 gegen die 10-MB-Grenze
+(heute 2,3 MB RSS). Der Chat macht es seit jeher genauso: `chat.js` fragt
+`/api/chat/strom?seit=` ab. Ein zweiter Transport für ein Bild wäre eine
+zweite Technik für dasselbe Problem.
+
+#### Im Browser: ein Element, das nur im aktiven Reiter läuft
+
+`<chimera-anzeige>` (Modul `anzeige`) zeichnet die Bytes auf ein `<canvas>`
+und wandelt RGB565 → RGBA in JavaScript — 67 200 Punkte, bei fünf Bildern je
+Sekunde nichts. Skalierung macht CSS; der Puffer bleibt in Panelgröße.
+
+- **An- und abschaltbar im Chat:** Der Chat hängt das Element ein, wenn die
+  Ansicht eingeschaltet ist. Der Merker liegt im Browser (`localStorage`) —
+  es ist eine Ansichtseinstellung je Gerät, keine Geräteeinstellung (die
+  gehören in eine Gateway-Ablage, Regel 5t).
+- **Nur im aktiven Reiter.** Der Rahmen ersetzt beim Modulwechsel den Inhalt
+  (`rahmen.html`, `zeigeModul`); `disconnectedCallback` hält den Abruf an.
+  Damit läuft nie ein Zähler in einem versteckten Reiter weiter, und niemand
+  muss zwischen zwei Tabs verhandeln, wer das Bild holt. Zusätzlich pausiert
+  der Abruf bei `document.hidden`.
+- **Position:** `float: right` **im Verlauf**, Start oben rechts,
+  verschiebbar (Seite über die Mitte, Höhe über den Abstand im Fluss). Nur ein
+  Element im Fluss kann umflossen werden; `position: fixed` steht außerhalb und
+  die Blasen liefen darunter. `position: sticky` auf einem Float ist verworfen:
+  beim Kleben rechnet der Fluss nicht mehr um, dann liegt das Gesicht über dem
+  Text.
+
+#### Was das kostet (am Pi gemessen, 15.11.2026, `b3c26c1`)
+
+| Posten | Wert |
+|---|---|
+| Speicher | 133 von 462 MB belegt, 329 verfügbar |
+| `/run` | 93 MB, davon 84 frei |
+| Veröffentlichen | 134 KB `memcpy` ≈ 0,05 ms je Bild; in Ruhe 2 B/s (`RUHE_FPS`), im Ereignis 15 |
+| Dienst-CPU | rund 50 % **eines** Kerns (4 Kerne) — unverändert, der Spiegel fügt nichts hinzu |
+| Gateway | keins bei 204; ein 134-KB-Kopiervorgang nur bei neuem Bild |
+
+Der teure Teil der Anzeige ist das Zeichnen, nicht das Spiegeln. Wer dort
+sparen will, baut den Renderer in Rust (Stufe 2), nicht dieses Bild weg.
+
+#### Tests und Gegenproben
+
+- Zähler unverändert → 204; neuer Zähler → Bild mit passender Länge.
+- Halb geschriebene Datei (`bild.neu` liegt noch) wird nie ausgeliefert.
+- Maße aus dem Profil: ein 240×240-Panel ergibt 115 200 Byte, nicht 134 400.
+- Fehlende Datei → 503 mit benanntem Grund, nicht 200 mit Nullen.
+- Zähler läuft nie rückwärts (nach einem Neustart des Dienstes beginnt er neu:
+  dann gilt „Zähler kleiner als `seit`" als neues Bild, nicht als Stillstand).
+- JS: RGB565 → RGBA gegen bekannte Werte (0xF800 rot, 0x07E0 grün, 0x001F blau,
+  je mit Gegenprobe), und `disconnectedCallback` hält den Abruf wirklich an.
+
+**Nicht Teil dieses Entwurfs:** Ton (Regel 5g), Kamerabild, Fernsteuerung des
+Panels. Das Gateway liest nur.
 
 ### Architekturregel 7 — Ein Prozess, ein Framebuffer
 
