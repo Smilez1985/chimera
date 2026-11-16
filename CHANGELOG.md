@@ -2055,12 +2055,15 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   Fehlschlag wird **einmal** gemeldet statt alle 10 s. Ein eigenes Blatt
   musste es sein: ein `RuntimeDirectory` wird beim Stoppen gelöscht — mit
   `/run/chimera` in der Liste räumte ein Neustart `tor.sock` und
-  `sitzung.sock` mit weg.
+  `sitzung.sock` mit weg. Am Gerät belegt (16.11.): Datei liegt unter
+  `/run/chimera/state/`, **0** Zeilen „Permission denied" in sechs Stunden.
 - **`verlauf.jsonl` nannte keine Werkzeuge** (15.11.2026): `Verlauf.append`
   schrieb nur Rolle und Text. Neu stehen `werkzeuge` (Name + Argumente),
   `werkzeug` und `gedacht` in der Zeile und werden beim Abspielen
   zurückgegeben — außer bei halben Runden (Aufruf ohne Ergebnis), die die
-  Schnittstelle ablehnen würde.
+  Schnittstelle ablehnen würde. Belegt: `tests/test_protokoll_werkzeuge.py`
+  (12 Fälle, echte Datei), Gegenprobe 5/5 rot; auf dem Gerät läuft der Stand
+  aus `20a23a4`, der `e11272e` enthält.
 - **DeepSeek im Denkmodus war unbenutzbar** (15.11.2026, am Pi im Journal
   gefunden: `400 "The reasoning_content in the thinking mode must be passed
   back to the API"`, viermal an einem Vormittag): Jede Runde mit

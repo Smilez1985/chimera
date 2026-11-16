@@ -241,23 +241,6 @@ Quelle ist PaKaChi-SM (privat); sie dient als Vorbild, hier wird nachgebaut, nic
       Nicht durch die Änderungen vom 15.11. verursacht, aber ein Test, der
       manchmal rot ist, erzieht dazu, Rot zu ignorieren. Zu tun: Ursache
       benennen (Reihenfolge von Binden/Aufräumen), nicht die Frist erhöhen.
-- [ ] **Die Werkzeugkennung steht nicht im Verlaufsprotokoll** (15.11.2026):
-      `Verlauf.append` schreibt nur `rolle` und `inhalt`, nicht `tool_calls`
-      und `tool_name`. Nach einem Neustart sieht das Fenster ein Ergebnis
-      (`role: tool`) ohne den Aufruf davor; `verlauf_formen` macht daraus eine
-      Nutzernachricht — mit DeepSeek funktioniert das (kein 422), aber die
-      Zuordnung Werkzeug↔Ergebnis ist weg. Zu schreiben: `tool_calls` (Namen)
-      und `tool_name` mit in die Zeile, beim Abspielen zurückgeben; ein Test
-      über Neustart (schreiben, `laden()`, Aufruf steht wieder am Ergebnis).
-- [ ] **Lebenszeichen-Zustandsdatei ist für den Dienst nicht schreibbar**
-      (15.11.2026, beim Deploy aufgefallen): `/opt/chimera/state` gehört
-      `root:chimera-tor` (0710), der Dienst läuft als `chimera` — bei jedem
-      Takt `WARNING … Permission denied: '/opt/chimera/state/lebenszeichen.json.neu'`.
-      Der Watchdog selbst arbeitet (systemd bekommt die Beats, entschieden
-      wird auf der monotonen Uhr), die Datei ist nur zur Ansicht. Trotzdem:
-      entweder den Pfad in ein für den Dienst schreibbares Verzeichnis legen
-      (z. B. `CHIMERA_HOME`) oder den Ordner für die Gruppe `chimera` öffnen
-      — und **am Gerät** nachweisen, dass keine Warnung mehr kommt.
 
 ### Aus dem Noisy-Recon (15.11.2026) — zwei Lücken, die dort offen sind
 
