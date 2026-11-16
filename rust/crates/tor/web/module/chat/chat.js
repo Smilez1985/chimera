@@ -38,6 +38,17 @@ function zerlegen(text) {
   return { meta: meta.join("\n"), text: rest.join("\n\n") };
 }
 
+/// Ist ein Verlaufseintrag als Blase zu zeigen? Reine Rechnung, damit
+/// `tests/js/chat_systemtext.mjs` sie an der ECHTEN Datei prüfen kann.
+///
+/// Systemmeldungen (Kanalhinweis, Gesichtsausdruck) stehen seit 16.11.2026 als
+/// eigene Einträge im Verlauf; sie sind Beiwerk und erscheinen nur mit dem
+/// Haken „Systemtext". `meta` ist der Zustand dieses Hakens.
+function blaseSichtbar(art, meta) {
+  if (art === "system") return !!meta;
+  return art === "nachricht" || art === "verdichtet";
+}
+
 /// Kleinste Höhe der Eingabe: zwei Zeilen (die Vorgabe aus `rows="2"`).
 const EINGABE_MIN = 42;
 /// Gemerkte Höhe je Gerät (Ansichtssache, keine Geräteeinstellung).
@@ -452,12 +463,23 @@ class ChimeraChat extends HTMLElement {
   /// Eine Blase bauen, ohne sie anzuhaengen (fuer das Nachladen oben).
   blasenKnoten(e) {
     const d = document.createElement("div");
+    if (!blaseSichtbar(e && e.art, this.metaGemocht())) return null;
     if (!e || e.art === "verdichtet") {
       d.className = "m sys";
       d.textContent = "— verdichtet —";
       return d;
     }
-    if (e.art !== "nachricht") return null;
+    if (e.art === "system") {
+      // Kanalhinweis und Gesichtsausdruck: eigene Systemmeldung im Verlauf
+      // (nicht mehr im Text der Nutzernachricht). Nur mit dem Haken
+      // „Systemtext" sichtbar -- das entscheidet `blaseSichtbar`.
+      d.className = "m sys";
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      meta.textContent = e.inhalt || "";
+      d.appendChild(meta);
+      return d;
+    }
     d.className = "m " + (e.rolle === "user" ? "ich" : "sie");
     const teile = zerlegen(e.inhalt || "");
     if (teile.meta) {
@@ -618,6 +640,7 @@ class ChimeraChat extends HTMLElement {
 // An der Klasse, damit der Node-Test sie ohne DOM erreicht.
 ChimeraChat.weichtAus = weichtAus;
 ChimeraChat.zerlegen = zerlegen;
+ChimeraChat.blaseSichtbar = blaseSichtbar;
 ChimeraChat.eingabeHoehe = eingabeHoehe;
 ChimeraChat.griffHoehe = griffHoehe;
 ChimeraChat.EINGABE_MIN = EINGABE_MIN;

@@ -285,9 +285,10 @@ class Session:
             denken: str = "") -> Turn:
         """Eine Frage stellen — egal durch welche Tür.
 
-        Der Kanalhinweis wird dem Auftrag vorangestellt, nicht in den
-        Systemtext geschrieben: Der Systemtext gilt für die ganze Sitzung,
-        der Kanal wechselt von Umlauf zu Umlauf.
+        Der Kanalhinweis geht als **eigene Systemmeldung** mit dem Auftrag
+        an den Agenten, nicht in den Text: Der Systemtext gilt für die ganze
+        Sitzung, der Kanal wechselt von Umlauf zu Umlauf, und im Verlauf
+        gehört Beiwerk nicht in die Nutzernachricht (smilez, 16.11.2026).
 
         Fehler des Agenten werden hier abgefangen und als Text beantwortet.
         Ein Bot, der bei einem Modellfehler stirbt, ist schlechter als
@@ -316,7 +317,11 @@ class Session:
                     kwargs["modell"] = modell
                 if denken:
                     kwargs["denken"] = denken
-                result = self.agent.run(f"{channel.hint()}\n\n{text}", **kwargs)
+                # Der Kanalhinweis geht als eigene Systemmeldung mit, nicht
+                # in den Text (smilez, 16.11.2026). `text` bleibt das, was
+                # der Nutzer geschrieben hat -- die Ablage und die Oberflaeche
+                # zeigen keine Mischung mehr.
+                result = self.agent.run(text, kanal=channel.hint(), **kwargs)
                 turn = Turn(
                     channel=channel.name,
                     prompt=text,

@@ -87,6 +87,12 @@ def abspielen(eintraege: list[dict]) -> list[dict]:
                                   "arguments": w.get("argumente") or {}}}
                     for w in e["werkzeuge"] if isinstance(w, dict)]
             fenster.append(m)
+        elif art == "system":
+            # Kanalhinweis / Gesichtsausdruck: als Systemmeldung zurueck, wie
+            # sie geschrieben wurde (16.11.2026). Ohne `_quelle` -- die
+            # Herkunft steht in der Ablage, gehoert aber nicht in die Anfrage
+            # an den Anbieter.
+            fenster.append({"role": "system", "content": e.get("inhalt") or ""})
         elif art == "leer":
             fenster = []
         elif art == "verdichtet":
@@ -551,6 +557,25 @@ class Verlauf(list):
         return self.sid or self.ablage.aktiv()
 
     def append(self, m: dict) -> None:
+        # Systemmeldungen haben eine eigene Art (16.11.2026): Kanalhinweis und
+        # Gesichtsausdruck stehen seit heute als `role: system` im Verlauf,
+        # nicht mehr im Text der Nutzernachricht. Sie werden als `art:
+        # system` abgelegt, damit die Oberflaeche sie ein-/ausblenden kann und
+        # das Verdichten sie nicht fuer einen Rundenbeginn haelt.
+        if m.get("role") == "system":
+            eintrag = {"art": "system", "rolle": "system",
+                       "inhalt": m["content"]}
+            quelle = str(m.get("_quelle") or "")
+            if quelle:
+                eintrag["quelle"] = quelle
+            self.ablage.anhaengen(eintrag, self.sid)
+            # `_quelle` ist eine Angabe fuer die Ablage. Sie darf nicht im
+            # Verlauf bleiben -- sonst schickt das Gateway ein fremdes Feld
+            # an den Anbieter.
+            m.pop("_quelle", None)
+            super().append(m)
+            return
+
         eintrag = {"art": "nachricht", "rolle": m["role"], "inhalt": m["content"]}
         # Werkzeugkennung mitschreiben (15.11.2026): Im Protokoll stand nur
         # Rolle und Text — welches Werkzeug gerufen wurde und was es

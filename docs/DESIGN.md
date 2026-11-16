@@ -3257,10 +3257,35 @@ billiger als jede Abstimmung.
 
 #### Systemtext im Verlauf: anzeigbar, aber standardmäßig aus
 
-Der Dienst stellt jedem Auftrag den Kanalhinweis voran (`[Kanal: web] …`) und
-hängt den Gesichtsausdruck an (`[Gesicht: active=…]`). Beides steht so in der
-Ablage und landete damit in der Blase des Nutzers — *„die sollten ein- /
-ausblendbar sein"* (smilez, 16.11.).
+**Nachtrag 16.11.2026 — der Hinweis gehört nicht in den Prompt.** Was oben als
+offene Frage stand, ist entschieden (smilez): *„Kanal im prompt, aber nicht als
+prompt Text, sondern als System Meldung, Gesicht nur opt-in der Antwort
+ausgeben, als Systemmeldung behandeln."* Der Kanalhinweis und der
+Gesichtsausdruck stehen seitdem als **eigene Systemmeldungen** hinter der
+Nutzernachricht:
+
+* `session.ask` gibt den Hinweis getrennt mit (`kanal=`), klebt ihn nicht mehr
+  an den Text;
+* `Loop._run` hängt `user` → `system` (Kanal) → `system` (Gesicht) an den
+  Verlauf;
+* die Ablage schreibt sie als `{"art": "system", "rolle": "system",
+  "inhalt": …, "quelle": "kanal|gesicht"}`; `abspielen()` gibt sie als
+  `role: system` zurück. Der Marker `_quelle` wird **vor** dem Ablegen aus dem
+  Verlauf entfernt — er ist eine Angabe für die Ablage, kein Feld für die
+  Anbieter-API;
+* Anthropic kennt in `messages` nur `user`/`assistant`: `_system_nach_oben`
+  hebt die Systemmeldungen in den Top-Level-`system`-Text (HTTP 400 sonst);
+* das Fenster zeigt sie weiterhin nur mit dem Haken „Systemtext"
+  (`blaseSichtbar()` in `chat.js`, rein und damit prüfbar).
+
+**Warum nicht in den Systemprompt:** Der Ausdruck wechselt mit jeder Antwort,
+der Prompt ist der cache-empfindliche Teil (5q). Gemessen am 16.11. gegen
+DeepSeek: Systemnachrichten werden **vor und nach** der Nutzernachricht
+angenommen — der Hinweis steht am Ende des Fensters, nicht vorn.
+
+**Alte Verläufe bleiben lesbar:** Dort steckt der Hinweis noch im Text;
+`zerlegen()` trennt ihn weiterhin ab. Ein Umbau alter Protokolle findet nicht
+statt (Regel 8d: das Protokoll bleibt, wie es war).
 
 `zerlegen()` (rein, in `chat.js`) trennt Blöcke, die mit `[` beginnen und `]`
 enthalten, vom eigenen Text. Sie werden **standardmäßig nicht** gezeigt; der
@@ -3268,10 +3293,8 @@ Schalter „Systemtext" in der Kopfzeile blendet sie ein (Merker je Gerät in
 `localStorage`, wie das Gesicht). Ein `[` mitten im Satz ist kein Systemtext —
 getrennt wird an **Leerzeilen**, nicht an Klammern.
 
-**Was in der Ablage steht, bleibt.** Der Prompt wird weiterhin mit Hinweis
-gespeichert (das Modell braucht ihn); geändert ist nur, was der Nutzer sieht.
-Ob der Hinweis überhaupt in die Ablage gehört, ist eine Frage an den Dienst
-(`session.ask`), nicht an das Fenster — sie steht in der ROADMAP.
+**Was in der Ablage steht, bleibt** — für Protokolle von **vor** dem 16.11.:
+Dort steckt der Hinweis im gespeicherten Prompt; sie werden nicht umgebaut.
 
 ### Regel „Avatar-Einstellungen" — Frisur und Farbe gehören dem Dienst, die Tür dem Gateway
 

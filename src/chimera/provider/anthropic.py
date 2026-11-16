@@ -91,6 +91,31 @@ def claude_cli_version(*, refresh: bool = False) -> str:
 def user_agent() -> str:
     return f"claude-cli/{claude_cli_version()}"
 
+def _system_nach_oben(messages: list[dict],
+                      system: str | None) -> tuple[list[dict], str | None]:
+    """Systemmeldungen aus ``messages`` in den Top-Level-Text heben.
+
+    Anthropic verlangt in ``messages`` ausschliesslich ``user`` und
+    ``assistant``. Alles andere -- auch ``tool`` -- ist dort nicht erlaubt;
+    Systemmeldungen sind der Fall, den wir seit dem 16.11.2026 selbst
+    erzeugen (Kanalhinweis, Gesichtsausdruck). Ihr Text wird an den
+    Systemtext angehaengt, in der Reihenfolge des Verlaufs. Reine Funktion,
+    damit sie sich ohne Netz pruefen laesst.
+    """
+    zeilen: list[str] = []
+    rest: list[dict] = []
+    for m in messages:
+        if m.get("role") == "system":
+            t = str(m.get("content") or "").strip()
+            if t:
+                zeilen.append(t)
+            continue
+        rest.append(m)
+    if not zeilen:
+        return rest, system
+    teile = ([system.strip()] if system and system.strip() else []) + zeilen
+    return rest, "\n\n".join(teile)
+
 
 class _AnthropicBase(Connector):
     """Gemeinsames für beide Zugangsarten."""
@@ -116,8 +141,13 @@ class _AnthropicBase(Connector):
         if not self.is_available():
             raise Unavailable(f"{self.label} ist nicht eingerichtet.")
 
-        messages = list(history)
-        messages.append({"role": "user", "content": prompt})
+        messages = list(history) + [{"role": "user", "content": prompt}]
+        # Anthropic kennt in `messages` nur `user` und `assistant` -- eine
+        # Systemnachricht dort wird mit HTTP 400 abgelehnt. Seit 16.11.2026
+        # stehen Kanalhinweis und Gesichtsausdruck als eigene Systemmeldungen
+        # im Verlauf; sie werden fuer diese Tuer in den Top-Level-`system`-Text
+        # umgehaengt (Reihenfolge bleibt erhalten).
+        messages, system = _system_nach_oben(messages, system)
 
         payload: dict = {
             "model": model or self.default_model,

@@ -632,23 +632,28 @@ check("Systemprompt aendert sich mit dem Ausdruck nicht",
 _ag_ohne = Agent(StubRegistry(), Toolbox(tempfile.mkdtemp(prefix="chimera-ohne-")))
 check("ohne Gesicht keine Anweisung", "Dein Gesicht" in _ag_ohne._system(), False)
 
-# Der Laufzeitstand haengt an der NEUEN Nachricht, in Kurzform.
+# Der Laufzeitstand steht seit 16.11.2026 als eigene Systemmeldung hinter der
+# Nutzernachricht -- nicht mehr im Text. Reine Funktion, ohne Lauf.
 _ges_state = _tb_ges.face.state
 _ges_state.mood_name = "Thinking Hard"
-_text = _ag_ges._mit_laufzeit("hallo")
-check("Laufzeitzeile am Ende", _text.endswith("[Gesicht: active=mood_thinking_hard]"),
-      True)
-check("Nachricht bleibt vorn", _text.startswith("hallo"), True)
+check("Gesichtszeile in Kurzform",
+      _ag_ges._gesicht_hinweis(), "[Gesicht: active=mood_thinking_hard]")
 _ges_state.mood_name = "IDLE"
-check("Kurzform klein", _ag_ges._mit_laufzeit("x").endswith("active=mood_idle]"), True)
-check("ohne Gesicht keine Zeile", _ag_ohne._mit_laufzeit("hallo"), "hallo")
+check("Kurzform klein", _ag_ges._gesicht_hinweis().endswith("active=mood_idle]"), True)
+check("ohne Gesicht keine Zeile", _ag_ohne._gesicht_hinweis(), "")
 
-# Beim echten Lauf landet die Zeile im Verlauf -- nicht im Systemprompt.
+# Beim echten Lauf landet die Zeile als `role: system` im Verlauf -- nicht im
+# Systemprompt und nicht im Nutzertext.
 _tb2 = _mit_gesicht()
 _reg2 = StubRegistry()
 Agent(_reg2, _tb2).run("hallo")
-_letzte = _reg2.gesehen[0]["verlauf"][-1]["content"]
-check("Verlauf traegt die Kurzform", _letzte.endswith("active=mood_idle]"), True)
+_verlauf = _reg2.gesehen[0]["verlauf"]
+_rollen = [m.get("role") for m in _verlauf]
+check("Verlauf endet mit Systemmeldung", _rollen[-1], "system")
+check("Systemmeldung nennt den Ausdruck",
+      _verlauf[-1]["content"].endswith("active=mood_idle]"), True)
+check("Nutzertext bleibt rein", _verlauf[0]["content"], "hallo")
+check("kein Beiwerk im Nutzertext", "[Gesicht:" in _verlauf[0]["content"], False)
 check("Systemprompt bleibt ohne active",
       "active=" not in str(_reg2.gesehen[0].get("system") or ""), True)
 

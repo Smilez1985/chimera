@@ -20,6 +20,26 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Kanalhinweis und Gesichtsausdruck sind eigene Systemmeldungen** (smilez,
+  16.11.2026: *„Kanal im prompt aber nicht als prompt Text, sondern als
+  system Meldung, Gesicht nur opt-in der Antwort ausgeben, als Systemmeldung
+  behandeln"*). Bisher klebte beides am Nutzertext
+  (`f"{channel.hint()}\n\n{text}"` bzw. `prompt + "\n\n[Gesicht: …]"`):
+  das Fenster musste den Prompt wieder zerlegen, und das Modell sah den
+  Ausdruck als Teil der Frage. Jetzt hängt `Loop._run` an: `user`(Frage) →
+  `system`(Kanal) → `system`(Gesicht). Die Ablage schreibt sie als
+  `{"art": "system", "rolle": "system", "inhalt": …, "quelle":
+  "kanal|gesicht"}` und gibt sie beim Abspielen als `role: system` zurück;
+  der Marker `_quelle` wird vor dem Ablegen aus dem Verlauf entfernt (er
+  wäre für die Anbieter-API ein fremdes Feld). Das Fenster zeigt sie über
+  den vorhandenen Haken „Systemtext" (`blaseSichtbar()` in `chat.js`).
+  **Anthropic:** `_system_nach_oben` hebt sie in den Top-Level-`system`-Text
+  — `messages` darf dort nur `user`/`assistant` führen (sonst HTTP 400).
+  **Verdichten:** Eine Systemmeldung ist kein Rundenbeginn, der Schnitt
+  bleibt an der Runde. Am Pi gegen DeepSeek vorher gemessen: Systemnachrichten
+  werden vor **und** nach der Nutzernachricht angenommen. Tests:
+  `tests/test_systemmeldungen.py` 20 ok, JS `chat_eingabe.mjs` 26 ok,
+  `tests/gegenprobe_systemmeldungen.py` 9/9 rot.
 - **Die Bildrate wird einmal je Minute gemeldet** (Befund aus einer Antwort
   des Modells im Web-Chat, 16.11.: *„Der Dienst selbst ist der Stromfresser,
   37,2 % CPU im Schnitt"*): Die Zahl stimmte, die Erklärung nicht. Gemessen
@@ -1334,6 +1354,10 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   fertigen Fall bereitgestellt.
 
 ### Geändert
+- **Der Kanalhinweis steht nicht mehr im Prompt** — `session.ask` gibt ihn
+  getrennt mit (`kanal=`), `Channel.hint()` bleibt unverändert. Alte Verläufe
+  mit `[Kanal: …]` im Text bleiben lesbar: `zerlegen()` blendet sie weiterhin
+  aus, umgebaut wird nichts (Regel 8d).
 - **Reiter Einstellungen nutzt die volle Breite** (smilez: warum nutzen
   die Einstellungen nur eine Seite?): `max-width:44rem` war eine
   Eigenmächtigkeit dieses Moduls — alle anderen Reiter nutzen die Breite.

@@ -105,9 +105,9 @@ MUTATIONEN = [
     (
         "protokoll-vergisst-nachricht",
         ABLAGE,
-        '''        self.ablage.anhaengen({"art": "nachricht", "rolle": m["role"],
-                               "inhalt": m["content"]}, self.sid)''',
-        '''        pass''',
+        '''        self.ablage.anhaengen(eintrag, self.sid)
+        super().append(m)''',
+        '''        super().append(m)''',
         "erste Nachricht noch da",
     ),
     (

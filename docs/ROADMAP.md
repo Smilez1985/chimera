@@ -24,12 +24,12 @@ Rest.
   und die Reiterbeschriftung sind zweisprachig, die Texte *in* den Modulen
   sind deutsch. Dafür braucht jedes Modul eine Sprachtabelle an
   `window.chimera.sprache`. Kein Umbau der Logik, nur Texte.
-- **Kanalhinweis im Verlauf** — der Dienst schreibt den Kanalhinweis
-  (`[Kanal: web] …`) und den Gesichtsausdruck (`[Gesicht: …]`) in den
-  gespeicherten Prompt. Das Fenster blendet sie jetzt aus; die Frage, ob sie
-  überhaupt in die **Ablage** gehören, ist eine Entscheidung im Dienst
-  (`agent/session.py`, `ask`) und braucht ein Design, weil der Hinweis auch
-  dem Modell dient.
+- **Kanalhinweis im Verlauf** — *erledigt 16.11.2026, siehe CHANGELOG:*
+  Kanalhinweis und Gesichtsausdruck stehen jetzt als eigene Systemmeldungen
+  (`art: system` in der Ablage, `role: system` im Fenster) statt im
+  gespeicherten Prompt. Anmerkung für später: Der alte Hinweis in
+  bestehenden Verläufen bleibt als Text stehen — `zerlegen()` blendet ihn
+  weiterhin aus.
 - **Sprache der Browsersprache folgen** — heute gilt ohne Merker die
   Browsersprache nur für die Reiter; die Hülle fällt auf Deutsch zurück,
   wenn der Merker fehlt (bewusst, weil die Modultexte deutsch sind). Mit

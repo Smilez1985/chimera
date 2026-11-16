@@ -89,5 +89,16 @@ check("Klammern mitten im Text sind kein Systemtext",
 check("nur Systemtext: leerer Rest", z("[Gesicht: active=idle]").text, "");
 check("mehrere Blöcke werden getrennt", z("[Kanal: a]\n\n[Gesicht: b]\n\nrichtig").text, "richtig");
 
+// --- Systemmeldungen als eigene Einträge (16.11.2026) --------------------
+// Kanalhinweis und Gesichtsausdruck stehen jetzt als `art: system` im
+// Verlauf; sichtbar sind sie nur mit dem Haken „Systemtext".
+const b = klasse.blaseSichtbar;
+check("Systemmeldung ohne Haken verborgen", b("system", false), false);
+check("Systemmeldung mit Haken sichtbar", b("system", true), true);
+check("normale Nachricht immer sichtbar", b("nachricht", false), true);
+check("Verdichtungsmarke immer sichtbar", b("verdichtet", false), true);
+check("unbekannte Art bleibt weg", b("quatsch", true), false);
+check("leerer Eintrag bleibt weg", b(undefined, true), false);
+
 console.log(`\nErgebnis: ${pass} ok, ${fail} fehlgeschlagen`);
 process.exit(fail ? 1 : 0);

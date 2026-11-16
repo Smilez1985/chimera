@@ -4,11 +4,15 @@ Kein Netz: Die API wird durch ein Doppel ersetzt, das dieselben Methoden
 anbietet. Geprüft wird der echte Code — die Tests rechnen nichts nach,
 sie rufen auf.
 """
+import os
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
+# CHIMERA_SRC: der Baum, aus dem importiert wird. Die Gegenproben verfälschen
+# eine Kopie und erwarten, dass der Test daran rot wird (Muster aus
+# test_freigabe_erinnerung.py) -- ohne diese Zeile prüften sie den echten Baum.
+sys.path.insert(0, str(Path(os.environ.get("CHIMERA_SRC") or (ROOT / "src"))))
 
 from chimera.agent.session import DIRECT, Channel, Session  # noqa: E402
 from chimera.bot.telegram import (  # noqa: E402
@@ -51,10 +55,14 @@ class FakeAgent:
         self.boom = boom
         self.history = []
         self.seen = []
+        self.kanal = []                   # Kanalhinweise, getrennt vom Text
 
-    def run(self, prompt):
+    def run(self, prompt, *, kanal="", **kw):
         self.seen.append(prompt)
+        self.kanal.append(kanal)
         self.history.append({"role": "user", "content": prompt})
+        if kanal:
+            self.history.append({"role": "system", "content": kanal})
         if self.boom:
             raise RuntimeError("Modell weg")
         text = self.answer(prompt) if callable(self.answer) else self.answer
@@ -137,23 +145,25 @@ t = s.ask("Hallo", CHANNEL)
 check("Antwort kommt an", t.text, "Antwort.")
 check("Kanal vermerkt", t.channel, "telegram")
 check("Anbieter vermerkt", t.provider, "ollama")
-ok("Kanalhinweis vorangestellt") if agent.seen[0].startswith("[Kanal: telegram]") \
-    else bad(agent.seen[0][:40])
-ok("Auftrag steht dahinter") if agent.seen[0].endswith("Hallo") \
-    else bad(agent.seen[0][-40:])
+ok("Kanalhinweis geht als Systemmeldung") if agent.kanal[0].startswith("[Kanal: telegram]") \
+    else bad(str(agent.kanal[0])[:40])
+check("Auftrag bleibt rein", agent.seen[0], "Hallo")
+check("Kanal steht als Systemmeldung im Verlauf", agent.history[1]["role"], "system")
+check("kein Beiwerk im Nutzertext", "[Kanal:" in agent.seen[0], False)
 check("danach wieder frei", s.busy, False)
 
 print("== Ein Gespräch, zwei Türen (Regel 5d) ==")
 s.ask("Und übrigens", voice)
-check("beide Türen, ein Verlauf", len(agent.history), 4)
+# Je Umlauf drei Einträge: Frage, Kanal-Systemmeldung, Antwort (16.11.2026).
+check("beide Türen, ein Verlauf", len(agent.history), 6)
 check("Sitzung protokolliert beide", len(s.turns()), 2)
 check("zweiter Umlauf ist Sprache", s.turns()[-1].channel, "sprache")
-ok("Sprachkanal im Hinweis") if "sprache" in agent.seen[1] else bad(agent.seen[1][:40])
+ok("Sprachkanal im Hinweis") if "sprache" in agent.kanal[1] else bad(agent.kanal[1][:40])
 # Gegenprobe: zwei Sitzungen auf EINEM Agenten teilen den Verlauf auch
 # dann — die Trennung liegt im Kanal, nicht in der Sitzung.
 zweite = Session(agent)
 zweite.ask("Dritte Tür")
-check("dritte Tür, selber Verlauf", len(agent.history), 6)
+check("dritte Tür, selber Verlauf", len(agent.history), 9)
 
 print("== Fehler werden beantwortet, nicht geworfen ==")
 kaputt = Session(FakeAgent(boom=True))

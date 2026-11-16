@@ -95,7 +95,7 @@ class R:
 class Doppel:
     """Agent-Doppel mit echtem Verlauf wie der echte Loop (history.append)."""
     def __init__(self): self.history = []; self.n = 0
-    def run(self, prompt):
+    def run(self, prompt, **kw):
         self.history.append({"role": "user", "content": prompt})
         self.n += 1
         t = f"antwort-{self.n}"

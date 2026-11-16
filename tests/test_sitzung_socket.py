@@ -35,7 +35,9 @@ class R:
 
 class Agent:
     def __init__(self): self.n = 0
-    def run(self, prompt):
+    def run(self, prompt, **kw):
+        # `kanal` seit 16.11.2026: der Hinweis geht als eigene Systemmeldung
+        # mit, das Doppel muss ihn annehmen (sonst scheitert jeder Umlauf).
         self.n += 1
         return R(f"antwort-{self.n}")
 

@@ -526,20 +526,30 @@ class Agent:
 
         return text
 
-    def _mit_laufzeit(self, prompt: str) -> str:
-        """Den Laufzeitstand an die **neue Nachricht** hängen, nicht in den
-        Systemprompt (DESIGN 5q: ein wechselnder Wert vorn macht jeden Cache
-        ungültig; der Verlauf wird nur angehängt).
+    def _gesicht_hinweis(self) -> str:
+        """Der Laufzeitstand als **eigene Systemmeldung** (smilez, 16.11.2026).
 
-        Die Kurzform nennt den Ausdruck so, wie das Modell ihn wieder
-        setzen kann: ``active=mood_idle``.
+        Bis heute hing er am Nutzertext (``prompt\\n\\n[Gesicht: …]``). Das
+        machte den gespeicherten Prompt zu einer Mischung aus Frage und
+        Beiwerk: Die Oberfläche musste ihn wieder zerlegen, und ein
+        Verlaufsfenster zeigte dem Modell den Ausdruck als Teil der
+        Nutzernachricht. Jetzt steht er als eigene Nachricht mit
+        ``role: system`` hinter der Frage — gemessen am 16.11. nimmt DeepSeek
+        Systemnachrichten vor **und** nach der Nutzernachricht an.
+
+        Nicht in den Systemprompt: Der Ausdruck wechselt mit jeder Antwort,
+        der Prompt ist der Cache-empfindliche Teil (DESIGN 5q). Der Verlauf
+        wird nur angehängt.
+
+        Die Kurzform nennt den Ausdruck so, wie das Modell ihn wieder setzen
+        kann: ``active=mood_idle``. Leer, wenn es kein Gesicht gibt.
         """
         gesicht = getattr(self.tools, "face", None)
         if gesicht is None:
-            return prompt
+            return ""
         name = str(getattr(getattr(gesicht, "state", None), "mood_name", "") or "")
         kurz = re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")
-        return f"{prompt}\n\n[Gesicht: active=mood_{kurz or 'unbekannt'}]"
+        return f"[Gesicht: active=mood_{kurz or 'unbekannt'}]"
 
     def _state(self, what: str) -> None:
         if self.on_state:
@@ -556,7 +566,7 @@ class Agent:
     # --- der Lauf ---------------------------------------------------------
 
     def run(self, prompt: str, *, anbieter: str = "", modell: str = "",
-            denken: str = "") -> Result:
+            denken: str = "", kanal: str = "") -> Result:
         """Ein Auftrag. Jede Antwort endet mit ``wartet`` (DESIGN: Regel „Sprechgesicht“) -- auch
         bei einem Fehler, sonst bleibt das Gesicht auf dem letzten Ausdruck
         stehen.
@@ -565,18 +575,35 @@ class Agent:
         Tuer (Web, Telegram, CLI). Sie gilt nur fuer diesen Auftrag und
         **ohne** Rueckfall auf einen anderen Anbieter: Wer DeepSeek waehlt,
         will nicht stillschweigend Ollama bekommen (DESIGN, Modellwahl).
+
+        ``kanal`` ist der Hinweis der Tuer (``Channel.hint()``). Er geht als
+        **eigene Systemmeldung** in den Verlauf, nicht in den Prompt-Text
+        (smilez, 16.11.2026: „Kanal im prompt, aber nicht als prompt Text,
+        sondern als Systemmeldung").
         """
         try:
-            return self._run(prompt, anbieter=anbieter, modell=modell, denken=denken)
+            return self._run(prompt, anbieter=anbieter, modell=modell,
+                             denken=denken, kanal=kanal)
         finally:
             self._state("wartet")
 
     def _run(self, prompt: str, *, anbieter: str = "", modell: str = "",
-             denken: str = "") -> Result:
+             denken: str = "", kanal: str = "") -> Result:
         self.guard.reset()
         steps: list[Step] = []
         system = self._system()
-        self.history.append({"role": "user", "content": self._mit_laufzeit(prompt)})
+        self.history.append({"role": "user", "content": prompt})
+        # Der Kanalhinweis und der Gesichtsausdruck stehen **hinter** der
+        # Frage, als eigene Systemmeldungen (16.11.2026). `_quelle` ist nur
+        # fuer die Ablage bestimmt und wird dort wieder entfernt -- sonst
+        # ginge ein fremdes Feld an die Anbieter-API.
+        if kanal:
+            self.history.append({"role": "system", "content": kanal,
+                                 "_quelle": "kanal"})
+        gesicht = self._gesicht_hinweis()
+        if gesicht:
+            self.history.append({"role": "system", "content": gesicht,
+                                 "_quelle": "gesicht"})
 
         provider = model = ""
         fell_back = False
