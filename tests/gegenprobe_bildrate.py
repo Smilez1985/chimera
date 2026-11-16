@@ -109,5 +109,18 @@ mutation("ruhe-ignoriert-blinzeln", DATEI,
          "                if False:",
          "geplantes Blinzeln weckt die Schleife (4–12 Bilder)")
 
+# M9: Die Minutenmeldung geht nie auf INFO (dann sieht man die Bildrate im
+# Betrieb nur bei eingeschaltetem DEBUG — genau der Zustand vom 16.11.).
+mutation("meldung-nie-auf-info", DATEI,
+         "        if self._fenster % INFO_JEDES_FENSTER == 0:",
+         "        if False:",
+         "je Minute ein INFO")
+
+# M10: Die Meldung verschweigt den Grund der Rate.
+mutation("meldung-ohne-grund", DATEI,
+         '                   "volle Rate" if self._volle_rate() else "Ruhe",',
+         '                   "",',
+         "nennt den Grund (Ruhe)")
+
 print(f"\nErgebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(0 if FAIL == 0 else 1)

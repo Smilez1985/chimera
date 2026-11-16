@@ -96,6 +96,11 @@ BLINK_DAUER_MAX = 0.47
 # Blinzeln fast eine Sekunde voller Rate -- am Pi gemessen.
 BLINK_VORLAUF = 0.02
 
+#: Wie oft die Bildrate auf INFO gemeldet wird (Fenster zu 10 s):
+#: 6 = einmal je Minute. Der Wert steht hier, damit ein Test ihn
+#: nicht nachbauen muss.
+INFO_JEDES_FENSTER = 6
+
 
 def gaehn_mund(phase: float) -> tuple[int, int]:
     """Mundgröße beim Gähnen: (halbe Breite, Höhe) für eine Phase 0..1.
@@ -2616,6 +2621,35 @@ class NoisyRenderer:
                 return True
         return False
 
+    def bildrate_meldung(self) -> str:
+        """Der Text der Minutenmeldung — für Protokoll und Test."""
+        return ("Bilder: %.1f/s (%s), %.0f C, Mood %s, Pegel %.2f"
+                % (self._letzte_fps,
+                   "volle Rate" if self._volle_rate() else "Ruhe",
+                   float(getattr(self, "cpu_temp", 0) or 0),
+                   self._letzter_mood,
+                   float(getattr(self, "smooth_loud", 0.0) or 0.0)))
+
+    def _bildrate_fenster(self, actual_fps: float, mood_name: str) -> None:
+        """Ein 10-Sekunden-Fenster abschliessen und melden.
+
+        Alle 10 s auf DEBUG, **einmal je Minute auf INFO** (jedes sechste
+        Fenster). Warum (16.11.2026): Die Bildrate ist der groesste Posten
+        der Dienst-CPU — gemessen ein Faden mit 6.571 s von 7.300 s
+        Dienst-CPU. Im DEBUG-Protokoll steht sie nur, wenn jemand DEBUG
+        einschaltet; genau dann, wenn man sie braucht, weiss man nicht,
+        dass es sie gibt. Mit Pegel und Rate-Grund laesst sich die Last
+        zuordnen, statt sie zu raten.
+        """
+        self._letzte_fps = float(actual_fps)
+        self._letzter_mood = mood_name
+        log.debug("%.1f Bilder/s | Bild %d | %.0f C | Mood %s",
+                  actual_fps, int(self.frame),
+                  float(getattr(self, "cpu_temp", 0) or 0), mood_name)
+        self._fenster = getattr(self, "_fenster", 0) + 1
+        if self._fenster % INFO_JEDES_FENSTER == 0:
+            log.info(self.bildrate_meldung())
+
     def run(self, stop=None):
         """Zeichnen, bis ``stop`` gesetzt wird.
 
@@ -2675,9 +2709,7 @@ class NoisyRenderer:
                 if time.time() - fps_timer >= 10.0:
                     actual_fps = fps_counter / (time.time() - fps_timer)
                     mood_name = self._mood().get('name', 'IDLE')
-                    log.debug("%.1f Bilder/s | Bild %d | %.0f C | Mood %s",
-                              actual_fps, int(self.frame), self.cpu_temp,
-                              mood_name)
+                    self._bildrate_fenster(actual_fps, mood_name)
                     fps_counter = 0
                     fps_timer = time.time()
 

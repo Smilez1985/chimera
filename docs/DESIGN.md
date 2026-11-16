@@ -4000,6 +4000,38 @@ Tastgraden liegen die Kanten dichter als die Schläfchen getrennter Fäden.
 Zahlen und Aufbau: `docs/research/LED-TAKT.md`, Messwerkzeug
 `tools/pwm-vergleich.py`. Die drei Einzelfäden bleiben.
 
+#### Die Bildrate wird gemeldet, nicht geschätzt (16.11.2026)
+
+Anlass war eine Antwort des Modells im Web-Chat (`ps aux` gelesen): *„Der
+Dienst selbst ist der Stromfresser, 37,2 % CPU im Schnitt"*. Die Zahl
+stimmte, die Erklärung nicht: `status` zeigt 0 %, `ps` im Mittel 34 % — und
+niemand konnte sagen, **wann**. Also nachgemessen statt geraten:
+
+| Messung am Pi (16.11., Laufzeit 6 h) | Wert |
+|---|---|
+| Dienst-CPU laut cgroup | 7.301 s von 21.600 s = **34 %** |
+| davon der Renderer-Faden | **6.571 s (90 %)** |
+| im Ruhezustand gemessen (60 s) | **10 %** eines Kerns, ~0,8 Bilder/s am Spiegel |
+| Temperatur dabei | 38,6 °C, keine Drosselung |
+| `ERROR`/`WARN` im Journal seit 12:42 | **0** |
+
+Der Unterschied zwischen 10 % (jetzt, Ruhe) und 34 % (Mittel) kommt aus den
+**Phasen voller Rate** — und die konnte man nicht sehen: die Bildrate stand
+nur auf `DEBUG`, und `DEBUG` schaltet im Betrieb niemand ein. Genau dann,
+wenn man sie braucht, weiß man nicht, dass es sie gibt.
+
+Deshalb meldet der Renderer jetzt **einmal je Minute auf INFO**:
+`Bilder: 1.9/s (Ruhe), 38 C, Mood IDLE, Pegel 0.00`. Der Grund (`Ruhe` /
+`volle Rate`) und der gehörte Pegel stehen dabei, weil `smooth_loud > 0,02`
+eine der Bedingungen für die volle Rate ist (7a) — ein Gerät in einem Raum
+mit Dauergeräusch zeichnet also dauerhaft mit 15 Bildern/s. Das ist mit der
+Zeile künftig nachweisbar statt vermutet.
+
+**Nicht geändert:** Bildrate, Schwellen, Ruhewert. Eine Optimierung ohne
+diese Messung wäre Raten — und die Vermutung des Modells („15 fps laufen den
+ganzen Tag") war nachweislich falsch: in Ruhe zeichnet der Renderer mit 2
+Bildern/s.
+
 ---
 
 ## 6. Was von openclawgotchi bleibt

@@ -188,5 +188,47 @@ still, still_gesamt = bilder_in(0.6, ruhe_fps=0, bei=lambda r: setattr(
 check("Ruhe 0: während des Laufs kein Bild", still, 0)
 check("Ruhe 0: nur das Abschaltbild", still_gesamt, 1)
 
+print("== 5. Die Minutenmeldung nennt Rate, Grund und Pegel ==")
+import logging
+
+_r = NoisyRenderer(target_fps=15, ruhe_fps=2)
+_r._letzte_fps, _r._letzter_mood, _r.cpu_temp, _r.smooth_loud = 1.9, "IDLE", 38, 0.004
+zeile = _r.bildrate_meldung()
+check("nennt die gemessene Rate", "1.9/s" in zeile, True)
+check("nennt den Grund (Ruhe)", "(Ruhe)" in zeile, True)
+check("nennt die Temperatur", "38 C" in zeile, True)
+check("nennt den Pegel", "Pegel 0.00" in zeile, True)
+_r._wach_bis = time.monotonic() + 5
+check("wache Phase heisst 'volle Rate'", "(volle Rate)" in _r.bildrate_meldung(), True)
+
+# Nur jedes INFO_JEDES_FENSTER-te Fenster geht auf INFO, die anderen auf
+# DEBUG. Ein Test, der den Wert 6 nachbaut, wuerde eine Aenderung der
+# Konstante nicht merken -- deshalb wird die Konstante benutzt.
+import chimera.render.avatar as AV
+class Sammler(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.zeilen = []
+    def emit(self, record):
+        self.zeilen.append(record.levelname)
+
+s = Sammler()
+alt_level = AV.log.level
+AV.log.setLevel(logging.DEBUG)
+AV.log.addHandler(s)
+try:
+    frisch = NoisyRenderer(target_fps=15, ruhe_fps=2)
+    for i in range(AV.INFO_JEDES_FENSTER * 2):
+        frisch._bildrate_fenster(2.0, "IDLE")
+finally:
+    AV.log.removeHandler(s)
+    AV.log.setLevel(alt_level)
+check("je Fenster ein DEBUG", s.zeilen.count("DEBUG"), AV.INFO_JEDES_FENSTER * 2)
+check("je Minute ein INFO", s.zeilen.count("INFO"), 2)
+# Je Aufruf kommt erst die DEBUG-Zeile, dann ggf. die INFO-Zeile.
+check("der sechste Aufruf schreibt DEBUG und INFO",
+      s.zeilen[AV.INFO_JEDES_FENSTER - 1:AV.INFO_JEDES_FENSTER + 1],
+      ["DEBUG", "INFO"])
+
 print(f"\nErgebnis: {PASS} ok, {FAIL} fehlgeschlagen")
 sys.exit(0 if FAIL == 0 else 1)

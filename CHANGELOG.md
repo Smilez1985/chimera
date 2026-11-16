@@ -20,6 +20,22 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Die Bildrate wird einmal je Minute gemeldet** (Befund aus einer Antwort
+  des Modells im Web-Chat, 16.11.: *„Der Dienst selbst ist der Stromfresser,
+  37,2 % CPU im Schnitt"*): Die Zahl stimmte, die Erklärung nicht. Gemessen
+  am Pi über sechs Stunden: Dienst-CPU 7.301 s von 21.600 s (34 %), davon
+  **6.571 s im Renderer-Faden (90 %)**; im Ruhezustand sind es 10 % eines
+  Kerns bei ~2 Bildern/s, 38,6 °C, keine Drosselung, 0 `ERROR`/`WARN` im
+  Journal. Der Unterschied zwischen Ruhe und Mittel kommt aus den Phasen
+  voller Rate — und die waren unsichtbar, weil die Bildrate nur auf `DEBUG`
+  stand. Neu: alle sechs 10-Sekunden-Fenster eine INFO-Zeile
+  `Bilder: 1.9/s (Ruhe), 38 C, Mood IDLE, Pegel 0.00` mit Rate, Grund und
+  gehörtem Pegel (`smooth_loud > 0,02` ist eine Bedingung für die volle
+  Rate). Bildrate, Schwellen und Ruhewert bleiben unverändert — eine
+  Optimierung ohne diese Messung wäre Raten, und die Vermutung „15 fps laufen
+  den ganzen Tag" war falsch (in Ruhe zeichnet der Renderer mit 2/s).
+  `tests/test_bildrate.py` 35 ok, `tests/gegenprobe_bildrate.py` 10/10 rot
+  (neu: `meldung-nie-auf-info`, `meldung-ohne-grund`).
 - **Selbstauskunft als Werkzeug `selbst`** (Befund smilez 16.11.: *„die
   vorschläge des modells die schon gebaut waren, könnte es aber nicht sehen,
   sonst hätte es sie nicht vorgeschlagen … bitte die ursache prüfen und
