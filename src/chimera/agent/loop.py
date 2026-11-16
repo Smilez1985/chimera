@@ -333,6 +333,21 @@ bewusst — es ist der einzige Teil von dir, den man sieht.
 - "active=mood_…" am Ende der Nachricht ist der Ausdruck, der gerade zu
   sehen ist. Er ist der Stand vor deiner Antwort, keine Frage an dich."""
 
+#: Was das Modell darüber wissen muss, dass es sich selbst nachsehen kann
+#: (Befund smilez, 16.11.2026). Bewusst **drei Zeilen** und keine Liste:
+#: Der Inhalt kommt auf Abruf über das Werkzeug ``selbst`` — eine Aufzählung
+#: im Prompt würde in jeder Runde mitbezahlt und nach dem nächsten Commit
+#: falsch sein (Regel 5q).
+SELBST_TEMPLATE = """
+
+Über dich selbst:
+Was Chimera schon kann und was noch fehlt, steht nicht in diesem Prompt,
+sondern in der Selbstauskunft — rufe dafür `selbst` auf. Tue das, bevor du
+Verbesserungen vorschlägst oder behauptest, etwas fehle: Was dort unter
+"Schon gebaut" steht, ist gebaut, und ein Vorschlag dafür ist ein Fehler.
+Was dort unter "Offen" steht, steht in der Roadmap — wenn du davon etwas
+vorschlägst, sage, dass es schon geplant ist."""
+
 
 @dataclass
 class Step:
@@ -366,7 +381,6 @@ class Agent:
         self.tools = toolbox
         self.task = task
         self.max_turns = max_turns
-        self.guard = LoopGuard(guard, known_tools=toolbox.names())
         #: Werkzeugschemas mitschicken? Aus, wenn das Modell sie nicht kann
         #: (fehlt noch: Entscheidung aus dem gemessenen `tools`, ROADMAP Regel „Aufrufe, nicht Text“).
         self._nativ = True
@@ -376,17 +390,94 @@ class Agent:
         self.skills = skills
         self.memory = memory
 
+        from .preflight import ToolSpec
+
+        # Die Selbstauskunft ist **immer** da (Befund smilez, 16.11.2026):
+        # Im Web-Chat nach Verbesserungen gefragt, schlug das Modell vier
+        # Punkte vor, die seit Tagen gebaut waren — es konnte sie nicht
+        # kennen, denn der Systemprompt sagt ihm nur, dass es ein Gerät mit
+        # einem Gesicht ist. Ein Absatz im Prompt wäre nach 5q ein
+        # Cache-Brecher und würde mit jeder Änderung veralten; als Werkzeug
+        # geholt kostet die Auskunft nur, wenn danach gefragt wird.
+        toolbox.add(ToolSpec(
+            "selbst",
+            "Was Chimera ist und kann: Fassung, Werkzeuge, Freigabemodus, "
+            "Zahl der Gesichtsausdruecke, offene Tueren — und was laut "
+            "CHANGELOG schon gebaut bzw. laut ROADMAP noch offen ist. "
+            "Vor jedem Verbesserungsvorschlag aufrufen.",
+            {},
+            (),
+        ), self._selbst)
+
         # Skills als Werkzeug anmelden, wenn welche da sind. Ein Katalog
         # ohne Abrufmöglichkeit wäre ein offenes Ende (Regel 10h).
         if skills is not None:
-            from .preflight import ToolSpec
             toolbox.add(ToolSpec(
                 "read_skill",
                 "Die Anleitung zu einem Skill lesen, bevor du ihn benutzt.",
                 {"name": "Name des Skills"},
                 ("name",),
             ), self._read_skill)
-            self.guard = LoopGuard(guard, known_tools=toolbox.names())
+
+        # Erst hier: die Vorprüfung muss **alle** Werkzeuge kennen, auch die
+        # nachträglich angemeldeten (sonst gilt `selbst` als unbekannt).
+        self.guard = LoopGuard(guard, known_tools=toolbox.names())
+
+    # --- Selbstauskunft ---------------------------------------------------
+
+    def _selbst(self) -> str:
+        """Version, Werkzeuge, Freigaben, Türen, gebaut und offen.
+
+        Alles, was hier hineingeht, wird **gemessen**: die Werkzeugliste aus
+        der Toolbox, der Freigabemodus vom Gateway, das Gedächtnis aus den
+        Dateien, „gebaut"/„offen" aus CHANGELOG und ROADMAP. Was sich nicht
+        messen lässt, steht als „nicht messbar" da — nie als Vermutung.
+        """
+        from . import selbstbild
+
+        gesicht = getattr(self.tools, "face", None)
+        moods = getattr(gesicht, "moods", None)
+        return selbstbild.text(
+            werkzeuge=self.tools.names(),
+            ausdruecke=len(moods) if moods is not None else None,
+            freigabe=self._freigabe(),
+            tueren=self._tueren(),
+            skills=len(self.skills.usable()) if self.skills is not None else None,
+            gedaechtnis=getattr(self.memory, "root", None),
+        )
+
+    def _freigabe(self) -> str:
+        """Der Freigabemodus je Werkzeug — über das Gateway, wie alles andere."""
+        from ..provider import gateway
+
+        try:
+            a = gateway.anfragen({"op": "freigabe_lesen"})
+        except Exception as exc:
+            return "nicht messbar (%s)" % type(exc).__name__
+        if not a.get("ok"):
+            grund = (a.get("fehler") or {}).get("text") or "ohne Grund"
+            return "nicht messbar (%s)" % grund
+        werkzeuge = (a.get("freigaben") or {}).get("werkzeuge") or {}
+        teile = []
+        for name in sorted(werkzeuge):
+            e = werkzeuge[name] or {}
+            modus = e.get("modus") or "?"
+            ziele = len(e.get("positiv") or [])
+            teile.append(f"{name}={modus}" + (f" ({ziele} Ziel(e))" if modus == "positivliste" else ""))
+        return ", ".join(teile) if teile else "keine Angaben"
+
+    def _tueren(self) -> list[str]:
+        """Welche Türen offen sind. Die Web-Tür gibt es immer."""
+        from ..provider import gateway
+
+        tueren = ["web"]
+        try:
+            a = gateway.anfragen({"op": "status"})
+        except Exception:
+            return tueren + ["Telegram: nicht messbar"]
+        if a.get("telegram") == "an":
+            tueren.append("telegram")
+        return tueren
 
     def _read_skill(self, name: str) -> str:
         sk = self.skills.get(name) if self.skills else None
@@ -417,6 +508,10 @@ class Agent:
         # immer "Keine Anzeige angeschlossen" antwortet (Regel 8a).
         if getattr(self.tools, "face", None) is not None:
             text += GESICHT_TEMPLATE
+
+        # Die Selbstauskunft gilt für jede Tür: das Modell soll wissen, dass
+        # es nachsehen kann, statt zu raten.
+        text += SELBST_TEMPLATE
 
         if self.skills is not None:
             cat = self.skills.catalog()

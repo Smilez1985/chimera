@@ -2558,6 +2558,60 @@ und bei Ollama.
 
 ---
 
+### Die Selbstauskunft — das Modell sieht nach, statt zu raten (16.11.2026)
+
+**Der Befund (smilez).** Im Web-Chat nach Verbesserungen für Chimera
+gefragt, nannte das Modell sieben Punkte. Vier davon waren gebaut:
+Diagnose über `status` (14.11.), Dateizugriff samt Freigabemodi,
+43 Gesichtsausdrücke, Werkzeugkennung im Protokoll. Es hat nicht gelogen —
+es wusste es nicht. Der Systemprompt sagt ihm `Du bist Chimera, ein Gerät
+mit einem Gesicht`; über sich selbst erfährt es sonst nichts. Es sieht die
+Werkzeugschnittstelle, aber keine Inventur: keine Fassung, keinen
+Freigabemodus, kein Wort darüber, was schon läuft.
+
+**Die Regel.** Ein Agent, der Vorschläge zu seinem eigenen System machen
+soll, braucht eine Auskunft über dieses System — und sie muss aus dem
+**laufenden System** kommen, nicht aus einer gepflegten Datei. Eine von
+Hand geschriebene `system.md` wiederholt genau den Fehler, den sie behebt:
+sie behauptet, was gebaut ist, und stimmt nach dem nächsten Commit nicht
+mehr (dasselbe Muster wie die zwei Leichen in der ROADMAP, die am 16.11.
+nur noch einen grünen Haken trugen).
+
+**Der Weg: ein Werkzeug, kein Prompt-Absatz.** `selbst` liefert:
+Fassung und Gerät, die Werkzeugliste der Toolbox, die Zahl der
+Gesichtsausdrücke, den Freigabemodus je Werkzeug (vom Gateway), die
+offenen Türen — und aus `CHANGELOG.md` die neuesten Einträge unter
+„Schon gebaut", aus `docs/ROADMAP.md` die offenen Titel unter „Offen"
+(Gesamtzahl gegen Auszug, damit ein Teil nicht als Ganzes gilt).
+
+- **Warum nicht im Systemprompt:** der Anfang ist nach 5q der
+  cache-empfindliche Teil; eine Inventur dort wird in jeder Runde
+  mitbezahlt und ist nach dem nächsten Bau veraltet. Im Prompt stehen
+  deshalb **drei Sätze**: dass es die Auskunft gibt, dass dort steht, was
+  gebaut ist, und dass ein Vorschlag für etwas Gebautes ein Fehler ist.
+- **Warum nicht geraten:** Jeder Eingang ist optional. Was nicht messbar
+  ist, wird als „nicht messbar" benannt (Regel 8a) — eine leere Antwort
+  ist ein Verdachtsfall, keine Entwarnung.
+- **Wo die Dokumente liegen:** `CHIMERA_DOKUMENTE`, sonst vom Modul aus den
+  Baum hinauf (`…/code/src/chimera/agent/selbstbild.py` → `…/code`). Fehlt
+  der Baum, sagt die Auskunft „nicht gefunden — was gebaut und was offen
+  ist, kann ich nicht sagen (nicht raten)".
+- **Der Preis:** ein weiteres Werkzeugschema in jeder Anfrage (rund 90
+  Tokens). Gemessen wird er nicht am Tokenzähler, sondern am Verhalten:
+  `tests/test_selbstbild.py` prüft, dass die Auskunft die gebauten Punkte
+  aus dem echten CHANGELOG zieht; `tests/gegenprobe_selbstbild.py` bricht
+  jede Zusage (6 Mutationen, alle rot).
+
+**Was daraus folgt und bewusst *nicht* gebaut ist:** eigene Dateien für
+`system.md`, `gateway.md`, `skill_list.md` und Ähnliches. Sie wären eine
+zweite Wahrheit neben Code, CHANGELOG und ROADMAP — und sie würden
+veralten, ohne dass es jemand merkt. Was der Agent über sich wissen soll,
+liest er; was er wissen *muss*, steht in drei Sätzen im Prompt. Die
+nutzergpflegten Dateien, die es schon gibt (`GRUNDLAGEN.md`, Tageslogs),
+bleiben, wo sie sind (Regel 8c).
+
+---
+
 ### Architekturregel 5r — Websuche ist ein Werkzeug des Gateways, kein freier Netzzugang
 
 **Für den Agenten gibt es genau ein Werkzeug:** `web_suche` (Anfrage,

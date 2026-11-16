@@ -20,6 +20,23 @@ Was noch nicht fertig ist, steht in `docs/ROADMAP.md`; was im Repo liegt,
 zählt als released (Projektregel, Abweichung von Keep a Changelog).
 
 ### Hinzugefügt
+- **Selbstauskunft als Werkzeug `selbst`** (Befund smilez 16.11.: *„die
+  vorschläge des modells die schon gebaut waren, könnte es aber nicht sehen,
+  sonst hätte es sie nicht vorgeschlagen … bitte die ursache prüfen und
+  beheben“*): Der Systemprompt sagte dem Modell nur, dass es ein Gerät mit
+  einem Gesicht ist — über den eigenen Stand erfuhr es nichts, also schlug es
+  vier längst gebaute Funktionen als Verbesserung vor. Neu liefert `selbst`
+  Fassung und Gerät, die Werkzeugliste der Toolbox, die Zahl der
+  Gesichtsausdrücke, den Freigabemodus je Werkzeug (vom Gateway), die offenen
+  Türen, die neuesten Einträge aus `CHANGELOG.md` („Schon gebaut") und die
+  offenen Titel aus `docs/ROADMAP.md` („Offen", Gesamtzahl gegen Auszug).
+  Gelesen wird aus dem laufenden System, **nicht** aus einer gepflegten
+  Datei — eine `system.md` würde genau so veralten wie die zwei
+  ROADMAP-Leichen, die am selben Tag auffielen. Im Prompt stehen drei Sätze
+  (Ort, Inhalt, „ein Vorschlag für Gebautes ist ein Fehler"); ein Absatz
+  dort wäre nach 5q in jeder Runde Cache und Tokens. Was nicht messbar ist,
+  wird als „nicht messbar" benannt. `tests/test_selbstbild.py` 25 ok,
+  `tests/gegenprobe_selbstbild.py` 6/6 rot.
 - **Systemtext im Chat ein-/ausblendbar** (Befund smilez 16.11.: *„in der
   chatbubble wieder die system Nachrichten … die sollten ein-/ausblendbar
   sein“*): Der Dienst stellt jedem Auftrag den Kanalhinweis voran und hängt
