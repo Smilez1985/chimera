@@ -23,6 +23,10 @@ SB = "chimera/agent/selbstbild.py"
 LP = "chimera/agent/loop.py"
 
 MUTATIONEN = [
+    ("erste-zeile-statt-titel",
+     SB,
+     '    m = re.match(r"\\*\\*(.+?)\\*\\*", zeile)',
+     '    m = None'),
     ("grenze-ignoriert",
      SB,
      'if aktuell is not None and z.startswith("- ") and len(gesammelt) < je:',

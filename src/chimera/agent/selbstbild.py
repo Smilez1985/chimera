@@ -70,6 +70,24 @@ def _erste_zeile(text: str) -> str:
     return _ohne_markup(text.splitlines()[0] if text else "")
 
 
+def _titel(text: str, grenze: int = 120) -> str:
+    """Der **Titel** eines Eintrags, nicht sein erster Satz.
+
+    Ein CHANGELOG-Eintrag beginnt mit seinem Titel in Sternchen
+    (``- **Selbstauskunft als Werkzeug** (Befund …): …``). Die erste Zeile
+    abzuschneiden ergab in der Auskunft Halbsätze wie ``… (Befund smilez
+    16.11.: *„die`` — am Gerät gesehen, 16.11.2026. Gibt es keinen
+    Fettdruck, wird die erste Zeile genommen und ein Schnitt als solcher
+    gekennzeichnet.
+    """
+    zeile = (text.splitlines()[0] if text else "").strip()
+    m = re.match(r"\*\*(.+?)\*\*", zeile)
+    if m:
+        return _ohne_markup(m.group(1))[:grenze]
+    klar = _ohne_markup(zeile)
+    return klar if len(klar) <= grenze else klar[:grenze].rstrip() + "…"
+
+
 def gebaut(root: Path, abschnitte: tuple[str, ...] = ABSCHNITTE,
            je: int = GEBAUT_JE_ABSCHNITT) -> list[tuple[str, list[str]]]:
     """Die neuesten Einträge je Abschnitt: ``[(Abschnitt, [Titel, ...]), ...]``.
@@ -110,7 +128,7 @@ def gebaut(root: Path, abschnitte: tuple[str, ...] = ABSCHNITTE,
                 aktuell, gesammelt = None, []
             continue
         if aktuell is not None and z.startswith("- ") and len(gesammelt) < je:
-            gesammelt.append(_erste_zeile(z[2:]))
+            gesammelt.append(_titel(z[2:]))
     _abschluss()
 
     # Reihenfolge wie angefragt, nicht wie gefunden.

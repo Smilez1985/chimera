@@ -52,6 +52,8 @@ CHANGELOG = """# Changelog
 
 ### Geändert
 - **Etwas anderes** (14.11.2026): nicht in der Auskunft.
+- Ein Eintrag ohne Fettdruck, der sehr lang ist und deshalb gekürzt werden
+  muss, damit die Auskunft nicht aus dem Ruder läuft.
 
 ### Behoben
 - **Lebenszeichen schrieb ins Nichts** (15.11.2026): jetzt /run.
@@ -83,8 +85,9 @@ def main() -> int:
         hin = dict(g)["Hinzugefügt"]
         pruefe(len(hin) == sb.GEBAUT_JE_ABSCHNITT,
                f"höchstens {sb.GEBAUT_JE_ABSCHNITT} Einträge, nicht alle ({len(hin)})")
-        pruefe(hin[0] == "Selbstauskunft als Werkzeug (16.11.2026): Das Modell kann nachsehen.",
-               "nur die erste Zeile eines Eintrags, Sterne weg")
+        pruefe(hin[0] == "Selbstauskunft als Werkzeug",
+               f"nur der Titel, nicht der halbe Satz: {hin[0]!r}")
+        pruefe(hin[1] == "Fensterhöhe repariert", "auch der zweite Eintrag als Titel")
         pruefe("Fünfter Punkt" not in " ".join(hin), "der fünfte Punkt ist abgeschnitten")
         pruefe(dict(g)["Behoben"][0].startswith("Lebenszeichen schrieb ins Nichts"),
                "der Behoben-Abschnitt wird mitgelesen")
