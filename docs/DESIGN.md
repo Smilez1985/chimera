@@ -3180,6 +3180,45 @@ sparen will, baut den Renderer in Rust (Stufe 2), nicht dieses Bild weg.
 **Nicht Teil dieses Entwurfs:** Ton (Regel 5g), Kamerabild, Fernsteuerung des
 Panels. Das Gateway liest nur.
 
+#### Die eigene Nachricht erscheint sofort (nicht erst aus dem Echo)
+
+Befund smilez (16.11.2026): *„meine Nachricht taucht nicht als chatbubble auf
+… ich bekomme die Antwort"* — einmal auch als *„mein ‚guten Abend' wurde
+verschluckt"*.
+
+**Ursache:** Die Blase entstand erst aus dem **Echo** des Dienstes (Ereignis
+`eingabe`). Der erste Abruf des Stroms nach dem Öffnen gilt aber als
+**Rückstand** und wird übersprungen (er steckt schon im geladenen Verlauf) —
+fiel eine frische Nachricht in dieses Fenster, war sie weg, die Antwort
+danach kam wieder durch. Kein Anzeigefehler, eine Lücke im Weg.
+
+**Jetzt:** `senden()` malt die Blase **selbst**, sofort. Das Echo kommt gleich
+danach; es wird an der **Textgleichheit** erkannt und verworfen, damit die
+Nachricht nicht doppelt steht. Der Rückstand bleibt übersprungen — er ist
+weiterhin schon im Verlauf. Zwei Wege, eine Blase.
+
+**Lehre:** Wer eine Anzeige nur aus einer zweiten Quelle speist, muss deren
+Ausfälle mitdenken. Eine eigene Handlung sofort und idempotent anzuzeigen ist
+billiger als jede Abstimmung.
+
+#### Systemtext im Verlauf: anzeigbar, aber standardmäßig aus
+
+Der Dienst stellt jedem Auftrag den Kanalhinweis voran (`[Kanal: web] …`) und
+hängt den Gesichtsausdruck an (`[Gesicht: active=…]`). Beides steht so in der
+Ablage und landete damit in der Blase des Nutzers — *„die sollten ein- /
+ausblendbar sein"* (smilez, 16.11.).
+
+`zerlegen()` (rein, in `chat.js`) trennt Blöcke, die mit `[` beginnen und `]`
+enthalten, vom eigenen Text. Sie werden **standardmäßig nicht** gezeigt; der
+Schalter „Systemtext" in der Kopfzeile blendet sie ein (Merker je Gerät in
+`localStorage`, wie das Gesicht). Ein `[` mitten im Satz ist kein Systemtext —
+getrennt wird an **Leerzeilen**, nicht an Klammern.
+
+**Was in der Ablage steht, bleibt.** Der Prompt wird weiterhin mit Hinweis
+gespeichert (das Modell braucht ihn); geändert ist nur, was der Nutzer sieht.
+Ob der Hinweis überhaupt in die Ablage gehört, ist eine Frage an den Dienst
+(`session.ask`), nicht an das Fenster — sie steht in der ROADMAP.
+
 ### Regel „Avatar-Einstellungen" — Frisur und Farbe gehören dem Dienst, die Tür dem Gateway
 
 Auftrag smilez (15.11.2026): *„Feld ‚Anzeige' in ‚Avatar' umbenennen … daneben

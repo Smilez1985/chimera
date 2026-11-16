@@ -2564,6 +2564,11 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   anderen eigenen Adresse. Vorher galt das Tailnet als „das Internet".
 
 ### Bekannte Einschränkungen
+- **Die Modultexte sind noch deutsch** (16.11.): Die Hülle (Anmeldung,
+  Abmelden, Warnstreifen) und die Reiterbeschriftung folgen der Sprachwahl
+  Deutsch/Englisch, die Texte *in* den Modulen noch nicht. Bewusst so
+  ausgeliefert statt einer halben Übersetzung, die es verschweigt — die
+  Seite sagt es, der Rest steht in der ROADMAP.
 - **Die CI veröffentlicht kein Prerelease mehr von selbst** (smilez,
   11.11.): Der Installer nimmt das Binary aus `gateway/`. Gebaut und
   geprüft wird bei jeder Änderung an `rust/` weiter; veröffentlicht nur
@@ -2610,6 +2615,17 @@ zählt als released (Projektregel, Abweichung von Keep a Changelog).
   nicht gemessen.
 
 ### Geprüft
+- **Chatfenster, Einstellungen und Audio am Pi nachgemessen** (16.11.,
+  chimera-pi, Stand `20a23a4`): `audio_lesen` meldet im Aus **80 %/80 %**
+  (vorher „nicht messbar“ — `_amixer` verwarf den `stdout`, dann schwieg
+  `amixer -q … sget`); an/aus schaltet 80 % und zurück. `avatar_lesen` →
+  Kontrast 45, Helligkeit 255/80, Nachtfenster aus; `helligkeit_jetzt=150`
+  antwortet „gilt bis 06:00“ und `get_display` liefert 150 als Tageswert,
+  `zurueck` wieder 255; `helligkeit_tag=999` wird abgelehnt, ohne etwas zu
+  ändern. Im Browser (Prüf-Gateway am echten Sitzungs-Socket): Reiter
+  „Einstellungen“ rendert, die eigene Chatblase steht 400 ms nach dem
+  Senden und wird nicht doppelt, Systemtext ist aus und lässt sich
+  einblenden. Dienste danach `active`.
 - **Die Restzeit-Anzeige der Freigaben hat jetzt einen Autotest** (13.11.):
   Bisher war das JS nur von Hand im Browser geprüft (ROADMAP). Neu:
   `tests/js/freigaben_restzeit.mjs` lädt die **echte** `freigaben.js` in Node

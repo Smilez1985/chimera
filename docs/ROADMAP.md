@@ -11,10 +11,29 @@ Stand: 2026-11-10. Pre-Alpha.
 
 ## Offen aus dem 16.11.2026
 
-- **Modultexte auf Englisch** — die Hülle (Anmeldung, Reiter, Abmelden)
-  ist zweisprachig, die Texte *in* den Modulen sind deutsch. Dafür braucht
-  jedes Modul eine Sprachtabelle am `window.chimera.sprache`. Kein Umbau
-  der Logik, nur Texte — deshalb ein eigener Punkt.
+Aus der Sitzung, in der Chatfenster, Reiter „Einstellungen" und die
+SSRF-Sperre gebaut wurden. **Erledigtes steht im CHANGELOG**, hier nur der
+Rest.
+
+- **Umgebungsparameter einstellbar** — `agent/ambiente.py` führt `FENSTER`,
+  `MIN_ABSTAND_S`, `SPERRE_JE_AUSDRUCK_S` und `CHANCE` als Konstanten. Seit es
+  die Einstellungsseite gibt, gehören sie dorthin (Ablage und Weg stehen
+  schon: `render/einstellungen.py`, Op über den Sitzungs-Socket). Bestellt und
+  abgestimmt, aber noch nicht gebaut.
+- **Modultexte auf Englisch** — die Hülle (Anmeldung, Abmelden, Warnstreifen)
+  und die Reiterbeschriftung sind zweisprachig, die Texte *in* den Modulen
+  sind deutsch. Dafür braucht jedes Modul eine Sprachtabelle an
+  `window.chimera.sprache`. Kein Umbau der Logik, nur Texte.
+- **Kanalhinweis im Verlauf** — der Dienst schreibt den Kanalhinweis
+  (`[Kanal: web] …`) und den Gesichtsausdruck (`[Gesicht: …]`) in den
+  gespeicherten Prompt. Das Fenster blendet sie jetzt aus; die Frage, ob sie
+  überhaupt in die **Ablage** gehören, ist eine Entscheidung im Dienst
+  (`agent/session.py`, `ask`) und braucht ein Design, weil der Hinweis auch
+  dem Modell dient.
+- **Sprache der Browsersprache folgen** — heute gilt ohne Merker die
+  Browsersprache nur für die Reiter; die Hülle fällt auf Deutsch zurück,
+  wenn der Merker fehlt (bewusst, weil die Modultexte deutsch sind). Mit
+  Punkt „Modultexte auf Englisch" wird das eine Entscheidung wert.
 
 ## Phase „Echte Lücken" — Reihenfolge nach Wirkung je Aufwand (14.11.2026)
 
